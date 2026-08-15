@@ -122,6 +122,11 @@ function lg_membership_header_ctx(string $active_nav = ''): array {
 
     return [
         'authenticated' => $authed,
+        // The WP user id, straight from /whoami — which resolves it with
+        // wp_validate_auth_cookie() upstream, so it is an AUTHENTICATED id and
+        // not a name parsed out of a cookie a visitor can edit. The Stripe Test
+        // Group is keyed on WP user ids, so the gate needs this; 0 = anon.
+        'wp_user_id'    => (int)($who['wp_user_id'] ?? 0),
         'tier'          => (string)($who['tier'] ?? 'public'),
         'display_name'  => (string)($who['display_name'] ?? ''),
         'avatar_url'    => $who['avatar_url'] ?? null,

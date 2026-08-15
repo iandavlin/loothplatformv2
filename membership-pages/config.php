@@ -202,6 +202,64 @@ function lg_membership_stripe_pages_live(): bool {
 }
 }
 
+/* ---------- Stripe Test Group (the soft-launch list) ---------- *
+ * Ian ruled the soft launch runs through the EXISTING member pages, unlocked
+ * for a hand-picked list, rather than a bespoke page
+ * (docs/STRIPE-TEST-VIA-EXISTING-PAGES.md). These three helpers are the READ
+ * side of that list for the standalone pages; the WRITE side is the poller's
+ * admin dash (LGMS\CohortAllowlist), and both address the SAME wp_option, so
+ * they cannot drift.
+ *
+ * TWO locks, and either one alone keeps the pages shut:
+ *   1. `lgms_stripe_testgroup_pages` — off/absent (the default) means the
+ *      Test Group unlocks NOTHING and every page behaves exactly as it does
+ *      today: administrator-only. This is the house flag rule.
+ *   2. the list itself — absent, empty or malformed means NOBODY, which is
+ *      the same fail-safe the membership grant already uses.
+ *
+ * The option is a PHP-SERIALIZED array (that is how WordPress stores an array
+ * option) — reading it as JSON silently finds nothing, which would read as
+ * "the list is empty" and fail open on a populated list if this were ever the
+ * only lock. Numeric strings are accepted because a hand-set list written with
+ * `wp option update ... --format=json` arrives that way.
+ */
+if (!function_exists('lg_membership_stripe_testgroup_pages')) {
+function lg_membership_stripe_testgroup_pages(): bool {
+    return lg_membership_wp_option('lgms_stripe_testgroup_pages', '0') === '1';
+}
+}
+
+if (!function_exists('lg_membership_stripe_test_group_ids')) {
+/** @return int[] the Test Group, or [] for absent/empty/malformed (= nobody) */
+function lg_membership_stripe_test_group_ids(): array {
+    static $ids = null;
+    if ($ids !== null) return $ids;
+
+    $raw = lg_membership_wp_option('lgms_stripe_lifecycle_allowlist', null);
+    if ($raw === null || $raw === '') return $ids = [];
+
+    $decoded = @unserialize($raw, ['allowed_classes' => false]);
+    if (!is_array($decoded)) return $ids = [];   // a string/int/bool option = nobody
+
+    $out = [];
+    foreach ($decoded as $v) {
+        if (is_int($v) || (is_string($v) && ctype_digit($v))) {
+            $n = (int) $v;
+            if ($n > 0) $out[] = $n;
+        }
+    }
+    return $ids = array_values(array_unique($out));
+}
+}
+
+if (!function_exists('lg_membership_in_stripe_test_group')) {
+function lg_membership_in_stripe_test_group(int $wpUserId): bool {
+    if ($wpUserId <= 0) return false;                        // anon is never listed
+    if (!lg_membership_stripe_testgroup_pages()) return false;   // lock 1
+    return in_array($wpUserId, lg_membership_stripe_test_group_ids(), true);  // lock 2
+}
+}
+
 /* ---------- shared helpers ---------- */
 if (!function_exists('lg_membership_h')) {
 function lg_membership_h(string $s): string {
