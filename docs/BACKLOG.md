@@ -60,6 +60,7 @@ S3 dev2's vhost is a REGULAR FILE, not the repo symlink — tracked nginx change
 23. MOBILE MAP at "Everywhere": bottom-sheet says "0 members in view" at world zoom (pre-existing, Buck-flagged 6/10, re-confirmed 7/25 during the map-infinite verify; pins still plot, List still counts) — UNOWNED. Fix shape: sheet-aware bounds, or auto-switch to List when radius=all. Surfaced 8/15 by the memory prune — the finding lived only in a retired lane note.
 24. GUITARDLE: ~8% of daily results binned on an expired nonce (measured by the fairness lane 8/15) — players lose a finished game to a token timeout. OWNED: guitardle-fairness phase 3, keeper green-lit 8/15, flag-gated.
 25. GUITARDLE: moves/won/hardcore are CLIENT-SUPPLIED while hardcore doubles points — a forgeable leaderboard input, same fairness class as the device-hop hole. OWNED: guitardle-fairness phase 3, keeper green-lit 8/15, flag-gated.
+27. AUTHOR ARCHIVE BUTTON in the hub header links (Ian 8/15: "We seem to not have a button for the user archive in the hub. Which would be the author search... basically in the header where the links go") — from a member profile, a header link opens the hub filtered to that author's posts. OWNED: featured-members seat, queued after backlog 20.
 16. Front-end authoring for all post types ★ vision
 17. Stripe membership: audit → build
 
