@@ -6,7 +6,9 @@ per-item alerts, a modal per item, and an embedded chat (§1b supersedes the
 earlier desk-plus-list). These are the things that decide the *build*, found
 while drawing it.
 
-Mocks: `/footer-mockups/wip-board/` (round 1, shape), `rank.html` (round 2,
+Mocks: **`concept.html` (the CONCEPT — the board as Ian's primary interface,
+the one to build toward)**, `/footer-mockups/wip-board/` (round 1, shape),
+`rank.html` (round 2,
 drag-to-rank), `board.html` (round 3, one surface) and
 **`final.html` (round 4 — THE ONE TO BUILD; supersedes 1–3)**.
 
@@ -53,6 +55,41 @@ ids, dropping `E1`–`E5` and `S1`–`S3` — including a security item marked
 awaiting Ian.
 
 **Phase 2 is unchanged** and still carries everything below.
+
+---
+
+## 0b. THE AMBITION RAISED — the board as Ian's primary interface
+
+Ian, 2026-08-15: *"a practical board that I would like to use to great effect.
+Maybe even transition away from vs."* That changes the target: not a status page
+but the place he works from. Concept drawn at `concept.html`; five principles,
+all visible on it:
+
+1. **The top answers three questions** before he scrolls — what waits on him,
+   who is working, and **what changed since he last looked**. The digest is
+   derived from git + board + stamp history, never typed.
+2. **Plain English everywhere.** Project names, not lane names. Relative times.
+   **No item numbers on the page at all** — they stay in the file, where they
+   are our problem and not his.
+3. **Every row wears its single next action** without a click, in words: *set
+   the price*, *look at it*, *being worked on*, *nothing needed*. The page is
+   readable without touching anything, which is what makes it a desk rather
+   than a dashboard.
+4. **The four things that would let VS Code go:** decision boxes as tappable
+   buttons on the desk (always with a *Something else…*), a chat per item,
+   pictures opening in the page, and live-command blocks with a copy button and
+   somewhere to paste the output back.
+5. **A trust chip** beside the stamp age — *all clear*, or the number red and
+   their names. A stale page must not be able to look healthy.
+
+**Build order, and why:** the desk and its buttons first. That is the part that
+changes his day; everything else is presentation of work he can already see.
+
+**Two judgement calls made in the drawing.** The desk comes first on the phone
+rather than the digest, because on a phone he is nearly always checking one
+thing. And the digest states what it filtered — *"81 changes reached the site
+today. These are the four you'd care about"* — rather than implying four is all
+that happened.
 
 ---
 
