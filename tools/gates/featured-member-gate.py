@@ -130,9 +130,35 @@ def section_a_constraints():
              f"UPDATE users SET featured_opt_in=false, featured_opt_in_at=NULL WHERE id={test_id}")
 
     # A2: featured_history must reject a second open row.
+    #
+    # STATE-AWARE since 2026-08-15 (keeper): Ian featured a REAL member from
+    # the dash, and this probe's seed-insert was rejected by the very
+    # constraint under test — which the old code misread as CANNOT RUN. If a
+    # real open row exists it IS row one: probe the rejection against it and
+    # touch nothing. (Near-miss recorded: the failure looked like stale test
+    # residue; deleting it would have un-featured Ian's actual pick. Verify
+    # the row, never assume the probe owns whatever it collides with.)
     u1, u2 = "eeeeeeee-1111-1111-1111-111111111111", "eeeeeeee-2222-2222-2222-222222222222"
     psql("postgres", "looth",
          f"DELETE FROM discovery.featured_history WHERE member_uuid IN ('{u1}','{u2}')")
+    _, live_open, _ = psql("postgres", "looth",
+        "SELECT count(*) FROM discovery.featured_history WHERE ended_at IS NULL")
+    if (live_open or "").strip() not in ("0", ""):
+        rc2, _, err2 = psql("postgres", "looth",
+            f"INSERT INTO discovery.featured_history (member_uuid, display_name) VALUES ('{u2}','Gate Test B')")
+        if rc2 == 0:
+            RED.append("[A2] featured_history_one_open did NOT reject a second concurrently-open "
+                       "row — Ian's ONE AT A TIME ruling is not actually enforced")
+            psql("postgres", "looth",
+                 f"DELETE FROM discovery.featured_history WHERE member_uuid='{u2}'")
+        elif "featured_history_one_open" in err2 or "duplicate key" in err2:
+            OK.append("[A2] one-open-row constraint rejects a second row — proven against the "
+                      "REAL currently-featured member, nothing touched")
+        else:
+            DEAD.append(f"[A2] second INSERT failed for an unexpected reason: {err2[:200]}")
+        psql("postgres", "looth",
+             f"DELETE FROM discovery.featured_history WHERE member_uuid IN ('{u1}','{u2}')")
+        return
     rc, _, err = psql("postgres", "looth",
         f"INSERT INTO discovery.featured_history (member_uuid, display_name) VALUES ('{u1}','Gate Test A')")
     if rc != 0:
