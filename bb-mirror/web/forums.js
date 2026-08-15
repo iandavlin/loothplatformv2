@@ -6298,24 +6298,44 @@ function lgFollowEnabled() {
         var card = doc.querySelector('.lgfc__card') || doc.querySelector('main.lgfc') || doc.body;
         bodyEl.innerHTML = card ? card.innerHTML : '';
 
-        /* External scripts in document order, THEN the inline ones — an inline
-           acf.addAction(...) that runs before acf.js exists is a silent no-op. */
-        var ext = [].slice.call(doc.querySelectorAll('script[src]'));
-        var inline = [].slice.call(doc.querySelectorAll('script:not([src])'));
-        return ext.reduce(function (chain, sc) {
-          return chain.then(function () { return loadScript(sc.getAttribute('src')); });
-        }, Promise.resolve()).then(function () {
-          inline.forEach(function (sc) {
-            /* innerHTML does NOT execute a script; it has to be re-created. */
-            var s = document.createElement('script');
-            s.textContent = sc.textContent;
-            document.body.appendChild(s);
+        /* SCRIPTS IN DOCUMENT ORDER — external and inline INTERLEAVED, exactly
+           as the page printed them.
+
+           WordPress emits a script's configuration as an inline block placed
+           BETWEEN the external files: `var _wpMediaViewsL10n = {…}` is printed
+           immediately before media-views.js, and that file reads it at load
+           time. Running all the external files first and the inline ones after
+           — which is what this did at first — leaves wp.media.view.settings as
+           an EMPTY OBJECT and wp.Uploader undefined, so wp.media() throws
+           "Cannot read properties of undefined (reading 'limitExceeded')" and
+           the photo picker does nothing when clicked. Measured, twice: the
+           button is present, styled and completely dead.
+
+           So walk the nodes in order and await each external one before moving
+           on. Slower than firing them in parallel, and correct. */
+        var nodes = [].slice.call(doc.querySelectorAll('script'));
+        return nodes.reduce(function (chain, sc) {
+          return chain.then(function () {
+            var src = sc.getAttribute('src');
+            if (src) return loadScript(src);
+            /* Inline: TYPE and ID must come with it. WordPress ships the media
+               modal as 28 <script type="text/html"> underscore templates that
+               wp.template() looks up BY ID; re-creating them as plain <script>
+               makes the browser try to EXECUTE the template HTML as JavaScript,
+               so nothing registers and the modal has nothing to render. */
+            var type = sc.getAttribute('type') || '';
+            var el = document.createElement('script');
+            if (type) el.type = type;
+            if (sc.id) el.id = sc.id;
+            el.textContent = sc.textContent;
+            document.body.appendChild(el);
           });
+        }, Promise.resolve()).then(function () {
           /* Hand ACF the appended subtree so it wires the fields it did not see
              at DOM ready. Without this the markup is inert. */
           try {
             if (window.acf && window.jQuery) window.acf.doAction('append', window.jQuery(bodyEl));
-          } catch (e) { /* reported by the harness, never thrown at the member */ }
+          } catch (e) { /* surfaced by the harness, never thrown at the member */ }
           loaded = true; loading = false;
         });
       })
