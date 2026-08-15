@@ -149,6 +149,33 @@ the same sentence for a 404, a 403, a dropped session and a slow page.
 
 ---
 
+## GATES, AND THE STATE OF THE BRANCH
+
+| | |
+|---|---|
+| gate 46 compose-media | **GREEN**, 7 assertions + new **7b** |
+| gate 47 compose-dark | **GREEN** at 1280 **and** 390 — the suite ran only 1280 before |
+| buck-surface guard | clean |
+| rebased onto main | yes, 44 commits, **no conflicts** |
+
+**Two stale pointers on gate 47, both found by trying to USE the ledger row
+rather than reading it.** Its CRAFT-STANDARD row cited
+`tools/gates/frontend-compose/dark-contrast-sweep.py`, which does not exist (the
+sweep is at `tools/frontend-compose/…`), and the suite invoked the sweep once, at
+desktop, on a branch whose own commit history says "both widths" and whose last
+two visual defects were both on the phone. Both fixed; 390 measured GREEN before
+being registered, so it adds coverage rather than a known red.
+
+**The gate-number note was stale within hours.** `run-all.sh` said "next free
+48". The rebase brought back a **GATE 49** that did not exist when 46/47 were
+minted, and there is no 48 on main at all — it belongs to a lane that has not
+merged, so it is invisible from the file. That is exactly the situation that
+produced the old "9/9" collision. **Next free is 50, and the number comes from
+keeper, never from reading this file.** This branch minted nothing: the second
+dark width is a leg under 47, not a new gate.
+
+---
+
 ## WHAT IS NOT DONE
 
 - **Ian has not seen it.** The flag stays OFF until he has.

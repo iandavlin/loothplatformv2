@@ -249,16 +249,35 @@ echo json_encode($out);
                 findings.append("[6] the reaper deleted a FRESH draft — a member's "
                                 "in-progress work")
     finally:
+        # ⚠️ SCOPED TO THE PROBE ACCOUNT, AND THAT IS NOT A DETAIL.
+        #
+        # This deleted EVERY row carrying _lg_fc_draft, site-wide, with its
+        # attachments. Harmless today only because the flag is off and nobody is
+        # composing — and the entire point of the flag is that it gets turned ON.
+        # After that, one gate run would force-delete every member's in-progress
+        # compose draft AND the photos they had just uploaded to it. The gate
+        # that exists to prove nothing is destroyed would have been the most
+        # destructive thing in the tree for this feature.
+        #
+        # A cleanup may only remove what its own run made. The author filter is
+        # what guarantees that: a member's draft is owned by the member and can
+        # never match. The site-wide UNATTACHED count below stays site-wide on
+        # purpose — assertion 4 has to see an orphan produced by a path this gate
+        # did not model, and that is a read, not a delete.
         left = wp_eval(r'''
 global $wpdb;
-foreach ($wpdb->get_col("SELECT p.ID FROM {$wpdb->posts} p JOIN {$wpdb->postmeta} m ON m.post_id=p.ID AND m.meta_key='_lg_fc_draft'") as $id) {
+$probe = %d;
+foreach ($wpdb->get_col($wpdb->prepare("SELECT p.ID FROM {$wpdb->posts} p JOIN {$wpdb->postmeta} m ON m.post_id=p.ID AND m.meta_key='_lg_fc_draft' WHERE p.post_author = %%d", $probe)) as $id) {
     foreach (get_children(["post_parent"=>$id,"post_type"=>"attachment","numberposts"=>-1,"fields"=>"ids"]) as $a) wp_delete_attachment($a, true);
     wp_delete_post($id, true);
 }
-foreach ($wpdb->get_col("SELECT ID FROM {$wpdb->posts} WHERE post_title LIKE 'zzgate-%'") as $id) wp_delete_attachment($id, true);
-echo json_encode(["drafts" => (int) $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE meta_key='_lg_fc_draft'"),
-                  "probes" => (int) $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_title LIKE 'zzgate-%'"),
-                  "unattached" => (int) $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type='attachment' AND post_parent=0")]);''')
+foreach ($wpdb->get_col($wpdb->prepare("SELECT ID FROM {$wpdb->posts} WHERE post_title LIKE 'zzgate-%%' AND post_author = %%d", $probe)) as $id) wp_delete_attachment($id, true);
+echo json_encode([
+    // the probe's OWN leftovers — the number the cleanup is accountable for
+    "drafts" => (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->posts} p JOIN {$wpdb->postmeta} m ON m.post_id=p.ID AND m.meta_key='_lg_fc_draft' WHERE p.post_author = %%d", $probe)),
+    "probes" => (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_title LIKE 'zzgate-%%' AND post_author = %%d", $probe)),
+    // site-wide, deliberately — see assertion 4
+    "unattached" => (int) $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts} WHERE post_type='attachment' AND post_parent=0")]);''' % PROBE_USER)
         cl = json.loads(left)
         print(f"  cleanup: {cl['drafts']} drafts, {cl['probes']} probe rows left; "
               f"unattached {cl['unattached']} (was {st['unattached']})")
