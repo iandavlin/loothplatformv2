@@ -80,3 +80,33 @@ if (!defined('LG_GUITARDLE_HOW_TO_PLAY')) {
 if (!defined('LG_GUITARDLE_SCORE_RETRY')) {
     define('LG_GUITARDLE_SCORE_RETRY', false);
 }
+
+/**
+ * Backlog 25 (option A, keeper 2026-08-15) — SERVER-DRIVEN PLAY.
+ *
+ * The leaderboard's inputs were all client-supplied: moves, won and hardcore
+ * came straight out of the POST body, and hardcore DOUBLES points, so anyone
+ * holding their own nonce could post a 20-point day. But server-side scoring
+ * alone would not have fixed it, because THE ANSWER KEY IS PUBLIC: the game
+ * fetched sequence.json and guitardle_phrases.csv into the browser and decided
+ * the win in JS, so all 285 phrases and the full fixed sequence -- today and
+ * every future day -- are readable by anyone. A player reading the key
+ * genuinely solves in one move, and an honest server would score it 20.
+ *
+ * So the phrase stops reaching the client. With this ON:
+ *   - the client is given the board SHAPE only (word lengths), never letters
+ *   - each reveal is a server call that returns positions and counts the move
+ *   - the guess is judged server-side against the phrase
+ *   - moves / won / hardcore are what the SERVER watched happen; the values in
+ *     the POST body are ignored entirely
+ *
+ * Requires LG_GUITARDLE_DAILY_CLAIM, whose claim row is the play session.
+ *
+ * RESIDUE, deliberately not closed here and reported as its own backlog item:
+ * the two asset files must KEEP being served while this flag is OFF, because
+ * the old path needs them -- so the key stays readable until the flag is ON
+ * everywhere and the assets are then restricted. That is a two-stage deploy.
+ */
+if (!defined('LG_GUITARDLE_SERVER_PLAY')) {
+    define('LG_GUITARDLE_SERVER_PLAY', false);
+}
