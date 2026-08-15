@@ -15,6 +15,10 @@ strip. One line per item: what, why, and the single action.*
 - **Compose modal preview look (dark).** The Loothprint modal in dark at
   https://dev2.loothgroup.com/preview/frontend-compose/hub/?compose=1 —
   your nod gates that feature's switch-on.
+- **Front-page weekly mock — your look.** Options A/B + placement + whether
+  member-only cards show, all drawn at
+  https://dev2.loothgroup.com/footer-mockups/weekly-front/ — nod starts the
+  build.
 - *(Optional)* **Live video cleanup** — the guarded two-line block for the
   four dead videos on live, whenever.
 - *(Optional)* **Retraction verify** — one read-only line double-checking
