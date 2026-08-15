@@ -98,6 +98,17 @@ function lg_shared_render_site_header(array $ctx): void
     // ---------- derived display values ----------
     $manage_opts = ($caps['manage_options'] ?? false) === true;
 
+    /**
+     * STRIPE TEST GROUP (Ian 2026-08-15: "a way for only white listed users to
+     * be able to see the menu for stripe, or the pages for stripe").
+     *
+     * Read as a CAPABILITY, computed centrally beside manage_options, so this
+     * shared header needs no user id and no caller has to be taught to pass
+     * one. Fails CLOSED: a ctx that carries no capabilities shows no Stripe
+     * menu, which is today's behaviour for everybody.
+     */
+    $stripe_tester = ($caps['stripe_testgroup'] ?? false) === true;
+
     // Tier pill label: Admin overrides paid-tier labels for manage_options users.
     $tier_label = match($tier) {
         'lite' => 'Lite',
@@ -563,7 +574,18 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
             <?php /* "Connect Your Patreon" removed from the logged-in account menu (Ian 6/16):
                      connected members don't need it; the anon connect door lives elsewhere. */ ?>
             <?php /* "Membership Guide" hidden until the guide is actually built out (Ian 6/16). */ ?>
-            <?php if ($manage_opts): /* Stripe money pages — dormant pre-launch; admin-only QA until cut */ ?>
+            <?php /* STRIPE MONEY PAGES — visible to the Stripe Test Group, and to
+                     admins as before. ABSENT for everyone else, not greyed: an
+                     entry you cannot use is worse than no entry.
+
+                     THIS LIST MIRRORS WHAT THE ROUTER WILL ACTUALLY ADMIT THEM
+                     TO. The five below are the ones gated 'testgroup' in
+                     membership-pages/web/router.php; Earnings and Test
+                     Checklist stay ADMIN-ONLY there, so they stay admin-only
+                     here. A menu that offers a tester a door the gate then
+                     shuts on them is the presence-is-not-reachability trap in
+                     its most annoying form. */ ?>
+            <?php if ($stripe_tester): ?>
             <li role="none" class="lg-chrome__account-menu-divider"></li>
             <li role="none">
               <a role="menuitem" href="/lgjoin/">Join</a>
@@ -578,10 +600,12 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
               <a role="menuitem" href="/my-gifts/">My Gifts</a>
             </li>
             <li role="none">
-              <a role="menuitem" href="/affiliate-earnings/">Earnings</a>
-            </li>
-            <li role="none">
               <a role="menuitem" href="/request-refund/">Request a Refund</a>
+            </li>
+            <?php endif; ?>
+            <?php if ($manage_opts): /* admin-only QA surfaces — never in the test group's menu */ ?>
+            <li role="none">
+              <a role="menuitem" href="/affiliate-earnings/">Earnings</a>
             </li>
             <li role="none">
               <a role="menuitem" href="/test-checklist/">Test Checklist</a>

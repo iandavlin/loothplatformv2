@@ -414,6 +414,84 @@ is_( $wrongDoor === [], sprintf(
     "no soft-launch page calls the hard admin gate directly, which would bypass the list (%s)",
     $wrongDoor === [] ? 'none do' : implode( ', ', $wrongDoor ) ) );
 
+/* ---------------------------------------------------------------------- *
+ * [9] THE MENU — the other half of Ian's ask
+ *
+ * "a way for only white listed users to be able to see the menu for stripe, or
+ * the pages for stripe." Sections 1-8 cover the PAGES. This covers the MENU,
+ * and the assertion that matters is the negative one: a member who is NOT on
+ * the list must see NO stripe entries at all — absent, not greyed.
+ * ---------------------------------------------------------------------- */
+section("[9] THE STRIPE MENU IS ABSENT FOR ANYONE NOT ON THE LIST");
+
+/** Render just the account menu with a given capability set. */
+function menuFor(string $repo, array $caps): string
+{
+    $harness = '<?php
+$ctx = [ "authenticated" => true, "display_name" => "T", "capabilities" => ' . var_export($caps, true) . ',
+         "logout_url" => "/logout", "profile_url" => "/p", "logo_url" => "", "active_nav" => "",
+         "tier" => "looth3", "msg_unread" => null, "notif_unread" => null ];
+ob_start();
+require ' . var_export($repo . '/lg-shared/site-header.php', true) . ';
+lg_shared_render_site_header($ctx);
+echo ob_get_clean();
+';
+    $tmp = tempnam(sys_get_temp_dir(), 'lgmenu') . '.php';
+    file_put_contents($tmp, $harness);
+    $out = (string) shell_exec(PHP_BINARY . ' ' . escapeshellarg($tmp) . ' 2>/dev/null');
+    @unlink($tmp);
+    return $out;
+}
+
+$REPO  = dirname(__DIR__, 2);
+$STRIPE_LINKS = [ '/lgjoin/', '/lggift-buy/', '/lggift/', '/my-gifts/', '/request-refund/' ];
+$ADMIN_ONLY   = [ '/affiliate-earnings/', '/test-checklist/' ];
+
+$mPlain  = menuFor($REPO, [ 'manage_options' => false, 'stripe_testgroup' => false ]);
+$mTester = menuFor($REPO, [ 'manage_options' => false, 'stripe_testgroup' => true ]);
+$mAdmin  = menuFor($REPO, [ 'manage_options' => true,  'stripe_testgroup' => true ]);
+$mNoCaps = menuFor($REPO, []);
+
+is_($mPlain !== '' && $mTester !== '', "the header renders at all, so these checks are not vacuous");
+
+$leak = array_values(array_filter($STRIPE_LINKS, static fn (string $l): bool => str_contains($mPlain, $l)));
+is_($leak === [], sprintf(
+    "a NON-listed member sees NO stripe menu entries (leaked: %s)",
+    $leak === [] ? 'none' : implode(', ', $leak)));
+
+$missing = array_values(array_filter($STRIPE_LINKS, static fn (string $l): bool => !str_contains($mTester, $l)));
+is_($missing === [], sprintf(
+    "a LISTED tester sees all five stripe entries (missing: %s)",
+    $missing === [] ? 'none' : implode(', ', $missing)));
+
+// The menu must not offer a door the page gate then shuts.
+$overreach = array_values(array_filter($ADMIN_ONLY, static fn (string $l): bool => str_contains($mTester, $l)));
+is_($overreach === [], sprintf(
+    "a tester is NOT offered the admin-only QA surfaces the router would refuse them (%s)",
+    $overreach === [] ? 'none' : implode(', ', $overreach)));
+
+is_(!str_contains($mPlain, 'lg-chrome__account-menu-divider') || substr_count($mPlain, 'lg-chrome__account-menu-divider') < substr_count($mTester, 'lg-chrome__account-menu-divider'),
+    "...and the divider that introduces them is absent too — no empty gap where the menu was");
+
+foreach ($ADMIN_ONLY as $l) {
+    is_(str_contains($mAdmin, $l), "an administrator keeps " . $l . " — the list ADDS people, it never removes Ian's access");
+}
+foreach ($STRIPE_LINKS as $l) {
+    if ($l !== '/lgjoin/') { continue; }
+    is_(str_contains($mAdmin, $l), "...and still sees the money pages as before");
+}
+
+// Fail closed: a ctx with no capabilities at all shows nothing.
+$leakNo = array_values(array_filter($STRIPE_LINKS, static fn (string $l): bool => str_contains($mNoCaps, $l)));
+is_($leakNo === [], sprintf(
+    "a context carrying NO capabilities shows no stripe menu — it fails closed (leaked: %s)",
+    $leakNo === [] ? 'none' : implode(', ', $leakNo)));
+
+// And the capability itself is computed centrally, not re-derived per surface.
+$icr = (string) file_get_contents($REPO . '/lg-patreon-stripe-poller/src/Wp/InternalRestController.php');
+is_(str_contains($icr, "\$caps['stripe_testgroup']"),
+    "the capability is computed centrally beside manage_options, so every surface gets the same answer");
+
 /* ---------------------------------------------------------------------- */
 echo "\n$pass passed, $fail failed\n";
 if ($fail > 0) {

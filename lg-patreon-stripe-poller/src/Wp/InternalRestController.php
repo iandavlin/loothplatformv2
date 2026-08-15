@@ -159,6 +159,25 @@ final class InternalRestController
             [ 'administrator', 'bbp_keymaster', 'bbp_moderator' ]
         );
 
+        /**
+         * STRIPE TEST GROUP, as a CAPABILITY (Ian 2026-08-15: "a way for only
+         * white listed users to be able to see the menu for stripe, or the
+         * pages for stripe").
+         *
+         * Computed HERE, once, rather than by each surface reading the option:
+         * this is what `capabilities` already is, it rides whoami to every
+         * consumer exactly as manage_options does, and no caller has to be
+         * taught to pass a user id it may not have. A surface that asks
+         * "should this person see the Stripe menu?" gets the same answer the
+         * page gate will give when they click it — which is the whole point,
+         * because a menu entry that leads to a refusal is worse than no entry.
+         *
+         * Administrators keep their pre-launch access: the list ADDS people,
+         * it never takes Ian's own QA route away.
+         */
+        $caps['stripe_testgroup'] = ( $caps['manage_options'] ?? false )
+            || \LGMS\StripeLifecycle::inCohort( $wpUserId );
+
         return $caps;
     }
 }
