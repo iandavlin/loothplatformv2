@@ -226,6 +226,58 @@ symlinked to the **serving checkout**, not a worktree. On dev2 the route is
 asserted from the conf text and the endpoint exercised over a loopback
 `php -S`. It wants one real curl through the live route after merge.
 
+## 8. The race I found in my own fix (2026-08-15, post-build)
+
+Found by **re-reading the code**, not by a test failing — which is the only
+reason it did not ship.
+
+`reveal` was a **read-modify-write** on `resume_state`: SELECT, compute, UPDATE.
+Fire four reveals simultaneously and every one reads the same state and returns
+**its own positions** — the player sees four letters — while only the last write
+survives and the server charges for **one move**. Four reveals for the price of
+one is precisely the forgery backlog 25 exists to stop, so it would have shipped
+with a hole in the middle of it, behind a gate that was green because **a
+sequential test can never reproduce a race**.
+
+Fixed with `SELECT ... FOR UPDATE` inside a transaction. Every early exit inside
+the transaction releases the lock first; both success paths commit before
+emitting; the catch rolls back only if a transaction is actually open — that
+last detail matters because **the start/save block shares that catch's text and
+uses no transaction**, which is also why the first patch attempt failed its own
+uniqueness assertion instead of silently editing the wrong block.
+
+Gate 41 **phase 3b** fires the reveals genuinely concurrently via `subprocess`
+and asserts both the move arithmetic and that no write was lost. Measured:
+**4 simultaneous reveals cost 4 moves**, all letters survived.
+
+> **Honest limit:** a race is probabilistic, so a green here is strong evidence
+> rather than proof. That is why the red-first matters more than usual on this
+> one — if stripping the `FOR UPDATE` still passes, the test is not reproducing
+> the race and the burst needs widening.
+
+## 9. Suite state, and what is NOT ours
+
+Full run: **43 gates, my four (37/40/41/42) all GREEN, zero FAIL lines.**
+
+The suite banner is RED from **three gates this lane never touched** — gate 5
+`looth-auth-issue`, gate 11 `shop-planner-url`, gate 30 `legacy-url-redirect` —
+all failing with **HTTP 403**. Evidence they are flaky, not broken:
+
+- green in **three earlier full runs the same day** (00:59, 01:24, 03:00), red at 03:39
+- `shop-planner` standalone: **GREEN twice**, then **RED three times** minutes
+  later, same command, no code change
+- the URL itself served **200 on 20 of 20** direct curls using the gate's own
+  internal-IP resolve and exact cookie
+- `gate-env.sh` derived an **identical token 15/15**
+
+So the request works, the token resolves, the page serves — and the gate still
+intermittently sees 403. Not isolated further on purpose: it is another lane's
+instrument. Same class as the known gate 1 / gate 17 load flake.
+
+Also 4 gates DEAD (exit 2) for environment reasons, incl. `featured-member`,
+which wants `LG_GATE_HOST` + `LG_GATE_COOKIE`. **Only that gate reads
+`LG_GATE_COOKIE`** — checked, so setting it did not cause the three 403s.
+
 ## 5. Open
 
 1. **Gate number for 24** — keeper. Blocks the push.
