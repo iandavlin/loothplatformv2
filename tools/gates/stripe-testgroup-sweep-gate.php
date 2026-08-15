@@ -328,6 +328,33 @@ is_( $sources === [ 'stripe' ], sprintf(
 is_( ! str_contains( $syncBody, "'patreon'" ),
      "the patreon rail is written elsewhere entirely — this file cannot gate it even by accident" );
 
+// THE STRUCTURAL GUARANTEE behind the ruling, asserted so it cannot rot.
+//
+// Downstream flows fire for BOTH rails today only because the Stripe lifecycle
+// produces NO member-facing effect of its own: it moves the entitlement and the
+// role opinion, and the ARBITER announces the activation (welcome modal,
+// welcome email, looth_tier_changed) off the WINNING TIER across all sources.
+// A Patreon activation and a Stripe activation therefore have identical
+// consequences for the member.
+//
+// The way that breaks is somebody adding a "nice touch" email or hook inside
+// the Stripe leg — instantly a Stripe joiner gets something a Patreon joiner
+// does not, which is precisely what Ian ruled against. So: the Stripe
+// lifecycle may not mail, may not fire an action, and may not stamp user meta.
+$lifeBody = (string) file_get_contents( __DIR__ . '/../../lg-patreon-stripe-poller/src/StripeLifecycle.php' );
+$lifeCode = preg_replace( '!/\*.*?\*/!s', '', $lifeBody );          // strip block comments
+$lifeCode = preg_replace( '!^\s*//.*$!m', '', (string) $lifeCode );  // strip line comments
+
+$leaks = [];
+foreach ( [ 'wp_mail(' => 'sends mail', 'Mailer::' => 'invokes a mailer',
+            'do_action(' => 'fires a hook', 'update_user_meta(' => 'stamps user meta' ] as $needle => $what ) {
+    if ( str_contains( (string) $lifeCode, $needle ) ) { $leaks[] = $what; }
+}
+is_( $leaks === [], sprintf(
+    "the Stripe lifecycle has NO member-facing side effect of its own, so activation stays "
+    . "rail-agnostic and both rails produce identical consequences (%s)",
+    $leaks === [] ? 'clean' : 'LEAKS: ' . implode( ', ', $leaks ) ) );
+
 /* ---------------------------------------------------------------------- */
 echo "\n$pass passed, $fail failed\n";
 if ( $fail > 0 ) { echo "RED — the entitlement sweep is not fenced by the Test Group.\n"; exit( 1 ); }
@@ -363,6 +390,15 @@ exit( 0 );
  *   S8  wire up the latent UserLifecycle::provision() path        ->  1 RED
  *       (Reddens on a commented reference too — see the note at that
  *       assertion; over-eager in the safe direction.)
+ *
+ *  S10 add a Stripe-only welcome email inside the lifecycle           -> 1 RED
+ *      Ian's dual-rail ruling turned into a tripwire. Downstream flows fire for
+ *      BOTH rails today only because the Stripe leg has no member-facing effect
+ *      of its own — it moves state, and the ARBITER announces activation off
+ *      the WINNING tier across all sources. The way that rots is somebody
+ *      adding a "nice touch" inside the Stripe leg, at which point a Stripe
+ *      joiner gets something a Patreon joiner does not. The assertion names
+ *      what leaked ("LEAKS: sends mail") rather than just failing.
  * ======================================================================= */
 
 }
