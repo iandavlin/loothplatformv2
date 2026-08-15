@@ -736,6 +736,15 @@ run "stripe-testgroup-grant" php "$(dirname "$0")/../../lg-patreon-stripe-poller
 echo "=== GATE 34b/35: Stripe test-group — the PAGES (flag off = today's site) ==="
 run "stripe-testgroup-pages" php "$(dirname "$0")/stripe-testgroup-pages-gate.php"
 
+# 34c — the price control (Ian 2026-08-15: "I'd like to be able to set the
+# price. In the dash."). Setting a price is THREE writes and only the middle
+# one looks optional: create it in Stripe, record it in our own prices table,
+# repoint new joins. Skip the middle and an existing subscriber vanishes from
+# the join page's already-subscribed check, which offers them a second
+# subscription. Also asserts the charter's sandbox-only rule in code.
+echo "=== GATE 34c/35: Stripe price — one action or none, sandbox only ==="
+run "stripe-price-control" php "$(dirname "$0")/stripe-price-control-gate.php"
+
 # ── 35 ─────────────────────────────────────────────────────────────────────
 # Front-end compose + edit (backlog 6; Ian ruled Option A 2026-08-03, all-members
 # and front-end edit 2026-08-09). PER-STATE, and that is the point: it READS the
@@ -760,7 +769,7 @@ run "compose" python3 "$(dirname "$0")/compose-gate.py" \
     --owner patreon_77159883 --stranger bangers --post 72155
 
 # THE GATE-NUMBER LEDGER (single source of truth; keeper mints, lanes never):
-#   34 stripe (34a grant + 34b pages) · 35 compose/v2 · 36 dark-anon · 37 guitardle claim · 38 insert
+#   34 stripe (34a grant + 34b pages + 34c price) · 35 compose/v2 · 36 dark-anon · 37 guitardle claim · 38 insert
 #   path · 39 featured-members · 40 guitardle score-integrity — NEXT FREE: 41.
 # Gate 38 runs on the real stored-layout corpus via direct mysql; needs
 # neither Redis nor a WP bootstrap.

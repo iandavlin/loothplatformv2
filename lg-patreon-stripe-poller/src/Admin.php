@@ -25,6 +25,7 @@ final class Admin
         add_action( 'admin_post_lgms_cohort_lookup', [ self::class, 'handleCohortLookup' ] );
         add_action( 'admin_post_lgms_cohort_add',    [ self::class, 'handleCohortAdd' ] );
         add_action( 'admin_post_lgms_cohort_remove', [ self::class, 'handleCohortRemove' ] );
+        add_action( 'admin_post_lgms_price_set', [ self::class, 'handlePriceSet' ] );
     }
 
     public static function menu(): void
@@ -222,6 +223,164 @@ final class Admin
             ) ) ] );
         }
         self::cohortRedirect( [ 'lgms_cohort_err' => rawurlencode( "#{$uid} was not in the cohort." ) ] );
+    }
+
+    // -------------------------------------------------------------------------
+    // Stripe price (Ian 2026-08-15: "I'd like to be able to set the price. In
+    // the dash.") — the WRITE goes through LGMS\StripePrice, which creates the
+    // Stripe price, records it in our own prices table, and repoints new joins
+    // as ONE action. See that class for why the middle step is load-bearing.
+    // -------------------------------------------------------------------------
+
+    private static function priceRedirect( array $extra ): void
+    {
+        wp_safe_redirect( add_query_arg(
+            array_merge( [ 'page' => self::OPT_PAGE, 'tab' => 'stripe_price' ], $extra ),
+            admin_url( 'options-general.php' )
+        ) );
+        exit;
+    }
+
+    public static function handlePriceSet(): void
+    {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( 'Nope.' );
+        }
+        check_admin_referer( 'lgms_price_set' );
+
+        try {
+            $cents    = StripePrice::parseAmount( (string) ( $_POST['price_amount'] ?? '' ) );
+            $interval = StripePrice::assertInterval( sanitize_key( (string) ( $_POST['price_interval'] ?? '' ) ) );
+
+            // Typing the amount twice is cheaper than an accidental price. A
+            // Stripe price cannot be deleted once made, only deactivated.
+            $confirm = StripePrice::parseAmount( (string) ( $_POST['price_amount_confirm'] ?? '' ) );
+            if ( $confirm !== $cents ) {
+                throw new \RuntimeException( 'The two amounts do not match — nothing was changed.' );
+            }
+
+            $set = StripePrice::setPrice( $cents, $interval );
+        } catch ( \Throwable $e ) {
+            self::priceRedirect( [ 'lgms_price_err' => rawurlencode( $e->getMessage() ) ] );
+            return;
+        }
+
+        self::priceRedirect( [ 'lgms_price_ok' => rawurlencode( sprintf(
+            'New members will now pay %s %s. Everyone already subscribed keeps the price they joined on.',
+            StripePrice::money( $set['unit_amount_cents'] ),
+            $set['interval'] === 'year' ? 'a year' : 'a month'
+        ) ) ] );
+    }
+
+    private static function renderStripePriceTab(): void
+    {
+        $ok  = isset( $_GET['lgms_price_ok'] )  ? rawurldecode( (string) $_GET['lgms_price_ok'] )  : '';
+        $err = isset( $_GET['lgms_price_err'] ) ? rawurldecode( (string) $_GET['lgms_price_err'] ) : '';
+
+        $current  = StripePrice::currentPrice();
+        $orphaned = StripePrice::currentPriceIsOrphaned();
+
+        $productErr = '';
+        $product    = null;
+        try {
+            $product = StripePrice::tierProduct();
+        } catch ( \Throwable $e ) {
+            $productErr = $e->getMessage();
+        }
+
+        $modeErr = '';
+        try {
+            StripePrice::assertTestMode();
+        } catch ( \Throwable $e ) {
+            $modeErr = $e->getMessage();
+        }
+
+        if ( $ok !== '' ) : ?>
+            <div class="notice notice-success is-dismissible"><p><?php echo esc_html( $ok ); ?></p></div>
+        <?php endif;
+        if ( $err !== '' ) : ?>
+            <div class="notice notice-error is-dismissible"><p><?php echo esc_html( $err ); ?></p></div>
+        <?php endif; ?>
+
+        <h2>Membership price</h2>
+        <p class="description" style="max-width:720px;">
+            This is what somebody pays to join. There is one membership, so there is one price.
+            <strong>Changing it only affects people who join afterwards</strong> — everybody already
+            subscribed keeps paying the price they joined on, and nothing here can change that.
+        </p>
+
+        <?php if ( $modeErr !== '' ) : ?>
+            <div class="notice notice-error inline" style="max-width:720px;"><p><?php echo esc_html( $modeErr ); ?></p></div>
+        <?php endif; ?>
+
+        <?php if ( $productErr !== '' ) : ?>
+            <div class="notice notice-error inline" style="max-width:720px;"><p><?php echo esc_html( $productErr ); ?></p></div>
+        <?php endif; ?>
+
+        <h3>Right now</h3>
+        <?php if ( $orphaned ) : ?>
+            <div class="notice notice-error inline" style="max-width:720px;">
+                <p>
+                    New joins are pointed at a price this site has no record of
+                    (<code><?php echo esc_html( StripePrice::currentPriceId() ); ?></code>).
+                    <strong>Set a price below before anybody joins.</strong> A price we do not hold a
+                    record of also makes an existing member's subscription invisible to the join page,
+                    which would offer them a second one.
+                </p>
+            </div>
+        <?php elseif ( $current === null ) : ?>
+            <p><strong>No price is set</strong>, so nobody can join yet. That is the intended state until the
+               number is decided.</p>
+        <?php else : ?>
+            <table class="widefat striped" style="max-width:720px;">
+                <tbody>
+                    <tr><th style="width:12em;">New members pay</th>
+                        <td><strong><?php echo esc_html( StripePrice::money( $current['unit_amount_cents'], $current['currency'] ) ); ?></strong>
+                            <?php echo esc_html( $current['interval'] === 'year' ? 'a year' : 'a month' ); ?></td></tr>
+                    <tr><th>Membership</th><td><?php echo esc_html( $current['product_name'] ); ?></td></tr>
+                    <tr><th>Stripe reference</th><td><code><?php echo esc_html( $current['stripe_price_id'] ); ?></code></td></tr>
+                </tbody>
+            </table>
+        <?php endif; ?>
+
+        <h3>Set a new price</h3>
+        <?php if ( $modeErr !== '' || $productErr !== '' ) : ?>
+            <p class="description">Not available until the problem above is resolved.</p>
+        <?php else : ?>
+            <p class="description" style="max-width:720px;">
+                A price cannot be deleted from Stripe once it is made, only replaced — so the amount is
+                typed twice on purpose.
+                <?php if ( $product !== null ) : ?>
+                    It will be added to <strong><?php echo esc_html( $product['name'] ); ?></strong>.
+                <?php endif; ?>
+            </p>
+            <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+                <?php wp_nonce_field( 'lgms_price_set' ); ?>
+                <input type="hidden" name="action" value="lgms_price_set">
+                <table class="form-table" style="max-width:720px;">
+                    <tr>
+                        <th scope="row"><label for="lgms_price_amount">Price</label></th>
+                        <td><input name="price_amount" id="lgms_price_amount" type="text" class="regular-text"
+                                   inputmode="decimal" placeholder="12.00" required>
+                            <p class="description">In dollars, like 12 or 12.50.</p></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="lgms_price_amount_confirm">Price again</label></th>
+                        <td><input name="price_amount_confirm" id="lgms_price_amount_confirm" type="text"
+                                   class="regular-text" inputmode="decimal" required></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="lgms_price_interval">Billed</label></th>
+                        <td><select name="price_interval" id="lgms_price_interval">
+                            <?php foreach ( StripePrice::INTERVALS as $val => $label ) : ?>
+                                <option value="<?php echo esc_attr( $val ); ?>"><?php echo esc_html( $label ); ?></option>
+                            <?php endforeach; ?>
+                            </select></td>
+                    </tr>
+                </table>
+                <p><button type="submit" class="button button-primary">Set the price for new members</button></p>
+            </form>
+        <?php endif;
     }
 
     private static function renderStripeCohortTab(): void
@@ -476,6 +635,7 @@ final class Admin
             'member_tools'  => 'Member Tools',
             'welcome_email' => 'Welcome Email',
             'stripe_cohort' => 'Stripe Test Group',
+            'stripe_price'  => 'Stripe Price',
         ];
         ?>
         <div class="wrap">
@@ -495,6 +655,7 @@ final class Admin
                 'member_tools'  => MemberTools::renderContent(),
                 'welcome_email' => self::renderWelcomeEmailTab(),
                 'stripe_cohort' => self::renderStripeCohortTab(),
+                'stripe_price'  => self::renderStripePriceTab(),
                 default         => self::renderSettingsTab(),
             };
             ?>

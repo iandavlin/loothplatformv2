@@ -48,6 +48,20 @@ final class Client
         ] );
     }
 
+    /**
+     * Create a Price. Used only by LGMS\StripePrice (the dash control), which
+     * writes our own `prices` row in the same action — a Price that exists in
+     * Stripe but not in our table makes an existing subscriber's subscription
+     * vanish from the join page's already-subscribed check.
+     *
+     * Note a Stripe Price is immutable and cannot be deleted, only deactivated;
+     * that is why the caller validates before reaching this.
+     */
+    public function createPrice(array $params): object
+    {
+        return $this->sdk->prices->create( $params );
+    }
+
     /** @return iterable<\Stripe\Event> */
     public function listEvents(array $params = []): iterable
     {
