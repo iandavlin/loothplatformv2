@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Front-page panel — weekly email (mock)</title>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     THE REAL FRONT-PAGE STYLESHEET. Not a copy, not a lift — the same file
+     dev2 serves to https://dev2.loothgroup.com/ .  Every class below
+     (.row, .row__head, .rail, .rcard, .badge, .lg-fm) is therefore rendered by
+     the code that renders the live front page, at whatever width this panel is
+     given.  The only CSS this file adds is the ONE new component being
+     proposed (.wkiss / .wkfr), further down.
+
+     WHY THIS PANEL IS NORMALLY LOADED IN AN IFRAME — AND WHAT THAT DOES NOT FIX
+     ──────────────────────────────────────────────────────────────────────────
+     Every page served from the dev2 docroot gets scripts injected by nginx.
+     Three of them matter here, and MEASURED 2026-08-15 they behave differently:
+
+       pwa.js        line 13   `if (window.top !== window.self) return;`  bails
+       bottom-nav.js line 1687 same guard                                 bails
+       app-settings.js         NO frame guard                             RUNS
+
+     So framing the panel does remove the app chrome that has landed on top of
+     a mock's own controls before (2026-08-12) and reddened gates 36/45 by
+     being photographed (2026-08-15) — but it does NOT remove the theme boot
+     script, which stamps this shared browser profile's stored preference over
+     whatever the document asked for.  That is handled in script, below, and
+     the leftover chrome is hidden in CSS for the standalone URL.
+     ══════════════════════════════════════════════════════════════════════════ -->
+<link rel="stylesheet" href="/archive-poc/archive.css">
+
+<script>
+/* Theme + option, from the query string.  ?o=now|a|b  ?t=light|dark
+
+   ── WHY THIS DOES NOT STAMP data-lguser-theme, THOUGH THAT IS THE OBVIOUS WAY
+   ── MEASURED THE HARD WAY, 2026-08-15 ──────────────────────────────────────
+   First attempt set `document.documentElement.dataset.lguserTheme = 'dark'`,
+   which is exactly what archive.css's own dark gate keys on.  Two things went
+   wrong, in this order:
+
+   1. It did not take. nginx injects app-settings.js into every docroot HTML
+      response; it reads localStorage['lg-set-boot'] and stamps THAT over the
+      document's own value.  It has no frame guard (bottom-nav.js line 1687 and
+      pwa.js line 13 both do; app-settings.js does not), so framing the panel
+      does not dodge it.  All six dark states came back light — a mock claiming
+      dark while rendering light, which is the vacuous green this lane exists
+      to catch.
+
+   2. Worse: app-settings.js PERSISTED the stamp.  After that run the shared
+      chrome-dev profile held {"theme":"dark"} plus a full dark token map, and
+      every page it opened afterwards — for every lane on this box — was
+      force-painted dark by an injected body{background:#15171a!important}.
+      A mock had reached out and changed the browser other seats measure in.
+      (Restored to {"theme":"default"} the same session.)
+
+   So the panel touches NOTHING outside itself: no attribute on <html>, no
+   localStorage, no cookies.  The theme is a class on its own <body>, and the
+   token maps under it are lifted verbatim from archive.css — see the CSS. */
+(function () {
+  var q = new URLSearchParams(location.search);
+  document.documentElement.setAttribute('data-mock-opt', q.get('o') || 'now');
+  document.documentElement.setAttribute('data-mock-theme', q.get('t') === 'dark' ? 'dark' : 'light');
+})();
+</script>
+
+<style>
+/* ══════════════════════════════════════════════════════════════════════════
+   THE TWO THEMES, PINNED ON THIS PANEL'S OWN BODY.
+
+   Both maps are lifted VERBATIM from archive.css — the light one is its :root
+   block merged with its `body.view-discover` block (the discover redesign
+   re-points a few of them), the dark one is its
+   `html[data-lguser-theme="dark"] body.view-discover` block.  Extracted by
+   script, not retyped.  The dark values were independently confirmed the same
+   session against app-settings.js's own stored map (localStorage lg-set-boot
+   vars, read out of the browser) — the two agree exactly.
+
+   !important, and an id in the selector, because a docroot page whose visitor
+   has picked Dark gets an injected `body{background:#15171a!important}`
+   pre-paint.  `body#wkpanel.wk-light` is (1,1,1) and beats it among important
+   declarations, so the light panel stays light even for a dark-themed viewer —
+   and the dark panel stays dark for a light-themed one.  Ian sees both, in one
+   page, whatever his own setting is.
+
+   Everything the panel renders is token-driven product CSS (.rcard reads
+   --lg-card-bg / --lg-ink / --lg-mute / --lg-rust / --fp-img-ph; .badge--kind
+   reads --fp-badge-kind-bg), so re-pointing the tokens reproduces the real
+   rendering rather than approximating it.  The one exception is .badge--public
+   / .badge--lite, which hardcode light greens in archive.css with no dark
+   re-point of their own — they are shown here exactly as the platform would
+   show them, not quietly corrected.
+   ══════════════════════════════════════════════════════════════════════════ */
+body#wkpanel {
+  --lg-cream: #fcfcf9 !important;
+  --lg-sage: #8a9670 !important;
+  --lg-sage-d: #6b7751 !important;
+  --lg-sage-3: #dde3cd !important;
+  --lg-sage-tint: #f0f2e9 !important;
+  --lg-amber: #ecb351 !important;
+  --lg-rust: #c66845 !important;
+  --lg-charcoal: #1a1d1a !important;
+  --lg-ink: #323532 !important;
+  --lg-mute: #6b6f6b !important;
+  --lg-line: #ebe9e2 !important;
+  --lg-card-bg: #ffffff !important;
+  --fp-chip-bg: #1a1d1a !important;
+  --fp-chip-ink: #fff !important;
+  --fp-pill-bg: #fff !important;
+  --fp-pill-line: #d8d2c2 !important;
+  --fp-badge-kind-bg: #e8e2d2 !important;
+  --fp-input-bg: #f3efe7 !important;
+  --fp-img-ph: #d4ccb8 !important;
+  --fp-cta-ink: #fff !important;
+  --fp-cta-hover-bg: #3a4a3a !important;
+  --lg-read-scale: 1 !important;
+  background: var(--lg-cream) !important;
+  color: var(--lg-ink) !important;
+}
+html[data-mock-theme="dark"] body#wkpanel {
+  --lg-cream: #15171a !important;
+  --lg-card-bg: #1e2124 !important;
+  --lg-sage: #9cb37d !important;
+  --lg-sage-d: #b0c693 !important;
+  --lg-sage-tint: #243024 !important;
+  --lg-sage-3: #2f3d2c !important;
+  --lg-line: #2c312d !important;
+  --lg-ink: #e5e7e1 !important;
+  --lg-mute: #a6ac9f !important;
+  --lg-charcoal: #f2f4ee !important;
+  --lg-amber: #ecb351 !important;
+  --lg-rust: #d57a55 !important;
+  --fp-slab: #1f231e !important;
+  --fp-chip-bg: #2c312d !important;
+  --fp-chip-ink: #f2f4ee !important;
+  --fp-pill-bg: #243024 !important;
+  --fp-pill-line: #2c312d !important;
+  --fp-badge-kind-bg: #2f3d2c !important;
+  --fp-input-bg: #222629 !important;
+  --fp-img-ph: #262b30 !important;
+  --fp-cta-ink: #15171a !important;
+  --fp-cta-hover-bg: #c3d6a8 !important;
+  color-scheme: dark;
+}
+
+/* ── panel framing (mock-only: this is the slice of front page on show) ──── */
+html, body { margin: 0; }
+body.view-discover { padding: 0; }
+
+/* INJECTED APP CHROME IS NOT PART OF THE PROPOSAL, so it is not photographed.
+   bottom-nav.js and pwa.js both bail inside a frame, so in the decision page
+   these rules match nothing; they exist for the standalone URL, where the
+   tabbar really does paint over the bottom of the panel. Gates 36 and 45 were
+   both reddened by measuring exactly this furniture (2026-08-15). */
+#looth-tabbar, #looth-pwa-banner, #looth-ios-sheet,
+#looth-shop-bubble, .lg-bottom-nav { display: none !important; }
+body.has-looth-tabbar { padding-bottom: 0 !important; }
+.pnl { padding: 18px 0 26px; }
+/* The real front page is `.arc-page { padding: 0 48px 80px }`, narrowing on
+   mobile. Reproduced here so the block's gutters are the real gutters. */
+.arc-page { padding: 0 48px 26px; }
+@media (max-width: 900px) { .arc-page { padding: 0 16px 26px; } }
+
+/* Only the state asked for renders. */
+html[data-mock-opt="now"] .only-a, html[data-mock-opt="now"] .only-b,
+html[data-mock-opt="a"]   .only-b, html[data-mock-opt="a"]   .only-now,
+html[data-mock-opt="b"]   .only-a, html[data-mock-opt="b"]   .only-now { display: none !important; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   OPTION A — the ONE new component.  "This week's issue".
+
+   Everything inside it is already-shipping front-page furniture (.rail +
+   .rcard, gated cards included); the new part is only the masthead strip and
+   the sign-up foot, which is what makes a row of cards read as a newsletter.
+
+   TOKEN-DRIVEN ON PURPOSE.  Dark mode on logged-out surfaces is backlog 21,
+   promoted by Ian on 8/14 ("a ton of instructions and fields not ready for
+   primetime in dark for logged out"), and dark contrast has now bitten three
+   times.  So this component declares NO hardcoded ink or surface: it reads
+   --lg-* tokens, which archive.css itself re-points under the dark gate.  The
+   two exceptions are the masthead's own brown/gold — those ARE the newsletter's
+   identity and must survive both themes — and they get an explicit dark rule
+   below with the measured contrast written next to it.
+   ══════════════════════════════════════════════════════════════════════════ */
+.wkiss {
+  border: 1px solid var(--lg-line);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--lg-card-bg, #fff);
+
+  /* ── WHY THIS COMPONENT DOES NOT USE --lg-sage-d FOR INK OR FILL ─────────
+     Measured on dev2 2026-08-15 with tools/gates/lib/contrast-probe.js: the
+     SERVED value of --lg-sage-d is #6f7c54 (archive.css declares #6b7c52; the
+     injected lg-shared token sheet lands slightly lighter), which is 4.48:1
+     against white — a hair UNDER WCAG AA's 4.5 for normal text, in BOTH
+     directions.  The first draft of this block used it for the section labels
+     and for the sign-up button, and the probe reddened all three, correctly.
+     Rather than ship a new component 0.02 short, the accent is stated here:
+     #5c6a42 is 5.84:1 either way in light.  In dark, the platform's own
+     repoint (#b0c693) is already 8.74:1 on the dark card and 9.70:1 behind
+     #15171a ink, so dark simply uses it. */
+  --wk-accent:     #5c6a42;
+  --wk-accent-ink: #fff;
+}
+html[data-mock-theme="dark"] .wkiss,
+html[data-mock-theme="dark"] .wkfr {
+  --wk-accent:     #b0c693;
+  --wk-accent-ink: #15171a;
+}
+.wkfr { --wk-accent: #5c6a42; --wk-accent-ink: #fff; }
+
+/* The masthead. #2b2318 / #ecb351 / #87986a are lifted from the email itself
+   (lg-weekly-digest/templates/email.php:72,80,83) so the strip on the front
+   page and the header of the email that arrives are the same object. */
+.wkiss__mast {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px;
+  background: #2b2318;
+  padding: 13px 18px;
+}
+.wkiss__wordmark {
+  font: 700 15px/1.2 var(--lg-font-serif);
+  letter-spacing: 3px; text-transform: uppercase;
+  color: #ecb351;                     /* 8.34:1 on #2b2318 — AA large + AA body */
+}
+.wkiss__sent {
+  font: 600 11px/1.4 var(--lg-font-sans);
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: #b3c194;                     /* 7.09:1 on #2b2318.  The email's own
+                                         #87986a is only 3.31:1 — it passes in
+                                         the email because it sits on cream, not
+                                         on the brown.  Lightened here rather
+                                         than copied, and measured. */
+  margin-left: auto;
+}
+@media (max-width: 620px) { .wkiss__sent { margin-left: 0; } }
+
+.wkiss__body { padding: 16px 18px 4px; }
+.wkiss__lede {
+  margin: 0 0 14px;
+  font: 500 14px/1.55 var(--lg-font-sans);
+  color: var(--lg-mute);
+  max-width: 62ch;
+}
+.wkiss__lede b { color: var(--lg-ink); font-weight: 700; }
+
+/* Section label above each group — the issue's OWN section labels, straight
+   from the stored issue (sections[].label). Nothing is re-derived here. */
+.wkiss__sec {
+  margin: 4px 0 8px;
+  font: 800 10px/1 var(--lg-font-sans);
+  letter-spacing: .12em; text-transform: uppercase;
+  color: var(--wk-accent);
+}
+
+/* The rail is the front page's real rail; it only needs its negative gutter
+   pulled back in, because here it sits inside a bordered card. */
+.wkiss .rail { margin-left: 0; margin-right: 0; padding-left: 0; padding-right: 0; }
+
+.wkiss__foot {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 10px 16px;
+  border-top: 1px solid var(--lg-line);
+  background: var(--lg-sage-tint);
+  padding: 14px 18px;
+}
+.wkiss__pitch { margin: 0; font: 500 13.5px/1.5 var(--lg-font-sans); color: var(--lg-ink); }
+.wkiss__pitch b { font-weight: 700; }
+.wkiss__pitch small { display: block; color: var(--lg-mute); font-size: 12px; margin-top: 2px; }
+.wkiss__cta {
+  flex: 0 0 auto; text-decoration: none;
+  background: var(--wk-accent); color: var(--wk-accent-ink);
+  border-radius: 999px; padding: 11px 22px;
+  font: 700 13.5px/1 var(--lg-font-sans);
+}
+.wkiss__cta:hover { filter: brightness(0.92); }
+
+/* ── dark: only the two identity colours need saying, everything else is a
+      token that archive.css has already re-pointed. ───────────────────────── */
+html[data-mock-theme="dark"] .wkiss__mast {
+  background: #241d14;                /* the brown, deepened so the gold keeps
+                                         its ratio while the strip still reads
+                                         as a distinct object on #15171a */
+  border-bottom: 1px solid #3a3025;
+}
+html[data-mock-theme="dark"] .wkiss__wordmark { color: #ecb351; }  /* 9.55:1 */
+html[data-mock-theme="dark"] .wkiss__sent     { color: #b3c194; }  /* 8.12:1 */
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   OPTION B — the framed email, exactly as the sign-up page frames it today.
+   .wkfr is the sign-up page's own .lgws .mail rule (max-width:992px, its own
+   border + radius + overflow:hidden), so this is not a strawman: it is the
+   shipped treatment, moved onto the front page.
+   ══════════════════════════════════════════════════════════════════════════ */
+.wkfr { border: 1px solid var(--lg-line); border-radius: 14px; overflow: hidden; background: var(--lg-card-bg, #fff); }
+.wkfr__mast { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; background: #2b2318; padding: 13px 18px; }
+.wkfr__wordmark { font: 700 15px/1.2 var(--lg-font-serif); letter-spacing: 3px; text-transform: uppercase; color: #ecb351; }
+.wkfr__sent { font: 600 11px/1.4 var(--lg-font-sans); letter-spacing: 1.5px; text-transform: uppercase; color: #b3c194; margin-left: auto; }
+.wkfr__mail { max-width: 992px; margin: 0 auto; background: #e8e2d8; }
+.wkfr__mail iframe { display: block; width: 100%; height: 620px; border: 0; background: #e8e2d8; }
+@media (max-width: 880px) { .wkfr__mail iframe { height: 520px; } }
+.wkfr__foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; border-top: 1px solid var(--lg-line); background: var(--lg-sage-tint); padding: 14px 18px; }
+.wkfr__pitch { margin: 0; font: 500 13.5px/1.5 var(--lg-font-sans); color: var(--lg-ink); }
+.wkfr__cta { flex: 0 0 auto; text-decoration: none; background: var(--wk-accent); color: var(--wk-accent-ink); border-radius: 999px; padding: 11px 22px; font: 700 13.5px/1 var(--lg-font-sans); }
+html[data-mock-theme="dark"] .wkfr__mast { background: #241d14; border-bottom: 1px solid #3a3025; }
+
+/* NOTHING re-points .wkfr__mail, and that is the point being shown, not an
+   oversight: the email document hardcodes #e8e2d8 / #FAF6EE / #2B2318 inline
+   (email.php:60,68,72) because real inboxes have no CSS variables.  A frame of
+   it cannot follow the page's theme.  Leave it, and let the dark panel say so. */
+
+/* what today actually offers a logged-out visitor, for the "now" state */
+.nowline {
+  border: 1px dashed var(--lg-line); border-radius: 12px;
+  padding: 15px 18px; background: var(--lg-card-bg, #fff);
+}
+.nowline p { margin: 0 0 10px; font: 500 13.5px/1.55 var(--lg-font-sans); color: var(--lg-mute); }
+.nowline .vp-cta { display: inline-block; }
+</style>
+</head>
+
+<!-- NOTE ON loading="lazy": the real card markup carries it and the real front
+     page should keep it. It is stripped in this mock only. A panel that is
+     scaled and off-screen when it loads never trips the lazy threshold, so the
+     dark desktop rendering published with grey placeholders where the
+     thumbnails should be — a picture that says "the images are broken" about a
+     proposal whose whole point is that the images already work. -->
+<body id="wkpanel" class="view-discover">
+<div class="pnl">
+<main class="arc-page">
+
+  <!-- ── the real neighbour above: the featured-member band, lifted verbatim
+          from the served anon front page on 2026-08-15 ──────────────────── -->
+  <section class="row row--featured-member" data-row-id="featured-member">
+    <div class="lg-fm">
+      <span class="lg-fm__badge">Featured member</span>
+      <span class="lg-fm__avi"><img src="/profile-media/avatars/d20d0a60-9eb9-543f-8ee2-5992ddeba677/3.webp?v=3&amp;w=208" alt="" width="104" height="104"></span>
+      <div class="lg-fm__body">
+        <h2 class="lg-fm__name">Rick Liftig luthier wannabe&hellip; slowly gettinthere</h2>
+        <div class="lg-fm__role">I&rsquo;m a retired dentist who has come to the conclusion that Loothing has a lot in common with dentistry, but without the blood or guts. Sometimes there&rsquo;s pain, but it&rsquo;s usually self-inflicted.</div>
+      </div>
+      <div class="lg-fm__act"><a class="lg-fm__cta" href="#">See Rick&rsquo;s profile</a></div>
+    </div>
+  </section>
+
+  <!-- ══════════════ TODAY ══════════════════════════════════════════════ -->
+  <section class="row only-now">
+    <header class="row__head"><h2 class="row__title">Today</h2></header>
+    <div class="nowline">
+      <p>There is no weekly-email block on the front page. The whole of what a logged-out
+         visitor is offered about the weekly email is one secondary text button, inside the
+         welcome video&rsquo;s copy, several screens up:</p>
+      <!-- The button reproduced exactly as the front page renders it: .vp-cta's
+           real rules are all scoped `.vpromo__copy .vp-cta*`, so lifting the
+           class without its parent gave an unstyled default-blue link at 2.39:1
+           — caught by the contrast probe, 2026-08-15, and a good reminder that
+           a lifted class is not a lifted component. -->
+      <div class="vpromo__copy"><a class="vp-cta vp-cta--secondary" href="#">Weekly email</a></div>
+      <p style="margin:10px 0 0">Measured on dev2, 2026-08-15: that button points at
+         <code>/looth-group-weekly/</code>, which <b>302-redirects a logged-out visitor to
+         wp-login.php</b> (<code>action=bpnoaccess</code>). The standalone issue page
+         <code>/weekly/</code> is members-only in PHP and shows anon a sign-in card with no
+         content at all. So today the one weekly link on the anon front page is a login wall.</p>
+    </div>
+  </section>
+
+  <!-- ══════════════ OPTION A ═══════════════════════════════════════════ -->
+  <section class="row only-a" data-row-id="weekly-issue">
+    <header class="row__head">
+      <h2 class="row__title">This week&rsquo;s issue</h2>
+    </header>
+
+    <div class="wkiss">
+      <div class="wkiss__mast">
+        <span class="wkiss__wordmark">The Looth Group Weekly</span>
+        <span class="wkiss__sent">Sent Monday 13 July</span>
+      </div>
+
+      <div class="wkiss__body">
+        <p class="wkiss__lede">Every Monday we send one email with the week&rsquo;s new videos,
+          articles and loothprints. <b>This is the one that just went out.</b></p>
+
+        <div class="wkiss__sec">Videos</div>
+        <div class="rail">
+
+          <a class="rcard rcard--video rcard--gated rcard--gated-lite" href="#">
+            <div class="rcard__img-wrap">
+              <img class="rcard__img" src="/img.php?s=2026%2F07%2Fscg.jpg&amp;w=480" srcset="/img.php?s=2026%2F07%2Fscg.jpg&amp;w=240 240w, /img.php?s=2026%2F07%2Fscg.jpg&amp;w=480 480w" sizes="(max-width: 640px) 45vw, 240px" alt="" width="480" height="320">
+              <span class="rcard__gate" aria-label="Lite member content" title="Lite members only">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              </span>
+            </div>
+            <div class="rcard__body">
+              <h3 class="rcard__title">Santa Cruz Guitars: 50 Years of Custom Guitars</h3>
+              <div class="rcard__meta"><span class="author">Michael Bashkin Bashkin Guitars</span>
+              <span>Jul 12, 2026</span></div>
+              <div class="rcard__foot"><span class="badge badge--lite">Lite</span><span class="badge badge--kind">Videos</span></div>
+            </div>
+          </a>
+
+          <a class="rcard rcard--video" href="#">
+            <div class="rcard__img-wrap">
+              <img class="rcard__img" src="/img.php?s=2026%2F07%2Fgn.jpg&amp;w=480" srcset="/img.php?s=2026%2F07%2Fgn.jpg&amp;w=240 240w, /img.php?s=2026%2F07%2Fgn.jpg&amp;w=480 480w" sizes="(max-width: 640px) 45vw, 240px" alt="" width="480" height="320">
+            </div>
+            <div class="rcard__body">
+              <h3 class="rcard__title">Live Testing: Hands on with Giuliano Nicoletti!</h3>
+              <div class="rcard__meta"><span class="author">Giuliano Nicoletti</span>
+              <span>Jul 6, 2026</span></div>
+              <div class="rcard__foot"><span class="badge badge--public">Public</span><span class="badge badge--kind">Videos</span></div>
+            </div>
+          </a>
+
+          <a class="rcard rcard--video rcard--gated rcard--gated-lite" href="#">
+            <div class="rcard__img-wrap">
+              <img class="rcard__img" src="/img.php?s=2026%2F07%2Ftb.jpg&amp;w=480" srcset="/img.php?s=2026%2F07%2Ftb.jpg&amp;w=240 240w, /img.php?s=2026%2F07%2Ftb.jpg&amp;w=480 480w" sizes="(max-width: 640px) 45vw, 240px" alt="" width="480" height="320">
+              <span class="rcard__gate" aria-label="Lite member content" title="Lite members only">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              </span>
+            </div>
+            <div class="rcard__body">
+              <h3 class="rcard__title">Electric Guitar Builders Club: Winding Pickups with Tom Brantley</h3>
+              <div class="rcard__meta"><span class="author">Brett Bailey Contriver Guitars</span>
+              <span>Jul 4, 2026</span></div>
+              <div class="rcard__foot"><span class="badge badge--lite">Lite</span><span class="badge badge--kind">Videos</span></div>
+            </div>
+          </a>
+
+        </div>
+
+        <div class="wkiss__sec">Loothprints &amp; articles</div>
+        <div class="rail">
+
+          <a class="rcard rcard--loothprint rcard--gated rcard--gated-lite" href="#">
+            <div class="rcard__img-wrap">
+              <img class="rcard__img" src="/img.php?s=2026%2F07%2Ftotal-vise-neck-rest-guitar-neck-held-flat.webp&amp;w=480" srcset="/img.php?s=2026%2F07%2Ftotal-vise-neck-rest-guitar-neck-held-flat.webp&amp;w=240 240w, /img.php?s=2026%2F07%2Ftotal-vise-neck-rest-guitar-neck-held-flat.webp&amp;w=480 480w" sizes="(max-width: 640px) 45vw, 240px" alt="" width="480" height="320">
+              <span class="rcard__gate" aria-label="Lite member content" title="Lite members only">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              </span>
+            </div>
+            <div class="rcard__body">
+              <h3 class="rcard__title">Total Vise Quick Dock Neck Rest &mdash; Flat-Lay Variant</h3>
+              <div class="rcard__meta"><span class="author">Jan Stoewenau electric wood</span>
+              <span>Jul 12, 2026</span></div>
+              <div class="rcard__foot"><span class="badge badge--lite">Lite</span><span class="badge badge--kind">Loothprints</span></div>
+            </div>
+          </a>
+
+          <a class="rcard rcard--article" href="#">
+            <div class="rcard__img-wrap">
+              <img class="rcard__img" src="/img.php?s=2026%2F07%2Fibanez-musician-resin-cast-pickup-covers-installed.webp&amp;w=480" srcset="/img.php?s=2026%2F07%2Fibanez-musician-resin-cast-pickup-covers-installed.webp&amp;w=240 240w, /img.php?s=2026%2F07%2Fibanez-musician-resin-cast-pickup-covers-installed.webp&amp;w=480 480w" sizes="(max-width: 640px) 45vw, 240px" alt="" width="480" height="320">
+            </div>
+            <div class="rcard__body">
+              <h3 class="rcard__title">Resin Casting a Replacement Pickup Cover for an Ibanez Musician</h3>
+              <div class="rcard__meta"><span class="author">James Roadman</span>
+              <span>Jul 12, 2026</span></div>
+              <div class="rcard__foot"><span class="badge badge--public">Public</span><span class="badge badge--kind">Articles</span></div>
+            </div>
+          </a>
+
+        </div>
+      </div>
+
+      <div class="wkiss__foot">
+        <p class="wkiss__pitch"><b>One email a week. No account needed.</b>
+          <small>Free, and you can unsubscribe in one click.</small></p>
+        <a class="wkiss__cta" href="/weekly-email-sign-up/">Get it every Monday &rarr;</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════ OPTION B ═══════════════════════════════════════════ -->
+  <section class="row only-b" data-row-id="weekly-issue">
+    <header class="row__head">
+      <h2 class="row__title">This week&rsquo;s issue</h2>
+    </header>
+
+    <div class="wkfr">
+      <div class="wkfr__mast">
+        <span class="wkfr__wordmark">The Looth Group Weekly</span>
+        <span class="wkfr__sent">Sent Monday 13 July</span>
+      </div>
+      <div class="wkfr__mail">
+        <!-- The real thing: the same admin-ajax route the sign-up page frames,
+             rendering the latest SENT issue through the email builder, cached
+             one hour. Nothing about this frame is simulated. -->
+        <iframe src="/wp-admin/admin-ajax.php?action=lg_wd_email_preview"
+                title="The Looth Group Weekly — latest issue"></iframe>
+      </div>
+      <div class="wkfr__foot">
+        <p class="wkfr__pitch"><b>One email a week. No account needed.</b></p>
+        <a class="wkfr__cta" href="/weekly-email-sign-up/">Get it every Monday &rarr;</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── the real neighbour below ─────────────────────────────────────── -->
+  <section class="row row--rail" data-row-id="latest-public-posts">
+    <header class="row__head"><h2 class="row__title">Latest posts</h2></header>
+  </section>
+
+</main>
+</div>
+</body>
+</html>
