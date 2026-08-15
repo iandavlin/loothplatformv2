@@ -974,6 +974,28 @@ echo "=== GATE 45: contrast defects that fail in BOTH themes ==="
 # zero assertion would block every other lane's train for disclosed debt.
 run "theme-independent-contrast" python3 "$(dirname "$0")/theme-independent-contrast-gate.py"
 
+echo "=== GATE 49: every copy of a paired feature flag agrees ==="
+# Number 49 ASSIGNED BY KEEPER 2026-08-15, verified free on origin/main first.
+#
+# A DEFECT I DESIGNED IN. The dark-anon flags are per-file module-local vars,
+# not one shared window global — correct, and it stays: pwa.js documents that a
+# dynamically-injected defer script has no guaranteed order against the
+# sync-injected ones, so a shared window.LG_* would be read before it was
+# written on some loads. Local copies have no such race. What they DO have is
+# this: I defended the pattern with a comment calling it "one grep away from
+# flipping every copy at once", and on 2026-08-15 the flip happened without the
+# grep. LG_DARK_BORDER_FIX went true in app-settings.js and stayed false in four
+# other files, so dark mode served TWO border colours at once, side by side on
+# hub surfaces where both files style the same page. Worse than either whole
+# state. A design whose safety depends on a comment being obeyed is not safe;
+# this is that comment turned into a mechanical check.
+#
+# Asserts only that copies AGREE — never that a flag is on or off — so it stays
+# correct as flags flip in either direction and nobody edits it to ship a
+# feature. Static source read: no browser, no network, cannot flake. Red-fired
+# against the REAL live half-state before the fix, not a synthetic one.
+run "paired-flag-agreement" python3 "$(dirname "$0")/paired-flag-agreement-gate.py"
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"

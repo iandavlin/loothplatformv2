@@ -55,9 +55,9 @@
   // so every file keeps its own identically-named, independently-flippable
   // copy rather than risk a race on a shared global. Both OFF pending Ian's
   // phone pass on the dev2 serve.
-  var LG_DARK_BORDER_FIX = false;
+  var LG_DARK_BORDER_FIX = true;  // ON 2026-08-15: Ian phone pass "dark mode good" — completing the flip keeper began (gate 49)
   var DARK_BORDER = LG_DARK_BORDER_FIX ? '#767c76' : '#333833';
-  var LG_DARK_SEARCH_WRAPPER_FIX = false;
+  var LG_DARK_SEARCH_WRAPPER_FIX = true;  // ON 2026-08-15: Ian phone pass "dark mode good" — completing the flip keeper began (gate 49)
   // Muted-meta ink — this file's own copy of app-settings.js's
   // LG_DARK_MUTED_INK_FIX (see that file for the measurements and why the map
   // attribution is fixed by opacity instead). Kept in lockstep deliberately:
