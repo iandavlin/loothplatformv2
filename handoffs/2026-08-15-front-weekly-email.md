@@ -153,3 +153,106 @@ once**, since an anon player has no pending row *and* plays a different phrase
 track. Caveat kept honest: the whole live table has only two claimed rows, both
 from today, so "his save landed" is solid but "the mirror is healthy in general"
 is not yet earned.
+
+---
+
+# ADDENDUM — 2026-08-15 late, the seat that inherited this charter
+
+Read §1–§7 above first; they are still accurate. This records what changed.
+
+## A. The suite now COMPLETES on this branch — the §5 blocker is cleared
+
+§5 said "the full suite has never completed on this branch." It has now.
+Branch merged up to `origin/main`, **zero conflicts**, tip **`28c91e9`**, pushed.
+
+**56 gates, ZERO no-verdict, exactly ONE red — `compose` — and it is not ours.**
+
+Gate 54 GREEN in-suite (22 assertions). Red-first **re-run after the merge**:
+11/11 mutations caught, so the gate is real against the *merged* tree, not only
+the tree it was written on.
+
+## B. The `compose` red is BOX STATE. Do not spend a session on it.
+
+Proven three ways, in ascending strength:
+
+1. It reds identically on `guitardle-phrase-dupe` and on this branch — two
+   unrelated branches, same gate, same two findings.
+2. **`compose-gate.py` run standalone against PRISTINE MAIN** in `~/keeper-repo`,
+   clean tree: **RED, exit 1, same two findings.** No lane branch involved.
+3. Cause: dev2 FPM carries `env[LG_FC_PREVIEW] = 1`
+   (`/etc/php/8.3/fpm/pool.d/looth-dev.conf` — find it with `grep -R`, **`grep -r`
+   misses it**, the pool file is a symlink into the serving checkout) while the
+   tracked `platform/config/frontend-compose.php` says `enabled => false`.
+   Gate 35 reads the **tracked** flag (OFF) then measures the **served** page
+   (ON) — it compares two different flag states.
+
+Keeper's to resolve (drop the pool env, or teach gate 35 the same override
+channel it measures). **Shared state — a lane must not touch either side.**
+
+## C. The OFF path was re-proven by hand, not inherited
+
+The merge moved the baseline, so §5's byte-identity claim was re-earned:
+
+- All three `index.php` hunks are **purely additive — zero deleted lines.**
+- Two are inert function definitions.
+- The third is the *only* unconditional call, `lg_weekly_front_flush_refresh()`,
+  and it **returns on its first line** when the flag is off: the global it keys
+  on (`$GLOBALS['LG_WEEKLY_FRONT_REFRESH']`) is set only *inside*
+  `lg_weekly_front_payload()`, **after** the flag check.
+- So OFF makes no loopback fetch, touches no cache file, emits no markup. The
+  emit site is double-guarded besides (logged-out only, non-empty sections only).
+
+`weekly-front-flip-dev2.sh --dry-run` **correctly refuses** today (exit 2, names
+the serving checkout's commit). The guard was tested before being relied on.
+
+`weekly-front-shots.py` was **pre-tested on the mock**: 12 states, all clear AA,
+exit 0, light/dark backgrounds correctly different — so the tooling is known-good
+*before* it is needed on the real page. chrome-dev, the gate token and the
+`websocket` module were all confirmed live.
+
+## D. THE ONLY REMAINING BLOCKER IS KEEPER'S MERGE
+
+Everything below is structurally impossible until the code is in the serving
+checkout, which is why the flip script refuses. **Runbook, in order:**
+
+```
+git -C ~/loothplatformv2-clean pull --ff-only origin main
+bash tools/preview/weekly-front-flip-dev2.sh            # --dry-run first
+python3 tools/preview/weekly-front-shots.py --url https://dev2.loothgroup.com/
+```
+Then verify on the REAL page, not the mock:
+- the anon view actually carries the block;
+- **the logged-in-member negative case** (§5's untested half — use
+  `tools/preview/mint-wp-session.php`; the block must NOT render for a member);
+- a **liveness assertion**, because a locked-out browser photographs a styled 403
+  identically in every state and passes having measured nothing;
+- then board-post the URL. **Ian asked for this look twice on 8/15.**
+
+## E. Job 1 (the Guitardle repeat) — done, and NOT by this seat
+
+Charter job 1 was already built by a sibling seat in a **second worktree the
+charter never named**: `~/worktrees/guitardle-dupe`, branch
+`guitardle-phrase-dupe`, committed **unpushed** two minutes before this session
+opened, with no live session left on it. **This seat pushed it** (origin,
+`64e2597`) and verified rather than rebuilt it — gate 55 green, 13/13 mutations
+bite, and, strongest of all, pointing gate 55 at **main's unfixed library** goes
+RED naming member days `[12, 65]` = Ian's 23 June and 15 August exactly.
+
+Lesson saved to memory: run `git worktree list`, `git branch -a | grep <topic>`
+and `git log --oneline -5 origin/main` **before** starting any chartered job.
+
+## F. Gate numbering — 54 is safe, and main's ledger comment lies
+
+Enumerated across every branch: main registers up to 45/48/49/50/53; in flight
+are 46+47 (compose), 51 (profiles-alive), 52 (notif-quickreply), **54 (this
+branch)**, 55 (guitardle-phrase-dupe). No collision.
+
+⚠️ `run-all.sh`'s ledger comment on main still reads **`NEXT FREE: 45`** while
+that same file registers 45, 48, 49, 50 and 53. Reported to keeper; **not edited
+from this branch** — the block says "keeper mints, lanes never," and it is a line
+every branch touches.
+
+## G. Backlog 28 (the charter's fallback) needs nothing
+
+`admin-no-offline-shell` @ `464c9e0` is **already merged into main**. No work
+there.
