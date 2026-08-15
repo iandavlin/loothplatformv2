@@ -265,8 +265,21 @@ def main():
         else:
             i = hub_body.find('id="ntm-overlay"')
             j = hub_body.find('id="lpm-overlay"')
-            disc = hub_body[i:j] if (i != -1 and j > i) else hub_body[i:i + 40000]
-            lp   = hub_body[j:j + 40000] if j != -1 else ""
+            # Bound each slice to the OVERLAY, not a fixed window. A fixed
+            # 40000-char slice past #lpm-overlay runs on into the feed, which
+            # carries its own <iframe> embeds — so the no-iframe clause fired on
+            # BOTH the clean and the mutated tree and the red-first proved
+            # nothing. An assertion that is red either way is not an assertion.
+            def _overlay(body, start):
+                if start == -1:
+                    return ""
+                nxt = [body.find(m, start + 10) for m in
+                       ('id="lpm-overlay"', 'id="frm-overlay"', 'id="ntm-overlay"')]
+                nxt = [n for n in nxt if n != -1]
+                return body[start:min(nxt)] if nxt else body[start:start + 20000]
+
+            disc = _overlay(hub_body, i)
+            lp   = _overlay(hub_body, j)
             if j == -1:
                 findings.append(
                     "[9] no dedicated Loothprint overlay (#lpm-overlay) — the two "
