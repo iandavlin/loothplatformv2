@@ -423,9 +423,240 @@ def run_viewport(tab, env, cookies, label, w, h, mobile, findings, notes):
     return draft
 
 
+def run_modal(tab, env, cookies, label, w, h, mobile, findings, notes):
+    """The MODAL path, and the discussion composer it replaced.
+
+    The Loothprint form is fetched furniture-free and INJECTED into the hub's
+    own shell — no iframe, Ian's ruling. That is the arrangement this lane has
+    already been bitten by twice, and the recorded class is precise: relocated
+    markup arrives WITHOUT ITS BEHAVIOUR. Counting the injected fields proves
+    nothing, so this taps the one control whose wiring is hardest to carry over
+    — the photo picker — and checks it is scoped to the same draft the
+    standalone page binds.
+
+    The discussion composer is checked on BOTH sides of the toggle, because the
+    hub is a different app with no WordPress and the injection drags jQuery,
+    acf.js, select2 and media-views into it. A second jQuery landing over the
+    hub's own does not fail loudly: it re-binds and quietly breaks the composer
+    that was working a moment ago.
+    """
+    url = env["LG_GATE_HOST"] + "/preview/frontend-compose/hub/?compose=1"
+
+    tab.call("Emulation.setDeviceMetricsOverride", width=w, height=h,
+             deviceScaleFactor=1, mobile=mobile, screenWidth=w, screenHeight=h)
+    tab.call("Emulation.setTouchEmulationEnabled", enabled=mobile,
+             maxTouchPoints=5 if mobile else 1)
+
+    ok = False
+    for _ in range(3):
+        tab.call("Network.setCookies", cookies=cookies)
+        tab.call("Page.navigate", url=url)
+        if wait_for(tab, "!!document.getElementById('ntm-typetoggle')", 30):
+            ok = True
+            break
+    if not ok:
+        seen = tab.js("JSON.stringify({url:location.href,title:document.title,"
+                      "text:(document.body?document.body.innerText:'').slice(0,120)})")
+        findings.append(f"[{label}/modal] the hub composer never appeared. "
+                        f"Page was: {seen}")
+        return
+
+    # The auth probe resolves 2-4s AFTER the composer opens, and the race it
+    # creates is the exact defect the dedicated modal was built to retire.
+    # Waiting it out is what makes the "both open" check below meaningful.
+    time.sleep(5)
+
+    def vis(sel):
+        return tab.js(f"""(() => {{
+          const e = document.querySelector({sel!r});
+          if (!e) return 'absent';
+          if (e.hidden) return 'hidden';
+          const r = e.getBoundingClientRect();
+          return (r.width > 0 && r.height > 0) ? 'visible' : 'zero-size';
+        }})()""")
+
+    # ---- the discussion composer, BEFORE the toggle
+    before = vis("#ntm-overlay")
+    if before != "visible":
+        findings.append(f"[{label}/modal] the discussion composer is {before} on "
+                        f"open — the toggle sits on a composer nobody can use")
+
+    # THE LIBRARY STATE BEFORE ANY INJECTION. The hub is not WordPress and
+    # carries none of what the form needs, so the modal drags jQuery, acf.js,
+    # select2 and media-views in behind it. The dedupe is by FILENAME because
+    # the two apps reach the same libraries by different paths — and the failure
+    # it guards against is silent: a second jQuery landing over a live one does
+    # not throw, it re-binds, and the discussion composer that worked a moment
+    # ago stops. So the version is recorded here and compared after the trip.
+    jq_before = tab.js("JSON.stringify({v:(window.jQuery&&jQuery.fn&&jQuery.fn.jquery)||null,"
+                       "n:[...document.querySelectorAll('script[src]')]"
+                       ".filter(s=>/jquery[.-]/i.test(s.src.split('/').pop())).length})")
+
+    # ---- switch to Loothprint
+    clicked = tab.js("""(() => {
+      const b = document.querySelector('#ntm-typetoggle .ntm-typetoggle__opt[data-ntm-type="loothprint"]');
+      if (!b) return 'no-toggle';
+      b.scrollIntoView({block:'center'});
+      b.click();
+      return 'clicked';
+    })()""")
+    if clicked != "clicked":
+        findings.append(f"[{label}/modal] no Loothprint option in the composer "
+                        f"toggle ({clicked}) — the modal has no door")
+        return
+    if not wait_for(tab, "(() => { const e = document.getElementById('lpm-overlay');"
+                         "return e && !e.hidden; })()", 20):
+        findings.append(f"[{label}/modal] tapping Loothprint did not open the "
+                        f"dedicated modal")
+        return
+
+    # SWAP, NEVER SHOW. 'Both open' is the state the rework exists to make
+    # unreachable, and it is a RACE — so this is checked after the auth probe
+    # has had time to re-show the wizard underneath.
+    sib = vis("#ntm-overlay")
+    if sib == "visible":
+        findings.append(f"[{label}/modal] BOTH modals are open at once — the "
+                        f"discussion wizard is still showing under the Loothprint "
+                        f"form, which is the stacking defect this shape retired")
+
+    # ---- the injected form is real, and bound to a real draft
+    # WAIT ON A FIELD, NOT ON THE CARD. The injector copies the card's INNER
+    # html — `bodyEl.innerHTML = card.innerHTML` — so `.lgfc__card` is exactly
+    # the one element that never exists inside the modal. Waiting for it
+    # reported "the fetch or the injection failed" at both widths against a
+    # modal that was working perfectly: 12 acf-fields, a bound draft and a live
+    # picker were all sitting in #lpm-body at the time. Assert something the
+    # injection actually produces.
+    if not wait_for(tab, "document.querySelectorAll('#lpm-body .acf-field').length > 0", 40):
+        body = tab.js("JSON.stringify({len:(document.getElementById('lpm-body')||{}).innerHTML?.length||0,"
+                      "text:(document.getElementById('lpm-body')||{}).innerText?.slice(0,120)||''})")
+        findings.append(f"[{label}/modal] no form fields arrived in the modal body — "
+                        f"the fetch or the injection failed. Body was: {body}")
+        return
+    time.sleep(3)   # acf.js initialises the appended subtree
+
+    bound = tab.js("(document.querySelector('#lpm-body input[name=_acf_post_id]')"
+                   "||{}).value || ''")
+    if not str(bound).isdigit():
+        findings.append(f"[{label}/modal] the injected form bound {bound!r} rather "
+                        f"than a draft id — uploads from the modal would orphan")
+        return
+    draft = int(bound)
+    print(f"   [{label}/modal] injected form bound draft {draft}")
+
+    # ---- THE BEHAVIOUR, not the markup: does the photo picker still work here?
+    opened = tab.js("""(() => {
+      const b = document.querySelector('#lpm-body .acf-field-gallery .acf-gallery-add');
+      if (!b) return 'no-add-button';
+      b.scrollIntoView({block:'center'});
+      b.click();
+      return 'clicked';
+    })()""")
+    if opened != "clicked":
+        findings.append(f"[{label}/modal] the injected form has no reachable photo "
+                        f"picker ({opened}) — relocated markup without its wiring")
+    elif not wait_for(tab, "!!document.querySelector('.media-modal')", 20):
+        findings.append(f"[{label}/modal] the injected photo picker does not open — "
+                        f"the markup moved and the behaviour did not")
+    else:
+        time.sleep(2)
+        scoped = tab.js("""(() => {
+          try { return wp.media.frame.state().get('library').props.get('uploadedTo') ?? null; }
+          catch (e) { return 'err:' + e; }
+        })()""")
+        print(f"   [{label}/modal] picker opened, uploadedTo={scoped}")
+        if scoped != draft:
+            findings.append(f"[{label}/modal] the modal's picker is scoped to "
+                            f"{scoped!r}, not this draft {draft} — each post is "
+                            f"supposed to keep its own library")
+        tab.js("(() => { const b=document.querySelector('.media-modal-close'); "
+               "if (b) b.click(); return 1; })()")
+        time.sleep(1)
+
+    # ---- back to Discussion: the composer must survive the round trip
+    back = tab.js("""(() => {
+      const b = document.querySelector('#lpm-typetoggle .ntm-typetoggle__opt[data-lpm-type="discussion"]');
+      if (!b) return 'no-back-toggle';
+      b.click();
+      return 'clicked';
+    })()""")
+    if back != "clicked":
+        findings.append(f"[{label}/modal] no Discussion option inside the Loothprint "
+                        f"modal ({back}) — a member who switches cannot switch back")
+    else:
+        # The composer's auth probe un-hides #ntm-form asynchronously, so give it
+        # the same grace here as on first open — otherwise "the form is hidden"
+        # is a stopwatch reading, not a defect.
+        wait_for(tab, "(() => { const f = document.getElementById('ntm-form');"
+                      "return f && !f.hidden; })()", 15)
+        time.sleep(1)
+        after = vis("#ntm-overlay")
+        lp_after = vis("#lpm-overlay")
+        print(f"   [{label}/modal] back to discussion: ntm={after} lpm={lp_after}")
+        if after != "visible":
+            findings.append(f"[{label}/modal] the discussion composer is {after} "
+                            f"after the round trip — the toggle is one-way")
+        if lp_after == "visible":
+            findings.append(f"[{label}/modal] the Loothprint modal is STILL open "
+                            f"after switching back to Discussion — both are showing")
+
+        # UNHARMED MEANS IT STILL WORKS, NOT THAT IT IS STILL THERE. Visibility
+        # is exactly what a re-bound jQuery leaves untouched, so this drives the
+        # composer's own controls: the forum picker must still hold its options
+        # and a text field must still take input.
+        alive = tab.js("""(() => {
+          const f = document.getElementById('ntm-form');
+          if (!f) return JSON.stringify({err:'no ntm-form'});
+          const sel = document.getElementById('ntm-forum');
+          const txt = f.querySelector('input[type=text], textarea');
+          let typed = null;
+          if (txt) {
+            txt.focus();
+            txt.value = 'zz probe';
+            txt.dispatchEvent(new Event('input', {bubbles:true}));
+            typed = txt.value;
+          }
+          return JSON.stringify({
+            formHidden: !!f.hidden,
+            // #ntm-forum is a div[role=radiogroup] of leaf radios, NOT a
+            // <select> — reading .options threw and killed the run before
+            // the phone pass ever started.
+            forumOptions: sel ? sel.querySelectorAll('input[type=radio][name=forum_id]').length : -1,
+            typed: typed,
+            jq: (window.jQuery && jQuery.fn && jQuery.fn.jquery) || null,
+            jqn: [...document.querySelectorAll('script[src]')]
+                   .filter(s => /jquery[.-]/i.test(s.src.split('/').pop())).length});
+        })()""")
+        print(f"   [{label}/modal] composer after round trip: {alive}")
+        st_after = json.loads(alive)
+        st_before = json.loads(jq_before)
+        if st_after.get("formHidden"):
+            findings.append(f"[{label}/modal] the discussion form is hidden after "
+                            f"the round trip even though its overlay is showing")
+        if st_after.get("forumOptions") == 0:
+            findings.append(f"[{label}/modal] the discussion forum picker lost its "
+                            f"options after the Loothprint trip — the injected "
+                            f"assets broke the composer they were loaded beside")
+        if st_after.get("typed") != "zz probe":
+            findings.append(f"[{label}/modal] the discussion composer no longer "
+                            f"takes typed input after the round trip "
+                            f"(got {st_after.get('typed')!r})")
+        if st_before.get("v") and st_after.get("v") != st_before.get("v"):
+            findings.append(f"[{label}/modal] jQuery changed under the hub — "
+                            f"{st_before.get('v')} -> {st_after.get('v')}. A second "
+                            f"copy over a live one re-binds silently and is how the "
+                            f"discussion composer breaks without an error")
+
+    tab.call("Page.navigate", url="about:blank")
+    time.sleep(1)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", default="", help="desktop|phone (default: both)")
+    ap.add_argument("--phase", default="both", choices=["media", "modal", "both"],
+                    help="media = the standalone upload loop; modal = the hub "
+                         "modal and the discussion composer either side of it")
     args = ap.parse_args()
 
     print("draft-first-loop — the compose media loop, driven in a real browser")
@@ -459,9 +690,13 @@ def main():
             if args.only and args.only != label:
                 continue
             tab.call("Network.setCookies", cookies=cookies)
-            d = run_viewport(tab, env, cookies, label, w, h, mobile, findings, notes)
-            if d:
-                drafts.append(d)
+            if args.phase in ("media", "both"):
+                d = run_viewport(tab, env, cookies, label, w, h, mobile,
+                                 findings, notes)
+                if d:
+                    drafts.append(d)
+            if args.phase in ("modal", "both"):
+                run_modal(tab, env, cookies, label, w, h, mobile, findings, notes)
     except CannotRun as e:
         print(f"  CANNOT RUN: {e}")
         return 3

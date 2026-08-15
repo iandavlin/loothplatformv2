@@ -49,6 +49,30 @@ class CannotRun(Exception):
     pass
 
 
+def wp_db(sql: str) -> str:
+    """Read the option table WITHOUT loading WordPress.
+
+    `wp db query` runs off wp-config alone, so it never fires `init` — which
+    matters here because init is where lg_fc_sync_reaper_schedule() disarms the
+    reaper. A `wp eval` cannot measure the cron state: by the time its code
+    runs, its own load has already healed whatever it was about to look at, so
+    it answers "nothing scheduled" no matter what was there. That is not a
+    hypothetical; it is why assertion 7 below could go red on one run and then
+    read clean on the next over the same broken code.
+    """
+    r = subprocess.run(WP + ["db", "query", sql, "--skip-column-names"],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        raise CannotRun(f"wp db query failed: {(r.stderr or '')[:200]}")
+    return r.stdout.strip()
+
+
+def reaper_entries() -> int:
+    """How many entries the cron array holds for our hook, raw."""
+    out = wp_db("SELECT option_value FROM wp_options WHERE option_name='cron'")
+    return out.count("lg_fc_reap_drafts_event")
+
+
 def wp_eval(php: str) -> str:
     r = subprocess.run(WP + ["eval", php], capture_output=True, text=True)
     out = "\n".join(l for l in r.stdout.splitlines()
@@ -85,6 +109,49 @@ def main() -> int:
                         "left armed keeps deleting rows for a feature nobody can reach")
     elif not st["enabled"]:
         print("  [7] flag OFF and nothing scheduled")
+
+    # ---- 7b. THE HEAL TAKES THE WHOLE HOOK, not just the next occurrence.
+    #
+    # 7 above is passive: it can only see a state that happened to be there, and
+    # a WP load heals one entry on the way past — so a broken heal shows up as an
+    # intermittent red that clears itself, which is how it nearly got written off
+    # as flake. This plants the state instead.
+    #
+    # THE DEFECT IT STANDS OVER: wp_unschedule_event() removes ONE timestamped
+    # occurrence and wp_next_scheduled() returns only the earliest, so with two
+    # entries in the array every flag-off load disarmed one and left the other
+    # running. An armed reaper force-deletes auto-drafts AND their attachments
+    # daily, from WP-cron, for a feature nobody can reach.
+    if not st["enabled"]:
+        before = 0          # bound before the try: the finally reads it, and a
+        try:                # NameError there would mask the real failure
+            before = reaper_entries()
+            wp_eval('$c = _get_cron_array();'
+                    '$a = ["schedule"=>"daily","args"=>[],"interval"=>DAY_IN_SECONDS];'
+                    '$c[time()+3600]["lg_fc_reap_drafts_event"][md5(serialize([]))] = $a;'
+                    '$c[time()+7200]["lg_fc_reap_drafts_event"][md5(serialize([]))] = $a;'
+                    '_set_cron_array($c); echo "planted";')
+            planted = reaper_entries()
+            if planted < 2:
+                notes.append(f"[7b] could not plant two cron entries (saw {planted}) "
+                             f"— the heal was NOT exercised this run")
+            else:
+                wp_eval('echo "";')          # one ordinary WP load, flag off
+                left = reaper_entries()
+                if left:
+                    findings.append(
+                        f"[7b] the flag-off heal left {left} of {planted} reaper "
+                        f"entries armed — it takes the next occurrence, not the "
+                        f"hook, so a second entry keeps deleting drafts for a "
+                        f"feature nobody can reach")
+                else:
+                    print("  [7b] the heal disarmed BOTH planted entries in one load")
+        finally:
+            # never leave the box holding what this assertion planted
+            wp_eval('wp_clear_scheduled_hook("lg_fc_reap_drafts_event"); echo "";')
+            if reaper_entries() > before:
+                findings.append("[7b] this assertion left cron entries behind — "
+                                "the gate has to clean up what it plants")
 
     php = r'''
 $out = [];
@@ -203,6 +270,13 @@ echo json_encode(["drafts" => (int) $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb-
             print("  [4] abandon left ZERO unparented rows (site-wide count unchanged)")
 
     print()
+    # PRINT THE NOTES. They were collected and never shown, which is worse than
+    # not collecting them: a note says an assertion could not be exercised, and
+    # swallowing it makes a skipped check read exactly like a passed one.
+    for n in notes:
+        print(f"  note: {n}")
+    if notes:
+        print()
     if findings:
         print("RED — the media contract is broken:")
         for f in findings:
