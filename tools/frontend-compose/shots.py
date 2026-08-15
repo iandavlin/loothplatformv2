@@ -136,6 +136,15 @@ def main():
             # ALONGSIDE the profile's existing host-only one, not replace it.
             "name": name, "value": value,
             "domain": domain, "path": "/", "secure": True, "httpOnly": True,
+            # TRAP 6 — sameSite MUST be set explicitly. A CDP cookie set with no
+            # sameSite is sent on fetch() but WITHHELD FROM AN IFRAME NAVIGATION,
+            # so any page that embeds a frame photographs the frame SIGNED OUT
+            # while the surrounding page is signed in. That manufactures a defect
+            # that is not there: on 2026-08-15 it produced a 404 in the compose
+            # iframe and a 200 on a fetch of the SAME url in the SAME page, which
+            # reads exactly like "the embedded route is broken". Real browsers
+            # default WP's own cookies to Lax, so Lax is what reproduces Ian.
+            "sameSite": "Lax",
         })
 
     made = []
