@@ -212,6 +212,14 @@
   var DARK_MUTED_INK = LG_DARK_MUTED_INK_FIX ? '#8a9087' : '#80867d';
   var DARK_ATTRIB_BG = LG_DARK_MUTED_INK_FIX ? '#15171a' : 'rgba(21,23,26,.8)';
 
+  // ---- LG_DARK_EVENTS_LANDING_FIX (same lane/backlog/gate) -------------------
+  // The /events/ landing copy, 3.51:1 in dark. Kept as its own flag rather than
+  // folded into LG_DARK_MUTED_INK_FIX above: that one LIFTS a dark token that
+  // was already dark-aware, this one repoints a LIGHT value that dark never
+  // touched. Same symptom, different defect, so they should be flippable
+  // independently. See the rule itself for the full reasoning.
+  var LG_DARK_EVENTS_LANDING_FIX = false;
+
   function ensureDarkStyle() {
     if (document.getElementById(DARK_STYLE_ID)) return;
     var D = 'html[data-lguser-theme="dark"]';
@@ -369,7 +377,24 @@
       // blackened ONLY the header when OS was dark with no picked theme — the
       // page stayed light = the "some headers and not others" mismatch. Two
       // explicit modes now; Dark is a deliberate pick, Light has no overrides.)
-      ''
+      //
+      // events/web/events.css is a 32-line static skin with NO dark block at
+      // all — the same shape as the login page's, written before dark mode
+      // existed. Its muted copy is #6b6f68, which is the LIGHT theme's mute
+      // (--lg-mute #6b6f6b) hardcoded and never repointed, so on the dark page
+      // it lands at 3.51:1. The fix is not a new colour, it is USING THE TOKEN
+      // THE THEME ALREADY DEFINES: dark's own --lg-mute is #a6ac9f = 7.72:1.
+      // Patched from here because a static stylesheet cannot self-gate a flag
+      // (same reason .hub-tsearch is patched from hub-polish.js). Covers
+      // .lg-evland__region too — it carries the identical hardcoded value and
+      // only escaped the sweep because it needs an event with a region to
+      // render. Sits in the array's existing trailing-'' slot ON PURPOSE, so
+      // the OFF state is byte-identical rather than adding a blank line.
+      // The events landing is public but members browse it too — MEMBER-VISIBLE,
+      // so OFF pending Ian's pass, unlike the login/join fixes which are not.
+      (LG_DARK_EVENTS_LANDING_FIX
+        ? D + ' .lg-evland__sub,' + D + ' .lg-evland__empty,' + D + ' .lg-evland__region{color:#a6ac9f!important}'
+        : '')
     ].join('\n');
     var s = document.createElement('style'); s.id = DARK_STYLE_ID; s.textContent = css;
     (document.head || document.documentElement).appendChild(s);
