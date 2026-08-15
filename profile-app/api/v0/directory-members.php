@@ -8,6 +8,7 @@ use Looth\ProfileApp\Db;
 use Looth\ProfileApp\Profile;
 use Looth\ProfileApp\Block;
 use Looth\ProfileApp\Visibility;
+use Looth\ProfileApp\Flags;
 
 /** Great-circle miles — distance is computed from the DISPLAYED (precision-coarsened) point so it never leaks precision. */
 function dir_haversine_mi(float $la1, float $lo1, float $la2, float $lo2): float
@@ -40,7 +41,69 @@ function dir_member_display(array $r, array $vArr): ?array
         'lng'      => $r['lng'] !== null ? (float)$r['lng'] : null,
         'text'     => $r['location_text'],
     ];
-    return Block::locationDisplay($place, $precision);          // null when private for this audience
+    // BACKLOG 20 (Ian 8/12, member safety). A LIST is an index strangers scan,
+    // not the detail view the member curated, so it tops out at City/Region
+    // however the member set their own dial AND whoever is looking. That last
+    // part is the half that is easy to miss: Visibility::precisionForAudience()
+    // hands 'street' to the OWNER and to every ADMIN unconditionally, which is
+    // right for one profile page and wrong for a list, where an admin browsing
+    // the directory got every member's raw street address on every row.
+    //
+    // Two clamps, because they close two different holes:
+    //
+    //  1. Downgrade the PRECISION street -> city. This reuses the existing city
+    //     branch whole, so the pin coarsens with the text (~1.1km, zoom 11,
+    //     circle instead of an exact marker) and there is no new rendering
+    //     branch to drift. Capping only the text would leave a zoom-15 marker
+    //     sitting on the house — which IS the address, just drawn instead of
+    //     spelled.
+    //
+    //  2. Then take the label from listLocationText(), which is structured-only.
+    //     Needed because a row with NO pin never reaches the coarsening math at
+    //     all: Block::coarseText() falls through to the row's literal text, and
+    //     on live 2 such rows hold a full street address today.
+    //
+    // 'state' keeps its own level — it is already coarser than city, and
+    // rewriting it to "City, Region" would make a deliberately vague row MORE
+    // precise. A privacy clamp may only ever subtract.
+    //
+    // Flag OFF leaves $precision untouched and returns locationDisplay()'s array
+    // exactly as built, so OFF is a byte-identical no-op (proven against main).
+    $disp = Block::locationDisplay($place, $precision);   // null when private for this audience
+    if (!Flags::bool('directory-location', 'coarsen_list_location')) {
+        return $disp;                                    // OFF: byte-identical to pre-flag behaviour
+    }
+
+    // The clamp may only ever SUBTRACT. A row this viewer could not see stays
+    // unseen, and a row they could see stays present — only its precision drops.
+    // Returning null for a row that OFF rendered (or rendering one OFF hid) is a
+    // shape change the front end and the map pin feed both read, and the first
+    // draft of this did exactly that: downgrading a bare row turned "no location"
+    // into an empty location object for the admin audience, and a later over-fix
+    // turned an empty-but-present member row into a hidden one. Both were caught
+    // by this gate's pin assertions rather than by inspection, which is why the
+    // rule is now stated as shape-preservation rather than trusted case by case.
+    if ($disp === null) return null;
+
+    if ($precision === 'street') {
+        // Re-render one level down rather than editing the street result, so the
+        // pin coarsens with the text through the SAME city branch a
+        // members-precision='city' row already takes — no new rendering branch.
+        // Capping only the text would leave a zoom-15 exact marker on the house,
+        // which is the address, drawn instead of spelled.
+        $precision = 'city';
+        $disp = Block::locationDisplay($place, $precision);
+        if ($disp === null) return null;
+    }
+
+    // Structured labels only. Needed on top of the downgrade because a row with
+    // NO pin never reaches the coarsening math: Block::coarseText() falls through
+    // to the row's literal text, and on live 2 such rows hold a full street
+    // address today.
+    if ($precision === 'city' || $precision === 'state') {
+        $disp['text'] = Block::listLocationText($place, $precision);
+    }
+    return $disp;
 }
 
 /**
