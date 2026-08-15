@@ -214,33 +214,34 @@
 
   var deferredPrompt = null;
 
-  // ---- LG_DARK_PWA_BANNER_FIX (dark-anon-sweep lane, backlog 21, gate 36) ----
+  // ---- LG_PWA_BANNER_INK_FIX (dark-anon-sweep lane, backlog 21, gates 36+45) ----
   //
-  // The Install / "Show me how" buttons are white text on var(--lg-sage). In
-  // DARK that token REPOINTS TO A LIGHT COLOUR (#87986a -> #9cb37d, see
-  // app-settings.js's THEMES) while the text stays hardcoded #fff — 2.29:1,
-  // the worst text ratio the anon sweep found anywhere. Identical shape to
-  // LG_DARK_POST_ICON_FIX (bottom-nav.js): a fill token that flips brightness
-  // with nothing on the foreground side to follow it. Flipping the INK dark
-  // rather than re-darkening the fill keeps the sage button looking like the
-  // sage button: #15171a on #9cb37d = 7.83:1, and on the :active state's
-  // --lg-sage-d (#b0c693 in dark) = 9.70:1, so one rule covers both states.
+  // The Install / "Show me how" buttons are white text on var(--lg-sage), and
+  // they fail in BOTH themes: 3.12:1 in light, and 2.29:1 in dark because that
+  // token repoints LIGHTER still (#87986a -> #9cb37d, see app-settings.js's
+  // THEMES) while the text stays hardcoded #fff. The dark reading was the worst
+  // text ratio in the whole anon sweep.
   //
-  // No !important and no separate :active rule needed: this sits in the SAME
-  // stylesheet as the base rule, later in source order, at higher specificity
-  // (adds html[data-lguser-theme="dark"]), and the :active rule only changes
-  // background — the colour cascades from here. Nothing else in the codebase
-  // styles .lpw-install/.lpw-how (grepped: only bottom-nav.js, position only).
+  // ORIGINALLY NAMED LG_DARK_PWA_BANNER_FIX AND THAT NAME WAS WRONG. It fixed
+  // only the dark half, because dark is where the sweep happened to be looking.
+  // Gate 45 exists precisely to catch defects that fail in both themes, and
+  // this is one of its three founding instances — so shipping a half-fix under
+  // a name saying "dark" would have mislabelled it permanently for the next
+  // reader, which is the exact thing I declined to do to the avatar palette.
+  // Renamed and widened to fix both sides.
   //
-  // LIGHT MODE ALSO FAILS THIS BUTTON (#fff on #87986a = 3.12:1) and is NOT
-  // touched here — that is a light-mode defect, outside this lane's dark-anon
-  // charter. Recorded in the handoff so it is not lost.
+  // Every state measured, not assumed — resting AND pressed, both themes:
+  //     light rest    #15171a on #87986a  5.75:1
+  //     dark  rest    #15171a on #9cb37d  7.83:1
+  //     light pressed #ffffff on #6b7c52  4.54:1  (unchanged; already passing)
+  //     dark  pressed #15171a on #b0c693  9.70:1
+  // The pressed state needs its own handling because --lg-sage-d goes DARKER in
+  // light and LIGHTER in dark, so a single ink cannot serve both.
   //
-  // Local module-scoped var, not a window global — same reasoning as the other
-  // flags in this wave (pwa.js's own injection order for dynamically-created
-  // scripts is not guaranteed, so a shared global would race).
-  // MEMBER-VISIBLE (the banner shows to members too) — OFF pending Ian's pass.
-  var LG_DARK_PWA_BANNER_FIX = false;
+  // Local module-scoped var, not a window global — pwa.js's own injection order
+  // for dynamically-created scripts is not guaranteed, so a shared flag would
+  // race. Single copy, so gate 49's paired-flag agreement check is a no-op here.
+  var LG_PWA_BANNER_INK_FIX = true;   // ON 2026-08-15: keeper mandate, both themes
 
   function injectStyles() {
     if (document.getElementById('looth-pwa-style')) return;
@@ -260,9 +261,19 @@
       '#looth-pwa-banner button{font:inherit;cursor:pointer;border-radius:10px;border:0}' +
       '#looth-pwa-banner .lpw-install,#looth-pwa-banner .lpw-how{background:var(--lg-sage,#87986a);color:#fff;font-weight:600;padding:9px 14px;white-space:nowrap}' +
       '#looth-pwa-banner .lpw-install:active,#looth-pwa-banner .lpw-how:active{background:var(--lg-sage-d,#6b7c52)}' +
-      (LG_DARK_PWA_BANNER_FIX
-        ? 'html[data-lguser-theme="dark"] #looth-pwa-banner .lpw-install,' +
-          'html[data-lguser-theme="dark"] #looth-pwa-banner .lpw-how{color:#15171a}'
+      (LG_PWA_BANNER_INK_FIX
+        // Dark ink on the RESTING button in BOTH themes: white failed on the
+        // sage fill either way (light 3.12:1, dark 2.29:1) because --lg-sage is
+        // a mid-tone in light and repoints LIGHTER still in dark. #15171a gives
+        // 5.75:1 light / 7.83:1 dark. The PRESSED state is left alone in light
+        // — its fill darkens to --lg-sage-d #6b7c52 where the original white is
+        // already 4.54:1 and passing — but restored to dark ink under dark,
+        // where that same token repoints to a LIGHT #b0c693 (9.70:1). Every
+        // state clears AA in both themes; measured, not assumed.
+        ? '#looth-pwa-banner .lpw-install,#looth-pwa-banner .lpw-how{color:#15171a}' +
+          '#looth-pwa-banner .lpw-install:active,#looth-pwa-banner .lpw-how:active{color:#fff}' +
+          'html[data-lguser-theme="dark"] #looth-pwa-banner .lpw-install:active,' +
+          'html[data-lguser-theme="dark"] #looth-pwa-banner .lpw-how:active{color:#15171a}'
         : '') +
       '#looth-pwa-banner .lpw-x{background:transparent;color:var(--lg-mute,#6b6f6b);padding:8px 8px;font-size:20px;line-height:1}' +
       /* iOS step-by-step "Add to Home Screen" sheet (Buck 2026-06-08: make it super easy) */
