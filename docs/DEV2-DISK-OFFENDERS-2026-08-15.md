@@ -10,28 +10,28 @@ red line. Two hours earlier swap was 0.4 GB; at the time of writing it is
 
 ---
 
-## The headline: 79 orphaned worktree directories — 2.6 GB
+## ⚠ CORRECTED — the worktree headline was wrong
 
-`~/worktrees/` holds **89 directories**. Git knows about **10**. Six are live
-lanes.
+My first pass here said *"79 orphaned worktree directories, 2.6 GB, git knows
+nothing about them."* **That was wrong and is retracted.** I checked registration
+against `keeper-repo` only; the 89 directories actually belong to **three** parent
+repos — 71 to `loothplatformv2-clean`, 9 to `projects`, 9 to `keeper-repo` — and
+**all 89 are properly registered. None are orphaned.**
+
+The verified figures, after reading each directory's own gitdir pointer:
 
 | | Count | Size |
 |---|---|---|
-| Registered with git (`git worktree list`) | 10 | ~0.9 GB |
-| **Not registered — git has no record of them** | **79** | **2.6 GB** |
+| Live lanes — never touch | 6 | — |
+| **SAFE** — merged, clean tree, nothing unpushed | **48** | **1,555 MB (1.5 GB)** |
+| **HOLD** — would lose work | 35 | 1,268 MB |
 
-These are finished lanes whose directories were never removed. Git isn't
-tracking them, so they are not "someone's uncommitted work" in the usual sense —
-but **that must be checked before anything goes**, because an unregistered
-directory can still hold uncommitted files.
+So the honest worktree reclaim is **~1.5 GB, not 2.6 GB**, and it must be done with
+`git worktree remove` from the correct parent — never `rm -rf`, which would leave
+three registries pointing at nothing.
 
-**Recommended check before removal, per directory:** confirm its branch is
-merged and the tree is clean. `git worktree prune` will not touch these, since
-git has already forgotten them.
-
-**Ruling: keeper.** This is fleet housekeeping, not Ian's call.
-
----
+**Full per-directory list, with the hold reasons:**
+`docs/DEV2-WORKTREE-SAFE-LIST-2026-08-15.md`.
 
 ## Everything else, biggest first
 
@@ -59,17 +59,18 @@ git has already forgotten them.
 
 ## What I would clear first, and why
 
-1. **The 79 orphaned worktrees — 2.6 GB, keeper's call.** Biggest single win,
-   lowest risk, and it is pure fleet debris. Verify each branch is merged and the
-   tree clean first.
+1. **The 48 finished worktrees — 1.5 GB, keeper's call.** Verified merged, clean
+   and fully pushed. Remove with `git worktree remove` from the parent named in the
+   companion list, never `rm -rf`.
 2. **Caches — roughly 1.0 GB combined and genuinely safe:** `apt clean` (277 MB),
    `journalctl --vacuum` (131 MB), `~/.cache` (367 MB), snapd (464 MB, partial).
    These regenerate; nothing is lost.
 3. **The June docroot backup — 1.6 GB.** Two months old and superseded. Worth one
    question to Ian before it goes, since it is a backup.
 
-That is **~5 GB without touching anything anyone might want** — which moves 91%
-back to roughly 74%.
+That is **~4 GB without touching anything anyone might want** — which moves 91%
+back to roughly 77%. (Was stated as ~5 GB / 74% before the worktree figure was
+corrected downward.)
 
 **Held for Ian, not keeper:** `~/dev1-import`, `~/dev26-archive-…`, `~/projects`,
 the thumbnail editors. These are history and member-facing work; their value is
