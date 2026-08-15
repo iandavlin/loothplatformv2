@@ -5861,3 +5861,47 @@ html[data-lguser-theme="dark"] .lg-fm__acct-badge { background: #9db07c; color: 
 .lpm-dialog { display: flex; flex-direction: column; max-height: 88vh; overflow-y: auto; }
 .lpm-body { flex: 1 1 auto; }
 .lpm-row { justify-content: flex-end; }
+
+/* ── DARK MODE for the composer type toggle + the injected Loothprint form ────
+   Ian, 2026-08-15: "compose works well. Needs some dark mode love."
+   MEASURED with tools/frontend-compose/dark-contrast-sweep.py, which reads the
+   rendered page rather than a pair list — the form is fetched from WordPress,
+   so its colours are ACF/WP stylesheets meeting the hub's dark tokens and are
+   not knowable in advance. Ratios below are against the modal's #15171a.
+
+   The toggle was the worst of it at 2.12:1. .ntm-typetoggle paints
+   var(--bg-subtle, #f4f5ee) and had NO dark override, so in dark the pill TRACK
+   stayed light while the inactive label went dark-muted — near-invisible text on
+   a bright pill, in the one control that switches between the two composers. */
+html[data-lguser-theme="dark"] .ntm-typetoggle {
+  background: #22262a;
+  border-color: #32373c;
+}
+html[data-lguser-theme="dark"] .ntm-typetoggle__opt {
+  color: #a6ac9f;                    /* 6.54:1 on the track above */
+}
+html[data-lguser-theme="dark"] .ntm-typetoggle__opt.is-on {
+  background: var(--accent, #586b3f);
+  color: #fff;                       /* 5.85:1 — the active pill was already fine */
+}
+
+/* ACF's own chrome, scoped to the injected form so nothing else on the hub and
+   nothing on the standalone /compose/ page is touched. */
+html[data-lguser-theme="dark"] #lpm-body p.description {
+  color: #a6ac9f;                    /* was #667085 at 3.61:1 — now 7.72:1 */
+}
+/* CONTROL BOTH COLOURS on these buttons, never just the text.
+   First attempt set only `color:#b0c693`, reasoning from the one button that
+   failed — "Add File", dark sage on the dark modal at 3.07:1. But ACF gives
+   several of its buttons a WHITE background of their own, so lightening the
+   text alone took "Add to gallery", "Close" and "Update" from readable to
+   1.85:1. The measurement caught it; reasoning from a single failing element
+   did not. A button whose foreground AND background are both set cannot be
+   undone by whatever it happens to sit on. */
+html[data-lguser-theme="dark"] #lpm-body .acf-button,
+html[data-lguser-theme="dark"] #lpm-body a.acf-button.button,
+html[data-lguser-theme="dark"] #lpm-body .acf-gallery-toolbar .acf-button {
+  background: #2a2f26;
+  color: #c3d6ab;                    /* 8.82:1 on the background above */
+  border-color: #3c4436;
+}
