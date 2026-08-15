@@ -432,6 +432,7 @@ def verify_fixes(host, tok, probe_js):
     s = Session()
     wave_red = []
     other_findings = []
+    unresolved = []
     try:
         s.call("Page.enable"); s.call("Runtime.enable"); s.call("Network.enable")
         for device, metrics in (("desktop", DESKTOP), ("mobile", PHONE)):
@@ -452,6 +453,22 @@ def verify_fixes(host, tok, probe_js):
                         data = measure(s, tok, host, probe_js, key, path_tpl, mode, device, metrics,
                                        extra_css=FIX_VERIFY_CSS)
 
+                    # THE VACUOUS-CLEARED GUARD, and this mode needs it MOST.
+                    # verify_fixes exists to answer "does the fix actually clear
+                    # this?", and an unresolved page answers YES for free: the
+                    # dark rule under test does not apply to a light page, so it
+                    # reports zero this-wave findings having proven nothing. That
+                    # is not hypothetical — it is exactly the false pass hit by
+                    # hand on 2026-08-15 while verifying the .lgpo-subtext fix,
+                    # where two of four ON-runs came back theme='default' and
+                    # read "CLEARED". A fix-verification that cannot fail is
+                    # worse than no verification, because it is believed.
+                    if not data.get("resolved") or data.get("theme") != "dark":
+                        unresolved.append(f"{label}  theme={data.get('theme')}")
+                        print(f"  UNRESOLVED  {label}  theme={data.get('theme')} — "
+                              f"NOT counted as cleared; the fix CSS was never exercised here")
+                        continue
+
                     wave = [f for f in data.get("findings", []) if belongs_to_this_wave(f)]
                     rest = [f for f in data.get("findings", []) if not belongs_to_this_wave(f)]
                     for f in wave:
@@ -465,6 +482,13 @@ def verify_fixes(host, tok, probe_js):
     finally:
         s.finish()
 
+    if unresolved:
+        print(f"\n⚠ {len(unresolved)} surface(s) NEVER RESOLVED DARK — the fix CSS was not "
+              f"exercised on them, so this run does NOT clear them. Re-run before believing "
+              f"any 'cleared' verdict below:")
+        for line in unresolved:
+            print("    " + line)
+
     if other_findings:
         print(f"\n{len(other_findings)} out-of-scope finding(s) remain (not this wave's job, reported not failed):")
         for line in other_findings:
@@ -474,6 +498,15 @@ def verify_fixes(host, tok, probe_js):
         print(f"\n{len(wave_red)} finding(s) THIS WAVE CLAIMS TO FIX are still red with the fix CSS active:\n")
         for line in wave_red:
             print(line)
+        sys.exit(1)
+
+    # A run with unresolved surfaces has not verified them, so it must not claim
+    # GREEN — "no findings" from a page the fix CSS never applied to is the
+    # vacuous pass this whole change exists to stop, and printing GREEN under it
+    # is how it would get believed.
+    if unresolved:
+        print(f"\nINCOMPLETE — nothing this wave targets is still red, but {len(unresolved)} "
+              f"surface(s) never resolved dark and were NOT verified. This is not a GREEN.")
         sys.exit(1)
 
     print("\nGREEN over the fixed set — every finding this wave (icon + border-token) targets clears AA "
