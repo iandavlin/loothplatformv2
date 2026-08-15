@@ -73,6 +73,56 @@ if ($kind !== 'gift') {
     $manageHint = '<p class="lg-success__manage">You can change plan, update your card, or cancel any time at <a href="/manage-subscription/">Manage Subscription</a>.</p>';
 }
 
+/**
+ * Backlog 19 — the STRIPE rail's hand-off to the arrive-alive step.
+ *
+ * Ian 8/15: "Both patreon onboarding like after Password gen and for the stripe."
+ * This is the Stripe half; the Patreon half is in
+ * platform/mu-plugins/lgpo-set-password.php. Both point at the SAME screen, and
+ * that sameness is the point — the ruling is that a Patreon joiner and a Stripe
+ * joiner get the identical experience.
+ *
+ * We read the ONE tracked config file directly rather than calling the WP
+ * mu-plugin's helper, because this page is the STANDALONE membership app and has
+ * no WordPress loaded. One file, two runtimes — not two flags, which is the drift
+ * bug platform/config/post-follow.php's header argues against.
+ *
+ * __DIR__ is safe here: /srv/membership-pages is a symlink to the monorepo's
+ * membership-pages, so this resolves to the checkout's own platform/config/.
+ *
+ * ⚠️ NOT ON A GIFT PURCHASE. kind=gift is somebody BUYING codes for other people
+ * — they are not the new member, and "set up your profile" is the wrong sentence
+ * to show them.
+ */
+$profileSetupOn   = false;
+$profileSetupPath = '/profile-setup/';
+if ($kind !== 'gift') {
+    $psFile = __DIR__ . '/../../platform/config/profile-setup.php';
+    if (is_readable($psFile)) {
+        $psCfg = require $psFile;
+        if (is_array($psCfg)) {
+            $profileSetupOn   = !empty($psCfg['enabled']);
+            $profileSetupPath = (string) ($psCfg['path'] ?? $profileSetupPath);
+        }
+    }
+    // TESTERS (Ian 8/15). Same list, same meaning as the WordPress side; identity
+    // is wp_user_id out of the header context, which comes from the
+    // wordpress_logged_in_* cookie — the WordPress login and nothing else. If the
+    // master switch is off, only a listed member sees the hand-off; everyone else
+    // gets the original single CTA, unchanged.
+    if (!$profileSetupOn && is_array($psCfg ?? null)) {
+        $psTesters = $psCfg['testers'] ?? array();
+        $psViewer  = (int) ($ctx['wp_user_id'] ?? 0);
+        if (is_array($psTesters) && $psViewer > 0) {
+            $psTesters = array_values(array_filter(array_map('intval', $psTesters)));
+            if (in_array($psViewer, $psTesters, true)) $profileSetupOn = true;
+        }
+    }
+    foreach ([getenv('LG_PROFILE_SETUP'), $_SERVER['LG_PROFILE_SETUP'] ?? false] as $o) {
+        if ($o !== false && $o !== '') $profileSetupOn = ($o === '1' || $o === 'true');
+    }
+}
+
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -91,7 +141,15 @@ if ($kind !== 'gift') {
             <div class="lg-success__body"><?= $bodyHtml /* intentional HTML */ ?></div>
             <?= $manageHint ?>
             <div class="lg-success__actions">
-                <a class="lg-success__cta is-primary" href="/">Head to the community</a>
+                <?php if ($profileSetupOn): ?>
+                    <?php /* Flag ON: the profile step becomes the primary action and the
+                             original CTA stays as the way past it — skipping must remain a
+                             first-class choice here too, not a trap. */ ?>
+                    <a class="lg-success__cta is-primary" href="<?= $h($profileSetupPath) ?>">Set up your profile</a>
+                    <a class="lg-success__cta" href="/">Head to the community</a>
+                <?php else: ?>
+                    <a class="lg-success__cta is-primary" href="/">Head to the community</a>
+                <?php endif; ?>
             </div>
         </div>
 

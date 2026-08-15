@@ -33,6 +33,20 @@ BASE = os.environ.get("MOCK_BASE", "https://dev2.loothgroup.com/footer-mockups/f
 PAGES = (os.environ.get("MOCK_PAGES") or "index.html,tickbox.html,dash.html,frontpage.html").split(",")
 INJECTED_DARK = "rgb(21, 23, 26)"
 
+# ── Per-lane probes (added by the profiles-alive lane 2026-08-15) ────────────
+# The built-in PROBE below names featured-members' own components. Point this
+# script at another lane's mocks and every one of those selectors returns null
+# — null == null across themes, so the run reports a large "compared" count
+# having measured NOTHING. That is the vacuous-assertion trap in the lane
+# memory, and it is why this hook exists rather than each lane forking the file.
+#
+#   MOCK_PROBE_EXTRA='{"pwcard_bg":[".pw-card","backgroundColor"], ...}'
+#
+# name → [css selector, computed property]. Unlike the built-ins, an extra
+# selector that matches nothing is a HARD FAILURE: the lane declared it, so its
+# absence means the probe is measuring air, not that the page is fine.
+EXTRA = json.loads(os.environ.get("MOCK_PROBE_EXTRA") or "{}")
+
 # Probes: every element that paints a light background must be read, not just body.
 PROBE = r"""
 (() => {
@@ -74,9 +88,20 @@ PROBE = r"""
     h_overflow : Math.round(document.documentElement.scrollWidth - window.innerWidth),
     tok_charcoal: getComputedStyle(document.body).getPropertyValue('--lg-charcoal').trim(),
     tok_cardbg : getComputedStyle(document.body).getPropertyValue('--lg-card-bg').trim(),
+/*__EXTRA__*/
+    // Liveness for the per-lane probes: a declared selector that matches
+    // nothing is measuring air. Reported per theme and fatal in main().
+    __extra_unmatched: __EXTRA_SELECTORS__.filter(s => !document.querySelector(s)).join('|'),
   });
 })()
 """
+
+PROBE = (PROBE
+         .replace("/*__EXTRA__*/",
+                  "".join("    %s: g(%s, %s),\n" % (name, json.dumps(sel), json.dumps(prop))
+                          for name, (sel, prop) in EXTRA.items()))
+         .replace("__EXTRA_SELECTORS__",
+                  json.dumps(sorted({sel for sel, _ in EXTRA.values()}))))
 
 
 def http_get(path):
@@ -160,6 +185,10 @@ async def main():
 
                 # 3. geometry: no zero-width bars, no horizontal overflow
                 for label, shot in (("dark", dark), ("light", light)):
+                    if shot.get("__extra_unmatched"):
+                        failures.append(f"{page}: [{label}] LIVENESS — declared probe "
+                                        f"selector(s) matched nothing, so they proved "
+                                        f"nothing: {shot['__extra_unmatched'][:160]}")
                     if shot.get("zero_width_bars"):
                         failures.append(f"{page}: [{label}] zero-width bar(s): "
                                         f"{shot['zero_width_bars'][:120]}")
@@ -169,7 +198,8 @@ async def main():
 
                 # 4. every probe identical across themes
                 for k in dark:
-                    if k in ("theme_attr", "boot_crit", "zero_width_bars", "h_overflow"):
+                    if k in ("theme_attr", "boot_crit", "zero_width_bars", "h_overflow",
+                             "__extra_unmatched"):
                         continue
                     checked += 1
                     if dark[k] != light[k]:

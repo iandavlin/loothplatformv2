@@ -1028,6 +1028,29 @@ if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push #########
 echo "=== GATE 50: the work board renders EVERY item, and phase 1 cannot write ==="
 run "work-board" php "$(dirname "$0")/work-board-gate.php"
 
+echo "=== GATE 51: new members arrive alive — the profile-setup step, flag OFF, and NO nudge ==="
+# Backlog 19 (Ian 8/12 from the empty-directory screenshot; ruled 8/15, Option A
+# with four sharpenings). One skippable screen at /profile-setup/ asking for the
+# three fields a directory row actually shows.
+#
+# THE ASSERTION THAT MATTERS MOST IS AN ABSENCE. Ian: "No nudging on that
+# matter." There is no banner, no dismissible card, no percentage chase — and an
+# absence is exactly what creeps back in as a well-meaning improvement, so the
+# gate scans five member-facing trees for one and pairs that scan with a LIVENESS
+# self-test (the detector must first fire on a synthetic nudge, or a broken
+# detector would pass on an empty repo and prove nothing).
+#
+# DUAL RAIL is asserted BEHAVIOURALLY, not by string presence: the Stripe rail's
+# switch must be DERIVED from the shared config's enabled key. The first
+# red-first run caught the loose version staying green against a hardcoded
+# Patreon-only build — precisely the regression Ian's dual-wield ruling forbids.
+#
+# Flag OFF is the default and is proven a no-op per-state (config ABSENT,
+# present-and-OFF, overridden ON) by RUNNING the reader, not reading it.
+# Companion: profile-setup-redfirst.py mutates the source 12 ways and requires a
+# RED from each — run it after touching either the feature or this gate.
+run "profile-setup" python3 "$(dirname "$0")/profile-setup-gate.py"
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"
