@@ -16,6 +16,17 @@ set -uo pipefail
 # lane falsely suspected. Per-gate env goes INLINE on that gate's run line.
 LG_GATE_TOKEN_MINTED="$(bash "$(dirname "$0")/gate-env.sh" 2>/dev/null | grep '^LG_GATE_TOKEN=' | cut -d= -f2)"
 
+# ONE SUITE AT A TIME, box-wide (8/15, third concurrency bite in a day: two
+# concurrent suites both ran the visibility matrix and trampled its fixture
+# member's dials mid-mutation — matrix-vs-matrix). Gates that mutate shared
+# fixtures cannot overlap; a second suite WAITS (up to 25 min), it does not
+# interleave. Lock death releases automatically with the process.
+exec 8>/tmp/lg-suite.lock
+if ! flock -n 8; then
+  echo "run-all: another suite holds the lock — waiting (max 25 min)…"
+  flock -w 1500 8 || { echo "run-all: lock never freed — CANNOT RUN"; exit 2; }
+fi
+
 red=0
 dead=0
 run() {  # run <label> <command...>
