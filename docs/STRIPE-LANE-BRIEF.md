@@ -24,6 +24,14 @@ at before it is ever armed.
 2. **Nothing reaches members.** Every member-facing surface merges behind a
    switch defaulted OFF, and the OFF state is gated red-first.
 3. **Live is read-only.** Live writes are Ian's, handed to him through keeper.
+4. **BOTH RAILS FIRE, INDEFINITELY.** Ian, 2026-08-15, a permanent ruling:
+   *"Everything needs to fire for both for the foreseeable future… we are dual
+   wielding patreon and stripe for a while."* **Patreon does not sunset at the
+   Stripe launch.** The two rails run in parallel with no end date, so every
+   downstream flow keys on **membership activation**, never on one rail's
+   events. *"Does it fire for both rails?"* is a standing question for anything
+   this lane builds or reports — treat a Stripe-only answer as an unfinished
+   one.
 
 ---
 
@@ -91,7 +99,11 @@ cron reaches the same place on its own, and `lgms_stripe_frozen` does **not**
 stop it, because that option guards the Stripe *poll*, a different pass. So a
 gift to somebody not on the list let them in anyway, within minutes.
 
-Now fenced in `Sync::customer()` — the one choke point both roads pass through.
+Now fenced in `Sync::customer()` — the one choke point both roads pass through. It is
+provably **Stripe-only**: a refusal writes nothing and never runs the Arbiter, so
+a member paying on Patreon is untouched by a Stripe refusal — gate 34d §7 asserts
+exactly that, because under the dual-rail ruling the expensive mistake is not
+refusing a Stripe grant but disturbing the other rail while doing it.
 If you add a *third* road to a membership grant, it must pass through there too,
 or the fence has another hole. Gate 34d.
 
@@ -178,6 +190,25 @@ Everything below is a decision, not a task. Nothing here is blocked on code.
 4. **When to switch the pages on.** Flip order: identity gate on → lifecycle on
    → the list governs who → the pages flag on.
 
+5. ~~**The Stripe keys — this now BLOCKS the rehearsal.**~~ **✅ RESOLVED
+   2026-08-15 — Ian was right: the keys were already here.** He said *"They
+   should be in the stripe work that was already completed. We did a ton of
+   testing."* They were: a working **sandbox** key sits in dev2's WP options
+   under the retired PMPro plugin (`pmpro_sandbox_stripe_connect_secretkey`),
+   validated alive by a read-only account retrieve — `acct_1LJOi5Hg6gcIV22b`,
+   "Loothgroup", the same account the brief already names. Now wired into
+   `lgms_stripe_secret_key`, and the money half is **rehearsed and working**
+   (see §6c). The *live* key under the same plugin is still his to rotate.
+   Original text follows for the record:
+
+   ~~The blocker was:~~ dev2 holds **no key of
+   ours at all**, so no checkout can be created, no price can be set, and the
+   money half of a soft launch (payment, gift purchase, regional pricing) cannot
+   be tested by anyone. Pasting the two **sandbox** values is his step one.
+   Meanwhile dev2 *does* hold a **live** payments key under the retired old
+   membership plugin — so the box has exactly the wrong key: a real one nobody
+   uses, and no sandbox one for the work we want. Both are fixed in one sitting.
+
 ### The two he must do himself
 
 - **Rotate the key.** He already has a real, charges-enabled Stripe account
@@ -196,6 +227,56 @@ Everything below is a decision, not a task. Nothing here is blocked on code.
 - **No tokened invite links.** Login plus the list is enough for the test, and a
   token that bypassed the list would defeat it. Revisit only if he wants
   pre-login invites.
+
+## 6b. The dress rehearsal (2026-08-15) — and what it caught
+
+Walked the pages on the real serve as a whitelisted member. **The unlock did not
+work at all**, and the reason is worth keeping:
+
+**These pages are gated TWICE.** The router decides who may reach a page, and
+then *every page file* calls `lg_membership_prelaunch_gate_or_exit()` and
+re-checks on its own authority. The first cut changed only the router, so the
+router admitted a listed member and their own page then refused them. The page's
+door now delegates to the same gate the router uses, rather than keeping a
+private copy of the rule.
+
+**Gate 34b was GREEN at 54 assertions while the feature was completely broken.**
+It asked the gate *function* what it would decide and read the router's *table*;
+it never asked whether a member could reach a page. That is
+presence-is-not-reachability. Section 8 now drives the page's own door per state,
+and mutation R1 (the bug as it shipped) reddens it.
+
+Access half: **working**, proven end to end with real sessions — listed member
+gets the real join/gift/refund pages, unlisted and anon get the stub.
+Money half: **blocked on Ian's keys** (see decision 5).
+
+---
+
+## 6c. The money half — rehearsed 2026-08-15, and it works
+
+Once the sandbox key was found, the price control was run end to end against
+real Stripe test mode:
+
+1. the price was **created in Stripe** (`livemode: false`, so unmistakably
+   sandbox);
+2. **our own `prices` row was written** — the step whose absence is the
+   double-charge shape;
+3. **new joins were repointed** at it, with no orphaned pointer.
+
+The join page's own INNER JOIN then resolved the new price, which is that defence
+proven against a **real** price rather than a fixture.
+
+Also confirmed, and nobody had checked it: **our catalogue and Stripe's agree.**
+The single tier's product exists in test mode as `prod_UQXMEMmbIKNEn6`
+"Looth PRO" with exactly the three prices our table holds — 1100 monthly, 13200
+yearly, 14500 one-off. The earlier Stripe work was real and consistent.
+
+**No price is set.** Running the control means choosing a number, and the number
+is Ian's. So it ran on an obviously provisional 12.34/month, and the pointer was
+then cleared and the test price deactivated at both ends. The machinery is
+proven; the decision is still his.
+
+---
 
 ## 7. Corrections to this lane's charter
 

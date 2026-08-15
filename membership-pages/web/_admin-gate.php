@@ -116,6 +116,17 @@ function lg_membership_prelaunch_gate_or_exit(array $ctx): void
         && lg_membership_stripe_pages_live()) {
         return; // toggle on → pages are live to their real audience
     }
-    lg_membership_admin_gate_or_exit($ctx); // pre-launch → admin-only stub
+    // Pre-launch. THIS IS THE SECOND DOOR, and it is why the soft launch did
+    // not work when only the router was changed: the router decides who may
+    // reach a page, and then the page re-checks here on its own authority. A
+    // member the router had already admitted was refused by their own page.
+    //
+    // Both doors must therefore agree, so this delegates to the SAME gate the
+    // router uses rather than keeping a private copy of the rule. Pre-launch
+    // still means restricted; it now means administrators AND the Stripe Test
+    // Group, exactly as the router means it. With the flag off or the list
+    // empty, lg_membership_testgroup_gate_or_exit collapses to the admin stub,
+    // so this stays byte-identical to the old behaviour.
+    lg_membership_testgroup_gate_or_exit($ctx);
 }
 }

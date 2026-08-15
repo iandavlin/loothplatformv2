@@ -189,6 +189,55 @@ echo (int) ($ctx[\'wp_user_id\'] ?? -1);
     return (int) trim($out);
 }
 
+/**
+ * The door the PAGE itself uses — not the router's.
+ *
+ * THIS SECTION EXISTS BECAUSE THE GATE MISSED A TOTAL FAILURE. These surfaces
+ * are gated TWICE: the router decides who may reach a page, and then every page
+ * file calls lg_membership_prelaunch_gate_or_exit() and re-checks on its own
+ * authority. The first version of this feature changed only the router, so the
+ * router admitted a listed member and their own page then refused them — the
+ * unlock did not work AT ALL, while this gate stayed green at 54 assertions,
+ * because it asked the gate FUNCTION what it would decide and read the router's
+ * TABLE, and never asked whether a member could actually reach a page.
+ *
+ * So the assertions below drive the page's own door, per state.
+ */
+function pageDoor(string $MP, ?string $flag, ?string $listSerialized, ?string $pagesLive, array $ctx): string
+{
+    $opts = [
+        'lgms_stripe_testgroup_pages'     => $flag,
+        'lgms_stripe_lifecycle_allowlist' => $listSerialized,
+        'lgms_stripe_pages_live'          => $pagesLive,
+    ];
+    $harness = '<?php
+declare(strict_types=1);
+$OPTS = ' . var_export($opts, true) . ';
+$CTX  = ' . var_export($ctx, true) . ';
+function lg_membership_wp_option(string $name, ?string $default = null): ?string {
+    global $OPTS;
+    return array_key_exists($name, $OPTS) && $OPTS[$name] !== null ? $OPTS[$name] : $default;
+}
+function lg_shared_render_site_header(array $c = []): void {}
+function lg_shared_render_site_footer(array $c = []): void {}
+require ' . var_export($MP . '/config.php', true) . ';
+require ' . var_export($MP . '/web/_admin-gate.php', true) . ';
+ob_start();
+lg_membership_prelaunch_gate_or_exit($CTX);
+ob_end_clean();
+fwrite(STDERR, "ALLOWED");
+';
+    $tmp = tempnam(sys_get_temp_dir(), 'lgpd') . '.php';
+    file_put_contents($tmp, $harness);
+    $d = [1 => ['pipe','w'], 2 => ['pipe','w']];
+    $p = proc_open(PHP_BINARY . ' ' . escapeshellarg($tmp), $d, $pipes);
+    if (!is_resource($p)) { @unlink($tmp); cannot('could not spawn php'); }
+    stream_get_contents($pipes[1]); $err = stream_get_contents($pipes[2]);
+    foreach ($pipes as $pp) fclose($pp);
+    proc_close($p); @unlink($tmp);
+    return str_contains($err, 'ALLOWED') ? 'ALLOWED' : 'REFUSED';
+}
+
 /* Viewer shapes. capabilities.manage_options is what the app calls an admin. */
 $admin    = ['authenticated' => true,  'wp_user_id' => 1,   'capabilities' => ['manage_options' => true]];
 $listed   = ['authenticated' => true,  'wp_user_id' => 501, 'capabilities' => []];
@@ -332,6 +381,40 @@ is_(ctxUserId($MP, ['authenticated' => true,  'tier' => 'looth3']) === 0,
     "a whoami response with no id at all yields 0, never a stray truthy value");
 
 /* ---------------------------------------------------------------------- */
+section( "[8] THE PAGE'S OWN DOOR — the one the router does not control" );
+
+is_( pageDoor($MP, '1', $LIST, '0', $listed)   === 'ALLOWED',
+     "a LISTED member is admitted by the page itself — the failure the rehearsal caught");
+is_( pageDoor($MP, '1', $LIST, '0', $unlisted) === 'REFUSED', "an unlisted member is refused by the page itself");
+is_( pageDoor($MP, '1', $LIST, '0', $anon)     === 'REFUSED', "an anonymous visitor is refused by the page itself");
+is_( pageDoor($MP, '1', $LIST, '0', $admin)    === 'ALLOWED', "an administrator is admitted, as before");
+
+// OFF is still today, at this door too.
+is_( pageDoor($MP, null, $LIST, '0', $listed)  === 'REFUSED', "flag OFF: the page refuses a listed member, exactly as today");
+is_( pageDoor($MP, '1', serialize([]), '0', $listed) === 'REFUSED', "empty list: the page refuses everyone");
+is_( pageDoor($MP, null, null, '0', $admin)    === 'ALLOWED', "flag OFF: an administrator still gets in");
+
+// And go-live still overrides everything, unchanged.
+is_( pageDoor($MP, null, null, '1', $anon)     === 'ALLOWED', "pages_live ON: the page serves its real audience regardless of the list");
+
+// The pages must all use THAT door. A page calling the hard admin gate directly
+// would be invisible to every assertion above.
+$selfGated = [];
+$wrongDoor = [];
+foreach ( [ 'lgjoin', 'lggift-buy', 'lggift', 'my-gifts', 'request-refund', 'welcome', 'regional-pricing-not-available' ] as $slug ) {
+    $f = "$MP/web/$slug.php";
+    if ( ! is_readable( $f ) ) { bad( "page file missing: $slug.php" ); continue; }
+    $body = (string) file_get_contents( $f );
+    if ( str_contains( $body, 'lg_membership_prelaunch_gate_or_exit' ) ) { $selfGated[] = $slug; }
+    if ( preg_match( '/lg_membership_admin_gate_or_exit\s*\(/', $body ) )  { $wrongDoor[] = $slug; }
+}
+is_( count( $selfGated ) === 7, sprintf(
+    "all 7 soft-launch pages go through the flag-aware door (%d do)", count( $selfGated ) ) );
+is_( $wrongDoor === [], sprintf(
+    "no soft-launch page calls the hard admin gate directly, which would bypass the list (%s)",
+    $wrongDoor === [] ? 'none do' : implode( ', ', $wrongDoor ) ) );
+
+/* ---------------------------------------------------------------------- */
 echo "\n$pass passed, $fail failed\n";
 if ($fail > 0) {
     echo "RED — the Stripe Test Group page gate is not holding.\n";
@@ -388,4 +471,15 @@ exit(0);
  * Likewise M8 originally reddened only a source-text assertion, because every
  * scenario hands the gate a context array the gate itself built. ctxUserId()
  * now exercises the real builder, and M8b reddens 4.
+ *
+ *  R1  revert the PAGE'S OWN DOOR (lg_membership_prelaunch_gate_or_exit) to
+ *      the hard admin gate — i.e. THE BUG THE REHEARSAL FOUND, exactly as it
+ *      shipped                                                    -> 1 RED
+ *      "a LISTED member is admitted by the page itself". Before §8 existed
+ *      this gate was GREEN at 54 assertions while the feature did not work at
+ *      all: it asked the gate FUNCTION what it would decide and read the
+ *      router's TABLE, and never asked whether a member could reach a page.
+ *      These surfaces are gated TWICE and only the router had been changed.
+ *      The lesson is not "add an assertion" — it is that asserting a decision
+ *      is not asserting reachability.
  * ======================================================================= */

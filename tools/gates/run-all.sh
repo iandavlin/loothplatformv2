@@ -1001,6 +1001,11 @@ echo "=== GATE 49: every copy of a paired feature flag agrees ==="
 run "paired-flag-agreement" python3 "$(dirname "$0")/paired-flag-agreement-gate.py"
 
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; echo "RED GATES: ${RED_GATES:-unknown}"; exit 1; fi
+
+echo "=== GATE 50: the work board renders EVERY item, and phase 1 cannot write ==="
+run "work-board" php "$(dirname "$0")/work-board-gate.php"
+
+if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"
   echo "Nothing red, but $dead gate(s) reached no verdict, so this is NOT green."
