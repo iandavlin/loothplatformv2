@@ -10,6 +10,7 @@ Phase 1 + 2 shipped and merged; see `handoffs/2026-08-15-guitardle-fairness.md`.
 | Backlog 24 | **DONE.** Gate **40** (keeper), registered, CRAFT-STANDARD row in |
 | Backlog 25 | **DONE.** Gate **41** (keeper), registered, row in |
 | Backlog 26 | **BUILT + GATED.** Gate **42** (pre-assigned), registered, row in. Stage ONE of two |
+| **STATE — PARKED 2026-08-15** | **Parked on keeper's fleet-quiet order** (Ian on dev2, load 15 on 2 cores). All three items are BUILT, GATED, RED-FIRST PROVEN and PUSHED — **nothing is half-finished**. The only thing outstanding is the *confirming* full-suite run, which I killed mid-flight to give the box back; gates 40, 41 and 42 each passed standalone immediately before. **To resume:** run `tools/gates/run-all.sh` (needs `source tools/gates/gate-env.sh` + `export LG_GATE_COOKIE="loothdev_auth=$LG_GATE_TOKEN"`, or gate 39 reports CANNOT RUN). |
 | Flags | `_SCORE_RETRY`, `_SERVER_PLAY`, `_DAY_PUZZLE` added, all OFF. `_DAILY_CLAIM` and `_HOW_TO_PLAY` are ON in main. All five independent |
 
 ---
