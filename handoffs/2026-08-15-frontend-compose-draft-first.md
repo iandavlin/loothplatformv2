@@ -187,10 +187,17 @@ the same sentence for a 404, a 403, a dropped session and a slow page.
 
 | | |
 |---|---|
+| gate 35 compose | **GREEN** — flag OFF is byte-identical to the pre-feature fixture (404 / 5106B) |
 | gate 46 compose-media | **GREEN**, 7 assertions + new **7b** |
 | gate 47 compose-dark | **GREEN** at 1280 **and** 390 — the suite ran only 1280 before |
 | buck-surface guard | clean |
 | rebased onto main | yes, 44 commits, **no conflicts** |
+
+Everything above was then re-run **on the rebased tree**, which is the tree that
+will merge: the full browser loop GREEN at both widths and both phases (drafts
+73260 desktop / 73262 phone, modal reusing 73260), gate 46 GREEN, gate 47 GREEN
+at 1280 and 390, gate 35 GREEN, buck guard clean. The earlier numbers in the
+table above are from the pre-rebase runs; both agree.
 
 **Two stale pointers on gate 47, both found by trying to USE the ledger row
 rather than reading it.** Its CRAFT-STANDARD row cited
