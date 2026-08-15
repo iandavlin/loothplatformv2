@@ -226,6 +226,56 @@ its baseline verified by two full runs. The sweep's copy is the same logic and
 passes syntax, but the full 48-run sweep has **not** been re-run under it (box
 over the load threshold). The disclosure block is the safety net until it is.
 
+## THE WAVE'S REAL WORKLIST (frozen instrument, 48/48 resolved, phantom-free)
+
+Re-run after the transition freeze. **Every run resolved dark; zero phantoms.**
+app-dark and os-dark now agree column-for-column (hub 7/7, hub-door 9/9) where
+before they disagreed 7-vs-3 — that symmetry is the instrument being stable.
+
+**Two corrections to what I reported earlier, both against my own predictions:**
+
+1. **The 1.0–1.07:1 items are REAL.** I twice flagged them as carrying the
+   phantom signature and said not to fix them until re-measured. Re-measured,
+   they survive the freeze on a `#15171a` body. The predecessor's original
+   "borderless search fields" item was right all along. Checking was correct
+   process; my prediction was wrong.
+2. **Freezing transitions made the total go UP, 133 → 154, not down.** I
+   expected it to shrink as phantoms fell away. Only 9 findings were phantoms
+   (2 unresolved runs); the freeze *un-hid* ~30 real ones that mid-fade frames
+   had been masking — `hub-door` mobile went 1 → 19. An early probe does not
+   only invent defects, it also **conceals** them.
+
+| worst | hits | element | fg on bg | surfaces |
+|---|---|---|---|---|
+| **1.00** | 8 | `input#q` | `#0b2528` on `#0b2528` | shop |
+| **1.00** | 6 | `input#dir-loc` | `#1e2124`/`#fff` on itself | directory |
+| **1.06** | 4 | `input.lgev-input` | `#222629` on `#1e2124` | events |
+| **1.07** | 8 | `input.hub-tsearch__in` | `#222629` on `#262b30` | hub, hub-door |
+| 2.17 | 4 | `a.feed-more__btn` | `#524e48` on `#15171a` | hub, hub-door |
+| 2.83 | 20 | `span.gdle-side-row__pts` | `#657154` on `#242a20` | front *(other lane)* |
+| 2.86 | 6 | `span` | `#f8f5ef` on `#b98a3e` | directory, events |
+| 3.00 | 2 | `.leaflet-control-attribution` | `#80867d` on `#333d41` | directory |
+| 3.12 | 38 | `span.avatar-init` | `#ffffff` on `#87986a` | hub, hub-door |
+| 3.36 | 20 | `span.gdle-side-row__rank` | `#737c66` on `#242a20` | front *(other lane)* |
+| 3.51 | 8 | `.lg-evland__sub` / `__empty` | `#6b6f68` on `#15171a` | events |
+| 4.33 | 30 | `time.reply-stub__time` | `#80867d` on `#1e2124` | hub, hub-door |
+
+**Start here.** The four worst are ONE defect class — search/text inputs whose
+ink equals or nearly equals their own fill. `input#q` is literally `#0b2528` on
+`#0b2528`: the text is not low-contrast, it is *invisible*. 26 findings across
+shop, directory, events, hub and hub-door, plausibly one shared root in the
+borderless-field styling. That is the highest-value fix in the list by a wide
+margin.
+
+Then by volume rather than badness: `.avatar-init` (38) and
+`.reply-stub__time` (30) are single-token fixes hitting many instances.
+
+`front/*` (40 findings, both Guitardle rows) is explicitly another lane's
+surface — excluded, leaving ~114 for this wave.
+
+**The login family is now clear**: signin, lostpassword, bpnoaccess, join and
+lgjoin all read 0 in all four states.
+
 ## Next
 
 The ranked wave list (110+ remaining) is the standing charter — badness order,
