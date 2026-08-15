@@ -211,11 +211,24 @@ echo "TOTAL={{$diff}}/" . count($rows) . "\\n";
 
 
 def section_c_flag_off():
+    # PER-STATE since 2026-08-15 (keeper): originally this hard-asserted OFF,
+    # which made every RULED flip a red — same lesson as the compose gate,
+    # "flipping the default needs no gate edit". The policy this now encodes:
+    # ON is legal ONLY with an attribution comment naming the ruling on the
+    # define/flip (grep the flag file's history for who and when); an ON with
+    # no ruling text adjacent is still RED. The real safety — the member-facing
+    # markup reachable only through the flag check — is asserted in BOTH states
+    # by C2/C2b/C2c below, which do not care what the default is.
     flag_src = read(FLAG_FILE)
     if flag_src is None:
         DEAD.append("[C] platform/config/featured-members.php is missing")
     elif re.search(r"'enabled'\s*=>\s*true", flag_src):
-        RED.append("[C] the tracked flag defaults to true — must ship OFF")
+        window = flag_src[max(0, flag_src.find("'enabled' => true") - 400):flag_src.find("'enabled' => true")]
+        if re.search(r"(?i)\bIan\b.{0,120}(ruled|ruling|decision|box|flip)", window, re.S):
+            OK.append("[C1] flag is ON by an attributed ruling (comment names Ian + the decision)")
+        else:
+            RED.append("[C] the tracked flag is ON with no ruling attribution beside it — "
+                       "an unruled ON is a member-facing surface nobody decided to open")
     elif re.search(r"'enabled'\s*=>\s*false", flag_src):
         OK.append("[C1] the tracked flag defaults to false")
     else:
