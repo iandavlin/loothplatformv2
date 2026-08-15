@@ -194,8 +194,8 @@ $set = mustSet( 1200, 'month', 'the happy path' );
 is_( FakeStripe::$created === 1, "the price is created in Stripe" );
 is_( (string) $pdo->query( "SELECT COUNT(*) FROM prices WHERE stripe_price_id='price_TEST_NEW'" )->fetchColumn() === '1',
      "the price is recorded in OUR table — the step whose absence costs money" );
-is_( ( $GLOBALS['OPTIONS'][ StripePrice::PRICE_OPT ] ?? '' ) === 'price_TEST_NEW',
-     "new joins are pointed at it" );
+is_( StripePrice::currentPriceId( 'month' ) === 'price_TEST_NEW',
+     "new joins on that cadence are pointed at it" );
 is_( (string) $pdo->query( "SELECT product_id FROM prices WHERE stripe_price_id='price_TEST_NEW'" )->fetchColumn() === '1',
      "and it hangs off the STANDARD product, never the regional one" );
 is_( ( FakeStripe::$lastParams['product'] ?? '' ) === 'prod_LOOTH3',
@@ -253,8 +253,14 @@ mustSet( 9900, 'year', 'the second, dearer price' );
 
 is_( (string) $pdo->query( "SELECT stripe_price_id FROM subscriptions WHERE stripe_subscription_id='sub_old'" )->fetchColumn()
      === 'price_TEST_NEW', "an existing subscription still names the price it joined on" );
-is_( ( $GLOBALS['OPTIONS'][ StripePrice::PRICE_OPT ] ?? '' ) === 'price_TEST_DEARER',
-     "while NEW joins move to the new price" );
+// Note the shape change cadences brought: setting the YEARLY price moves new
+// YEARLY joins and leaves monthly untouched. The old single-slot assertion
+// ("new joins move to the new price") was the right claim when there was one
+// slot; it is now per-cadence, and §6b holds the independence claim.
+is_( StripePrice::currentPriceId( 'year' ) === 'price_TEST_DEARER',
+     "while NEW joins on the changed cadence move to the new price" );
+is_( StripePrice::currentPriceId( 'month' ) === 'price_TEST_NEW',
+     "...and the OTHER cadence is untouched by that change" );
 is_( (string) $pdo->query( "SELECT COUNT(*) FROM prices WHERE stripe_price_id='price_TEST_NEW' AND active=1" )->fetchColumn() === '1',
      "the old price stays ACTIVE in our table — a grandfathered member's page must still resolve it" );
 is_( joinPageSeesSubscription( $pdo, 7 ), "and the grandfathered member is still found by the join page" );
@@ -291,6 +297,49 @@ catch ( Throwable $e ) { ok( "only monthly and yearly are offered, and only thos
 is_( StripePrice::assertInterval( 'year' ) === 'year', "'year' is accepted" );
 
 is_( FakeStripe::$created === 0, "none of the above reached Stripe at all" );
+
+/* ---------------------------------------------------------------------- */
+section( "[6b] TWO CADENCES, ONE TIER — and they must not overwrite each other" );
+
+// Ian, 2026-08-15: "We need a monthly and a yearly price etc." — his Patreon
+// shape. Still ONE membership: both prices hang off the same product and grant
+// the same tier, so the poller still needs no price logic. What changes is that
+// a member picks how often they pay, and the two slots must be independent —
+// the obvious bug here is a second setPrice() quietly replacing the first.
+
+$pdo = rig();
+mustSet( 500, 'month', 'the monthly price' );
+FakeStripe::$nextId = 'price_TEST_YEAR';
+mustSet( 6000, 'year', 'the yearly price' );
+
+is_( StripePrice::currentPriceId( 'month' ) === 'price_TEST_NEW',
+     "setting the YEARLY price leaves the monthly one alone" );
+is_( StripePrice::currentPriceId( 'year' ) === 'price_TEST_YEAR',
+     "...and the yearly slot holds its own price" );
+is_( StripePrice::configuredCadences() === [ 'month', 'year' ],
+     "both cadences are offered once both are set" );
+
+$m = StripePrice::currentPrice( 'month' ); $y = StripePrice::currentPrice( 'year' );
+is_( ( $m['unit_amount_cents'] ?? 0 ) === 500 && ( $y['unit_amount_cents'] ?? 0 ) === 6000,
+     "each cadence reports its own amount (5.00 monthly, 60.00 yearly — Ian's Patreon shape)" );
+is_( (string) $pdo->query( "SELECT COUNT(DISTINCT product_id) FROM prices WHERE stripe_price_id IN ('price_TEST_NEW','price_TEST_YEAR')" )->fetchColumn() === '1',
+     "BOTH prices hang off the SAME product — one tier, two rhythms, so the grant stays a constant" );
+
+// One cadence configured must not imply the other is offered.
+rig();
+mustSet( 500, 'month', 'monthly only' );
+is_( StripePrice::configuredCadences() === [ 'month' ], "a single configured cadence offers only itself" );
+is_( StripePrice::currentPriceId( 'year' ) === '', "...and the unset one stays empty rather than borrowing" );
+is_( StripePrice::currentPrice( 'year' ) === null, "...with nothing to show for it" );
+
+// The legacy single option still answers for MONTHLY, and only when unset.
+rig( [ StripePrice::PRICE_OPT => 'price_LEGACY' ] );
+is_( StripePrice::currentPriceId( 'month' ) === 'price_LEGACY',
+     "a box configured before cadences existed keeps selling its monthly price" );
+is_( StripePrice::currentPriceId( 'year' ) === '', "...and the legacy option never answers for yearly" );
+mustSet( 700, 'month', 'monthly over legacy' );
+is_( StripePrice::currentPriceId( 'month' ) === 'price_TEST_NEW',
+     "...and a real monthly price WINS over the legacy fallback once set" );
 
 /* ---------------------------------------------------------------------- */
 section( "[7] THE PRODUCT IS RESOLVED, NEVER GUESSED" );

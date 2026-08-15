@@ -318,29 +318,47 @@ final class Admin
         <?php endif; ?>
 
         <h3>Right now</h3>
-        <?php if ( $orphaned ) : ?>
-            <div class="notice notice-error inline" style="max-width:720px;">
-                <p>
-                    New joins are pointed at a price this site has no record of
-                    (<code><?php echo esc_html( StripePrice::currentPriceId() ); ?></code>).
-                    <strong>Set a price below before anybody joins.</strong> A price we do not hold a
-                    record of also makes an existing member's subscription invisible to the join page,
-                    which would offer them a second one.
-                </p>
-            </div>
-        <?php elseif ( $current === null ) : ?>
-            <p><strong>No price is set</strong>, so nobody can join yet. That is the intended state until the
-               number is decided.</p>
+        <?php
+          // ONE TIER, TWO CADENCES (Ian: "We need a monthly and a yearly price
+          // etc."). Both prices sit under the SAME membership — the member
+          // chooses how often they pay, not what they get.
+          $any = false;
+          foreach ( StripePrice::CADENCES as $cad => $cadLabel ) {
+              if ( StripePrice::currentPriceId( $cad ) !== '' ) { $any = true; }
+          }
+        ?>
+        <?php if ( ! $any ) : ?>
+          <p><strong>No price is set yet</strong>, so nobody can join. That is the intended state until
+             you decide the numbers.</p>
         <?php else : ?>
-            <table class="widefat striped" style="max-width:720px;">
-                <tbody>
-                    <tr><th style="width:12em;">New members pay</th>
-                        <td><strong><?php echo esc_html( StripePrice::money( $current['unit_amount_cents'], $current['currency'] ) ); ?></strong>
-                            <?php echo esc_html( $current['interval'] === 'year' ? 'a year' : 'a month' ); ?></td></tr>
-                    <tr><th>Membership</th><td><?php echo esc_html( $current['product_name'] ); ?></td></tr>
-                    <tr><th>Stripe reference</th><td><code><?php echo esc_html( $current['stripe_price_id'] ); ?></code></td></tr>
-                </tbody>
-            </table>
+          <table class="widefat striped" style="max-width:760px;">
+            <thead><tr><th style="width:9em;">Billed</th><th>New members pay</th><th>Stripe reference</th></tr></thead>
+            <tbody>
+            <?php foreach ( StripePrice::CADENCES as $cad => $cadLabel ) :
+                    $cur = StripePrice::currentPrice( $cad );
+                    $orph = StripePrice::currentPriceIsOrphaned( $cad ); ?>
+              <tr>
+                <td><strong><?php echo esc_html( $cadLabel ); ?></strong></td>
+                <?php if ( $orph ) : ?>
+                  <td colspan="2" style="color:#8a3208;">
+                    Pointed at a price this site has no record of
+                    (<code><?php echo esc_html( StripePrice::currentPriceId( $cad ) ); ?></code>) —
+                    <strong>set it again before anybody joins.</strong>
+                  </td>
+                <?php elseif ( $cur === null ) : ?>
+                  <td colspan="2" style="color:#666;">not set — this cadence is not offered</td>
+                <?php else : ?>
+                  <td><strong><?php echo esc_html( StripePrice::money( $cur['unit_amount_cents'], $cur['currency'] ) ); ?></strong>
+                      <?php echo esc_html( $cad === 'year' ? 'a year' : 'a month' ); ?></td>
+                  <td><code><?php echo esc_html( $cur['stripe_price_id'] ); ?></code></td>
+                <?php endif; ?>
+              </tr>
+            <?php endforeach; ?>
+            </tbody>
+          </table>
+          <p class="description" style="max-width:760px;">A member picks one of these at checkout. Both
+             give the same membership — only the billing rhythm differs. Leave one unset and it is simply
+             not offered.</p>
         <?php endif; ?>
 
         <h3>Set a new price</h3>
