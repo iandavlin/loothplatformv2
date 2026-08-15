@@ -235,14 +235,18 @@ def section_c_flag_off():
     if idx_src is None:
         DEAD.append("[C] archive-poc/web/index.php is missing")
     else:
-        # STRICT: $lg_fm_on must be the literal ternary CONDITION that decides
-        # whether to resolve, not merely present somewhere in the file. A
-        # looser "does lg_fm_on appear after the if" check was tried first and
-        # missed exactly this: $lg_fm_on is computed a few lines above
-        # regardless, so it always "appears nearby" even after the ternary
-        # itself is deleted and resolution runs unconditionally — caught only
-        # by actually red-firing this check against that mutation.
-        m = re.search(r"\$lg_fm\s*=\s*\$lg_fm_on\s*\?\s*lg_resolve_featured_member\s*\(", idx_src)
+        # STRICT: the resolve CALL must appear inside the `if ($lg_fm_on) {`
+        # block, ahead of its own `} else { $lg_fm = null; }` — not merely
+        # "lg_fm_on appears somewhere nearby". Was a ternary
+        # ($lg_fm = $lg_fm_on ? lg_resolve_featured_member(...) : null) until
+        # review 2026-08-15 added a try/catch (PDO can throw on a transient
+        # DB outage), which needed a full if/else instead — this regex was
+        # updated to match at the same time, and re-red-fired (moving the
+        # call above the `if` still trips it) so the structural check didn't
+        # quietly weaken along with the refactor.
+        m = re.search(
+            r"if\s*\(\s*\$lg_fm_on\s*\)\s*\{.*?lg_resolve_featured_member\s*\(.*?\}\s*else\s*\{\s*\$lg_fm\s*=\s*null;",
+            idx_src, re.S)
         if not m:
             RED.append("[C3] index.php's member_uuid resolution is not textually gated behind "
                        "a flag check — a stale member_uuid in config.json could resolve a real "
@@ -287,6 +291,15 @@ def section_e_live_routes():
         DEAD.append("[E] LG_GATE_HOST/LG_GATE_COOKIE not set — cannot exercise the live routes; "
                     "this is an environment fact, not a finding, until this branch is merged")
         return
+    # EXPLICIT allow-list of acceptable statuses, not an else-catches-all.
+    # Found in review 2026-08-15: the original else branch called ANY
+    # non-404/401 status "routed, OK" — which would have called the nginx
+    # allow-list gap (finding elsewhere in this same review: me-featured was
+    # missing from strangler-profile-app.conf's regex, producing a 403) a
+    # PASS. Auth::requireUser() answers 401 with no session; that is the one
+    # response that proves the route is live AND reaches the PHP endpoint.
+    # 403 is now its own branch — RED, not swallowed — because it is exactly
+    # the signature of "nginx is blocking this before PHP ever runs."
     status, body = check_http(f"https://{host}/profile-api/v0/me/featured",
                                {"Cookie": f"loothdev_auth={gate_cookie}"})
     if status is None:
@@ -296,9 +309,14 @@ def section_e_live_routes():
                     "(expected pre-merge; re-run after merge)")
     elif status == 401:
         OK.append("[E1] /profile-api/v0/me/featured is routed and requires auth (401 without a "
-                 "member session) — the route exists and is not wide open")
+                 "member session) — the route exists, reaches PHP, and is not wide open")
+    elif status == 403:
+        RED.append("[E1] /profile-api/v0/me/featured returned 403 — nginx is blocking this route "
+                  "before it reaches PHP (check the regex allow-list in "
+                  "strangler-profile-app.conf around the me-*.php location)")
     else:
-        OK.append(f"[E1] /profile-api/v0/me/featured routed, HTTP {status}")
+        DEAD.append(f"[E1] /profile-api/v0/me/featured returned an unexpected HTTP {status} — "
+                    "not a known-good or known-bad signature, needs a human look")
 
 
 def main():

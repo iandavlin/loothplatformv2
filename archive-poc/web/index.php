@@ -269,6 +269,30 @@ $happening_now = archive_poc_happening_now($db);
 // ---- Helpers -------------------------------------------------------------
 function h(string $s): string { return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8'); }
 
+/**
+ * TWO KINDS OF URL LIVE IN avatar_url AND ONLY ONE UNDERSTANDS ?w= — the same
+ * trap profile-app/web/directory-members.php's client-side rs() documents
+ * (craft-gate item 13.5: a 1000px 107KB default avatar shipped raw at 42px
+ * display, on the anonymous finder, RED since Nov 2024). profile-media URLs
+ * are served by a resizer that reads ?w=; RAW WordPress uploads
+ * (/wp-content/uploads/...) are served by nginx, which ignores it outright.
+ *
+ * PHP twin of that JS helper, added in review 2026-08-15: this featured-card
+ * resolver is the FIRST server-rendered path to feed a real, uncurated
+ * member avatar_url through this template — the pre-existing hand-typed
+ * config always had a human hand-pick an already-reasonable URL. A member
+ * who never uploaded a photo (or is still on the default) would otherwise
+ * ship that same raw PNG here, full-size, house rule ("always the resizer +
+ * width/height, never raw uploads") notwithstanding.
+ */
+function lg_fm_avatar_rs(string $u, int $w): string {
+    if ($u === '') return $u;
+    if (preg_match('#/wp-content/uploads/(.+?)(?:\?.*)?$#', $u, $m)) {
+        return '/img.php?s=' . rawurlencode($m[1]) . '&w=' . $w;
+    }
+    return $u . (str_contains($u, '?') ? '&' : '?') . 'w=' . $w;
+}
+
 const LG_FALLBACK_IMG = 'https://loothgroup.com/wp-content/uploads/2024/11/Featured-Image-Fallback-2.webp';
 
 // --- Static front-page widgets ----
@@ -772,7 +796,21 @@ if ($lg_fm && !empty($lg_fm['member_uuid'])) {
     foreach ([getenv('LG_FEATURED_MEMBERS'), $_SERVER['LG_FEATURED_MEMBERS'] ?? false] as $lg_fm_o) {
         if ($lg_fm_o !== false && $lg_fm_o !== '') $lg_fm_on = ($lg_fm_o === '1' || $lg_fm_o === 'true');
     }
-    $lg_fm = $lg_fm_on ? lg_resolve_featured_member((string) $lg_fm['member_uuid'], $is_member) : null;
+    // Non-fatal by contract, same shape as the discussions try/catch below
+    // (archive_poc_run_discussions) — a transient profile_app outage or a
+    // stale/malformed member_uuid must degrade to "no band", never a 500 for
+    // every visitor to the front page. Found in review 2026-08-15: the
+    // resolver runs with PDO::ERRMODE_EXCEPTION and nothing guarded its call.
+    if ($lg_fm_on) {
+        try {
+            $lg_fm = lg_resolve_featured_member((string) $lg_fm['member_uuid'], $is_member);
+        } catch (\Throwable $e) {
+            error_log('[featured-member resolve] ' . $e->getMessage());
+            $lg_fm = null;
+        }
+    } else {
+        $lg_fm = null;
+    }
 }
 
 /**
@@ -789,7 +827,8 @@ function lg_resolve_featured_member(string $uuid, bool $isMember): ?array {
     }
     $st = $pdo->prepare(
         'SELECT id, slug, display_name, avatar_url, at_a_glance, business_name,
-                location_city, location_region, location_members_precision
+                location_city, location_region, location_members_precision,
+                (profile_layout IS NULL OR profile_layout @> \'["location"]\'::jsonb) AS loc_on_profile
            FROM users
           WHERE uuid = :u AND featured_opt_in = true AND profile_visibility = \'public\''
     );
@@ -808,8 +847,17 @@ function lg_resolve_featured_member(string $uuid, bool $isMember): ?array {
     // hides this from anon regardless), AND only when the member's OWN
     // members-precision allows it — "not just is this a member" (the charter's
     // own wording). 'private' or 'state'-only hides city; anything blank stays blank.
+    //
+    // loc_on_profile added in review 2026-08-15: profile-app's
+    // Visibility::locationPrecision() — the authoritative rule this mirrors,
+    // called from a DIFFERENT PHP process this resolver cannot reach
+    // directly — treats a member who removed the Location SECTION from
+    // their own profile layout as off-map for EVERYONE, independent of their
+    // precision dial. Without this, unpublishing Location from your profile
+    // would not stop it appearing on a featured card.
     $where = '';
-    if ($isMember && in_array($u['location_members_precision'], ['city', 'street'], true)) {
+    if ($isMember && !empty($u['loc_on_profile'])
+        && in_array($u['location_members_precision'], ['city', 'street'], true)) {
         $where = trim(implode(', ', array_filter([$u['location_city'], $u['location_region']])));
     }
 
@@ -824,9 +872,26 @@ function lg_resolve_featured_member(string $uuid, bool $isMember): ?array {
 
     $firstName = trim((string) explode(' ', trim((string) $u['display_name']))[0]);
 
+    // CARD-READY GUARD, enforced HERE — the single choke point every caller
+    // funnels through (the dash AND the pre-existing front-end editor via
+    // fp-save.php, which forwards a raw featured_member object with no
+    // knowledge of "eligible"/"card_ready" at all — found in review 2026-08-15).
+    // The template below renders avatar + role UNCONDITIONALLY (no !empty
+    // guard, unlike where/bio which already degrade gracefully) — an empty
+    // photo or role would be a rendered-but-broken card: an <img src=""> and
+    // a blank name/role line, live on the front page, to every visitor.
+    // Location is deliberately NOT required here — it is optional and already
+    // hides itself; most real cards will have none (see docs/FEATURED-MEMBERS-PLAN.md
+    // §3b, the measured "ordinary case"), and that is a fine card, not a broken one.
+    if (trim((string) $u['avatar_url']) === '' || $role === '') return null;
+
     return [
         'enabled'   => true,
-        'avatar'    => (string) $u['avatar_url'],
+        // 208 = 2x the .lg-fm__avi CSS box (104px, archive.css) for retina —
+        // single right-sized fetch, matching directory-members.php's rs()
+        // precedent (a fixed-size avatar there also gets one size, no
+        // srcset; this card's avatar is likewise fixed-size, never responsive).
+        'avatar'    => lg_fm_avatar_rs((string) $u['avatar_url'], 208),
         'name'      => (string) $u['display_name'],
         'role'      => $role,
         'where'     => $where,
@@ -979,7 +1044,7 @@ if ($lg_ht_enabled) {
       <section class="row row--featured-member" data-row-id="featured-member">
         <div class="lg-fm">
           <span class="lg-fm__badge">Featured member</span>
-          <span class="lg-fm__avi"><img src="<?= h((string)($lg_fm['avatar'] ?? '')) ?>" alt="" loading="lazy"></span>
+          <span class="lg-fm__avi"><img src="<?= h((string)($lg_fm['avatar'] ?? '')) ?>" alt="" width="104" height="104" loading="lazy"></span>
           <div class="lg-fm__body">
             <h2 class="lg-fm__name"><?= h((string)($lg_fm['name'] ?? '')) ?></h2>
             <div class="lg-fm__role"><?= h((string)($lg_fm['role'] ?? '')) ?></div>

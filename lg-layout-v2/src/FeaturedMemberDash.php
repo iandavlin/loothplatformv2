@@ -45,7 +45,12 @@ final class FeaturedMemberDash
     public const CONFIG_SECRET_FILE   = '/etc/lg-archive-poc-secret';
     public const INTERNAL_SECRET_FILE = '/etc/lg-internal-secret';
     public const CONFIG_WEBHOOK_URL   = 'https://127.0.0.1/archive-api/v0/_config';
-    public const HISTORY_URL          = 'https://127.0.0.1/archive-api/v0/_featured-history';
+    // .php IS the URL — unlike CONFIG_WEBHOOK_URL below, no extensionless
+    // rewrite exists for this endpoint (found in review 2026-08-15: the
+    // extensionless form 404s). CONFIG_WEBHOOK_URL's own rewrite is legacy
+    // debt from ArchivePocDash, not a pattern to repeat — simplest fix is to
+    // just address the endpoint nginx actually serves.
+    public const HISTORY_URL          = 'https://127.0.0.1/archive-api/v0/_featured-history.php';
     public const POOL_URL             = 'https://127.0.0.1/profile-api/v0/internal/featured-pool';
 
     public static function boot(): void
@@ -174,6 +179,17 @@ final class FeaturedMemberDash
             self::redirect_back('member%20not%20eligible');
             return;
         }
+        // card_ready is ALSO enforced at the resolver itself
+        // (lg_resolve_featured_member in index.php — the true choke point
+        // every caller funnels through, including the pre-existing
+        // front-end editor). Re-checked here too so an admin who goes
+        // straight to admin-post.php (bypassing the disabled button) gets an
+        // immediate, legible error instead of a silent "Saved" that then
+        // renders nothing on the front page.
+        if (empty($member['completeness']['card_ready'])) {
+            self::redirect_back('member%27s%20card%20is%20not%20ready%20yet%20%E2%80%94%20missing%20photo%2C%20what-they-do%2C%20or%20where');
+            return;
+        }
 
         $user = wp_get_current_user();
         $res = self::post_config([
@@ -263,14 +279,23 @@ final class FeaturedMemberDash
                 echo '<td>' . esc_html((string) $p['tagline']) . '</td>';
                 echo '<td>' . $pct . '%</td>';
                 echo '<td>' . esc_html((string) $p['location']) . '</td>';
-                if (!$p['eligible']) {
-                    echo '<td colspan="2" style="color:#646970"><strong>Not currently eligible</strong> — profile is Private.</td>';
-                } elseif ($isCurrent) {
+                // $isCurrent is checked FIRST, ahead of eligibility. Found in
+                // review 2026-08-15: eligibility can change AFTER a member is
+                // featured (they can go Private at any time) — the ORIGINAL
+                // order put "not eligible" first, so a currently-featured
+                // member who went Private lost their Remove button entirely,
+                // with no way to formally close out that stint (the history
+                // row would stay open forever). Being the one currently live
+                // always wins, regardless of whether they could be newly
+                // selected right now.
+                if ($isCurrent) {
                     echo '<td><span class="lg-fm-tag" style="background:#edf7ee;color:#1a6b2a;border-radius:3px;padding:3px 7px;font-size:11px;font-weight:600">On now</span></td>';
                     echo '<td><form method="post" action="' . esc_url($postUrl) . '">'
                        . '<input type="hidden" name="action" value="' . esc_attr(self::REMOVE_ACTION) . '">'
                        . '<input type="hidden" name="_wpnonce" value="' . esc_attr($nonce) . '">'
                        . '<button type="submit" class="button">Remove from front page</button></form></td>';
+                } elseif (!$p['eligible']) {
+                    echo '<td colspan="2" style="color:#646970"><strong>Not currently eligible</strong> — profile is Private.</td>';
                 } elseif (!$cardReady) {
                     echo '<td style="color:#646970">Not ready</td><td><button class="button" disabled title="Card would be missing photo, what-they-do or where">Feature</button></td>';
                 } else {

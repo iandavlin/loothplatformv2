@@ -17,9 +17,17 @@
 -- public card itself will render (no email, no exact address/lat-lng, no
 -- phone). uuid is the join key the config stores (member_uuid); id is needed
 -- to look up the About section, a separate table keyed on user_id.
+-- profile_layout added in review 2026-08-15: Visibility::locationPrecision()
+-- (profile-app/src/Visibility.php, the app-of-record for this rule) treats a
+-- member removing the Location SECTION from their layout as off-map for
+-- EVERYONE regardless of their precision dial — a check this cross-DB
+-- resolver cannot call directly (Visibility is a profile-app class, not
+-- loaded in archive-poc's PHP process) but must still honour, since it is
+-- the same "not just is this a member" rule the charter names.
 GRANT SELECT (id, uuid, slug, display_name, avatar_url, at_a_glance, business_name,
               location_city, location_region, location_public_precision,
-              location_members_precision, profile_visibility, featured_opt_in)
+              location_members_precision, profile_visibility, featured_opt_in,
+              profile_layout)
   ON public.users TO "archive-poc";
 
 -- The About section — read-only, and the CALLER (index.php) is responsible for

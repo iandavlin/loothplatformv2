@@ -164,6 +164,28 @@ foreach ($allowed_keys as $k) {
             if (!is_string($mk)) continue;
             if (is_scalar($mv) || $mv === null) $clean[$mk] = $mv;
         }
+        // featured-members lane (backlog 18) — MERGE onto the existing map for
+        // THIS key only, never wholesale-replace. Found in review 2026-08-15:
+        // FeaturedMemberDash's Feature action sends only
+        // {enabled, member_uuid, name, role, chosen_by} — it deliberately
+        // does not cache avatar/where/bio/cta_href/cta_label, because
+        // index.php LIVE-resolves those from profile_app on every request
+        // rather than trusting a stale copy. A wholesale $merged[$k]=$clean
+        // would silently DELETE those keys from config.json on every Feature
+        // click. That is invisible while member_uuid is present (index.php's
+        // flag-on resolver ignores them entirely) but breaks the moment the
+        // flag is later turned back off: with member_uuid set the null
+        // fallback correctly blanks the band, but the ORIGINAL hand-typed
+        // card (avatar/bio/etc, unrelated to this feature) is now gone from
+        // config.json too — "flag off" stops meaning "exactly as before
+        // this feature ever existed" the first time an admin uses it.
+        // member_greeting is NOT changed here — no known caller sends a
+        // partial payload for it, and merging every assoc_key by default
+        // would be a wider, unreviewed behaviour change for a problem only
+        // featured_member actually has today.
+        if ($k === 'featured_member') {
+            $clean = $clean + (is_array($existing['featured_member'] ?? null) ? $existing['featured_member'] : []);
+        }
     } else {
         // Sponsor / CTA / Looth rows are flat key→scalar maps.
         $clean = [];
