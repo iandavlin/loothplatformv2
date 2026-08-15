@@ -25,11 +25,17 @@
  * people the member never chose. The member's OWN PROFILE PAGE is unchanged and
  * still shows exactly what they chose — this governs list surfaces only.
  *
- * ⚠️ THIS IS NOT PURELY A SAFETY DIAL. 6 of those 7 rows have a business_name
- * set: they are guitar shops that turned street precision on so customers could
- * find them, and this takes the street line out of their directory row. That is
- * the charter's ruling, not an accident — but it is a PRODUCT decision and it is
- * flagged here so it can be reversed in one line if Ian wants shops exempt.
+ * ⚠️ IT IS NOT PURELY A SAFETY DIAL, AND IAN RULED ON THAT. 6 of those 7 rows
+ * have a business_name set: they are guitar shops that turned street precision
+ * on so customers could find them, and this takes the street line out of their
+ * directory row (their profile page keeps it). Raised with him because the
+ * codebase already carves out storefront drop-off addresses as deliberately
+ * published; his ruling, 2026-08-15, was NO EXEMPTION — truncate everyone
+ * uniformly — reasoning "I'm going to trust that they can fix their position as
+ * it suits them", i.e. members can adjust their own location text, and a proper
+ * BUSINESS PROFILE is coming later as its own feature. So there is deliberately
+ * no business_name branch anywhere in this feature: the simplest rule, applied
+ * to everyone. Do not add one without a new ruling.
  */
 
 return array(
@@ -49,11 +55,17 @@ return array(
 	 * prints "Region, Country", and clamping it to "City, Region" would make a
 	 * deliberately-vague row MORE precise. A privacy clamp must only ever subtract.
 	 *
-	 * The map PIN is not moved by this flag. Pin precision is its own dial
-	 * (users.location_pin_precision) plus the anon coarsening in
-	 * Profile::renderLocation(); moving it from here would silently override a
-	 * control the member set somewhere else, and would break the shop pins that
-	 * are the whole point of the map view.
+	 * THE MAP PIN COARSENS TOO, and that is deliberate. ON downgrades a 'street'
+	 * result to 'city' BEFORE rendering, so the pin re-renders through the same
+	 * city branch as the text (~1.1km, zoom 11, a circle instead of an exact
+	 * marker). An earlier draft of this capped only the text and left a zoom-15
+	 * exact marker sitting on the house — which is the address, drawn instead of
+	 * spelled. Gate 44 asserts every exact pin coarsens under ON.
+	 *
+	 * (This paragraph previously claimed the pin was NOT moved. It was written
+	 * for that earlier text-only draft and was left behind when the approach
+	 * changed — corrected 2026-08-15. A comment that contradicts the code is
+	 * worse than none.)
 	 */
 	'coarsen_list_location' => false,
 
