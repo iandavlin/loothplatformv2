@@ -177,13 +177,25 @@ could ship; both are real defects and neither is closed. Fix as wave work.
    continuing to route around. Coordinate with the guitardle seat before
    changing their palette.
 2. **`.lg-chrome__badge` count pips — 1.51:1** (`#e5e7e1` on `#ecb351`).
-   White-ish ink on the amber badge. RENDER-DEPENDENT on notification state, so
-   it appears in some runs and not others — which is exactly why it was missed
-   by earlier captures and why its surface needed headroom rather than a tight
-   floor. Same root shape as the Install button: a mid-tone brand fill under a
-   near-white foreground, and `--lg-amber` does not repoint enough in dark to
-   save it. Likely a BOTH-THEMES defect (gate 45), so check light before fixing
-   only dark — that mistake has now been made twice in this lane.
+   RENDER-DEPENDENT on notification state, so it appears in some runs and not
+   others — which is exactly why earlier captures missed it and why its surface
+   needed headroom rather than a tight floor.
+   **CORRECTION — I first wrote that this was "likely a BOTH-THEMES defect".
+   It is not. It is DARK-ONLY, and I checked instead of leaving the guess in.**
+   `--lg-amber` is `#ecb351` in *both* themes — `app-settings.js`'s dark THEMES
+   block re-declares the identical value — while `--lg-ink` flips (`#323532`
+   light → `#e5e7e1` dark). So light renders dark ink on amber at **6.58:1 and
+   passes**; only dark inverts into near-white on amber at 1.51:1.
+   That makes it the **inverse** of the Install button, and the distinction is
+   the useful part: there the FILL moved and the ink stayed put; here the INK
+   moves and the fill stays put. Same symptom, opposite cause. So it belongs to
+   gate **36**, not 45.
+   Fix is one dark-scoped rule pinning the badge ink: `#323532` on `#ecb351` =
+   6.58:1 (reuses the existing brand value rather than inventing one). The rule
+   goes in a dark block — `lg-shell/lg-shared/site-header.css` has **no dark
+   override for this selector at all**, which is the whole reason it inverted.
+   Not applied tonight: it edits a stylesheet that is live on the serve, and
+   keeper's standalone gate 36 run was in flight.
 
 ### Also still open, from earlier in this lane
 - The probe's bordered-ancestor credit (gate 36) — the borderless-field
