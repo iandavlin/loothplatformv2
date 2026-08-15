@@ -77,6 +77,7 @@ import importlib.util
 import json
 import os
 import pathlib
+import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -109,56 +110,27 @@ SURFACES = [
 # BOTH-THEME failures only, which is why they sit far below the sweep's
 # per-theme totals. See the module docstring for what qualifies.
 #
-# NO PADDING HERE, DELIBERATELY, AND THAT IS A DIFFERENCE FROM GATE 36. That
-# gate carries +2 headroom on its noisy family because two runs of identical
-# code disagreed and one capture cannot bound a distribution. The honest fix
-# for non-determinism is to remove it, not to pad around it — so when the
-# first captures here disagreed wildly (three mobile surfaces reading 0 while
-# their desktop twins had findings, then hub-door/mobile reading 19), that was
-# chased to two real harness bugs rather than absorbed:
-#   1. --capture returned before printing red/cannot and filled gaps with
-#      .get(label, 0), so a surface that never measured was emitted as a clean
-#      zero. Now it refuses to emit a baseline at all.
-#   2. The localStorage clear RACED the still-loading page: app-settings.js
-#      persists a boot hint after any resolution, so the previous surface's
-#      dark write landed AFTER the clear and the next load pre-painted dark
-#      during the LIGHT pass. Caught by this gate's own liveness assertion.
-#      Now the page is settled before clearing, and a mis-resolve gets one
-#      patient retry before it is called.
-# Both fixes are real and both stay. But they did NOT make this deterministic,
-# and an earlier version of this comment claimed they had, on the strength of
-# two captures agreeing exactly. A third run then read hub-door/mobile at 0
-# where the other two read 19, which falsifies that claim — two agreeing runs
-# are not a distribution either, and I had just finished writing that same
-# lesson into gate 36.
+# COUNTS ARE DEFECT TYPES, NOT INSTANCES, as of the position-free key — see
+# defect_key(). Five failing avatars are one keyed defect, which is both the
+# number of things someone has to fix and far stabler than an instance count
+# that moves with however many cards lazy-loaded that second. Old instance-based
+# floor was 55; this is 20, and it is a tighter, more meaningful 20.
 #
-# THE REMAINING CAUSE IS THIS GATE'S OWN MATCHING KEY, not the page. The
-# intersection matches light-pass to dark-pass findings by SELECTOR STRING, and
-# those selectors carry :nth-child() positions. The mobile feed lazy-loads a
-# variable number of cards, so the same defect can sit at a different index in
-# the two passes; the selectors then differ, nothing intersects, and the
-# surface reports a confident 0. That is a FALSE CLEAN, and it is the same
-# vacuous-green shape as the two bugs above — just one level further in.
+# THE KEY FIX REDUCED THE VARIANCE BUT DID NOT REMOVE IT, and I am recording that
+# rather than claiming a win I did not get. hub-door/mobile used to swing 19/0;
+# it now swings 0/3. So the :nth-child mismatch was a real and large cause, but
+# a second cause remains — elements genuinely present in one run and absent in
+# the next (lazy-loaded content, the engagement-gated install banner). Two
+# captures still disagreed on 6 of 12 surfaces, so this floor is the per-surface
+# MAX of both. One run is not a distribution; that rule has not stopped being
+# true just because the numbers got smaller.
 #
-# WHY THIS IS STILL SAFE TO SHIP: the failure is one-directional. A missed
-# match can only UNDER-report, so the gate cannot invent a regression — it
-# reddens on more findings, never on fewer, and every recorded baseline is a
-# high-water mark from a run where the passes did align. It will miss things,
-# and it will not lie about finding things. Green here is a floor, as the exit
-# message says.
-#
-# THE FIX, for whoever picks this up: match on a POSITION-FREE key —
-# (kind, fg, bg, sample) — or strip :nth-*() from the selector before
-# comparing, then re-capture. Not done in this commit because it changes every
-# number and needs two fresh captures, and this seat had already been asked to
-# get gate 45 landed. Do it before tightening any of these numbers, because
-# tightening on top of an under-reporting matcher would bake the miss in.
 BASELINE = {
-    "hub/desktop": 7, "hub/mobile": 5,
-    "hub-door/desktop": 9, "hub-door/mobile": 19,
-    "events/desktop": 1, "events/mobile": 4,
-    "directory/desktop": 1, "directory/mobile": 3,
-    "shop/desktop": 2, "shop/mobile": 3,
+    "hub/desktop": 2, "hub/mobile": 2,
+    "hub-door/desktop": 2, "hub-door/mobile": 3,
+    "events/desktop": 1, "events/mobile": 3,
+    "directory/desktop": 1, "directory/mobile": 2,
+    "shop/desktop": 1, "shop/mobile": 2,
     "sponsors/desktop": 0, "sponsors/mobile": 1,
 }
 
@@ -204,19 +176,54 @@ def measure_theme(s, tok, host, probe_js, path, theme, metrics, patience=1.0):
     return s.js(probe_js)
 
 
-def both_theme_failures(light, dark):
-    """Elements that fail in BOTH passes, matched by selector.
+POSITION = re.compile(r":nth-(?:child|of-type|last-child|last-of-type)\(\s*[^)]*\)")
 
-    Returns a list of dicts carrying each side's numbers plus `hardcoded`,
-    which is True when the colours are identical in both themes — the shape a
-    hardcoded palette has, and the strongest evidence that nothing repoints.
+
+def defect_key(f):
+    """A POSITION-FREE identity for a finding.
+
+    The first version of this gate matched light-pass findings to dark-pass ones
+    by raw selector string. Those selectors carry :nth-child() positions, and the
+    mobile feed lazy-loads a variable number of cards — so the SAME defect sat at
+    a different index in the two passes, the selectors did not match, nothing
+    intersected, and the surface reported a confident 0. hub-door/mobile read 19
+    on two runs and 0 on a third for exactly that reason: a FALSE CLEAN, which is
+    the vacuous-green shape this lane keeps finding.
+
+    Key is (kind, selector-with-positions-stripped). Colour is deliberately NOT
+    in the key: the whole point is to match an element across two themes where
+    its colours are expected to differ, so keying on colour would silently
+    narrow this gate to hardcoded palettes only and miss every defect that fails
+    in both themes for different reasons.
+
+    Stripping positions also COLLAPSES repeated instances — five failing avatars
+    become one keyed defect rather than five. That is the intended meaning:
+    counts here are distinct DEFECT TYPES per surface, not instances, which is
+    both stabler against lazy-load variance and closer to the number of things
+    someone has to fix.
     """
-    lf = {f["sel"]: f for f in (light.get("findings") or [])}
-    out = []
+    return (f.get("kind", ""), POSITION.sub("", f.get("sel", "")))
+
+
+def both_theme_failures(light, dark):
+    """Defect TYPES that fail in BOTH passes, matched position-free.
+
+    Returns one entry per distinct key, carrying each side's numbers plus
+    `hardcoded` — True when the colours are identical in both themes, the shape
+    a hardcoded palette has and the strongest evidence nothing repoints.
+    """
+    lf = {}
+    for f in (light.get("findings") or []):
+        lf.setdefault(defect_key(f), f)          # first instance represents the type
+    out, seen = [], set()
     for f in (dark.get("findings") or []):
-        g = lf.get(f["sel"])
+        k = defect_key(f)
+        if k in seen:
+            continue
+        g = lf.get(k)
         if not g:
             continue
+        seen.add(k)
         out.append({
             "sel": f["sel"],
             "sample": f.get("sample", ""),
@@ -263,6 +270,27 @@ def _both_theme_selftest():
     r = both_theme_failures({"findings": [mk("a", "#fff", "#87986a", 3.1)]},
                             {"findings": [mk("b", "#fff", "#9cb37d", 2.3)]})
     cases.append(("different elements do not intersect", r == []))
+
+    # THE BUG THIS GATE SHIPPED WITH: the same defect at a different lazy-load
+    # index. Raw-selector matching returned [] here — a confident false clean.
+    r = both_theme_failures(
+        {"findings": [mk("ul > li:nth-child(2) > span.pts", "#fff", "#87986a", 3.1)]},
+        {"findings": [mk("ul > li:nth-child(7) > span.pts", "#fff", "#9cb37d", 2.3)]})
+    cases.append(("same defect at a different index still matches", len(r) == 1))
+
+    # repeated instances collapse to ONE defect type, not five
+    r = both_theme_failures(
+        {"findings": [mk(f"ul > li:nth-child({i}) > span.av", "#fff", "#87986a", 3.1) for i in (1, 2, 3)]},
+        {"findings": [mk(f"ul > li:nth-child({i}) > span.av", "#fff", "#9cb37d", 2.3) for i in (4, 5, 6)]})
+    cases.append(("repeated instances collapse to one type", len(r) == 1))
+
+    # position-stripping must not merge genuinely DIFFERENT elements
+    r = both_theme_failures(
+        {"findings": [mk("li:nth-child(1) > span.pts", "#fff", "#87986a", 3.1),
+                      mk("li:nth-child(1) > span.rank", "#fff", "#87986a", 3.1)]},
+        {"findings": [mk("li:nth-child(9) > span.pts", "#fff", "#9cb37d", 2.3),
+                      mk("li:nth-child(9) > span.rank", "#fff", "#9cb37d", 2.3)]})
+    cases.append(("distinct element types stay distinct", len(r) == 2))
 
     bad = [n for n, ok in cases if not ok]
     for n, ok in cases:
