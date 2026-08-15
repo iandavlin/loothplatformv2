@@ -136,7 +136,35 @@ the three fields it asks for are items 1, 2 and 3 of the existing eight
 (`photo`, `location`, `what_you_do`), which are also exactly the three the public
 card renders (`Completeness::CARD_ITEMS`).
 
-## 5. Phase 2 (only after Ian rules) — build shape
+## 5. Write paths — VERIFIED, and they exist for all three fields
+
+The mock tells Ian "everything it needs already exists somewhere in the
+platform". That claim was checked, not assumed — and it is **needed by both
+options**, so it is worth having settled before the ruling:
+
+| Field | Endpoint | Writes | Meter item |
+|---|---|---|---|
+| photo | `profile-app/api/v0/me-avatar.php` (POST, DELETE) | bumps `users.avatar_version`, sets versioned `avatar_url` | `photo` |
+| city | `profile-app/api/v0/me-location.php` | `location_city`, `location_region` | `location` |
+| — its autocomplete | `profile-app/api/v0/me-location-search.php` (GET) | — | — |
+| what you do | `profile-app/api/v0/me-header.php` (PATCH `at_a_glance`, ≤500 chars) | `users.at_a_glance` | `what_you_do` |
+
+Each writes **exactly** the column `Completeness::forUser()` reads, so filling
+the step moves the meter with no new plumbing and no second definition.
+
+⚠️ **`at_a_glance` is not a private field.** `me-header.php` mirrors it to the WP
+user `description`, i.e. it is the single-source author bio and shows up as a
+byline. That is desirable here, but it means the step's wording must suit a
+public one-liner — which is why the mock asks "What do you do? One line." and
+not something diary-shaped. It is also distinct from the meter's `bio` item,
+which is the longer `profile_sections.about` text; the two do not collide.
+
+Also re-verified rather than trusted from memory: the front page really does
+drop its own query string on load — `archive-poc/web/archive.js:582`,
+`history.replaceState(null, '', location.pathname)` inside `enterDiscover()`.
+That is the basis of the note against Option B in the mock.
+
+## 6. Phase 2 (only after Ian rules) — build shape
 
 - Member-facing → **flag, defaulted OFF**, copying `LG_AUTHOR_SOCIALS_ALL_MEMBERS`
   (`platform/mu-plugins/lg-author-socials.php`). OFF must be a proven byte-identical
