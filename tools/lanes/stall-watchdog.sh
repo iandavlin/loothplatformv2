@@ -47,7 +47,9 @@ while true; do
       fi
       # Park-ok entries EXPIRE (8/15: a stale exemption is a silent blind spot).
       # Format: "<lane> <expires-epoch> [# comment]". Bare legacy lines = expired.
-      OKEXP=$(awk -v l="$L" '$1==l {print $2}' "$OKFILE" 2>/dev/null | head -1)
+      # tail -1: the NEWEST entry wins — head -1 let an expired stale line
+      # shadow every fresh refresh (8/15, an hour of phantom parked-longs).
+      OKEXP=$(awk -v l="$L" '$1==l {print $2}' "$OKFILE" 2>/dev/null | tail -1)
       if [ -n "$OKEXP" ] && [ "$OKEXP" -gt "$(date +%s)" ] 2>/dev/null; then
         rm -f "$STATED/$L"; continue
       fi
