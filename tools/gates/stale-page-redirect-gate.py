@@ -170,18 +170,29 @@ def main():
 
         if check_dest:
             if want.startswith("http"):
+                # EXTERNAL destinations WARN, never RED (Ian 8/15: "we aren't
+                # working on loothtool. why are you bringing it up?" — an
+                # outside host's uptime is not a property of this repo and must
+                # not block deploys; loothtool.com being down froze a train).
+                # The redirect SHAPE above stays red-capable forever. Outages
+                # of outside destinations are reported loudly and end up in
+                # keeper's sweep, not in $red.
                 dcode = destination_answers(want)
-                label = f"external destination {want}"
+                if dcode == 200:
+                    print(f"        └─ external destination {want} answers 200")
+                    ok += 1
+                else:
+                    print(f"  WARN  └─ external destination {want} answered {dcode} — "
+                          f"outside host; NOT blocking. Tell Ian if it persists.")
             else:
                 dcode, _ = head(env, want)
-                label = f"destination {want}"
-            if dcode == 200:
-                print(f"        └─ {label} answers 200")
-                ok += 1
-            else:
-                print(f"  RED   └─ {label} answered {dcode} — the 301 would send "
-                      f"visitors and Googlebot into a dead end")
-                RED.append(f"{path} redirects to {want}, which answered {dcode}")
+                if dcode == 200:
+                    print(f"        └─ destination {want} answers 200")
+                    ok += 1
+                else:
+                    print(f"  RED   └─ destination {want} answered {dcode} — the 301 "
+                          f"would send visitors and Googlebot into a dead end")
+                    RED.append(f"{path} redirects to {want}, which answered {dcode}")
 
     for path in KEEP_200:
         code, loc = head(env, path)
