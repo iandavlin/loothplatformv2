@@ -13,6 +13,7 @@ Branch `stripe-membership`, rebased on `origin/main`.
 | Job | Outcome |
 |---|---|
 | **1. Wire the board's write layer** | **DONE AND DEPLOYED.** Drag-rank, notes, decisions — all three land through the committer. |
+| *(the charter's fallback)* **The board history view** | **DONE** — I was never blocked, so it became the next item rather than the substitute. |
 | **2. Rotate the leaked sandbox key** | **CANCELLED BY IAN** mid-session: *"keep sandbox keys. not worth rotating."* I touched no key. |
 | **3. The stranded `GerryHayesTest` note** | **VERIFIED AND ACTED ON** — it is genuinely ours; it is on the dev2 list. |
 
@@ -177,13 +178,44 @@ Two mistakes of mine, both fixed at the root:
 
 ---
 
+## The history view — DONE too (it was the fallback; I was not blocked, so it became the next item)
+
+The census was right and the cause is worth knowing. Thirty date-headed sections
+below `## ✅ SHIPPED TO LIVE` reached the page **not at all**. Not dropped by
+accident: `lgb_parse_details` takes the first token of a heading as the item id,
+and `"2026-08-01 — …"` yields **`2026`** — so all thirty collapsed onto that one
+key and the last one silently won. No item has id 2026, so the archive was
+unreachable. Nothing errored. Same shape as the ✅ bug that halved the ticked
+items.
+
+A **separate** parser, not a widened one: the two answer different questions, and
+the archive is keyed by DATE, which is not an id and must not be made to look
+like one. Provably disjoint, and the gate asserts no date leaked into the index.
+Grouped by date, newest first, collapsed by default, counts counted, and an
+absent archive **says so** rather than drawing a zero.
+
+**Two bugs in my own gate**, both caught only by red-first and both recorded in
+the commit: a `substr()` that cut through `🔴` and `—` and reported two headings
+missing from a board showing all thirty; and an empty-state assertion matching
+the bare string `hist--none`, which the **stylesheet** carries on every render —
+so it was true on a page with no such element, and the mutation that should have
+reddened it passed silently. This gate's own footer records learning that once
+already, with `f--bad`.
+
+> **A harness warning worth more than either.** My first mutation run reported
+> **no reds at all** and I nearly wrote that up as "the assertions are
+> decoration". In fact two anchors had never matched (one silently mutated a
+> *different function*) and the third was vacuous because I had hardcoded the
+> **true** value. A no-op mutation must fail LOUD. Mine does now.
+
+---
+
 ## The exact next action
 
-**The board HISTORY view.** The census found the shipped archive — **30
-date-headed sections** below `## ✅ SHIPPED TO LIVE` in `BACKLOG.md` — is
-invisible on the board, because `lgb_parse_details` keys detail sections by item
-id and only 7 sections are id-headed. That is the one real gap in *"the board
-doesn't have all of the backlog."* Nothing blocks it.
+**The two phase-2 surfaces still unbuilt:** the **keeper chat** (general +
+per-item, both bridging over `msg`) and **images in the item thread**. Both are
+specced in `docs/BACKLOG-29-BUILD-NOTES.md` §1b, both write, and the write path
+they need now exists and is fenced.
 
 **The one link not yet exercised:** nginx → the page's POST branch, which cannot
 be tested until this merges (the serve answers from main). Everything either side
