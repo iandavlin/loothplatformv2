@@ -605,7 +605,7 @@ function lg_bb_mirror_viewer_from_whoami(): array {
  * asserting a wrong one. A wrong canonical is worse than none: it actively tells
  * Google to consolidate on the wrong URL.
  */
-function bb_mirror_chrome_header(string $page_title = 'The Hub', ?string $canonical_path = null): void
+function bb_mirror_chrome_header(string $page_title = 'The Hub', ?string $canonical_path = null, string $og_type = 'article'): void
 {
     require_once '/srv/lg-shared/site-header.php';
 
@@ -662,7 +662,7 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub', ?string $canoni
         $lg_canon = htmlspecialchars($lg_canon, ENT_QUOTES, 'UTF-8'); ?>
 <link rel="canonical" href="<?= $lg_canon ?>">
 <meta property="og:url" content="<?= $lg_canon ?>">
-<meta property="og:type" content="article">
+<meta property="og:type" content="<?= htmlspecialchars($og_type, ENT_QUOTES, 'UTF-8') ?>">
 <meta property="og:title" content="<?= $title ?>">
 <?php endif; ?>
 <link rel="preconnect" href="https://fonts.googleapis.com">
