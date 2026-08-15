@@ -195,6 +195,29 @@
 <script>
 (function(){
   'use strict';
+
+  // LG_DARK_SEARCH_WRAPPER_FIX (dark-anon-sweep lane, backlog 21, gate 36) —
+  // local to this file, same pattern as every other copy of this flag (see
+  // app-settings.js for the full why). This page runs its OWN bespoke
+  // "Loothtool" dark palette (--card, --hair etc, defined in the <style>
+  // above), separate from the rest of the site's --lg-* tokens, so the fix
+  // lives here as a runtime custom-property override rather than a shared
+  // token change. .hd__search{background:var(--card);border:1px solid
+  // var(--hair)} measured 1.10-1.12:1 against its own intended background —
+  // the mint border sits at only 22% opacity. Lifting to 60% clears 3:1
+  // (checked with the same formula tools/gates/lib/contrast-probe.js uses)
+  // while staying the same hue, so it still reads as "Loothtool teal/mint",
+  // not a borrowed colour from the main site.
+  var LG_DARK_SEARCH_WRAPPER_FIX = false;
+  // Gated on the resolved theme too, not just the flag: --hair is a plain
+  // (non-!important) rule under html[data-lguser-theme="dark"], so setting
+  // this INLINE on <html> would win in EVERY theme, not just dark, if left
+  // unconditional — inline style beats any non-!important selector rule
+  // regardless of specificity.
+  if (LG_DARK_SEARCH_WRAPPER_FIX && document.documentElement.getAttribute('data-lguser-theme') === 'dark') {
+    try { document.documentElement.style.setProperty('--hair', 'rgba(111,185,143,.6)'); } catch (e) {}
+  }
+
   var FEED_URL='/shop-feed.json', SHOP_HOME='https://loothtool.com/shop';
   var grid=document.getElementById('grid');
 

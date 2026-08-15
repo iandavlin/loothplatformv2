@@ -70,7 +70,17 @@ been designed — when a fix ships flagged member-visible-off-by-default, extend
 this gate to assert per-state (flag OFF == today's numbers, byte-identical
 no-op; flag ON == the AA bar met) rather than replacing the OFF-state assertion.
 
-Usage:  python3 tools/gates/anon-dark-contrast-gate.py [--url https://dev2.loothgroup.com]
+Usage:  python3 tools/gates/anon-dark-contrast-gate.py
+          Default mode — the red-first baseline, against the REAL served page
+          (main), unconditionally. This is what run-all.sh runs.
+        python3 tools/gates/anon-dark-contrast-gate.py --verify-fixes
+          Injects the queued fixes' CSS (icon + border-token; see
+          FIX_VERIFY_CSS below) as an extra layer on top of the normally-
+          served page and asserts THOSE specific classes clear AA — proves
+          the fix values are correct without needing a merge or a lane-
+          preview route. Out-of-scope findings this wave does not touch are
+          reported, not failed. Manual verification step, not run by
+          run-all.sh (that always wants the true default-state baseline).
 Needs:  chrome-dev on 127.0.0.1:9222, tools/gates/gate-env.sh resolving a token.
 Exit 0 = GREEN (nothing below AA on the named surfaces). Exit 1 = RED, one line
 per finding. Exit 2 = CANNOT RUN (never silently exit 0 on a broken harness —
@@ -182,9 +192,11 @@ def arm_anon(s, tok):
            domain=".dev2.loothgroup.com", path="/", secure=True)
 
 
-def measure(s, tok, host, probe_js, key, path_tpl, mode, device, metrics):
+def measure(s, tok, host, probe_js, key, path_tpl, mode, device, metrics, extra_css=None):
     """Arm anon, navigate into the requested dark state, and probe. Returns
-    the raw probe result (theme, findings, truncated, ...)."""
+    the raw probe result (theme, findings, truncated, ...). extra_css, when
+    given, is appended as one more <style> tag right before probing — see
+    FIX_VERIFY_CSS below for why and what it contains."""
     path = path_tpl.replace("{host}", host.replace("https://", "").replace("http://", ""))
     url = host + path
     arm_anon(s, tok)
@@ -200,7 +212,138 @@ def measure(s, tok, host, probe_js, key, path_tpl, mode, device, metrics):
     s.goto(url, settle=1.6)
     if mode == "app-dark":
         s.goto(url, settle=2.0)
+    if extra_css:
+        s.js("""(function(css){
+            var st = document.createElement('style');
+            st.textContent = css;
+            document.head.appendChild(st);
+        })(arguments[0])""".replace("arguments[0]", json.dumps(extra_css)))
+        time.sleep(0.6)   # let any CSS transition triggered by the late style
+                           # tag settle — measured live, 2026-08-15: reading
+                           # immediately after a style swap can catch a mid-
+                           # transition interpolated colour and misreport a
+                           # real fix as still broken (see the 86.php commit).
     return s.js(probe_js)
+
+
+# ---- --verify-fixes: does gate 36's scope actually clear AA once the queued
+# fixes are ON? ---------------------------------------------------------------
+#
+# WHY THIS EXISTS, AND WHY IT DOESN'T JUST RE-RUN THE NORMAL PASS. The default
+# gate run above fetches the REAL SERVED PAGE — which is main, not this
+# worktree, until merged (trap-harness-and-serve-answer-from-main). A fix that
+# lands only in this branch can NEVER show green through that path; the gate
+# would keep reporting the pre-fix baseline forever, regardless of how correct
+# the fix is, because it is quite literally testing different code. So this
+# mode does not wait for a merge or a lane-preview route (v2's own lane found
+# that WordPress cannot serve a different plugin directory per-URL the way a
+# static file can — not worth that machinery for a CSS-only change): it
+# injects the SAME CSS these flags would add, as an EXTRA <style> tag layered
+# on top of the normally-served page, using !important-strength selectors so
+# it wins the cascade the identical way the real flagged code would once
+# merged and flipped.
+#
+# THE VALUES ARE NOT HAND-COPIED HERE A SECOND TIME BLIND — every one below
+# was independently verified twice already, in the commits that introduced
+# it: once against the WCAG formula (node, matching contrast-probe.js's own
+# math), and once by extracting each file's actual conditional expression and
+# eval()-ing it for both flag states. This block is the union of what those
+# already-verified expressions produce when every flag relevant to gate 36's
+# OWN surfaces (signin/lostpassword/bpnoaccess/join/lgjoin/front) is ON.
+#
+# SCOPE NOTE: the search-wrapper fix (.hub-tsearch, forums.css/hub-polish.js)
+# and the shop page's own --hair fix do NOT appear here — neither surface
+# (/hub/, /shop/) is in GATED_SURFACES, so verifying them is the broader
+# sweep's job (tools/preview/dark-anon-sweep.py), not this narrower gate.
+FIX_VERIFY_CSS = """
+html[data-lguser-theme="dark"] input,
+html[data-lguser-theme="dark"] textarea,
+html[data-lguser-theme="dark"] select { border-color: #767c76 !important; }
+html[data-lguser-theme="dark"] .lg-set-opt { border-color: #767c76 !important; }
+html[data-lguser-theme="dark"] .feed-sort-bar a,
+html[data-lguser-theme="dark"] .feed-sort-bar button { border-color: #767c76 !important; }
+html[data-lguser-theme="dark"] .lg-conn__search,
+html[data-lguser-theme="dark"] .lg-msg__reply-input { border-color: #767c76 !important; }
+html[data-lguser-theme="dark"] .lg-hub-search .ubar,
+html[data-lguser-theme="dark"] .lg-hub-search input,
+html[data-lguser-theme="dark"] .lgdm-ubar,
+html[data-lguser-theme="dark"] .lgev-ubar { border-color: #767c76 !important; }
+html[data-lguser-theme="dark"] #looth-tabbar .lt-post-ico svg { stroke: #15171a !important; }
+"""
+
+# A finding belongs to THIS wave (and must be gone once FIX_VERIFY_CSS is
+# active) if it is the icon-control class, or a field-border/borderless
+# reading whose broken colour was the OLD #333833/#2c312d token — matched by
+# the fg (the ink actually rendered) rather than the selector, so this stays
+# correct even if a selector gets refactored later. Anything else (WP-core's
+# own Terms/Privacy links, .lgpo-subtext — both already disclosed as OUT OF
+# SCOPE for this wave in the fix commits) is reported but does not fail this
+# specific check; conflating "not everything is fixed yet" with "this wave's
+# own fixes don't work" would make the assertion useless the moment a NEW,
+# unrelated defect is found on the same page.
+OLD_TOKEN_INKS = {"#333833", "#2c312d"}
+
+
+def belongs_to_this_wave(finding):
+    if finding["kind"] == "icon-control":
+        return True
+    if finding["kind"] in ("field-border", "field-borderless") and finding["fg"] in OLD_TOKEN_INKS:
+        return True
+    return False
+
+
+def verify_fixes(host, tok, probe_js):
+    print("\n=== --verify-fixes: injecting the queued fixes' CSS and re-measuring gate 36's own surfaces ===\n")
+    s = Session()
+    wave_red = []
+    other_findings = []
+    try:
+        s.call("Page.enable"); s.call("Runtime.enable"); s.call("Network.enable")
+        for device, metrics in (("desktop", DESKTOP), ("mobile", PHONE)):
+            for mode in ("app-dark", "os-dark"):
+                for key, path_tpl in GATED_SURFACES:
+                    label = f"{key}/{mode}/{device}"
+                    try:
+                        data = measure(s, tok, host, probe_js, key, path_tpl, mode, device, metrics,
+                                       extra_css=FIX_VERIFY_CSS)
+                    except Exception as e:                     # noqa: BLE001
+                        print(f"  WARN  {label}: {str(e)[:100]} — reconnecting")
+                        try:
+                            s.finish()
+                        except Exception:                       # noqa: BLE001
+                            pass
+                        s = Session()
+                        s.call("Page.enable"); s.call("Runtime.enable"); s.call("Network.enable")
+                        data = measure(s, tok, host, probe_js, key, path_tpl, mode, device, metrics,
+                                       extra_css=FIX_VERIFY_CSS)
+
+                    wave = [f for f in data.get("findings", []) if belongs_to_this_wave(f)]
+                    rest = [f for f in data.get("findings", []) if not belongs_to_this_wave(f)]
+                    for f in wave:
+                        wave_red.append(f"RED  {label}  {f['kind']} {f['ratio']}:1  "
+                                        f"{f['fg']} on {f['bg']}  [{f['sel'][-70:]}]  still broken with the fix ON")
+                    for f in rest:
+                        other_findings.append(f"{label}  {f['kind']} {f['ratio']}:1  "
+                                              f"{f['fg']} on {f['bg']}  [{f['sel'][-60:]}]")
+                    print(f"  ok   {label}  {len(wave)} this-wave finding(s), "
+                          f"{len(rest)} other (out-of-scope) finding(s)")
+    finally:
+        s.finish()
+
+    if other_findings:
+        print(f"\n{len(other_findings)} out-of-scope finding(s) remain (not this wave's job, reported not failed):")
+        for line in other_findings:
+            print("  ", line)
+
+    if wave_red:
+        print(f"\n{len(wave_red)} finding(s) THIS WAVE CLAIMS TO FIX are still red with the fix CSS active:\n")
+        for line in wave_red:
+            print(line)
+        sys.exit(1)
+
+    print("\nGREEN over the fixed set — every finding this wave (icon + border-token) targets clears AA "
+          "on gate 36's own surfaces once the queued fixes are active.")
+    sys.exit(0)
 
 
 def main():
@@ -300,4 +443,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if "--verify-fixes" in sys.argv:
+        _env = gate_env()
+        verify_fixes(_env["LG_GATE_HOST"], _env["LG_GATE_TOKEN"], pathlib.Path(PROBE).read_text())
+    else:
+        main()

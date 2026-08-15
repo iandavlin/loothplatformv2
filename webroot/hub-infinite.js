@@ -25,6 +25,12 @@
   function onHubPath() { return /^\/hub(\/|$)/.test(location.pathname || '/'); }
   if (!onHubPath()) return;
 
+  // LG_DARK_BORDER_FIX — see app-settings.js for the full why (same value,
+  // independent local copy per file; dark-anon-sweep lane, backlog 21, gate
+  // 36). Held OFF pending Ian's phone pass.
+  var LG_DARK_BORDER_FIX = false;
+  var DARK_BORDER = LG_DARK_BORDER_FIX ? '#767c76' : '#333833';
+
   var SENTINEL_ID = 'looth-hub-sentinel';
   var STYLE_ID = 'looth-hub-infinite-style';
   var END_ID = 'looth-hub-end';
@@ -61,7 +67,7 @@
       'border-radius:999px;padding:8px 18px;background:var(--lg-cream,#fbfbf8);color:var(--lg-ink,#323532);' +
       'font:600 13px/1 var(--lg-font-sans,system-ui,sans-serif);cursor:pointer}' +
       'html[data-lguser-theme="dark"] #' + END_ID + '{color:#9aa097}' +
-      'html[data-lguser-theme="dark"] #' + END_ID + ' .lg-end-retry{background:#222629;border-color:#333833;color:#e5e7e1}';
+      'html[data-lguser-theme="dark"] #' + END_ID + ' .lg-end-retry{background:#222629;border-color:' + DARK_BORDER + ';color:#e5e7e1}';
     var s = document.createElement('style');
     s.id = STYLE_ID;
     s.textContent = css;

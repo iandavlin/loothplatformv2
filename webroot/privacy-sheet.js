@@ -35,6 +35,12 @@
   'use strict';
   if (window.__loothPrivacySheet) return;
 
+  // LG_DARK_BORDER_FIX — see app-settings.js for the full why (same value,
+  // independent local copy per file; dark-anon-sweep lane, backlog 21, gate
+  // 36). Held OFF pending Ian's phone pass.
+  var LG_DARK_BORDER_FIX = false;
+  var DARK_BORDER = LG_DARK_BORDER_FIX ? '#767c76' : '#333833';
+
   // ── Surface gate ──────────────────────────────────────────────────────────
   function isEditSurface() {
     return !!(document.querySelector('.lg-shell--owner') && document.querySelector('.lg-pmp'));
@@ -459,9 +465,9 @@
       'html[data-lguser-theme="dark"] .lg-block .lg-bh,html[data-lguser-theme="dark"] .lg-block h1,html[data-lguser-theme="dark"] .lg-block h2,html[data-lguser-theme="dark"] .lg-block h3{color:#f2f4ee!important}',
       'html[data-lguser-theme="dark"] .lg-viewas{background:#121417!important;color:#cdd3c6!important}',
       'html[data-lguser-theme="dark"] .lg-viewas__edit{background:#2c312d!important;color:#f2f4ee!important}',
-      'html[data-lguser-theme="dark"] .lg-bizpill{background:#22262a!important;border-color:#333833!important;color:#e7ebe1!important}',
-      'html[data-lguser-theme="dark"] .lg-prec{background:#22262a!important;border-color:#333833!important;color:#e7ebe1!important}',
-      'html[data-lguser-theme="dark"] .lg-chip,html[data-lguser-theme="dark"] .lg-link,html[data-lguser-theme="dark"] .lg-loc__f,html[data-lguser-theme="dark"] .lg-dropoff__f{background:#22262a!important;border-color:#333833!important;color:#e7ebe1!important}',
+      'html[data-lguser-theme="dark"] .lg-bizpill{background:#22262a!important;border-color:' + DARK_BORDER + '!important;color:#e7ebe1!important}',
+      'html[data-lguser-theme="dark"] .lg-prec{background:#22262a!important;border-color:' + DARK_BORDER + '!important;color:#e7ebe1!important}',
+      'html[data-lguser-theme="dark"] .lg-chip,html[data-lguser-theme="dark"] .lg-link,html[data-lguser-theme="dark"] .lg-loc__f,html[data-lguser-theme="dark"] .lg-dropoff__f{background:#22262a!important;border-color:' + DARK_BORDER + '!important;color:#e7ebe1!important}',
       'html[data-lguser-theme="dark"] .lg-edit.editing{background:#22262a!important;color:#e7ebe1!important}',
       'html[data-lguser-theme="dark"] .lg-idrow__cam,html[data-lguser-theme="dark"] .lg-banner__set{background:#22262a!important;color:#e7ebe1!important}',
       /* sections palette (caddy) + light menus + gate */
@@ -469,7 +475,7 @@
       'html[data-lguser-theme="dark"] .lg-caddy__head strong{color:#f2f4ee!important}',
       'html[data-lguser-theme="dark"] .lg-caddy__item{background:#1b1e21!important;border-color:#2b2f2a!important;color:#e7ebe1!important}',
       'html[data-lguser-theme="dark"] .lg-lm,html[data-lguser-theme="dark"] .lg-light-menu,html[data-lguser-theme="dark"] .lg-gate{background:#1b1e21!important;border-color:#2b2f2a!important;color:#e7ebe1!important}',
-      'html[data-lguser-theme="dark"] .lg-block input,html[data-lguser-theme="dark"] .lg-block textarea,html[data-lguser-theme="dark"] .lg-caddy input{background:#22262a!important;color:#e7ebe1!important;border-color:#333833!important}'
+      'html[data-lguser-theme="dark"] .lg-block input,html[data-lguser-theme="dark"] .lg-block textarea,html[data-lguser-theme="dark"] .lg-caddy input{background:#22262a!important;color:#e7ebe1!important;border-color:' + DARK_BORDER + '!important}'
     ].join('');
     var s = document.createElement('style'); s.id = 'lg-privacy-style'; s.textContent = css;
     document.head.appendChild(s);

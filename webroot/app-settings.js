@@ -140,6 +140,47 @@
   // force the key surfaces dark, gated on the chosen theme. Injected once; inert
   // unless data-lguser-theme="dark" (Buck 2026-06-08).
   var DARK_STYLE_ID = 'lg-dark-style';
+
+  // ---- LG_DARK_BORDER_FIX (dark-anon-sweep lane, backlog 21, gate 36) --------
+  //
+  // #333833 is used as a dark-mode form-field/pill BORDER colour throughout
+  // this function (and repeated verbatim in hub-polish.js, hub-infinite.js,
+  // privacy-sheet.js, sponsor-sheet.js, forums.css) — every input, the feed
+  // sort-bar, connections search, message reply input. Measured against every
+  // background it is actually paired with (#222629/#22262a/#1e2124/#15171a):
+  // 1.27-1.50:1, nowhere near the 3:1 UI-component bar. #767c76 (same green
+  // undertone, lifted) clears 3.56-4.20:1 against all of them — checked with
+  // the same formula tools/gates/lib/contrast-probe.js uses.
+  //
+  // SAME LOCAL PATTERN AS LG_DARK_POST_ICON_FIX (bottom-nav.js) and
+  // LG_ANON_DASH_SIGNIN (also bottom-nav.js) — a plain module-scoped var, not
+  // a shared cross-file global. Checked pwa.js's own injection order before
+  // choosing this: app-settings.js loads sync (ordered), but hub-infinite.js
+  // and the idle-queued files do NOT — dynamically-injected `defer` is a
+  // documented no-op in this codebase's own pwa.js (defer on a script created
+  // via createElement does nothing per spec; only parser-inserted scripts
+  // defer), so those files' load order relative to app-settings.js is NOT
+  // guaranteed. A shared `window.LG_X` flag would race. Each file gets its
+  // OWN identically-named local flag instead — no cross-file dependency, no
+  // race, one grep away from flipping every copy at once.
+  //
+  // MEMBER-VISIBLE EVERYWHERE (every form field, site-wide, in dark) — held
+  // OFF pending Ian's phone pass on the dev2 serve, same as the icon fix.
+  var LG_DARK_BORDER_FIX = false;
+  var DARK_BORDER = LG_DARK_BORDER_FIX ? '#767c76' : '#333833';
+
+  // ---- LG_DARK_SEARCH_WRAPPER_FIX (same lane/backlog/gate) -------------------
+  //
+  // .lg-hub-search/.lgdm-ubar/.lgev-ubar's border-color is #2c312d against a
+  // #1e2124 fill on a #15171a page — 1.35-1.69:1 depending on which backdrop,
+  // same "dark-on-dark" shape as LG_DARK_BORDER_FIX above but a DIFFERENT
+  // literal value, kept as its own flag because it is conceptually the search-
+  // wrapper fix keeper asked for separately, not the general field-border
+  // token. .hub-tsearch (forums.css) gets its own new border under this same
+  // flag from hub-polish.js, since forums.css is static and cannot self-gate.
+  var LG_DARK_SEARCH_WRAPPER_FIX = false;
+  var DARK_SEARCH_BORDER = LG_DARK_SEARCH_WRAPPER_FIX ? '#767c76' : '#2c312d';
+
   function ensureDarkStyle() {
     if (document.getElementById(DARK_STYLE_ID)) return;
     var D = 'html[data-lguser-theme="dark"]';
@@ -153,7 +194,7 @@
       D + ' .lg-fb-bubble{background:#262b30!important;color:#e5e7e1!important}',
       D + ' .feed-sort-bar,' + D + ' .feed-toolbar{background:#15171a!important;border-color:#2c312d!important}',
       D + ' .lg-sort-pill,' + D + ' .feed-sort-bar a,' + D + ' .feed-sort-bar button{color:#cdd0ca}',
-      D + ' .lg-hub-search .ubar,' + D + ' .lg-hub-search input,' + D + ' .lgdm-ubar,' + D + ' .lgev-ubar{background:#1e2124!important;border-color:#2c312d!important;color:#e5e7e1!important}',
+      D + ' .lg-hub-search .ubar,' + D + ' .lg-hub-search input,' + D + ' .lgdm-ubar,' + D + ' .lgev-ubar{background:#1e2124!important;border-color:' + DARK_SEARCH_BORDER + '!important;color:#e5e7e1!important}',
       D + ' .lg-hub-search input::placeholder,' + D + ' input::placeholder{color:#7e857c!important}',
       D + ' #looth-tabbar{background:rgba(21,23,26,.92)!important;border-color:#2c312d!important}',
       D + ' .lt-sheet,' + D + ' .lt-sheet__row,' + D + ' .lg-set-opt{color:#e5e7e1}',
@@ -162,9 +203,9 @@
          those two selectors matched nothing. */
       D + ' .lt-sheet,' + D + ' #looth-rep-sheet .lrs-card,' + D + ' #looth-lp-sheet .llp-card,' + D + ' #lgdm-sheet,' + D + ' .lgdm-fsheet,' + D + ' #lgdm-suggest,' + D + ' .bb-layout__nav{background:#1b1e21!important;color:#e5e7e1!important}',
       D + ' .lt-sheet__name,' + D + ' .lrs-t,' + D + ' .llp-t{color:#f2f4ee!important}',
-      D + ' .lg-set-opt{background:#222629!important;border-color:#333833!important;color:#e5e7e1!important}',
+      D + ' .lg-set-opt{background:#222629!important;border-color:' + DARK_BORDER + '!important;color:#e5e7e1!important}',
       D + ' .lg-set-opt.is-on{background:#2a341f!important;border-color:#9cb37d!important}',
-      D + ' input,' + D + ' textarea,' + D + ' select{background:#222629!important;color:#e5e7e1!important;border-color:#333833!important}',
+      D + ' input,' + D + ' textarea,' + D + ' select{background:#222629!important;color:#e5e7e1!important;border-color:' + DARK_BORDER + '!important}',
       D + ' .feed-card__tags .tag-chip,' + D + ' .fc-tag,' + D + ' .hl,' + D + ' .fcr-chip{background:#243024!important;color:#b6c79a!important;border-color:transparent!important}',
       // ── dark-mode audit fixes (2026-06-08) ──
       // search bar: the WHITE slab is .lg-hub-search itself (mobile), not .ubar
@@ -194,7 +235,7 @@
       // bg rules missed → light text on a still-WHITE pill (1.41–1.56:1, audit
       // #19–22). Widen `> a` to descendant `a` (buttons on this line already are);
       // the more-specific .lg-newpost/.lg-filters-chip rules below still win.
-      D + ' .feed-sort-bar a,' + D + ' .feed-sort-bar button{background:#22262a!important;color:#d0d4cd!important;border:1px solid #333833!important;font-weight:600!important;transition:background .15s,color .15s!important}',
+      D + ' .feed-sort-bar a,' + D + ' .feed-sort-bar button{background:#22262a!important;color:#d0d4cd!important;border:1px solid ' + DARK_BORDER + '!important;font-weight:600!important;transition:background .15s,color .15s!important}',
       D + ' .feed-sort-bar a.active,' + D + ' .feed-sort-bar .is-active{background:#9cb37d!important;color:#15171a!important;border-color:#9cb37d!important;font-weight:700!important;box-shadow:0 1px 6px rgba(156,179,125,.35)!important}',
       D + ' .feed-sort-bar .lg-filters-chip{background:#9cb37d!important;color:#15171a!important}',   // dark text on sage
       D + ' .feed-sort-bar .lg-newpost{background:#243024!important;color:#e5e7e1!important}',
@@ -267,7 +308,7 @@
       D + ' .lg-conn__item--pending{background:#243024!important}',
       D + ' .lg-conn__name,' + D + ' .lg-msg__name,' + D + ' .lg-notif__text,' + D + ' .lg-msg__msg-text{color:#e5e7e1!important}',
       D + ' .lg-conn__section-h,' + D + ' .lg-msg__preview,' + D + ' .lg-msg__meta,' + D + ' .lg-msg__msg-time,' + D + ' .lg-notif__time,' + D + ' .lg-sm__status,' + D + ' .lg-sm__empty{color:#9aa097!important}',
-      D + ' .lg-conn__search,' + D + ' .lg-msg__reply-input{background:#22262a!important;border-color:#333833!important;color:#e7ebe1!important}',
+      D + ' .lg-conn__search,' + D + ' .lg-msg__reply-input{background:#22262a!important;border-color:' + DARK_BORDER + '!important;color:#e7ebe1!important}',
       D + ' .lg-msg__thread--unread,' + D + ' .lg-msg__msg,' + D + ' .lg-notif__item--unread{background:#22262a!important}',
       D + ' .lg-msg__msg--mine{background:#2a341f!important}',
       // Side conversation dock + member card (dm-from-group): both ride
