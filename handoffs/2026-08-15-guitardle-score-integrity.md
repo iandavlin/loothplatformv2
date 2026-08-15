@@ -5,11 +5,12 @@ Phase 1 + 2 shipped and merged; see `handoffs/2026-08-15-guitardle-fairness.md`.
 
 | | |
 |---|---|
-| Branch | `guitardle-score-integrity`, tip **`73df469`**, **NOT pushed** |
-| Base | `912f161` (my merged phase-2 tip). `origin/main` did **not** carry keeper's merge when last fetched — **rebase onto main before pushing** |
-| Backlog 24 | **BUILT, GREEN, proven end-to-end.** Blocked only on a gate number |
-| Backlog 25 | **NOT STARTED — scope ruling outstanding with keeper** |
-| Flags | `LG_GUITARDLE_SCORE_RETRY` added, OFF. Joins `_DAILY_CLAIM` and `_HOW_TO_PLAY`, all OFF, all independent |
+| Branch | `guitardle-score-integrity`, **pushed**, tip **`54bc9a3`** |
+| Base | rebased onto `origin/main` `b9c48ba`. Phase 2 is merged and **both its flags are ON in main** |
+| Backlog 24 | **DONE.** Gate **40** (keeper), registered, CRAFT-STANDARD row in |
+| Backlog 25 | **BUILT + GATED GREEN, red-first proven.** Blocked only on a gate number (banner says `NN`) |
+| Backlog 26 | **JUDGED, not built.** Option A does *not* close the hole alone — see §6 |
+| Flags | `_SCORE_RETRY` and `_SERVER_PLAY` added, both OFF. `_DAILY_CLAIM` and `_HOW_TO_PLAY` are ON in main. All four independent |
 
 ---
 
@@ -52,7 +53,35 @@ Deliberately **not** a browser test: a browser dep would flake on 2 cores, and a
 DEAD gate blocks every lane. Red-first with two valid, still-parsing mutations —
 retry-without-refreshing and retry-in-a-loop — each caught by its own assertion.
 
-## 3. Backlog 25 — DO NOT BUILD BEFORE READING THIS
+## 3. THE GATE-COLLISION INCIDENT — read this before running anything
+
+On 2026-08-15 gate 37 reported **five failures on a healthy feature** and
+blocked keeper's merge train. Nothing was wrong with the code. Both gates did
+all their work as **one fixed WP account** (`gdle_gate_probe`) and wiped that
+user's rows between phases — so any other process touching it (a second gate
+run, or me hand-testing phase 3) landed rows inside the run, and the gate
+called them defects.
+
+All five symptoms were **one stray row**: "starts with a row already present"
+is direct; "OFF still records" and "claimed_at stays NULL" fail because a
+pre-existing row makes `ON CONFLICT DO NOTHING` return `recorded=false`;
+"position held server-side" and "device B resumes" fail because a *finished*
+row makes `UPDATE ... WHERE moves IS NULL` match nothing.
+
+**Fixed**: gates 37, 40 and the 25 gate take a **per-run probe identity** keyed
+to the PID, created on demand and deleted at the end with the deletion
+asserted. Proven by running 37 and 40 **simultaneously** — both green, on
+accounts 2048/2049. A false red blocks every lane, which is strictly worse than
+the coverage a gate buys.
+
+Two smaller fixes rode along: `wp_insert_user` **rejects a duplicate email** so
+the per-run login needed a per-run address, and it failed **silently** —
+`WP_Error` in, no output, `IndexError` three frames away. `wp()` now reports an
+empty wp-cli result as CANNOT RUN with the real stdout/stderr.
+
+**Discipline**: never use a gate's probe account for ad-hoc work.
+
+## 4. Backlog 25 — BUILT (option A). Read §6 before calling it closed
 
 **The answer key is public.** The game is a static client-side app: it fetches
 `assets/sequence.json` and `assets/guitardle_phrases.csv` from the browser and
@@ -67,7 +96,29 @@ doing — but a player reading the key genuinely solves in one move and the serv
 would **honestly** score it 10 points, 20 with hardcore. Building only that and
 reporting "the leaderboard inputs are unforgeable" would be **false**.
 
-**Option A (recommended)** — the answer stops reaching the client. Reveals go
+**Option A was taken by keeper and is BUILT.** What follows is what it does.
+
+`archive-poc/api/v0/_guitardle-puzzle.php` is the server's copy of
+`loadPhrase()`. Two new flag-gated actions: **`reveal`** returns the POSITIONS
+of a letter and counts the move server-side (consonant 1; vowel first tap buys
+for 1 with no positions, second tap places for 1 and returns them; re-reveal
+refused; the **hardcore cap enforced server-side**, so claiming the 2× and then
+over-revealing is not a thing), and **`guess`** is judged server-side, with
+`won`/`moves`/`hardcore` being what the server watched. The phrase comes back
+only once the game is over.
+
+**Both legacy doors are shut under the flag.** Refusing the old finish path is
+the obvious half. The half nearly missed: **`save`** let a client write its own
+`revealed`/`purchased` sets — and those are *exactly* what moves are counted
+from. Closing the front door and leaving that open achieves nothing.
+
+**A sharper finding than the CSV story**, measured in a browser: the legacy
+board put the answer in the DOM. 18 tiles, **all 18 carrying `data-letter`**,
+so `"POLYURETHANEFINISH"` reads straight off the *blank* tiles. No CSV needed —
+open the inspector. The server-driven board carries **zero** letters; after one
+reveal exactly 2 do.
+
+**Original option A description, kept for context** — the answer stops reaching the client. Reveals go
 through the server: client asks "reveal H", server returns the *positions*,
 counts the move, holds authority in `resume_state` (phase 2 already built that
 column). Guess judged server-side. `moves`/`won`/`hardcore` then are not
