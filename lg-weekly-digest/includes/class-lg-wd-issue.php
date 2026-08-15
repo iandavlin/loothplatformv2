@@ -121,6 +121,21 @@ class LG_WD_Issue {
      */
     public static function save_data( int $post_id, array $data ): void {
         update_post_meta( $post_id, self::META_KEY, $data );
+
+        /**
+         * Fires after an issue's data is written — every path that changes an
+         * issue goes through here, including the one that marks it SENT.
+         *
+         * Added 2026-08-15 for the front-page feed (backlog 8), which caches a
+         * projection of the latest sent issue for an hour. Without this, sending
+         * a new issue would leave the front page showing the previous one until
+         * the cache aged out. A hook rather than a direct call, so the model does
+         * not have to know what caches exist downstream of it.
+         *
+         * @param int   $post_id The issue.
+         * @param array $data    The data just written.
+         */
+        do_action( 'lg_wd_issue_saved', $post_id, $data );
     }
 
     // ── Section manipulation ─────────────────────────────────────────────────

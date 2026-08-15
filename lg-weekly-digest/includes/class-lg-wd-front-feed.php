@@ -94,6 +94,16 @@ class LG_WD_Front_Feed {
 	public static function init(): void {
 		add_action( 'wp_ajax_'        . self::ACTION, [ __CLASS__, 'serve' ] );
 		add_action( 'wp_ajax_nopriv_' . self::ACTION, [ __CLASS__, 'serve' ] );
+
+		/**
+		 * Drop the cache whenever an issue changes. Every write path in the
+		 * model funnels through save_data(), including the one that flips an
+		 * issue to `sent` — which is precisely the moment this feed's answer
+		 * changes and the moment it would otherwise be an hour out of date.
+		 * accepted_args 0: flush() wants nothing and should not grow a
+		 * dependency on the hook's payload.
+		 */
+		add_action( 'lg_wd_issue_saved', [ __CLASS__, 'flush' ], 10, 0 );
 	}
 
 	/**
@@ -336,8 +346,13 @@ class LG_WD_Front_Feed {
 	}
 
 	/**
-	 * Drop the cached payload. Called when an issue is saved or sent, so the
-	 * front page picks a new issue up without waiting out the hour.
+	 * Drop the cached payload. Hooked to `lg_wd_issue_saved`, so the front page
+	 * picks up a newly sent issue without waiting out the hour.
+	 *
+	 * Note the OTHER half of the staleness is archive-poc's own 15-minute file
+	 * cache, which WordPress cannot reach. That is deliberate and bounded: a
+	 * weekly email tolerates a quarter of an hour, and the alternative is
+	 * WordPress reaching across into another app's cache directory.
 	 */
 	public static function flush(): void {
 		delete_transient( self::CACHE );
