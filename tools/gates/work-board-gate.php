@@ -122,6 +122,46 @@ is_($headerCount === count($ids), sprintf(
     "the header's own count agrees with the file (%d vs %d)", $headerCount, count($ids)));
 
 /* ---------------------------------------------------------------------- */
+section("[1b] CONSERVATION — the board can never silently show fewer");
+
+// Ian, 2026-08-15: "the wip board doesn't have all of the backlog." The census
+// (docs/BACKLOG-CENSUS-2026-08-15.md) found no live item missing — but the
+// question deserves a STANDING answer, not a one-off audit. So: file count and
+// board count must be equal, every run, and the census is the fixture that
+// makes a shrinking FILE visible rather than mistaken for a healthy board.
+$fixture = [];
+$fx = $ROOT . '/tools/gates/fixtures-backlog-census.json';
+if (is_readable($fx)) { $fixture = json_decode((string) file_get_contents($fx), true) ?: []; }
+
+is_($fixture !== [], "the census fixture is present, so conservation has a baseline to speak of");
+
+$fileCount  = count($ids);
+$boardCount = preg_match_all('/data-item="/', $html);
+is_($fileCount === $boardCount, sprintf(
+    "CONSERVATION: the board renders exactly what the file carries (%d in the file, %d on the board)",
+    $fileCount, $boardCount));
+
+// A shrinking file is legitimate (items get archived) but must not pass silently
+// as "the board is fine" — it is reported, and the fixture is what makes it
+// noticeable at all.
+$baseline = (int) ($fixture['index_rows'] ?? 0);
+if ($baseline > 0 && $fileCount < $baseline) {
+    echo sprintf("  --   NOTE: the file now carries %d index rows, down from %d at the census. "
+               . "That is a FILE change, not a board fault — re-take the census if it was intended.\n",
+        $fileCount, $baseline);
+}
+is_($baseline === 0 || $fileCount >= $baseline || $boardCount === $fileCount,
+    sprintf("...and if the file shrank, the board shrank WITH it rather than losing rows of its own (baseline %d)", $baseline));
+
+// The known collision stays known: if a NEW duplicate id appears, say so.
+$dupes = array_values(array_unique(array_diff_assoc($ids, array_unique($ids))));
+$known = (array) ($fixture['known_duplicate_ids'] ?? []);
+$novel = array_values(array_diff($dupes, $known));
+is_($novel === [], sprintf(
+    "no NEW duplicate ids have appeared (known: %s; new: %s)",
+    $known === [] ? 'none' : implode(',', $known), $novel === [] ? 'none' : implode(',', $novel)));
+
+/* ---------------------------------------------------------------------- */
 section("[2] LETTER-PREFIXED IDS SURVIVE");
 
 $letters = array_values(array_filter($ids, static fn (string $i): bool => (bool) preg_match('/^[A-Z]/', $i)));
