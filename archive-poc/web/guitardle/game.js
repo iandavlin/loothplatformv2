@@ -160,7 +160,10 @@ function formatDate() {
 // a share URL, nothing about the puzzle.
 async function loadPhraseForDay() {
     const [pzRes, cfgRes] = await Promise.all([
-        fetch(`${PUZZLE_API}?local_date=${todayString()}`, { credentials: 'same-origin' }),
+        // No parameters, deliberately: the SERVER's clock picks the day. Passing
+        // one would imply it is negotiable, and the whole point of this endpoint
+        // is that no request shape can ask it about another day.
+        fetch(PUZZLE_API, { credentials: 'same-origin' }),
         fetch('assets/config.json'),
     ]);
     const pz = await pzRes.json();

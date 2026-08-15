@@ -100,7 +100,7 @@ try:
 
     # ── PHASE 0 — liveness ───────────────────────────────────────────────────
     print('PHASE 0 — liveness (an unreachable endpoint makes every check below vacuous)')
-    body, code = get('?local_date=' + today)
+    body, code = get()
     if body is None:
         cannot_run('the day endpoint did not answer over HTTP (code %s)' % code)
     check(code == '200' and isinstance(body.get('phrase'), str) and body['phrase'],
@@ -112,7 +112,7 @@ try:
     want_id = php_expr('echo lg_gdle_phrase_id(%s, false);' % json.dumps(today))
     want    = php_expr('echo lg_gdle_phrase(lg_gdle_phrase_id(%s, false));' % json.dumps(today))
     check(str(body.get('phrase_id')) == want_id and body.get('phrase', '').upper() == want,
-          "it matches the resolver's logged-out answer for today",
+          "it matches the resolver's logged-out answer for the server's today",
           'want %s/%r got %s/%r' % (want_id, want, body.get('phrase_id'), body.get('phrase')))
     member_phrase = php_expr('echo lg_gdle_phrase(lg_gdle_phrase_id(%s, true));' % json.dumps(today))
     check(member_phrase and member_phrase != want,
@@ -120,22 +120,40 @@ try:
           'member=%r logged-out=%r' % (member_phrase, want))
     print()
 
-    # ── PHASE 2 — no other day ──────────────────────────────────────────────
-    print('PHASE 2 — the calendar cannot be walked')
-    ids = {}
-    for delta in (-3, -1, 0, 1, 3):
-        d = time.strftime('%Y-%m-%d', time.gmtime(time.time() + delta * 86400))
-        b, _ = get('?local_date=' + d)
-        ids[delta] = b.get('phrase_id') if b else None
-    check(ids[-3] == ids[0] and ids[3] == ids[0],
-          'a date outside +/-1 day CLAMPS to today instead of answering',
-          repr(ids))
-    check(ids[-1] != ids[0] and ids[1] != ids[0],
-          'the +/-1 window still works (it exists for timezones, and only ever '
-          'exposes the logged-out track, which scores nothing)', repr(ids))
-    b, _ = get('?local_date=9999-99-99')
-    check(b is not None and b.get('phrase_id') == ids[0],
-          'a malformed date falls back to today rather than erroring or leaking')
+    # ── PHASE 2 — NO request shape can ask about another day ────────────────
+    print('PHASE 2 — the calendar cannot be asked about at all (keeper 2026-08-15)')
+    src0 = open(ENDPOINT).read()
+    check('$_GET' not in src0 and '$_POST' not in src0 and '$_REQUEST' not in src0,
+          '*** the endpoint reads NO superglobal — the server clock picks the day ***')
+    today_id = body.get('phrase_id')
+    probes = ['?local_date=' + time.strftime('%Y-%m-%d', time.gmtime(time.time() + 86400)),
+              '?local_date=' + time.strftime('%Y-%m-%d', time.gmtime(time.time() - 86400)),
+              '?local_date=2027-01-01', '?date=2027-01-01', '?day=2027-01-01',
+              '?d=99', '?index=17', '?i=17', '?offset=17', '?n=17',
+              '?phrase_id=1', '?id=1', '?seq=1']
+    for qs in probes:
+        b, _ = get(qs)
+        if not check(b is not None and b.get('phrase_id') == today_id,
+                     '*** %-26s cannot move the day off today ***' % qs, repr(b)):
+            break
+    # An earlier draft DID accept ?local_date with a +/-1 clamp, which felt
+    # consistent with the score API. It was still an oracle: a read-only endpoint
+    # that answers for a day you name rebuilds the key on a delay, one query at a
+    # time. There is no window small enough to be safe, so there is no window.
+    print()
+
+    # ── PHASE 2b — it must not survive the day boundary ─────────────────────
+    print('PHASE 2b — no cache may outlive the day (this sits behind Cloudflare)')
+    hdr = sh('curl -s -D- -o /dev/null %s' % shlex.quote(BASE)).stdout.lower()
+    check('no-store' in hdr,
+          '*** Cache-Control says no-store — an edge that caches across midnight '
+          'serves yesterday\'s phrase or pre-bakes today\'s ***',
+          repr([l for l in hdr.splitlines() if 'cache' in l]))
+    check('max-age=0' in hdr or 'no-cache' in hdr,
+          'and it is belt-and-braces for an edge that only honours some of them')
+    check('cdn-cache-control' in hdr,
+          'CDN-Cache-Control is set too, since Cloudflare honours it over the '
+          'generic header when both are present')
     print()
 
     # ── PHASE 3 — THE MEMBER TRACK IS NOT REACHABLE ─────────────────────────
@@ -143,8 +161,7 @@ try:
     src = open(ENDPOINT).read()
     check("'aud'" not in src and '"aud"' not in src and 'REQUEST[' not in src,
           'the endpoint reads no audience parameter at all')
-    for qs in ('?aud=m', '?aud=member', '?member=1', '?track=member', '?is_member=true',
-               '?aud=m&local_date=' + today):
+    for qs in ('?aud=m', '?aud=member', '?member=1', '?track=member', '?is_member=true'):
         b, _ = get(qs)
         if not check(b is not None and b.get('phrase', '').upper() != member_phrase.upper(),
                      '*** %s does NOT return the member phrase ***' % qs,
