@@ -4,8 +4,8 @@
 built. Ian has ruled the *shape* (the desk, plus drag-to-rank); these are the
 things that decide the *build*, found while drawing it.
 
-Mocks: `/footer-mockups/wip-board/` (round 1, shape) and
-`/footer-mockups/wip-board/rank.html` (round 2, drag-to-rank).
+Mocks: `/footer-mockups/wip-board/` (round 1, shape), `rank.html` (round 2,
+drag-to-rank) and **`board.html` (round 3, the current shape — supersedes 1–2)**.
 
 > ⚠️ There is still no numbered entry for this in `docs/BACKLOG.md` — the file
 > stops at 28. Scope here comes from keeper's brief and Ian's two rulings, not
@@ -40,6 +40,43 @@ So a page served from the serving tree **physically cannot** write to
 billing app already calls the poller over loopback with a shared secret
 (`WpSync::trigger` → `/wp-json/lg-member-sync/v1/sync-customer`). Same pattern,
 same failure handling, nothing novel to reason about.
+
+---
+
+## 1b. The reshape (Ian, round 3) — and the chat bridge
+
+Ian collapsed the desk-plus-list layout into **one surface**:
+
+1. the ranked drag list **is** the board — no separate desk section;
+2. every item carries an **alert** when there is work for him
+   (*"some way to alert that there is work to do on the item"*);
+3. clicking an item *"opens a modal with the work for me to do or the decisions
+   for me to make"* — mockups, decision buttons, branches, notes, in the overlay;
+4. an **embedded Claude chat** in the page, *"like there is on vs code"*.
+
+### The chat bridges to KEEPER, not to a fresh session
+
+Recommended, and drawn that way: the chat relays through the existing `msg`
+board to **keeper**, whose messages wake it and whose replies stream back.
+
+**Why keeper rather than a separate Claude session:** keeper is already running
+every lane, so it is the same brain that knows *why* an item is stuck. A fresh
+session is a stranger who must be briefed before it can help — and briefing it
+means duplicating the state keeper already holds, which is how two sources of
+truth get born.
+
+**Cost, and it must be said on the page:** replies are **seconds, occasionally up
+to a minute** when a lane is mid-run. That is person-paced, not instant. The mock
+states this in fine print, because a chat that *feels* broken is worse than one
+that is honestly a little slow.
+
+### The badge must be DERIVED, never typed
+
+A badge reading "2 decisions" is only worth having if it is **counted from the
+item itself**. Hand-maintained badges make the board one more thing to keep in
+sync, and a stale badge is worse than no badge — it actively misleads. Same class
+as gate 34b passing while the feature was broken: the display agreed with an
+assumption instead of with the store.
 
 ---
 
