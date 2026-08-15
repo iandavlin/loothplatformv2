@@ -21,6 +21,55 @@ if ( ! defined( 'LGPO_PLUGIN_FILE' ) ) define( 'LGPO_PLUGIN_FILE', __FILE__ );
 if ( ! defined( 'LGPO_PLUGIN_DIR' ) )  define( 'LGPO_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 if ( ! defined( 'LGPO_PLUGIN_URL' ) )  define( 'LGPO_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
+// ---- LG_DARK_ONBOARD_SUBTEXT_FIX (dark-anon-sweep lane, gate 36) -----------
+//
+// .lgpo-subtext is hardcoded `color: #666` in the [lg_patreon_onboard] style
+// block below. #666 was chosen against a white page — 5.57:1 on the login
+// card's light #fbfcf8, comfortably AA — and nothing ever gave it a dark
+// counterpart. Under dark it keeps that same #666 while the card underneath
+// becomes --lg-dark-card #1b1e21, which measures 2.92:1: under the 4.5:1 AA
+// text bar. Confirmed on the real served page with the gate's own contrast
+// probe, os-dark AND app-dark, mobile AND desktop — one finding, all four.
+//
+// THIS IS THE OPPOSITE SHAPE FROM THE ONE THE CHARTER NAMED, and the
+// difference is the whole reason this file is the fix site and 86.php is not.
+// The charter described dark ink stranded on a light card (the accordion
+// summaries). Measured, that does not happen: 86.php's dark block moves the
+// summary ink AND the .lg-acc background together, so the accordions render
+// e5e7e1 on 1b1e21 and are correct. What is actually broken is the reverse —
+// the CARD follows the theme (86.php owns it) and this ONE piece of ink does
+// not, because it lives in a different plugin that 86.php's block never
+// reaches. A fix in 86.php could not have touched it.
+//
+// Pins the dark value to #a8ada6 — the SAME --lg-dark-mute already used for
+// muted note text on this exact card elsewhere (86.php's .lg-card-note), so
+// this reuses the established token value rather than inventing a shade:
+// 7.33:1 on #1b1e21, 6.74:1 on the gold card, 7.86:1 on the page background.
+// Light is deliberately untouched; #666 there is correct and moving it would
+// be an unmeasured change to a passing surface.
+//
+// Member-visible, so DEFAULTED OFF pending Ian's pass, consistent with every
+// other member-visible fix in this wave (cf. LG_DARK_BADGE_INK_FIX). OFF emits
+// the empty string, and that it is a BYTE-IDENTICAL no-op was proven rather
+// than assumed: this exact template region was rendered under both flag states
+// and diffed against the same region rendered from HEAD (identical for OFF,
+// one added line for ON). That test caught a real bug in the first attempt —
+// closing the PHP tag at the end of the .lgpo-error line made PHP swallow that
+// line's own newline, so OFF was NOT byte-identical. Hence the tag opens at
+// column 0 and closes immediately before `</style>`.
+//
+// Reads getenv() AND $_SERVER because an nginx `fastcgi_param` preview flag
+// lands in $_SERVER only and would otherwise serve OFF on the very preview URL
+// built for someone to click.
+if ( ! defined( 'LG_DARK_ONBOARD_SUBTEXT_FIX' ) ) {
+    $lgpo_subtext_flag = getenv( 'LG_DARK_ONBOARD_SUBTEXT_FIX' );
+    if ( $lgpo_subtext_flag === false && isset( $_SERVER['LG_DARK_ONBOARD_SUBTEXT_FIX'] ) ) {
+        $lgpo_subtext_flag = $_SERVER['LG_DARK_ONBOARD_SUBTEXT_FIX'];
+    }
+    define( 'LG_DARK_ONBOARD_SUBTEXT_FIX', in_array( (string) $lgpo_subtext_flag, array( '1', 'true', 'on', 'yes' ), true ) );
+    unset( $lgpo_subtext_flag );
+}
+
 // Alias for the LGMS\* code paths (Stripe poller, arbiter, REST endpoints).
 // They originated in a separate `lg-member-sync` plugin and were folded in here.
 if ( ! defined( 'LGMS_PLUGIN_DIR' ) )  define( 'LGMS_PLUGIN_DIR', LGPO_PLUGIN_DIR );
@@ -522,6 +571,12 @@ function lgpo_shortcode( $atts ) {
         'state'         => $state,
     ), 'https://www.patreon.com/oauth2/authorize' );
 
+    // Dark-mode ink for .lgpo-subtext. OFF -> the empty string, so the emitted
+    // markup is byte-identical to what shipped before this flag existed.
+    $lgpo_dark_subtext_css = LG_DARK_ONBOARD_SUBTEXT_FIX
+        ? "        html[data-lguser-theme='dark'] .lgpo-subtext { color: #a8ada6; }\n"
+        : '';
+
     ob_start();
     ?>
     <div class="lgpo-onboard-wrap">
@@ -536,7 +591,7 @@ function lgpo_shortcode( $atts ) {
         .lgpo-notice { padding: 1em 1.5em; border-radius: 6px; margin: 1em 0; }
         .lgpo-success { background: #d4e0b8; color: #1A1E12; border: 1px solid #87986A; }
         .lgpo-error { background: #fde8e4; color: #1A1E12; border: 1px solid #FE6A4F; }
-    </style>
+<?php echo $lgpo_dark_subtext_css; ?>    </style>
     <?php
     return ob_get_clean();
 }
