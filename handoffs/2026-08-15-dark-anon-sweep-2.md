@@ -99,6 +99,68 @@ is not lost. **Do not re-apply it without first reproducing a defect it fixes.**
   `#guitardle` was **never** in that page's DOM (`frames: 0`, href correct).
   Unexplained; it did not reproduce in three clean back-to-back trials.
 
+## Round 2 — the SECOND phantom, and the instrument fix that explains both
+
+Keeper sent an addendum naming another live-facing defect: *join, app-dark,
+footer legal text 1.26:1 (`#dfdacb` on `#f2f4ee`), 21 findings*, to be fixed as
+one family with the accordion. **It does not reproduce either.**
+
+Probed the footer directly on `/join` **and** `/`, both dark paths, both widths
+— eight runs:
+
+```
+footer background = #101214  (dark)
+sub-AA text items = 0 of 15 on join, 0 of 17 on front, every state
+```
+
+Gate 36's full run agrees independently: `join/app-dark` = **0 findings** on
+both widths, baseline 0, `theme=dark` on every row.
+
+**The tell, and it is worth knowing by sight:** `#dfdacb` on `#f2f4ee` are
+*both light colours*. A real dark-mode defect goes light-on-light only where a
+token flips underneath. A page caught **pre-resolve** is light-on-light
+*everywhere*, because it is still wearing its light paint. That is why these
+arrive in **bursts of 21** rather than in ones and twos — it is not 21 defects,
+it is one unresolved page. The charter's accordion (1.21:1 on `#fbfcf8`) has
+the identical signature.
+
+### Gate 36 hardened — resolution is now a PRECONDITION
+
+Keeper's read was right, and this is the fix for the whole false-red class:
+
+- `measure()` now polls for `<html data-lguser-theme='dark'>` and only then
+  probes — **before** anything is measured, rather than noticing afterwards.
+- It covers **both** dark paths. The old check guarded `app-dark` only, so the
+  entire `os-dark` half was unprotected.
+- It re-navigates once if unresolved. If it *still* will not resolve, the
+  surface's findings are **DISCARDED, not ratcheted**, and it is named in the
+  output — a zero from an unresolved page is unearned and a non-zero is a
+  phantom, and ratcheting either is how the false reds were manufactured.
+- Polling is also **faster** than the old wall-clock settle on the common case:
+  it returns the moment the page is ready instead of always sleeping.
+
+CRAFT-STANDARD row 36 previously said *"re-baseline tighter once the probe waits
+on an explicit signal instead of a timer"* — that pointer is now true and the
+row says so.
+
+### Gate 53
+
+`tools/gates/dark-onboard-subtext-gate.py`, number from keeper. Static render,
+no browser, cannot flake. Asserts **both** flag states independently and only
+**reports** the shipped default — a gate asserting "the rule is present" would
+have reddened the moment the fix shipped OFF. Red-first breaks all five
+assertions; all five redden. The flag is now **ON** per keeper's call.
+
+### Still open / worth a look
+
+- Several gate-36 baselines are now provably too high and should come down on a
+  quiet box: `signin/os-dark/*` measured 1 against baseline 7,
+  `lostpassword/os-dark/mobile` 0 against 3, `bpnoaccess/os-dark/desktop` 7
+  against 10. The ratchet only tightens — lower them in the same commit as the
+  measurement, never leave them stale.
+- The `front/*` 10 findings are the Guitardle leaderboard, explicitly another
+  lane's surface.
+
 ## Next
 
 The ranked wave list (110+ remaining) is the standing charter — badness order,
