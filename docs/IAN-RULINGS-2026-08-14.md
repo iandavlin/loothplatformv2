@@ -28,3 +28,11 @@
 8. **4th seat = Guitardle fix** (backlog 22).
 
 9. **Guitardle anon ruling** ("Agree — relabel only"): logged-out play stays free and untracked; the claim button becomes honest ("Sign in to claim a spot") for logged-out visitors; the member-side fix (account-tracked daily attempt, claimed at START, with RESUME) is the build.
+
+## 2026-08-15 (morning)
+
+10. **DUAL-RAIL, PLATFORM-WIDE**: "Everything needs to fire for both for the
+    foreseeable future." Every member-facing flow fires for BOTH join sources
+    — Patreon AND Stripe. Nothing ships keyed to one source's events; hooks
+    key on membership-activation regardless of rail. Applies to profiles-
+    arrive-alive (backlog 19), the soft launch, and everything after.
