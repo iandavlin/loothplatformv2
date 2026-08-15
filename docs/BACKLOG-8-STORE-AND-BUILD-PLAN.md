@@ -284,15 +284,50 @@ load to the front page.
 
 ---
 
-## 8. Also worth fixing, found while measuring
+## 8. A live defect found while checking my own recommendation — and dev2 lied about it
 
-The front page's only weekly-email affordance for a logged-out visitor is one
-secondary text button reading **"Weekly email"**, inside the welcome video's
-copy. It points at `/looth-group-weekly/`, which **302s a logged-out visitor to
-`wp-login.php` (`action=bpnoaccess`)**. The standalone issue page `/weekly/` is
-members-only in PHP and shows anon a sign-in card with no content (verified: 6
-gate elements, zero issue content).
+I had written this section from dev2 alone, and dev2 gave the **opposite** answer
+to live. Measured on both, as anon, on the box (never a plain public curl —
+Cloudflare bot-challenges that into a 403 that reads as an outage):
 
-The public sign-up page **`/weekly-email-sign-up/` is open to anyone and answers
-200**. Repointing that button is a config change and fixes a login wall on the
-front page regardless of which option Ian picks.
+| anon request | dev2 | **live** |
+|---|---|---|
+| `/looth-group-weekly/` — where the front page's one weekly button points | **302 → wp-login** | **200** |
+| `/weekly-email-sign-up/` — the public sign-up page | **200** | **302 → wp-login** |
+| `/weekly/` — the standalone issue page | 200, but the members gate shell, zero content | same: 200, `lg-wk__gate` ×6, zero content |
+
+So my original §8 — "the front page's weekly button is a login wall" — is **true
+on dev2 and false on live**, and the thing that is actually broken is the one I
+had recommended as the safe CTA target.
+
+### The live defect
+
+> **`/weekly-email-sign-up/` — the page built so that someone WITHOUT a WP
+> account can subscribe — bounces logged-out visitors to `wp-login.php`.**
+
+It is `post_status = publish` on live (page 68595). The bounce carries
+`bp-auth=1&action=bpnoaccess`, BuddyBoss's private-network refusal. The lever is
+`wp_options.bp-enable-private-network-public-content`, a newline-separated
+allow-list of publicly reachable URLs — **67 entries on live**. It contains
+`https://loothgroup.com/looth-group-weekly/`, which is exactly why that one
+answers 200. It does **not** contain `/weekly-email-sign-up/`.
+
+That is the whole of it: **one missing line in a 67-line list**, and the entire
+public sign-up funnel — Ian's 29 July ask, the four audience states, the
+non-member list that ruling 6 is built around — is closed to the only audience it
+was written for. Nobody without an account can reach it.
+
+(`bp-enable-private-network` itself reads `0`, which does not obviously square
+with the behaviour; BuddyBoss's naming for that toggle is inverted in places.
+The correlation above is measured and unambiguous, so the allow-list is the
+lever to pull — but pull it through the BuddyBoss admin UI rather than by
+hand-editing the option, and confirm the toggle's sense there.)
+
+**Whose job:** a live change, so **Ian's**. It needs no deploy and no code.
+
+**What it means for this build:** the CTA in both options points at
+`/weekly-email-sign-up/`. On live that link is currently a login wall, so **the
+allow-list entry has to land before this feature is switched on**, or the block
+ships a sign-up button that cannot be signed up through. On dev2 it already
+works, which is precisely the shape of thing that gets verified green here and
+fails there.
