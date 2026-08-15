@@ -362,6 +362,101 @@ else:
         "a gift buyer is not a new member")
 
 
+# ── H. THE PUBLISHED SNAPSHOT AGREES WITH THE SOURCE IT PICTURES ───────────────
+# Ian rules from pictures. The two pages under footer-mockups/profiles-alive/built/
+# are a RENDER of this feature, published dev-gated so he can look at the built
+# thing before it reaches the serve. A render is a DERIVED artifact, and derived
+# artifacts go stale in silence: on 2026-08-15 the published skip screen still read
+# "Choose My profile" for hours after the source was corrected to "My Profile",
+# because the snapshot had been built from a pre-fix capture. Every static check
+# stayed green the whole time — the SOURCE was right. Only the picture was wrong,
+# and the picture is the thing Ian actually looks at.
+print("\nH. the published snapshot shows what the code actually says")
+
+SNAP_DIR = os.path.join(ROOT, "footer-mockups", "profiles-alive", "built")
+SNAPS = [os.path.join(SNAP_DIR, "step.html"), os.path.join(SNAP_DIR, "skipped.html")]
+
+missing_snap = [os.path.relpath(f, ROOT) for f in SNAPS if not os.path.isfile(f)]
+if missing_snap:
+    bad("the published snapshot Ian is linked to is missing", ", ".join(missing_snap))
+else:
+    def own_content(path):
+        """The page's OWN markup, with the shared chrome cut away.
+
+        Scoping matters more than it looks. The first version searched the whole
+        file and went GREEN against the real staleness it was written to catch:
+        the phrase "My Profile" also appears in the site header's account menu, so
+        the assertion matched the CHROME of the other page while the instruction
+        text under test still said "My profile". Passing for the wrong reason —
+        the same decoration bug that already bit three assertions in this gate.
+        """
+        t = open(path, encoding="utf-8", errors="ignore").read()
+        i = t.find('<div class="wrap">')
+        if i == -1:
+            return ""
+        j = t.find("lg-chrome-foot", i)
+        return t[i:j if j != -1 else len(t)]
+
+    snap_regions = {f: own_content(f) for f in SNAPS}
+    empty = [os.path.relpath(f, ROOT) for f, r in snap_regions.items() if not r.strip()]
+    if empty:
+        cannot("could not isolate the page's own content in: " + ", ".join(empty)
+               + " — the agreement check would compare against nothing")
+    snap_text = "".join(snap_regions.values())
+    mu_src = open(MU, encoding="utf-8", errors="ignore").read()
+
+    # Take the member-visible literals straight out of the source rather than
+    # listing them here — a hardcoded list is itself a derived artifact and would
+    # drift the same way the snapshot did.
+    phrases = set()
+    for pat in (r"<strong>([^<>]{4,60})</strong>",
+                r"<h2>([^<>{}]{4,60})</h2>",
+                r"<h3>([^<>{}]{4,60})</h3>"):
+        for m in re.findall(pat, mu_src):
+            t = m.strip()
+            if "<?" in t or "?>" in t or "$" in t:
+                continue          # PHP-interpolated: renders to something else
+            t = t.replace("&mdash;", "\u2014").replace("&amp;", "&")
+            phrases.add(t)
+
+    # COVERAGE, the lesson from section E: an agreement check that compares nothing
+    # passes on any snapshot at all. Prove the extraction actually found phrases.
+    # RED, not CANNOT RUN. This guard exists so the comparison cannot be vacuous —
+    # but it reads the SOURCE, and the source losing its member-visible wording is a
+    # DEFECT, which section F above already reports. Raising CANNOT RUN here would
+    # overwrite that exit code (2 beats 1) and re-report a real finding as a missing
+    # environment. Measured: the mutation that deletes the skipper instructions made
+    # this gate exit 2 instead of 1, and the red-first harness caught it.
+    if len(phrases) < 4:
+        bad(f"only {len(phrases)} member-visible phrases found in the source — either the "
+            "wording was deleted, or this gate's extraction broke; either way the "
+            "snapshot cannot be checked against anything")
+    ok(f"COVERAGE — {len(phrases)} member-visible phrases extracted from the source, "
+       f"checked against {len(snap_text)} bytes of page-own markup (chrome excluded)")
+
+    stale = sorted(t for t in phrases if t not in snap_text)
+    if stale:
+        bad("the published snapshot is STALE — it shows Ian wording the code no longer has",
+            "; ".join(repr(t) for t in stale[:4]))
+    else:
+        ok(f"all {len(phrases)} phrases in the source appear in the published snapshot")
+
+    # And it must stay inert. It is a picture, not a working form: the captured page
+    # carried the live JS that POSTs to the real profile-api write endpoints.
+    live = []
+    for f in SNAPS:
+        t = open(f, encoding="utf-8", errors="ignore").read()
+        if re.search(r"<script", t, re.I):
+            live.append(os.path.relpath(f, ROOT) + ": a <script> survived")
+        if "profile-api" in t:
+            live.append(os.path.relpath(f, ROOT) + ": a real write endpoint survived")
+    if live:
+        bad("the published snapshot is not inert — it can act, not just illustrate",
+            "; ".join(live))
+    else:
+        ok("the snapshot is inert: no script, no write endpoint on either page")
+
+
 # ── verdict ────────────────────────────────────────────────────────────────────
 print(f"\n{checks} checks run.")
 if fails:
