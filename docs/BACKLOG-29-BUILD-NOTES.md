@@ -1,15 +1,17 @@
 # The work board (backlog 29) — what to settle before building
 
 **Written 2026-08-15 by the stripe-membership lane, at mock stage.** Nothing is
-built. Ian has ruled the *shape* (the desk, plus drag-to-rank); these are the
-things that decide the *build*, found while drawing it.
+built. Ian has ruled the *shape* — now **one surface**: a ranked drag list with
+per-item alerts, a modal per item, and an embedded chat (§1b supersedes the
+earlier desk-plus-list). These are the things that decide the *build*, found
+while drawing it.
 
 Mocks: `/footer-mockups/wip-board/` (round 1, shape), `rank.html` (round 2,
 drag-to-rank) and **`board.html` (round 3, the current shape — supersedes 1–2)**.
 
 > ⚠️ There is still no numbered entry for this in `docs/BACKLOG.md` — the file
-> stops at 28. Scope here comes from keeper's brief and Ian's two rulings, not
-> from a written backlog item.
+> stops at 28. Scope here comes from keeper's brief and Ian's three rounds of
+> rulings, not from a written backlog item.
 
 ---
 
