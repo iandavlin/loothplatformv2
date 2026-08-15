@@ -6245,9 +6245,30 @@ function lgFollowEnabled() {
   /* Load one <script src> and RESOLVE ONLY WHEN IT HAS RUN. Sequential by
      design: acf.js throws on a missing jQuery, and a parallel load wins that
      race often enough to look intermittent. */
+  /* Already-loaded test is by FILENAME, not full URL. The compose page and the
+     hub reach the same libraries by different paths and version queries, so a
+     URL match would miss and load a SECOND jQuery over the hub's own — which
+     does not fail loudly, it quietly re-binds and breaks the discussion
+     composer that was working a moment ago. The whole risk of injecting a
+     WordPress form into a non-WordPress page is in this function. */
+  function fileOf(src) {
+    return (src.split('?')[0].split('/').pop() || '').toLowerCase();
+  }
+  var present = null;
+  function alreadyLoaded(src) {
+    if (!present) {
+      present = {};
+      [].forEach.call(document.querySelectorAll('script[src]'), function (s) {
+        present[fileOf(s.getAttribute('src'))] = true;
+      });
+    }
+    return !!present[fileOf(src)];
+  }
+
   function loadScript(src) {
     return new Promise(function (resolve) {
-      if (document.querySelector('script[src="' + src + '"]')) return resolve();
+      if (alreadyLoaded(src)) return resolve();
+      present[fileOf(src)] = true;
       var s = document.createElement('script');
       s.src = src; s.async = false;
       s.onload = resolve; s.onerror = resolve;   // never strand the modal
