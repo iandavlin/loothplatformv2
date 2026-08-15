@@ -195,8 +195,28 @@ header ("No WP needed") and runs on its own FPM pool against a read-only
 Postgres discovery index. Booting WP there would put a ~0.8s BuddyBoss bootstrap
 on every anonymous front-page render, on a 2-core box.
 
-The pattern already exists in the same file and is the one to copy —
-`archive_poc_run_activity_strip()`:
+The pattern to copy is `archive_poc_run_activity_strip()`, in the same file —
+**but copy it knowing it has never actually run.** Measured 2026-08-15: the
+`activity-strip` layout appears **zero** times in live's `archive-poc/config.json`
+and is absent from dev2's rows, and there is **no `lg_actstrip_*` cache file on
+either box**. It is a well-reasoned, well-documented, entirely unexercised code
+path. Its design is still right and its docblock states real costs — the loopback
+REST call measured **0.54s** on dev2 just now, which is why it must not sit on
+the render path — but "this already works here" is not available as evidence.
+**Whoever builds this owns proving the caching behaviour**, not inheriting it.
+
+Two consequences for the cache file specifically:
+
+- `PrivateTmp=no` on the FPM service (measured), so `sys_get_temp_dir()` is the
+  **real, shared** `/tmp` — shared with every other pool and every lane on the
+  box. Name the file so it cannot collide, and handle the case where it exists
+  but is owned by another user and therefore unwritable: that fails silently
+  into "serve nothing" or "serve forever-stale".
+- A first-load miss fetches **synchronously**, so the very first anonymous
+  render after a cache flush pays the 0.54s. Acceptable once; make sure the
+  failure path bumps the mtime rather than retrying per render.
+
+The shape to copy:
 
 - loopback `curl` to `https://127.0.0.1/wp-json/looth/v1/<route>` with an explicit
   `Host:` header
