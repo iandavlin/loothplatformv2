@@ -108,7 +108,10 @@ if (!defined('LG_GUITARDLE_SCORE_RETRY')) {
  * everywhere and the assets are then restricted. That is a two-stage deploy.
  */
 if (!defined('LG_GUITARDLE_SERVER_PLAY')) {
-    define('LG_GUITARDLE_SERVER_PLAY', false);
+    // ON on dev2 since 2026-08-15 — Ian (decision box, keeper turn): "Flip it
+    // on dev2" so he can run the desktop-to-mobile continuation test himself.
+    // Live stays OFF until he has looked at it running here.
+    define('LG_GUITARDLE_SERVER_PLAY', true);
 }
 
 /**
