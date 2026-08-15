@@ -161,6 +161,43 @@ assertions; all five redden. The flag is now **ON** per keeper's call.
 - The `front/*` 10 findings are the Guitardle leaderboard, explicitly another
   lane's surface.
 
+### Re-baseline, and the sweep had it too
+
+Two hardened runs, back to back, agreed on **all 24 surfaces — zero
+disagreement** (old method: 13/24, then 4/24). Baselines lowered to the measured
+values:
+
+```
+signin/os-dark/*             7  ->  1
+lostpassword/os-dark/*       3  ->  0
+lostpassword/app-dark/*      1  ->  0
+bpnoaccess/os-dark/desktop  10  ->  1
+```
+
+**Nobody fixed those pages.** Nothing on them changed — the old numbers were
+inflated by pre-resolve phantoms. This is the instrument getting honest, not the
+product improving, and the file's comment says so, because a future reader would
+otherwise credit a fix that never happened.
+
+`bpnoaccess` still reads **1** everywhere and that one is real: the
+`.lgpo-subtext` defect. Fixed on this branch, but the gate reads the SERVE
+(main), so it should drop to 0 after merge + deploy. **Lower it then, in the same
+commit as the measurement.**
+
+`tools/preview/dark-anon-sweep.py` had the identical defect and it matters more
+there, because that tool RANKS the wave. It read `resolvedTheme` but only
+*reported* it — findings were counted and ranked regardless. Since a pre-resolve
+reading is light-on-light (1.0–1.2:1), the phantoms sort to the **top** of a
+badness order. **The previous seat's ranked list has "borderless search fields
+1.0–1.07:1" at the top; that is the phantom signature and should be re-measured
+before anyone fixes it.** Same precondition applied, plus a disclosure block
+naming unresolved rows and their phantom counts.
+
+Honest limit: the gate's precondition is red-first proven both directions and
+its baseline verified by two full runs. The sweep's copy is the same logic and
+passes syntax, but the full 48-run sweep has **not** been re-run under it (box
+over the load threshold). The disclosure block is the safety net until it is.
+
 ## Next
 
 The ranked wave list (110+ remaining) is the standing charter — badness order,
