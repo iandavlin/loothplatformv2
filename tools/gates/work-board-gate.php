@@ -1,8 +1,11 @@
 <?php
 /**
- * GATE (number pending — keeper assigns; the ledger currently disagrees with
- * itself, saying both "next free 41" and "next free 43", so this file will not
- * mint one) — THE WORK BOARD, phase 1.
+ * GATE 50 — THE WORK BOARD, phase 1.
+ *
+ * Number ALLOCATED BY KEEPER, 2026-08-15 (ledger next free: 51). Not minted
+ * here: the run-all ledger disagreed with itself at the time, saying both
+ * "next free 41" and "next free 43", and a lane that guesses from a
+ * self-contradicting ledger is how two gates end up sharing a number.
  *
  *   php tools/gates/work-board-gate.php
  *
@@ -86,7 +89,7 @@ function truth(string $backlog): array
     return $ids;
 }
 
-echo "GATE — the work board, phase 1 (read-only)\n";
+echo "GATE 50 — the work board, phase 1 (read-only)\n";
 
 /* ---------------------------------------------------------------------- */
 section("[1] NOTHING IS SILENTLY DROPPED — the ✅ regression");

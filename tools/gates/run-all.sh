@@ -864,6 +864,23 @@ echo "=== GATE 42: the puzzle LIBRARY and SEQUENCE never reach a browser ==="
 # before both flags are on everywhere is a blank board, not a degraded one.
 run "guitardle-daypuzzle" python3 "$(dirname "$0")/guitardle-daypuzzle-gate.py"
 
+# ── 50 ─────────────────────────────────────────────────────────────────────
+# The work board, phase 1 (backlog 29, Ian's nod 2026-08-15). A dev-facing,
+# READ-ONLY page: docs/BACKLOG.md rendered as its own PRIORITY INDEX with
+# derived badges, plus lane lights and a capacity strip off the sentinel stamp.
+# No flag — it is dev-gated and renders no member content; phase 2's WRITE
+# endpoints are a different matter and get fenced as writes.
+#
+# WHY THE HEADLINE ASSERTION IS "NOTHING IS DROPPED" RATHER THAN "IT PARSES":
+# the first cut silently lost every COMPLETED item. preg_split on \R, without
+# /u, also matches the byte 0x85 — the third byte of "✅" — so it cut every
+# ticked line in half, and preg_match with /u then returns FALSE on the invalid
+# fragment SILENTLY. Five P0 items rendered as three and nothing logged. A
+# board that quietly loses rows is worse than no board, because it gets trusted.
+# Needs no network, no browser and no DB.
+echo "=== GATE 50: the work board renders EVERY item, and phase 1 cannot write ==="
+run "work-board" php "$(dirname "$0")/work-board-gate.php"
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"
