@@ -5,7 +5,7 @@ Phase 1 + 2 shipped and merged; see `handoffs/2026-08-15-guitardle-fairness.md`.
 
 | | |
 |---|---|
-| Branch | `guitardle-score-integrity`, **pushed**, tip **`afe3414`** |
+| Branch | `guitardle-score-integrity`, **pushed**, tip **`1cad6f7`** |
 | Base | rebased onto `origin/main` `b9c48ba`. Phase 2 is merged and **both its flags are ON in main** |
 | Backlog 24 | **DONE.** Gate **40** (keeper), registered, CRAFT-STANDARD row in |
 | Backlog 25 | **DONE.** Gate **41** (keeper), registered, row in |
@@ -183,6 +183,30 @@ track, nothing to compute forward from.
 **`dp=1` is emitted for logged-out visitors ONLY.** A member sent to the day
 endpoint would get the *logged-out* track — a different phrase from the one
 their day is scored on — which is worse than the bug.
+
+### Keeper's two guardrails (added on review, both red-first proven)
+
+**1. The endpoint takes NO parameter of any kind.** Not a date, not an index,
+not an audience — the *server's own clock* picks the day. My draft accepted
+`?local_date` with the same ±1 clamp the score API uses, justified to myself as
+consistency. **It was still an oracle**: a read-only endpoint that answers for a
+day you *name* rebuilds the answer key on a delay, one query at a time. There is
+no window small enough to be safe, so there is no window. It reads **no
+superglobal at all**, and the client stopped sending a date so the URL is
+byte-identical for every visitor. Gate 42 probes thirteen shapes.
+
+> **Cost, stated not hidden:** the logged-out day now turns over at the
+> **server's** midnight, not the player's. UK-centred audience → same hour; a US
+> player sees it change in the evening. If that ever matters, the fix is a
+> **site-timezone constant in the endpoint** — never a parameter.
+
+**2. No cache outlives the day.** On live this sits behind Cloudflare, and an
+unauthenticated GET cached across midnight either serves yesterday's phrase to
+everyone or pre-bakes today's for anyone who asks early. `no-store` rather than
+an expiry pinned to midnight — an edge that mis-rounds a pinned expiry by a
+minute is the same bug with more moving parts — plus `CDN-Cache-Control`, which
+Cloudflare honours in preference. The gate reads the headers off a **live
+response**, not the source.
 
 ### THE DEPLOY ORDER, three steps, and the last is Ian's
 
