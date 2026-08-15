@@ -74,6 +74,30 @@ class LG_WD_Issue {
     }
 
     /**
+     * The most recent issue whose own data says it was SENT, or 0.
+     *
+     * PROMOTED HERE 2026-08-15, not copied. It began as a private helper on
+     * LG_WD_Signup_Page, and the front-page feed (backlog 8) needed the same
+     * answer. Two implementations of "which issue is current" that can disagree
+     * is precisely the drift this area keeps having — the sample-email preview
+     * has already been wrong about which document it was showing twice — so the
+     * signup page now delegates to this and there is one answer on the box.
+     *
+     * Reads `status` from the issue's own meta rather than post_status: an
+     * issue is a published CPT entry long before it is sent, and after the send
+     * the send-state lives in the meta. Bounded to the newest 20, as it always
+     * was; an unsent backlog deeper than that is not a thing that happens.
+     */
+    public static function latest_sent_id( int $scan = 20 ): int {
+        foreach ( self::get_all_issues( $scan ) as $issue ) {
+            if ( ( $issue['status'] ?? '' ) === 'sent' ) {
+                return (int) $issue['id'];
+            }
+        }
+        return 0;
+    }
+
+    /**
      * Get issue data.
      */
     public static function get_data( int $post_id ): array {

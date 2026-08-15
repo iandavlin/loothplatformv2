@@ -3836,3 +3836,124 @@ html[data-lguser-theme="dark"] body.view-discover .lg-bento__wksub-row input[typ
   html:not([data-lguser-theme]) body.view-discover .lg-bento__wksub-txt small{color:var(--lg-mute)}
   html:not([data-lguser-theme]) body.view-discover .lg-bento__wksub-row input[type=email]{background:var(--lg-card-bg);color:var(--lg-ink,#e8e6df);border-color:var(--lg-line,#2c312d)}
 }
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   BACKLOG 8 — "This week's issue": the latest weekly email, for logged-out
+   visitors. Ian 2026-07-30, ruled 2026-08-15 after the mock (Option A).
+   Drawn and measured first in footer-mockups/weekly-front/.
+
+   TOKEN-DRIVEN ON PURPOSE. Dark mode on logged-out surfaces is backlog 21,
+   which Ian promoted on 2026-08-14 ("a ton of instructions and fields not
+   ready for primetime in dark for logged out"), and dark contrast has bitten
+   this project three-plus times. So this component declares no ink and no
+   surface of its own: it reads --lg-* tokens, which the dark gates further
+   down this file already re-point. The one exception is the masthead's brown
+   and gold, which ARE the newsletter's identity and must survive both themes —
+   they get an explicit dark rule below, with the measured ratio beside it.
+
+   MEASURED with tools/gates/lib/contrast-probe.js at 1280 and 390, light and
+   dark: every piece of text and every control in this block clears WCAG AA in
+   all four states. Two colours had to be corrected to get there — see the
+   --wk-accent note.
+   ══════════════════════════════════════════════════════════════════════════ */
+.wkiss {
+  border: 1px solid var(--lg-line);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--lg-card-bg, #fff);
+
+  /* NOT --lg-sage-d, and this is measured rather than preferred. The SERVED
+     value of --lg-sage-d is #6f7c54 (this file's own fallbacks say so, e.g. the
+     bento map button), which is 4.48:1 against white — a hair under AA's 4.5
+     for normal text, in BOTH directions. The first draft used it for the
+     section labels and the sign-up button and the probe reddened all three,
+     correctly. #5c6a42 is 5.84:1 either way. In dark the platform's own
+     re-point (#b0c693) is already 8.74:1 on the dark card and 9.70:1 behind
+     #15171a ink, so dark just uses it. */
+  --wk-accent:     #5c6a42;
+  --wk-accent-ink: #fff;
+}
+
+/* The masthead. #2b2318 / #ecb351 are the EMAIL's own header colours
+   (lg-weekly-digest/templates/email.php:72,80), so the strip on the front page
+   and the header of the email that arrives are recognisably one object. */
+.wkiss__mast {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px;
+  background: #2b2318;
+  padding: 13px 18px;
+}
+.wkiss__wordmark {
+  font: 700 15px/1.2 var(--lg-font-serif);
+  letter-spacing: 3px; text-transform: uppercase;
+  color: #ecb351;                     /* 8.21:1 on #2b2318 */
+}
+.wkiss__sent {
+  font: 600 11px/1.4 var(--lg-font-sans);
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: #b3c194;                     /* 8.09:1 on #2b2318. The email's own
+                                         #87986a is 3.31:1 here — it passes in
+                                         the email because it sits on cream, not
+                                         on the brown. Lightened, not copied. */
+  margin-left: auto;
+}
+@media (max-width: 620px) { .wkiss__sent { margin-left: 0; } }
+
+.wkiss__body { padding: 16px 18px 4px; }
+.wkiss__lede {
+  margin: 0 0 14px;
+  font: 500 14px/1.55 var(--lg-font-sans);
+  color: var(--lg-mute);
+  max-width: 62ch;
+}
+.wkiss__lede b { color: var(--lg-ink); font-weight: 700; }
+
+/* The issue's OWN section label, never a re-grouping of it. */
+.wkiss__sec {
+  margin: 4px 0 8px;
+  font: 800 10px/1 var(--lg-font-sans);
+  letter-spacing: .12em; text-transform: uppercase;
+  color: var(--wk-accent);
+}
+
+/* The rail is the front page's real rail; inside this bordered card it only
+   needs its negative gutter pulled back in. */
+.wkiss .rail { margin-left: 0; margin-right: 0; padding-left: 0; padding-right: 0; }
+
+.wkiss__foot {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 10px 16px;
+  border-top: 1px solid var(--lg-line);
+  background: var(--lg-sage-tint);
+  padding: 14px 18px;
+}
+.wkiss__pitch { margin: 0; font: 500 13.5px/1.5 var(--lg-font-sans); color: var(--lg-ink); }
+.wkiss__pitch small { display: block; color: var(--lg-mute); font-size: 12px; margin-top: 2px; }
+.wkiss__cta {
+  flex: 0 0 auto; text-decoration: none;
+  background: var(--wk-accent); color: var(--wk-accent-ink);
+  border-radius: 999px; padding: 11px 22px;
+  font: 700 13.5px/1 var(--lg-font-sans);
+}
+.wkiss__cta:hover { filter: brightness(0.92); }
+
+/* Dark: only the two identity colours need restating — everything else is a
+   token this file already re-points. Both gates kept in sync with the dark
+   counterparts above, same as the rest of the discover block. */
+html[data-lguser-theme="dark"] body.view-discover .wkiss {
+  --wk-accent: #b0c693; --wk-accent-ink: #15171a;
+}
+html[data-lguser-theme="dark"] body.view-discover .wkiss__mast {
+  background: #241d14;                /* the brown deepened, so the gold keeps
+                                         its ratio while the strip still reads
+                                         as its own object against #15171a */
+  border-bottom: 1px solid #3a3025;
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-lguser-theme]) body.view-discover .wkiss {
+    --wk-accent: #b0c693; --wk-accent-ink: #15171a;
+  }
+  html:not([data-lguser-theme]) body.view-discover .wkiss__mast {
+    background: #241d14; border-bottom: 1px solid #3a3025;
+  }
+}
