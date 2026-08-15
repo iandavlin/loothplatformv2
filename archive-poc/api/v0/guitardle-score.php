@@ -169,6 +169,9 @@ if ($method === 'GET') {
     // Independent of the claim flag on purpose: the rules are help copy with no
     // data path and must be free to ship without the fairness change.
     if (LG_GUITARDLE_HOW_TO_PLAY) $out['help'] = true;
+    // Backlog 24: tells the client it may re-fetch this nonce and retry once
+    // when a POST comes back 403. Independent of the other two flags.
+    if (LG_GUITARDLE_SCORE_RETRY) $out['retry'] = true;
     lg_gdle_json($out);
 }
 

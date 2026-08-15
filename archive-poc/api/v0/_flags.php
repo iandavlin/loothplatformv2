@@ -58,3 +58,25 @@ if (!defined('LG_GUITARDLE_HOW_TO_PLAY')) {
     // overlay was split to its own flag precisely so it could ship first.
     define('LG_GUITARDLE_HOW_TO_PLAY', true);
 }
+
+/**
+ * Backlog 24 — a result must not be lost to an EXPIRED NONCE.
+ *
+ * Measured on live over 7 days: 101 finished games POSTed, 8 came back 403,
+ * from 8 distinct IPs across 6 days. A WP nonce lives ~12h; the game sits in a
+ * front-page iframe people leave open, so a tab opened last night and played
+ * this morning carries a dead nonce. postScore() ended in `.catch(() => {})`,
+ * so the player saw their win card, believed it counted, and it never reached
+ * the board. Roughly 1 game in 12, landing hardest on the members who play most
+ * -- the opposite fairness failure to the one this lane started with.
+ *
+ * With the flag ON every nonce-bearing call re-fetches a fresh nonce on a 403
+ * and retries ONCE. It matters for `start` as much as for the finish: a
+ * start-claim lost to a stale nonce means the day is never claimed, and the
+ * whole allowance fix silently does not apply to that game.
+ *
+ * OFF by default; OFF keeps the original fire-and-forget behaviour exactly.
+ */
+if (!defined('LG_GUITARDLE_SCORE_RETRY')) {
+    define('LG_GUITARDLE_SCORE_RETRY', false);
+}
