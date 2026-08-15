@@ -166,7 +166,7 @@
   //
   // MEMBER-VISIBLE EVERYWHERE (every form field, site-wide, in dark) — held
   // OFF pending Ian's phone pass on the dev2 serve, same as the icon fix.
-  var LG_DARK_BORDER_FIX = false;
+  var LG_DARK_BORDER_FIX = true;  // ON 2026-08-15: Ian phone pass "dark mode good"
   var DARK_BORDER = LG_DARK_BORDER_FIX ? '#767c76' : '#333833';
 
   // ---- LG_DARK_SEARCH_WRAPPER_FIX (same lane/backlog/gate) -------------------
@@ -178,7 +178,7 @@
   // wrapper fix keeper asked for separately, not the general field-border
   // token. .hub-tsearch (forums.css) gets its own new border under this same
   // flag from hub-polish.js, since forums.css is static and cannot self-gate.
-  var LG_DARK_SEARCH_WRAPPER_FIX = false;
+  var LG_DARK_SEARCH_WRAPPER_FIX = true;  // ON 2026-08-15: Ian phone pass "dark mode good"
   var DARK_SEARCH_BORDER = LG_DARK_SEARCH_WRAPPER_FIX ? '#767c76' : '#2c312d';
 
   // ---- LG_DARK_MUTED_INK_FIX (same lane/backlog/gate) ------------------------

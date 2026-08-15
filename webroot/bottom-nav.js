@@ -179,7 +179,7 @@
   // the sign-in pill already flips to two functions up, not a new colour —
   // so it reads correctly against the now-light fill. 1.85:1 -> 9.70:1,
   // checked with the same formula tools/gates/lib/contrast-probe.js uses.
-  var LG_DARK_POST_ICON_FIX = false;
+  var LG_DARK_POST_ICON_FIX = true;  // ON 2026-08-15: Ian phone pass "dark mode good"
 
   // Where the dash's Sign in slot points. Mirrors the shared header's canonical
   // sign-in URL, then makes sure the visitor comes BACK to the page they were
