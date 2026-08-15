@@ -178,6 +178,36 @@ def run_surface(s, probe_js, key, path, label, mode, device, outdir):
     if mode == "app-dark":
         s.goto(url, settle=2.0)   # second pass: lg-set-boot now exists pre-paint
 
+    # --- WAIT for dark to resolve BEFORE measuring anything ----------------
+    # This used to be a pure wall-clock settle, and that is not good enough:
+    # an unresolved page is still showing its LIGHT paint, so the probe reads
+    # light ink against light backgrounds and emits ratios-of-nothing.
+    #
+    # THAT CONTAMINATES THE RANKING IN THE WORST POSSIBLE DIRECTION, which is
+    # why this matters here even more than in the gate. A pre-resolve reading
+    # is light-on-light, so it lands at 1.0-1.2:1 — the very BOTTOM of the
+    # contrast scale and therefore the very TOP of a badness-ordered list. A
+    # sweep whose job is "fix in badness order" would hand the next wave a
+    # worklist with the phantoms sorted FIRST. (Gate 36's equivalent fix, same
+    # day, cut one surface from 7 findings to 1.)
+    #
+    # Polls for the attribute app-settings.js actually sets, with one extra
+    # navigation, rather than sleeping longer and hoping. Rows that still will
+    # not resolve keep resolvedTheme != 'dark' so the gallery's existing
+    # theme_misses reporting and the disclosure below both still see them.
+    deadline = time.monotonic() + 8.0
+    while time.monotonic() < deadline:
+        if s.js("document.documentElement.getAttribute('data-lguser-theme')") == "dark":
+            break
+        time.sleep(0.2)
+    else:
+        s.goto(url, settle=2.4)
+        deadline = time.monotonic() + 8.0
+        while time.monotonic() < deadline:
+            if s.js("document.documentElement.getAttribute('data-lguser-theme')") == "dark":
+                break
+            time.sleep(0.2)
+
     # --- did dark ACTUALLY resolve? ---------------------------------------
     resolved = s.js("document.documentElement.getAttribute('data-lguser-theme')||'(none)'")
     title = s.js("document.title||''")
@@ -285,6 +315,25 @@ def main():
 
     (outdir / "sweep.json").write_text(json.dumps(rows, indent=1))
     print(f"\n  {len(rows)} runs -> {outdir/'sweep.json'}", flush=True)
+
+    # DISCLOSE CONTAMINATION rather than letting the ranking read as truth. A
+    # row that never resolved dark was measured in LIGHT: its findings are
+    # phantoms, and because they are light-on-light they sort to the TOP of any
+    # badness order. Anyone reading this ranking as a worklist needs to know.
+    misses = [r for r in rows if r.get("resolvedTheme") != "dark"]
+    if misses:
+        ghost = sum(len(r.get("findings") or []) for r in misses)
+        print(f"  ⚠ {len(misses)} of {len(rows)} runs NEVER RESOLVED DARK, carrying "
+              f"{ghost} finding(s) that were measured on a LIGHT page.", flush=True)
+        print("    Those are phantoms, not defects, and they rank FIRST because "
+              "light-on-light scores ~1.0-1.2:1. Do NOT fix in badness order "
+              "off this file until they are re-run:", flush=True)
+        for r in misses:
+            print(f"      {r['surface']}/{r['mode']}/{r['device']}  "
+                  f"theme={r.get('resolvedTheme')}  {len(r.get('findings') or [])} phantom finding(s)",
+                  flush=True)
+    else:
+        print("  every run resolved dark — the ranking is measuring real dark state", flush=True)
 
 
 if __name__ == "__main__":

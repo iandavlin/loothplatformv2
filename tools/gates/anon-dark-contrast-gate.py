@@ -525,13 +525,34 @@ def verify_fixes(host, tok, probe_js):
 # (icon/border-token/search-wrapper — /front carries no unflagged fix at all).
 # Regenerate by re-running that same injection sweep if the unflagged fixes
 # ever change shape.
+# RE-BASELINED 2026-08-15 on the HARDENED instrument (the resolve precondition
+# above). Two independent full runs, back to back on the same tree, agreed on
+# ALL 24 SURFACES — zero disagreement, against 13-of-24 and then 4-of-24 with
+# the old wall-clock method. That agreement is the evidence these numbers are
+# measurements rather than samples of noise, which is what the old max-of-two
+# padding existed to absorb.
+#
+# What came down, and why it is not a claim that anyone fixed anything:
+#   signin/os-dark/*             7  ->  1
+#   lostpassword/os-dark/*       3  ->  0
+#   lostpassword/app-dark/*      1  ->  0
+#   bpnoaccess/os-dark/desktop  10  ->  1
+# Nothing on those pages changed. The old numbers were inflated by pre-resolve
+# phantoms, so this is the instrument getting honest, not the product improving.
+#
+# bpnoaccess still reads 1 EVERYWHERE and that one is real: it is the
+# .lgpo-subtext defect (2.92:1, gate 53). It is FIXED on this branch but the
+# gate reads the SERVE, which is main — so it should drop to 0 once this merges
+# and deploys. LOWER IT THEN, in the same commit as the measurement.
+#
+# front/* 10 is the Guitardle leaderboard, explicitly another lane's surface.
 BASELINE = {
     "signin/app-dark/desktop": 1, "signin/app-dark/mobile": 1,
-    "signin/os-dark/desktop": 7, "signin/os-dark/mobile": 7,
-    "lostpassword/app-dark/desktop": 1, "lostpassword/app-dark/mobile": 1,
-    "lostpassword/os-dark/desktop": 3, "lostpassword/os-dark/mobile": 3,
+    "signin/os-dark/desktop": 1, "signin/os-dark/mobile": 1,
+    "lostpassword/app-dark/desktop": 0, "lostpassword/app-dark/mobile": 0,
+    "lostpassword/os-dark/desktop": 0, "lostpassword/os-dark/mobile": 0,
     "bpnoaccess/app-dark/desktop": 1, "bpnoaccess/app-dark/mobile": 1,
-    "bpnoaccess/os-dark/desktop": 10, "bpnoaccess/os-dark/mobile": 1,
+    "bpnoaccess/os-dark/desktop": 1, "bpnoaccess/os-dark/mobile": 1,
     "join/app-dark/desktop": 0, "join/app-dark/mobile": 0,
     "join/os-dark/desktop": 0, "join/os-dark/mobile": 0,
     "lgjoin/app-dark/desktop": 0, "lgjoin/app-dark/mobile": 0,
