@@ -178,7 +178,7 @@ add_action('init', function () {
     <h3>Where to find it later</h3>
     <ol>
       <li>Tap your photo in the top corner of any page.</li>
-      <li>Choose <strong>My profile</strong>.</li>
+      <li>Choose <strong>My Profile</strong>.</li>
       <li>Hit <strong>Edit profile</strong> &mdash; a photo, your town and one line about what you
           do is all it takes to show up properly in the member directory.</li>
     </ol>

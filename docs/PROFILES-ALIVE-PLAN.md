@@ -235,7 +235,85 @@ own right** — new members currently get no welcome pop-up and no welcome email
 and it is worth raising separately from backlog 19, because fixing it benefits
 both options and every future rail.
 
-## 7. Phase 2 (only after Ian rules) — build shape
+## 7. BUILT (Ian ruled Option A, 2026-08-15) — what shipped, flag OFF
+
+Ian's ruling, relayed by keeper, with the four sharpenings quoted:
+
+1. *"Both patreon onboarding like after Password gen and for the stripe"*
+2. *"clear that this is setting up the profile and is optional"*
+3. *"No nudging on that matter"*
+4. skippers get *"instructions for how to find their profile later"*
+
+| Piece | File |
+|---|---|
+| The flag (OFF) | `platform/config/profile-setup.php` |
+| The step | `platform/mu-plugins/lg-profile-setup.php` → `/profile-setup/` |
+| Patreon hand-off | `platform/mu-plugins/lgpo-set-password.php` (after password gen) |
+| Stripe hand-off | `membership-pages/web/welcome.php` (the CTA) |
+| Gate 51 | `tools/gates/profile-setup-gate.py` (registered in `run-all.sh`) |
+| Red-first proof | `tools/gates/profile-setup-redfirst.py` — 12 mutations, all bite |
+
+**How the no-transition problem was solved — visibly, as keeper asked.** It was
+**not** solved by fixing the arbiter, and this feature deliberately does **not**
+ride `_lg_pending_welcome`. That hook never fires for new members (§6), so riding
+it would have shipped a feature that is silently dead for exactly its own
+audience. Instead each rail hands off from its own end-of-join **page**, which is
+a surface both rails already have. The arbiter gap stays open as a separate
+defect, unmasked rather than depended upon.
+
+**Where the answers go.** Client-side, same-origin, with the member's own
+`looth_id` cookie, to the endpoints in §5 — so the step moves the existing
+completeness meter and introduces no second definition of "done".
+
+### What the red-first run caught (the reason it exists)
+
+The gate went green on its first write, and was still wrong four ways:
+
+1. A **false RED** from the gate's own detector — `id="…"[^>]*` stops at the `>`
+   inside an embedded `<?php ?>` tag and misses attributes written *before* the
+   id, so it failed a correctly-built control.
+2. **"Stripe rail wired"** was decoration: it tested for the presence of an
+   identifier, so it stayed green against a hardcoded Patreon-only build — the
+   exact regression Ian's dual-wield ruling forbids. Now asserts the switch is
+   *derived from* the config's `enabled` key.
+3. **"says it is optional"** was decoration: the word appears in this gate's own
+   docblock, so a whole-file search passed after the member-visible wording was
+   deleted. Now scoped to the rendered markup.
+4. **"gift excluded"** was decoration: `welcome.php` already carried an unrelated
+   `$kind !== 'gift'` for the manage hint, which the loose regex matched. Now
+   scoped to the profile-setup block itself.
+
+Three of four were the same mistake — **testing for a string instead of a
+behaviour** — and two of those matched text the gate itself had written.
+
+### Verified by RENDERING, not only by reading the source
+
+Gate 51 is a static source read — every one of its 17 checks would pass over a
+file with a fatal in it. So both screens were rendered for a real member (uid
+1881, `alden`) by invoking the registered `init` closure directly, with the flag
+forced on through the `$_SERVER` override:
+
+| Screen | Result |
+|---|---|
+| `/profile-setup/` | 48,331 bytes, no PHP error of any kind in the output |
+| `?skipped=1` | 44,631 bytes, clean; the setup form correctly ABSENT |
+
+What that caught which the source read could not: the three controls are really
+there and really wired (`ps-photo` file input, `ps-city`, `ps-what`, one call
+each to `me-avatar` / `me-location` / `me-header`); Save is a `<button
+class="btn btn--go">` and Skip an `<a class="btn btn--skip">`, the same `.btn`
+weight, which is Ian's sharpening 2 measured rather than asserted; and the skip
+screen's two exits resolve to real destinations (`/u/alden` and the front page).
+
+**And one real defect: the instructions quoted a label that does not exist.**
+Sharpening 4 tells a skipper to "Choose **My profile**" — the account menu the
+shared chrome actually renders says **"My Profile"**. Capitalisation only, but
+these are step-by-step instructions quoting a UI label, and a member following
+them is looking for the exact words. Fixed. It is the class of thing that is
+invisible to every static assertion and obvious on Ian's phone, which is the
+whole argument for rendering the page.
+
+## 8. Phase 2 (superseded — kept for the doctrine it records)
 
 - Member-facing → **flag, defaulted OFF**, copying `LG_AUTHOR_SOCIALS_ALL_MEMBERS`
   (`platform/mu-plugins/lg-author-socials.php`). OFF must be a proven byte-identical
