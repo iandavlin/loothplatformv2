@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-mirror-sync-loud-gate.py — the mirror pipe announces its own failures, and
-reconcile can reach backwards.
+mirror-sync-loud-gate.py — GATE 70 — the mirror pipe announces its own failures,
+and reconcile can reach backwards.
 
-⚠️ NO GATE NUMBER YET. Keeper mints, lanes never.
+Number minted by keeper 2026-08-16. Lanes never self-number.
 
 Backlog 3.9. Two independent guarantees, each of which has already failed once in
 production and cost real member-visible data:
