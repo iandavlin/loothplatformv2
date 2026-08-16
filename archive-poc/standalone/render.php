@@ -145,6 +145,7 @@ if ($previewAs !== '') {
    WordPress FE editor via ?lg_edit=1 — nginx routes that flagged URL to WP, where
    the real plugin editor + capability check take over. Hidden in preview mode. */
 $editUrl = '';
+$composeUrl = '';
 if (!$IS_CLI && $previewAs === '') {
     $who = lg_archive_poc_whoami();   // static-cached this request — no second HTTP call
     if (!empty($who['authenticated'])) {
@@ -153,8 +154,64 @@ if (!$IS_CLI && $previewAs === '') {
         $isAuthor = $vid > 0 && $vid === (int) ($postContext['author']['id'] ?? -1);
         if ($capEdit || $isAuthor) {
             $editUrl = rtrim((string) ($postContext['permalink'] ?? ''), '/') . '/?lg_edit=1';
+            /* IAN PICKED OPTION A, 2026-08-16: one Edit button that opens a two-line
+               choice — "Details & files" vs "Page text". Ruled scope item 4 is the
+               way IN; the form itself already worked, and was reachable by nobody.
+
+               ONLY FOR TYPES THE COMPOSE ROUTE ACTUALLY RENDERS. A "details" link on
+               a post type with no compose form would be a control that 404s, which
+               is the UI-lies class Ian has ruled against repeatedly. */
+            if ($postType === 'loothprint' && lg_standalone_compose_on()) {
+                /* post_id, NOT id — the established key here (see the comments
+                   affordance and the reactions block, which both read post_id).
+                   'id' is absent from post_context and would have produced a
+                   link to id=0, i.e. a compose form for nothing. */
+                $lgpid = (int) ($postContext['post_id'] ?? $postId);
+                if ($lgpid > 0) {
+                    $composeUrl = '/compose/?type=loothprint&id=' . $lgpid;
+                }
+            }
         }
     }
+}
+
+/**
+ * Is the front-end compose route switched on? Reads THE SAME PAIR the WP side does.
+ *
+ * platform/config/frontend-compose.php's own header argues that this feature must
+ * have ONE flag read by both runtimes, because two can disagree in both directions
+ * — and a "Details & files" link pointing at a route that is switched off is
+ * exactly the disagreement it warns about. So this does not keep its own copy of
+ * the answer: tracked config first, then the untracked per-box override, same
+ * order and same rules as lg_fc_enabled().
+ *
+ * The path is __DIR__-relative and that RESOLVES, verified rather than assumed:
+ * /srv/archive-poc is a symlink into the serving checkout, so ../../platform/config
+ * lands on the very files WordPress reads. (The usual trap runs the other way — a
+ * symlinked docroot script whose __DIR__ escapes into the repo. Here that is the
+ * point.)
+ *
+ * Fails CLOSED: anything unreadable or malformed means no link.
+ */
+function lg_standalone_compose_on(): bool
+{
+    static $on = null;
+    if ($on !== null) {
+        return $on;
+    }
+    $on   = false;
+    $base = __DIR__ . '/../../platform/config/';
+    if (is_readable($base . 'frontend-compose.php')) {
+        $raw = @include $base . 'frontend-compose.php';
+        $on  = (is_array($raw) && ($raw['enabled'] ?? false) === true);
+    }
+    if (is_readable($base . 'frontend-compose.local.php')) {
+        $lraw = @include $base . 'frontend-compose.local.php';
+        if (is_array($lraw) && array_key_exists('enabled', $lraw)) {
+            $on = ($lraw['enabled'] === true);
+        }
+    }
+    return $on;
 }
 
 /* ── Comments affordance ─────────────────────────────────────────────────
@@ -190,7 +247,7 @@ $articleHtml = lg_standalone_render_article($layout, $postContext, $viewer, $aut
 $css         = $GLOBALS['LG_STANDALONE_LAST_CSS'] ?? '';
 
 if (!$IS_CLI) header('Content-Type: text/html; charset=utf-8');
-echo lg_standalone_page($postContext, $articleHtml, $css, $authed, $shellTier, $viewerName, $previewAs, $editUrl, $commentsUrl, $commentsCount);
+echo lg_standalone_page($postContext, $articleHtml, $css, $authed, $shellTier, $viewerName, $previewAs, $editUrl, $commentsUrl, $commentsCount, $composeUrl);
 
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -395,7 +452,7 @@ function lg_standalone_front_js_href(): string {
     return $url;
 }
 
-function lg_standalone_page(array $pc, string $articleHtml, string $css, bool $authed, string $tier, string $viewerName, string $previewAs, string $editUrl = '', string $commentsUrl = '', int $commentsCount = 0): string {
+function lg_standalone_page(array $pc, string $articleHtml, string $css, bool $authed, string $tier, string $viewerName, string $previewAs, string $editUrl = '', string $commentsUrl = '', int $commentsCount = 0, string $composeUrl = ''): string {
     // Title: the stored title is ALREADY HTML-entity-encoded (e.g. a curly
     // apostrophe arrives as `&#8217;`). htmlspecialchars() alone re-escapes the
     // `&` → `&amp;#8217;`, which shows as literal garbage in the <title> and
@@ -499,6 +556,30 @@ body { margin: 0; background: #f0eee8; color: #323532;
   background: #323532; color: #f0eee8; border-radius: 999px; font-size: 14px;
   font-weight: 600; text-decoration: none; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
 .lg-standalone-edit:hover { background: #1a1a1a; }
+/* Ian's Option A — the choice the Edit button opens. The wrap is what is fixed;
+   the button inside it keeps the exact geometry it had as a bare link, so the
+   control does not move for anyone who already knows where it is. */
+.lg-standalone-editwrap { position: fixed; right: 18px; bottom: 18px; z-index: 50;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.lg-standalone-editwrap .lg-standalone-edit { position: static; border: 0; cursor: pointer;
+  font-family: inherit; }
+.lg-standalone-editmenu { width: 244px; background: #fff; border: 1px solid #d8d2c4;
+  border-radius: 13px; overflow: hidden; box-shadow: 0 18px 40px -18px rgba(0,0,0,.45); }
+.lg-standalone-editmenu[hidden] { display: none; }
+.lg-editmenu__i { display: flex; gap: 10px; padding: 11px 13px; text-decoration: none;
+  align-items: flex-start; color: #323532; }
+.lg-editmenu__i + .lg-editmenu__i { border-top: 1px solid #e8e3d8; }
+.lg-editmenu__i:hover { background: #f4f2ec; }
+.lg-editmenu__g { font-size: 14px; line-height: 1.15; flex: 0 0 auto; margin-top: 1px; }
+.lg-editmenu__t { display: block; font-size: 12.5px; font-weight: 700; line-height: 1.25; }
+.lg-editmenu__s { display: block; font-size: 11px; line-height: 1.4; color: #6b6f6b; margin-top: 2px; }
+/* DARK FROM BIRTH, per the standing rule — this is a new member-facing surface and
+   it enrolls its own dark colours on the day it is born rather than later. */
+html[data-lguser-theme="dark"] .lg-standalone-editmenu { background: #1a1d20; border-color: #2c312d; }
+html[data-lguser-theme="dark"] .lg-editmenu__i { color: #e5e7e1; }
+html[data-lguser-theme="dark"] .lg-editmenu__i + .lg-editmenu__i { border-top-color: #2c312d; }
+html[data-lguser-theme="dark"] .lg-editmenu__i:hover { background: #232729; }
+html[data-lguser-theme="dark"] .lg-editmenu__s { color: #9aa097; }
 .lg-standalone-comments { position: fixed; left: 18px; bottom: 18px; z-index: 50;
   display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; background: #fff;
   color: #323532; border: 1px solid #d8d2c4; border-radius: 999px; font-size: 14px;
@@ -595,7 +676,31 @@ body { margin: 0; background: #f0eee8; color: #323532;
             : '/profile/edit',
     ]);
 ?>
-<?php if ($editUrl !== ''): ?>
+<?php if ($editUrl !== '' && $composeUrl !== ''): ?>
+<?php /* IAN'S OPTION A, 2026-08-16. One control where the single Edit already sat;
+         tapping it names the two things "edit" can mean here, so nobody has to
+         learn which editor is which. Details & files is the acf_form the compose
+         route already renders (and already permission-checks); Page text is the
+         layout editor this button has always opened, untouched.
+         DETAILS IS LISTED FIRST because it is the one that was unreachable — the
+         print files, the licence and the category could not be changed at all. */ ?>
+<div class="lg-standalone-editwrap" data-lg-editmenu>
+  <div class="lg-standalone-editmenu" id="lg-editmenu" hidden>
+    <a class="lg-editmenu__i" href="<?= htmlspecialchars($composeUrl, ENT_QUOTES, 'UTF-8') ?>">
+      <span class="lg-editmenu__g" aria-hidden="true">&#128194;</span>
+      <span><span class="lg-editmenu__t">Details &amp; files</span>
+      <span class="lg-editmenu__s">Photos, the ZIP, licence, category, links</span></span>
+    </a>
+    <a class="lg-editmenu__i" href="<?= htmlspecialchars($editUrl, ENT_QUOTES, 'UTF-8') ?>">
+      <span class="lg-editmenu__g" aria-hidden="true">&#9998;</span>
+      <span><span class="lg-editmenu__t">Page text</span>
+      <span class="lg-editmenu__s">The write-up on this page</span></span>
+    </a>
+  </div>
+  <button type="button" class="lg-standalone-edit" aria-expanded="false"
+          aria-controls="lg-editmenu" aria-haspopup="true">&#9998; Edit</button>
+</div>
+<?php elseif ($editUrl !== ''): ?>
 <a class="lg-standalone-edit" href="<?= htmlspecialchars($editUrl, ENT_QUOTES, 'UTF-8') ?>" title="Edit this post">&#9998; Edit</a>
 <?php endif; ?>
 <?php
@@ -805,6 +910,36 @@ body { margin: 0; background: #f0eee8; color: #323532;
 <?php else: /* externalize failed (e.g. assets dir not writable) — inline as a fallback */ ?>
 <script>
 <?= (string) @file_get_contents(__DIR__ . '/engine/assets/lg-front.js') ?>
+</script>
+<?php endif; ?>
+<?php if ($editUrl !== '' && $composeUrl !== ''): ?>
+<script>
+/* The Edit choice (Ian's Option A). Deliberately tiny and dependency-free: this
+   sits on a page whose own JS is externalised and deferred, and a menu that only
+   opens once that has loaded would feel broken on a slow phone.
+   Closes on outside click and on Escape, and keeps aria-expanded honest — it is a
+   real menu button, so it answers to a keyboard. */
+(function () {
+  var wrap = document.querySelector('[data-lg-editmenu]');
+  if (!wrap) return;
+  var btn  = wrap.querySelector('.lg-standalone-edit');
+  var menu = wrap.querySelector('.lg-standalone-editmenu');
+  if (!btn || !menu) return;
+  function set(open) {
+    menu.hidden = !open;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  btn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    set(menu.hidden);
+  });
+  document.addEventListener('click', function (e) {
+    if (!wrap.contains(e.target)) set(false);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !menu.hidden) { set(false); btn.focus(); }
+  });
+})();
 </script>
 <?php endif; ?>
 <?php if (!$embed) lg_shared_render_site_footer(); ?>
