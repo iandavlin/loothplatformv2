@@ -35,34 +35,34 @@ def ratio(fg,bg):
 #
 # name, role, bar, (light fg,bg), (dark fg,bg), where measured, accepted?, proposal
 PAIRS = [
- ("Body ink on page","text",4.5,("#1f1d1a","#f6f3ee"),("#e5e7e1","#15171a"),"work board",0,None),
- ("Label on card","text",4.5,("#1f1d1a","#fffdf9"),("#e5e7e1","#1b1e21"),"work board / login cards",0,None),
- ("Soft ink on card","text",4.5,("#4a463f","#fffdf9"),("#cdd0ca","#1b1e21"),"work board",0,None),
- ("Muted on card","text",4.5,("#8a8478","#fffdf9"),("#a8ada6","#1b1e21"),"work board / login note",1,None),
- ("Muted on page","text",4.5,("#8a8478","#f6f3ee"),("#a8ada6","#15171a"),"work board",1,None),
- ("Muted on rail","text",4.5,("#8a8478","#fbf8f2"),("#a8ada6","#202426"),"work board rails",1,None),
- ("Link on card","text",4.5,("#b9450b","#fffdf9"),("#9cb37d","#1b1e21"),"login cards",0,None),
- ("Accent on card","text",4.5,("#b9450b","#fffdf9"),("#e8a07a","#1b1e21"),"work board desk strip",0,None),
- ("Onboard subtext","text",4.5,("#666666","#ffffff"),("#a8ada6","#1b1e21"),"bpnoaccess (gate 53)",0,None),
- ("Accordion label","text",4.5,("#2c3e50","#fbfcf8"),("#e5e7e1","#1b1e21"),"login accordions",0,None),
- ("Chip: done","text",4.5,("#5a7a3a","#e8efe2"),("#b6c79a","#243024"),"work board chips",1,None),
- ("Chip: look","text",4.5,("#b8860b","#f7ecd5"),("#e8c073","#2e2a1f"),"work board chips",1,None),
- ("Chip: unowned","text",4.5,("#4a463f","#eee9df"),("#cdd0ca","#262b30"),"work board chips",0,None),
- ("Chip: decide","text",4.5,("#ffffff","#8a3f1d"),("#ffffff","#8a3f1d"),"work board chips",0,None),
- ("Chip: blocked","text",4.5,("#ffffff","#8a3208"),("#f0937a","#2e211c"),"work board",0,None),
- ("Field border on page","non-text",3.0,("#e6e0d4","#f6f3ee"),("#767c76","#1e2124"),"hub / events / directory",0,("#8a8478",None)),
- ("Card border on page","non-text",3.0,("#e6e0d4","#f6f3ee"),("#767c76","#15171a"),"work board",0,("#8a8478",None)),
- ("Search border on bar","non-text",3.0,("#e6e0d4","#fffdf9"),("#767c76","#15171a"),"hub-tsearch (fixed today)",0,("#8a8478",None)),
+ ("Body ink on page","text",4.5,("#1f1d1a","#f6f3ee"),("#e5e7e1","#15171a"),"work board",0,None,None),
+ ("Label on card","text",4.5,("#1f1d1a","#fffdf9"),("#e5e7e1","#1b1e21"),"work board / login cards",0,None,None),
+ ("Soft ink on card","text",4.5,("#4a463f","#fffdf9"),("#cdd0ca","#1b1e21"),"work board",0,None,None),
+ ("Muted on card","text",4.5,("#8a8478","#fffdf9"),("#a8ada6","#1b1e21"),"work board / login note",1,None,None),
+ ("Muted on page","text",4.5,("#8a8478","#f6f3ee"),("#a8ada6","#15171a"),"work board",1,None,None),
+ ("Muted on rail","text",4.5,("#8a8478","#fbf8f2"),("#a8ada6","#202426"),"work board rails",1,None,None),
+ ("Link on card","text",4.5,("#b9450b","#fffdf9"),("#9cb37d","#1b1e21"),"login cards",0,None,None),
+ ("Accent on card","text",4.5,("#b9450b","#fffdf9"),("#e8a07a","#1b1e21"),"work board desk strip",0,None,None),
+ ("Onboard subtext","text",4.5,("#666666","#ffffff"),("#a8ada6","#1b1e21"),"bpnoaccess (gate 53)",0,None,None),
+ ("Accordion label","text",4.5,("#2c3e50","#fbfcf8"),("#e5e7e1","#1b1e21"),"login accordions",0,None,None),
+ ("Chip: done","text",4.5,("#5a7a3a","#e8efe2"),("#b6c79a","#243024"),"work board chips",1,None,None),
+ ("Chip: look","text",4.5,("#b8860b","#f7ecd5"),("#e8c073","#2e2a1f"),"work board chips",1,None,None),
+ ("Chip: unowned","text",4.5,("#4a463f","#eee9df"),("#cdd0ca","#262b30"),"work board chips",0,None,None),
+ ("Chip: decide","text",4.5,("#ffffff","#8a3f1d"),("#ffffff","#8a3f1d"),"work board chips",0,None,None),
+ ("Chip: blocked","text",4.5,("#ffffff","#8a3208"),("#f0937a","#2e211c"),"work board",0,None,None),
+ ("Field border on page","non-text",3.0,("#8a8478","#f6f3ee"),("#767c76","#1e2124"),"hub / events / directory",0,None,"#e6e0d4"),
+ ("Card border on page","non-text",3.0,("#8a8478","#f6f3ee"),("#767c76","#15171a"),"work board",0,None,"#e6e0d4"),
+ ("Search border on bar","non-text",3.0,("#8a8478","#fffdf9"),("#767c76","#15171a"),"hub-tsearch (fixed today)",0,None,"#e6e0d4"),
 ]
 
 rows=[]
 fails=0
-for name,role,bar,(lf,lb),(df,db),where,accepted,prop in PAIRS:
+for name,role,bar,(lf,lb),(df,db),where,accepted,prop,was in PAIRS:
     lr, dr = ratio(lf,lb), ratio(df,db)
     lok, dok = lr>=bar, dr>=bar
     if not lok and not accepted: fails+=1
     if not dok and not accepted: fails+=1
-    def cell(fg,bg,r,ok,newfg=None,newbg=None):
+    def cell(fg,bg,r,ok,newfg=None,newbg=None,was=None):
         cls = "ok" if ok else ("acc" if accepted else "bad")
         mark = "" if ok else (" — accepted" if accepted else " ✕")
         out = (f'<td class="sw"><div class="chip" style="background:{bg};color:{fg}">Aa</div>'
@@ -74,9 +74,14 @@ for name,role,bar,(lf,lb),(df,db),where,accepted,prop in PAIRS:
                     '<div class="hex">%s</div><div class="r %s">%s:1</div>'
                     '<div class="lbl">proposed</div></div>' %
                     (newbg or bg, newfg, newfg, "ok" if nr>=bar else "bad", nr))
+        if was:
+            wr = ratio(was, bg)
+            out += ('<div class="prop"><div class="chip" style="background:%s;color:%s">Aa</div>'
+                    '<div class="hex">%s</div><div class="r bad">%s:1</div>'
+                    '<div class="lbl" style="color:#8a3208">was</div></div>' % (bg, was, was, wr))
         return out + '</td>' 
     rows.append(f'<tr><th>{name}<em>{where}</em></th><td class="bar">{bar}:1<br><span>{role}</span></td>'
-                + cell(lf,lb,lr,lok, (prop[0] if prop else None)) + cell(df,db,dr,dok) + '</tr>')
+                + cell(lf,lb,lr,lok, (prop[0] if prop else None), was=was) + cell(df,db,dr,dok) + '</tr>')
 
 html = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
