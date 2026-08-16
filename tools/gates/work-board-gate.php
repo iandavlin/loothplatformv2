@@ -652,8 +652,125 @@ is_((bool) preg_match('/setInterval\(\s*poll/', $pageSrc),
     'the chat polls for keeper\'s replies rather than waiting for a refresh');
 is_((bool) preg_match('/if \(polling \|\| document\.hidden\)/', $pageSrc),
     '...and stops while the tab is hidden, so it cannot become background load');
-is_((bool) preg_match('/messages\.length !== lastSeen/', $pageSrc),
+is_((bool) preg_match('/chat\.length !== lastSeen/', $pageSrc),
     '...repainting only on CHANGE, so it cannot fight his cursor mid-sentence');
+
+/**
+ * THE WHOLE BOARD REFRESHES ON THE SAME TICK — Ian's ruling, 2026-08-16:
+ * "It doesn't seem like that keeper chat on there is live."
+ *
+ * ONE request per tick, not four: on a two-core box four polls every eight
+ * seconds is four times the work for the same answer. And the live update must
+ * be the SAME HTML as the first paint, or the empty and absent states — the ones
+ * carrying the honesty — are the first thing to drift.
+ */
+is_(str_contains($pageSrc, "action: 'board_state'"),
+    'the tick refreshes the whole board, not only the chat');
+is_(substr_count($pageSrc, 'setInterval(poll') === 1,
+    '...on ONE timer, so the regions cannot drift out of step with each other');
+is_(str_contains($pageSrc, 'lgb_render_desk_items') && str_contains($pageSrc, 'lgb_render_questions'),
+    '...serving the SAME renderers the first paint uses, so live and initial cannot drift');
+is_(str_contains($pageSrc, 'el.contains(document.activeElement)'),
+    '...and never repainting a region he is typing in');
+
+// The ranked accordions must NOT be in the refresh: they are what he DRAGS.
+is_(!preg_match("/swapIfChanged\('lgb-(proj|rank)/", $pageSrc),
+    'the ranked list is deliberately NOT live-repainted — it would fight the drag');
+
+/**
+ * IMAGE PASTE (parity phase 1). Ian's screenshots are the fleet's best bug
+ * reports and every one currently arrives by a side channel.
+ *
+ * The properties gated here are the ones that would hurt if wrong: where the
+ * bytes go, what is trusted about them, and what a missing file looks like.
+ */
+is_(str_contains($pageSrc, "action: 'media_upload'"), 'an image can be pasted into the chat');
+is_(str_contains($pageSrc, "LGB_MEDIA_DIR    = '/srv/board-media'"),
+    '...stored OUTSIDE the WP media library, where a board screenshot cannot become member-reachable');
+is_(!preg_match('/wp_insert_attachment|wp_upload_bits|media_handle/', $pageSrc),
+    '...and never through the WP media library, which would give it a public URL');
+
+// A CLIENT-SUPPLIED FILENAME IS A PATH. The name is derived server-side.
+is_((bool) preg_match("/gmdate\('Ymd-His'\) \. '-' \. bin2hex\(random_bytes/", $pageSrc),
+    'the stored filename is DERIVED, never taken from the client');
+is_(str_contains($pageSrc, 'FILEINFO_MIME_TYPE'),
+    'the type is SNIFFED from the bytes — an extension is a claim, the magic bytes are the file');
+
+// THE CAPS. This box is at 92% disk; a paste feature without a ceiling is a slow
+// outage, and the budget must be a decision made now rather than discovered.
+// Asserted on the COMPARISONS, not the constant names. The first version
+// checked that the names appeared — so deleting the budget's DEFINITION left
+// every usage in place, the string still present, and the gate still green on a
+// file that would fatal at runtime. A name is not an enforcement.
+is_((bool) preg_match('/strlen\(\$bin\) > LGB_MEDIA_MAX/', $pageSrc),
+    'the per-image cap is actually COMPARED against, not merely named');
+is_((bool) preg_match('/\$used \+ strlen\(\$bin\) > LGB_MEDIA_BUDGET/', $pageSrc),
+    '...and so is the total budget, measured against what is already stored');
+is_((bool) preg_match("/const LGB_MEDIA_BUDGET\s*=\s*\d+/", $pageSrc),
+    '...with the budget actually defined, so the check cannot fatal instead of refusing');
+is_(str_contains($pageSrc, 'nothing was deleted to make room'),
+    '...and a full store REFUSES rather than quietly evicting something of his');
+
+is_(str_contains($pageSrc, 'image no longer stored'),
+    'a deleted image reads as gone — never a broken icon, never a silent gap');
+
+/**
+ * PASTE WORKS IN EVERY BOX THAT TAKES A MESSAGE, not only the chat. The spec
+ * said "threads/chat" and the first cut wired the chat alone — the wrong half,
+ * because an item's thread is where a screenshot belongs PERMANENTLY, beside
+ * the decision it caused, while the chat scrolls away.
+ */
+is_(substr_count($pageSrc, 'function bindPaste(') === 1,
+    'one paste binder, so every box behaves the same way');
+is_(substr_count($pageSrc, 'bindPaste(') >= 4,
+    '...bound to the chat, the item threads and the note box, not just one of them');
+
+/**
+ * AND THE HELPERS THEY SHARE MUST BE IN THE SAME SCOPE. `withMedia` began life
+ * inside the chat's closure while `fillWrite` sits outside it, so an item modal
+ * calling it would have thrown a ReferenceError the moment it opened — a break
+ * a syntax check cannot see, because the syntax is fine. Asserted by brace
+ * depth: both must be at the top level of the page's IIFE.
+ */
+$scriptStart = strrpos($pageSrc, '<script>');
+$depthOf = static function (string $needle) use ($pageSrc, $scriptStart): int {
+    $i = strpos($pageSrc, $needle, $scriptStart);
+    if ($i === false) { return -1; }
+    $seg = substr($pageSrc, $scriptStart, $i - $scriptStart);
+    return substr_count($seg, '{') - substr_count($seg, '}');
+};
+is_($depthOf('function withMedia(') === $depthOf('function fillWrite(')
+    && $depthOf('function withMedia(') > 0,
+    'withMedia and fillWrite share a scope — an item modal can actually call it');
+
+/**
+ * THE FIRST PAINT AND THE REPAINT MUST AGREE ABOUT IMAGES.
+ *
+ * The first paint is PHP; every repaint is JavaScript. Without a server-side
+ * equivalent, a pasted screenshot rendered as a RAW PATH until the first poll
+ * eight seconds later and then silently became a picture — the same
+ * two-renderers drift the region renderers were extracted to prevent, found only
+ * by rendering every surface together instead of one at a time.
+ */
+$mediaFx = $tmp . '-media';
+@mkdir($mediaFx . '/board-chat', 0755, true);
+copy($BACK, $mediaFx . '/BACKLOG.md');
+file_put_contents($mediaFx . '/board-chat/keeper.md',
+    "# chat\n\n### 2026-08-16 19:00 — ian-via-board\n\n> look\n> /board-media/20260816-1-abc.png\n");
+$mediaHtml = (string) shell_exec('LGB_MAIN_COPY=/nonexistent/m.md LGB_THREADS=/nonexistent/t.json LGB_BACKLOG='
+    . escapeshellarg($mediaFx . '/BACKLOG.md') . ' ' . PHP_BINARY . ' ' . escapeshellarg($PAGE) . ' 2>/dev/null');
+is_((bool) preg_match('#<img class="msg__img" src="/board-media/20260816-1-abc\.png"#', $mediaHtml),
+    'the SERVER paint renders a pasted image, not a raw path he has to wait out');
+is_(str_contains($mediaHtml, 'image no longer stored'),
+    '...carrying the same gone-file wording the client uses');
+
+// BOTH server paints, not just the chat. There are two call sites — the chat and
+// the thread box — and a mutation aimed at "the server paint" hit only one of
+// them while this gate stayed green, which is how half a fix ships.
+$mediaSrc = (string) file_get_contents($PAGE);
+is_(substr_count($mediaSrc, 'lgb_with_media($m[\'text\'])') === 2,
+    'BOTH server paints use it — the chat AND the item/lane threads');
+sh2('rm -rf ' . escapeshellarg($mediaFx));
 is_(!preg_match('/chat_send[\s\S]{0,900}?innerHTML\s*\+=/', $pageSrc),
     '...and never appends a message it made up from the typed text');
 is_(str_contains($openBox, 'Something else'),

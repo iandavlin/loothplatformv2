@@ -403,6 +403,30 @@ const LGB_DISK_RED_PCT  = 90;
 
 function lgb_h(string $s): string { return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8'); }
 
+/**
+ * A message's text, with pasted images shown as pictures.
+ *
+ * THE SERVER SIDE OF `withMedia`, and it exists because the two were drifting:
+ * the first paint is PHP and every repaint is JavaScript, so a pasted screenshot
+ * rendered as a raw path until the first poll eight seconds later and then
+ * silently became a picture. Same class as the empty-state drift the region
+ * renderers were extracted to prevent — found by rendering every surface
+ * together instead of one at a time.
+ *
+ * Escaped FIRST, then only anchored media paths become images, so a message can
+ * never inject markup by looking like one. A file that has gone renders as words
+ * rather than a broken-image icon, exactly as the client does.
+ */
+function lgb_with_media(string $text): string
+{
+    return (string) preg_replace(
+        '#/board-media/[A-Za-z0-9._-]+\.(?:png|jpe?g|gif|webp)#',
+        '<a href="$0" target="_blank" rel="noopener"><img class="msg__img" src="$0" alt="pasted image"'
+        . ' onerror="this.replaceWith(Object.assign(document.createElement(\'em\'),{textContent:\'image no longer stored\'}))"></a>',
+        lgb_h($text)
+    );
+}
+
 /* ---------------------------------------------------------------------- *
  * PHASE 2 — THE WRITE LAYER
  *
@@ -433,6 +457,15 @@ function lgb_h(string $s): string { return htmlspecialchars($s, ENT_QUOTES | ENT
 $LGB_SOCKET = getenv('LGB_SOCKET') ?: '/run/board-committer.sock';
 
 /**
+ * Defined HERE, above the write layer, because the live-state action reads it.
+ * It used to sit with the thread readers further down — after the POST branch
+ * that needs it — so board_state fataled on an undefined variable. Third time
+ * this session a thing has been used above where it was defined; PHP hoists
+ * FUNCTIONS, not variables, and a POST branch runs before most of the file.
+ */
+$LGB_THREADS = getenv('LGB_THREADS') ?: '/home/ubuntu/.board-threads.json';
+
+/**
  * THE ACTOR IS DERIVED HERE, NEVER SENT BY THE CLIENT.
  *
  * Fence 2 refuses a write that does not name its actor, and an actor the page
@@ -441,6 +474,16 @@ $LGB_SOCKET = getenv('LGB_SOCKET') ?: '/run/board-committer.sock';
  * actor is a server-side constant and a forged one is not possible.
  */
 const LGB_ACTOR = 'ian-via-board';
+
+/**
+ * The media store: outside the WP library, outside git, and CAPPED at both ends.
+ * 4MB is a generous screenshot; 200MB is roughly fifty of them, which is a
+ * budget this box can afford at 92% full and a number somebody can revisit
+ * deliberately rather than discover during an outage.
+ */
+const LGB_MEDIA_DIR    = '/srv/board-media';
+const LGB_MEDIA_MAX    = 4194304;      // 4MB per image
+const LGB_MEDIA_BUDGET = 209715200;    // 200MB total
 
 /** Talk to the committer. Returns its own JSON answer, refusals included. */
 function lgb_commit(array $intent, string $sock): array
@@ -640,6 +683,83 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
          * keeper's rule, satisfied without making a chat that swallows what he
          * just typed until a reload.
          */
+        /**
+         * THE BOARD'S LIVE DATA, one call per tick.
+         *
+         * Ian's ruling: the whole board refreshes on the same tick, not just the
+         * chat. It returns the SAME HTML the page paints — see the region
+         * renderers — so a live update cannot drift from a first paint. The
+         * regions it does NOT return are deliberate: the ranked project
+         * accordions are what he DRAGS, and repainting those under his hand
+         * would fight the one interaction the board exists for.
+         */
+        case 'board_state':
+            $reply([
+                'ok'        => true,
+                'chat'      => lgb_chat($BACKLOG),
+                'deskHtml'  => lgb_render_desk_items((function () use ($LGB_THREADS) {
+                    if (!is_readable($LGB_THREADS)) { return []; }
+                    $r = json_decode((string) file_get_contents($LGB_THREADS), true);
+                    return is_array($r) && is_array($r['desk'] ?? null) ? $r['desk'] : [];
+                })()),
+                'questionsHtml' => lgb_render_questions(lgb_questions($BACKLOG)),
+                'branches'  => lgb_branch_states($LGB_THREADS),
+            ]);
+            break;
+
+        /**
+         * PASTE AN IMAGE. Ian's screenshots are the fleet's best bug reports,
+         * and today every one of them arrives by a side channel and has to be
+         * described back into a lane. This puts the picture where the decision
+         * it caused lives.
+         *
+         * NEVER THE WP MEDIA LIBRARY, permanently and for a concrete reason: a
+         * WP upload gets an attachment post with its own public URL and shows up
+         * in media search, so a board screenshot of an admin screen, a member's
+         * data or an unreleased feature would become reachable from a MEMBER
+         * surface. It goes to a directory outside the library AND outside git —
+         * binaries bloat a checkout forever.
+         *
+         * THE CAPS ARE NOT DECORATION. This box is at 92% disk with 2.4GB free,
+         * past the 90% line the board's own capacity strip draws in red. A paste
+         * feature with no ceiling on a nearly-full disk is a slow outage, so the
+         * per-file cap AND a total budget are both enforced here, at build time,
+         * rather than discovered later.
+         */
+        case 'media_upload':
+            $b64 = (string) ($req['data'] ?? '');
+            if ($b64 === '') { $reply(['ok' => false, 'error' => 'no image data'], 400); }
+            $bin = base64_decode($b64, true);
+            if ($bin === false) { $reply(['ok' => false, 'error' => 'that is not an image'], 400); }
+            if (strlen($bin) > LGB_MEDIA_MAX) {
+                $reply(['ok' => false, 'error' => 'that image is larger than ' . (LGB_MEDIA_MAX >> 20) . 'MB'], 400);
+            }
+
+            // TYPE IS SNIFFED FROM THE BYTES, never taken from the client. An
+            // extension is a claim; the magic bytes are the file.
+            $fi   = new finfo(FILEINFO_MIME_TYPE);
+            $mime = (string) $fi->buffer($bin);
+            $ext  = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/gif' => 'gif', 'image/webp' => 'webp'][$mime] ?? null;
+            if ($ext === null) { $reply(['ok' => false, 'error' => 'only images can be pasted here (' . $mime . ')'], 400);}
+
+            if (!is_dir(LGB_MEDIA_DIR)) { $reply(['ok' => false, 'error' => 'the media store is not set up'], 500); }
+            $used = 0;
+            foreach ((array) glob(LGB_MEDIA_DIR . '/*') as $f) { $used += (int) @filesize((string) $f); }
+            if ($used + strlen($bin) > LGB_MEDIA_BUDGET) {
+                $reply(['ok' => false, 'error' => 'the board media store is full ('
+                    . round($used / 1048576) . 'MB of ' . (LGB_MEDIA_BUDGET >> 20) . 'MB) — nothing was deleted to make room'], 507);
+            }
+
+            // The NAME is derived here and never taken from the client: a
+            // client-supplied filename is a path, and a path is a way out of a
+            // directory.
+            $name = gmdate('Ymd-His') . '-' . bin2hex(random_bytes(4)) . '.' . $ext;
+            if (@file_put_contents(LGB_MEDIA_DIR . '/' . $name, $bin) === false) {
+                $reply(['ok' => false, 'error' => 'could not store the image'], 500);
+            }
+            $reply(['ok' => true, 'path' => '/board-media/' . $name, 'ref' => $name]);
+            break;
+
         case 'chat_read':
             $reply(['ok' => true, 'messages' => lgb_chat($BACKLOG)]);
             break;
@@ -779,7 +899,6 @@ function lgb_item_extras(string $backlogPath, string $id): array
  * snapshot, and where there is no snapshot it says so rather than implying a
  * quiet lane.
  */
-$LGB_THREADS = getenv('LGB_THREADS') ?: '/home/ubuntu/.board-threads.json';
 
 /** @return array{sent:array<int,array{when:string,who:string,text:string}>} */
 function lgb_lane_sent(string $backlogPath, string $lane): array
@@ -870,7 +989,7 @@ function lgb_thread_box(string $lane, bool $ok, array $sent, array $rep, string 
         <?php endif; ?>
         <div class="thrbox__log">
           <?php foreach ($sent as $m): ?>
-            <div class="msg msg--out"><span class="msg__w"><?= lgb_h($m['when']) ?></span><?= lgb_h($m['text']) ?></div>
+            <div class="msg msg--out"><span class="msg__w"><?= lgb_h($m['when']) ?></span><?= lgb_with_media($m['text']) ?></div>
           <?php endforeach; ?>
           <?php foreach ($rep['replies'] as $m): ?>
             <div class="msg msg--in"><span class="msg__w"><?= lgb_h((string) ($m['when'] ?? '')) ?></span><?= lgb_h((string) ($m['text'] ?? '')) ?></div>
@@ -1028,6 +1147,50 @@ function lgb_branch_states(string $path): array
     if (!is_readable($path)) { return []; }
     $raw = json_decode((string) file_get_contents($path), true);
     return is_array($raw) && is_array($raw['branches'] ?? null) ? $raw['branches'] : [];
+}
+
+/**
+ * REGION RENDERERS — used by the first paint AND by the live tick.
+ *
+ * The board refreshes its data every few seconds now (Ian: "It doesn't seem like
+ * that keeper chat on there is live"). The tempting shape is a JSON endpoint plus
+ * a JavaScript rebuild — which is TWO renderers for one region, and the first
+ * thing to drift would be the empty and absent states, which are the ones that
+ * carry the honesty. So the live tick asks the server for the SAME HTML this
+ * page paints, produced by these functions.
+ */
+function lgb_render_desk_items(array $items): string
+{
+    $out = '';
+    foreach (array_reverse($items) as $d) {
+        $out .= '<div class="desk__i"><span class="desk__b"></span><span class="desk__x">'
+              . '<b>' . lgb_h((string) ($d['who'] ?? '?')) . '</b> '
+              . '<span>' . lgb_linkify((string) ($d['text'] ?? '')) . '</span> '
+              . '<span class="q__w">' . lgb_h((string) ($d['when'] ?? '')) . '</span>'
+              . '</span></div>';
+    }
+    return $out;
+}
+
+function lgb_render_questions(array $qq): string
+{
+    $out = '';
+    foreach ($qq['open'] as $q) {
+        $out .= '<div class="q q--open"><span class="q__tag">open</span>'
+              . '<div class="q__t">' . lgb_h($q['text']) . '</div>'
+              . '<div class="q__w">' . lgb_h($q['when'] . ' · ' . $q['who']) . '</div></div>';
+    }
+    if ($qq['open'] === []) { $out .= '<div class="thrbox__no">Nothing open.</div>'; }
+    if ($qq['answered'] !== []) {
+        $out .= '<details class="qdrawer"><summary>answered (' . count($qq['answered']) . ')</summary>';
+        foreach ($qq['answered'] as $q) {
+            $out .= '<div class="q"><div class="q__t">' . lgb_h($q['text']) . '</div>'
+                  . '<div class="q__a">' . lgb_h($q['answer']['text']) . '</div>'
+                  . '<div class="q__w">' . lgb_h($q['answer']['when'] . ' · ' . $q['answer']['who']) . '</div></div>';
+        }
+        $out .= '</details>';
+    }
+    return $out;
 }
 
 $backlog  = lgb_parse_backlog($BACKLOG);
@@ -1403,7 +1566,7 @@ html[data-lguser-theme="dark"]{--line:#767c76}
         <div class="thrbox" data-chat="1">
           <div class="thrbox__log" id="lgb-chatlog">
             <?php foreach ($chat as $m): ?>
-              <div class="msg <?= $m['mine'] ? 'msg--out' : 'msg--in' ?>"><span class="msg__w"><?= lgb_h($m['when'] . ' · ' . $m['who']) ?></span><?= lgb_h($m['text']) ?></div>
+              <div class="msg <?= $m['mine'] ? 'msg--out' : 'msg--in' ?>"><span class="msg__w"><?= lgb_h($m['when'] . ' · ' . $m['who']) ?></span><?= lgb_with_media($m['text']) ?></div>
             <?php endforeach; ?>
             <?php if ($chat === []): ?><div class="thrbox__no">Nothing yet.</div><?php endif; ?>
           </div>
@@ -1427,26 +1590,7 @@ html[data-lguser-theme="dark"]{--line:#767c76}
         <textarea class="thrbox__in" id="lgb-qin" rows="2" placeholder="Ask something before it slips…"></textarea>
         <button class="thrbox__go" id="lgb-qgo">Ask</button>
         <div class="thrbox__say" id="lgb-qsay" hidden></div>
-        <?php foreach ($qq['open'] as $q): ?>
-          <div class="q q--open">
-            <span class="q__tag">open</span>
-            <div class="q__t"><?= lgb_h($q['text']) ?></div>
-            <div class="q__w"><?= lgb_h($q['when'] . ' · ' . $q['who']) ?></div>
-          </div>
-        <?php endforeach; ?>
-        <?php if ($qq['open'] === []): ?><div class="thrbox__no">Nothing open.</div><?php endif; ?>
-        <?php if ($qq['answered'] !== []): ?>
-          <details class="qdrawer">
-            <summary>answered (<?= count($qq['answered']) ?>)</summary>
-            <?php foreach ($qq['answered'] as $q): ?>
-              <div class="q">
-                <div class="q__t"><?= lgb_h($q['text']) ?></div>
-                <div class="q__a"><?= lgb_h($q['answer']['text']) ?></div>
-                <div class="q__w"><?= lgb_h($q['answer']['when'] . ' · ' . $q['answer']['who']) ?></div>
-              </div>
-            <?php endforeach; ?>
-          </details>
-        <?php endif; ?>
+        <div id="lgb-qlist"><?= lgb_render_questions($qq) ?></div>
       </div>
     </div>
 
@@ -1543,16 +1687,7 @@ html[data-lguser-theme="dark"]{--line:#767c76}
             $snapRaw = json_decode((string) file_get_contents($LGB_THREADS), true);
             if (is_array($snapRaw) && is_array($snapRaw['desk'] ?? null)) { $deskAuto = $snapRaw['desk']; }
         }
-        foreach (array_reverse($deskAuto) as $d): ?>
-          <div class="desk__i">
-            <span class="desk__b"></span>
-            <span class="desk__x">
-              <b><?= lgb_h((string) ($d['who'] ?? '?')) ?></b>
-              <span><?= lgb_linkify((string) ($d['text'] ?? '')) ?></span>
-              <span class="q__w"><?= lgb_h((string) ($d['when'] ?? '')) ?></span>
-            </span>
-          </div>
-        <?php endforeach; ?>
+        echo '<div id="lgb-desklist">' . lgb_render_desk_items($deskAuto) . '</div>'; ?>
 
         <?php
         /**
@@ -1938,6 +2073,7 @@ html[data-lguser-theme="dark"]{--line:#767c76}
     .br__s--open{background:rgba(74,158,255,.20)}
     .br__s--gone{background:rgba(200,70,70,.18)}
     .br__s--unknown{background:rgba(128,128,128,.20)}
+    .msg__img{max-width:100%;max-height:240px;border-radius:6px;display:block;margin:4px 0}
   </style>
   <script type="application/json" id="lgb-branchstate"><?php
     echo json_encode(lgb_branch_states($LGB_THREADS), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
@@ -2108,7 +2244,9 @@ html[data-lguser-theme="dark"]{--line:#767c76}
       say.hidden = true;
       var thread = document.getElementById('lgb-thread'),
           cnt    = document.getElementById('lgb-threadc');
-      thread.textContent = d.thread || '';
+      // The item's thread renders its pictures too — a path is not what he
+      // pasted. Escaped first, then only known media paths become images.
+      thread.innerHTML = withMedia(d.thread || '');
       thread.style.display = d.thread ? '' : 'none';
       cnt.textContent = d.thread ? '' : '— nothing yet';
       document.getElementById('lgb-note').value = '';
@@ -2136,6 +2274,7 @@ html[data-lguser-theme="dark"]{--line:#767c76}
 
     function busy(btn, on) { btn.disabled = on; btn.textContent = on ? 'Saving…' : btn.dataset.was; }
 
+    bindPaste(document.getElementById('lgb-note'), document.getElementById('lgb-say'));
     document.getElementById('lgb-notesend').dataset.was = 'Add note';
     document.getElementById('lgb-notesend').addEventListener('click', function () {
       var t = document.getElementById('lgb-note').value.trim();
@@ -2256,6 +2395,7 @@ html[data-lguser-theme="dark"]{--line:#767c76}
       var btn = box.querySelector('.thrbox__go'),
           ta  = box.querySelector('.thrbox__in'),
           out = box.querySelector('.thrbox__say');
+      bindPaste(ta, out);                      // every thread takes a screenshot
       if (!btn || !ta) { return; }
       btn.addEventListener('click', function (e) {
         e.preventDefault(); e.stopPropagation();     // must not toggle the row
@@ -2411,6 +2551,72 @@ html[data-lguser-theme="dark"]{--line:#767c76}
      */
     function esc2(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 
+
+    /**
+     * A /board-media/ path in a message renders as the picture. Ian's
+     * screenshots are the fleet's best bug reports and today every one of them
+     * arrives by a side channel and has to be described back into a lane.
+     *
+     * THE TEXT IS ESCAPED FIRST and only then are known media paths turned
+     * into images — the pattern is anchored and narrow, so a message can
+     * never inject markup by looking like one.
+     *
+     * A FILE THAT IS GONE SAYS SO. The spec is explicit: a deleted image must
+     * read as "no longer stored", never as a broken image icon and never as a
+     * silent gap, because a gap looks like he never sent it.
+     */
+    function withMedia(text) {
+      return esc2(text).replace(/\/board-media\/[A-Za-z0-9._-]+\.(png|jpg|jpeg|gif|webp)/g, function (p) {
+        return '<a href="' + p + '" target="_blank" rel="noopener">'
+             + '<img class="msg__img" src="' + p + '" alt="pasted image" '
+             + 'onerror="this.replaceWith(Object.assign(document.createElement(\'em\'),'
+             + '{textContent:\'image no longer stored\'}))"></a>';
+      });
+    }
+
+    /**
+     * PASTE AN IMAGE INTO ANY BOX THAT TAKES A MESSAGE — the chat, an item's
+     * thread, a lane thread. The spec said "threads/chat" and the first cut
+     * wired only the chat, which would have been the wrong half: the per-item
+     * thread is where a screenshot belongs PERMANENTLY, next to the decision it
+     * caused, while the chat scrolls away.
+     *
+     * What lands in the box is the PATH, not the bytes — cheap to render, and
+     * keeper opens the original from disk. Nothing is stored in any thread until
+     * he chooses to send.
+     */
+    function bindPaste(ta, out) {
+      if (!ta) { return; }
+      ta.addEventListener('paste', function (e) {
+        var items = (e.clipboardData && e.clipboardData.items) || [];
+        for (var i = 0; i < items.length; i++) {
+          if (items[i].type.indexOf('image/') !== 0) { continue; }
+          var file = items[i].getAsFile();
+          if (!file) { continue; }
+          e.preventDefault();
+          var say = function (cls, txt) {
+            if (!out) { return; }
+            out.hidden = false; out.className = 'thrbox__say' + (cls ? ' ' + cls : ''); out.textContent = txt;
+          };
+          say('', 'Uploading image…');
+          var fr = new FileReader();
+          fr.onload = function () {
+            var b64 = String(fr.result).split(',')[1] || '';
+            post({ action: 'media_upload', data: b64 }).then(function (res) {
+              if (res && res.ok) {
+                ta.value = (ta.value ? ta.value + '\n' : '') + res.path;
+                say('w2__say--ok', 'Image attached — send to post it.');
+              } else {
+                say('w2__say--no', (res && res.error) || 'the image could not be attached');
+              }
+            });
+          };
+          fr.readAsDataURL(file);
+          return;
+        }
+      });
+    }
+
     (function () {
       var log = document.getElementById('lgb-chatlog'),
           ta  = document.getElementById('lgb-chatin'),
@@ -2419,15 +2625,24 @@ html[data-lguser-theme="dark"]{--line:#767c76}
       if (!btn) { return; }
       btn.dataset.was = 'Send';
 
+
       function paint(msgs) {
         if (!msgs || !msgs.length) { return; }
         log.innerHTML = msgs.map(function (m) {
           return '<div class="msg ' + (m.mine ? 'msg--out' : 'msg--in') + '">'
                + '<span class="msg__w">' + esc2(m.when + ' · ' + m.who) + '</span>'
-               + esc2(m.text) + '</div>';
+               + withMedia(m.text) + '</div>';
         }).join('');
         log.scrollTop = log.scrollHeight;
       }
+
+      /**
+       * PASTE AN IMAGE STRAIGHT INTO THE BOX, as VS Code's chat does. The upload
+       * happens on paste; what lands in the message is the PATH, not the bytes —
+       * which keeps the thread cheap to render and lets keeper open the original
+       * from disk.
+       */
+      bindPaste(ta, out);
 
       /**
        * NEAR-LIVE: poll for keeper's replies. Ian used this chat for the first
@@ -2442,15 +2657,41 @@ html[data-lguser-theme="dark"]{--line:#767c76}
        * the kind of thing that shows up later as unexplained load.
        */
       var lastSeen = log ? log.children.length : 0, polling = false;
+
+      /**
+       * ONE TICK REFRESHES THE WHOLE BOARD'S DATA, not just the chat — Ian's
+       * ruling. One request per tick, not four: on a two-core box, four polls
+       * every eight seconds is four times the work for the same answer.
+       *
+       * WHAT IT DELIBERATELY DOES NOT TOUCH: the ranked project accordions. They
+       * are what he DRAGS, and repainting them under his hand would fight the
+       * one interaction this board exists for. A rank change still needs a
+       * reload, and that is the right trade.
+       *
+       * It also never repaints a region he is TYPING IN, and only repaints at
+       * all when the HTML actually differs — a repaint that changes nothing is
+       * still a repaint that loses a text selection.
+       */
+      function swapIfChanged(id, html) {
+        var el = document.getElementById(id);
+        if (!el || typeof html !== 'string') { return; }
+        if (el.contains(document.activeElement)) { return; }   // he is in this region
+        if (el.innerHTML === html) { return; }                 // nothing moved
+        el.innerHTML = html;
+      }
+
       function poll() {
         if (polling || document.hidden) { return; }
         polling = true;
-        post({ action: 'chat_read' }).then(function (r) {
+        post({ action: 'board_state' }).then(function (r) {
           polling = false;
-          if (!r || !r.ok || !r.messages) { return; }
-          // Repaint only on CHANGE — repainting every few seconds would fight
-          // his cursor if he were mid-sentence in the box below.
-          if (r.messages.length !== lastSeen) { lastSeen = r.messages.length; paint(r.messages); }
+          if (!r || !r.ok) { return; }
+          if (r.chat && r.chat.length !== lastSeen) { lastSeen = r.chat.length; paint(r.chat); }
+          swapIfChanged('lgb-desklist', r.deskHtml);
+          swapIfChanged('lgb-qlist',    r.questionsHtml);
+          // Branch badges are read from this object when a modal opens, so a
+          // card opened after a tick shows the fresh state without a reload.
+          if (r.branches && typeof r.branches === 'object') { BRSTATE = r.branches; }
         });
       }
       setInterval(poll, 8000);
