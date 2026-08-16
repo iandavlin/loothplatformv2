@@ -573,6 +573,38 @@ is_(str_contains($icr, "\$caps['stripe_testgroup']"),
 
 /* ---------------------------------------------------------------------- */
 /* ---------------------------------------------------------------------- */
+section("[11] SINGLE TIER IS DERIVED FROM THE CATALOGUE, NOT PREVIEWED");
+
+/**
+ * Ian, 2026-08-16: *"It looks like there is a single tier preview. We shouldn't
+ * need that anymore right? I should be able to have 1 tier just by registering
+ * one tier."*
+ *
+ * The join page used to carry a `?preview=single` toggle that rendered a MOCK
+ * product with invented prices — a design mockup living inside the shipping
+ * page, which meant the only way to see the single-tier layout was to look at
+ * something that was not the catalogue. The layout now follows the registered
+ * tier COUNT.
+ */
+$joinSrc = (string) @file_get_contents($REPO . '/membership-pages/web/lgjoin.php');
+if ($joinSrc === '') {
+    bad('cannot read membership-pages/web/lgjoin.php');
+} else {
+    is_(!str_contains($joinSrc, "\$_GET['preview']"),
+        'the manual preview toggle is gone — the layout is not a mode you switch');
+    is_(!str_contains($joinSrc, 'renderSingleTierPreview'),
+        '...and so is the mock renderer it called');
+    is_(!preg_match('/mock_month|mockProd|mockPrices/', $joinSrc),
+        '...leaving no invented prices in a page that sells things');
+    is_(str_contains($joinSrc, 'products.length === 1'),
+        'the single-tier layout is DERIVED from the registered tier count');
+
+    // The derivation must feed the REAL card builder, or "one tier" would still
+    // render something other than the tier that is registered.
+    is_((bool) preg_match('/buildTierCard\(prod, sorted, isPopular, singleTier\)/', $joinSrc),
+        '...and renders the REAL product, not a stand-in');
+}
+
 section("[10] THE REAL PAGE, AS A REAL MEMBER — driven over HTTP");
 
 /**
