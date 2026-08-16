@@ -954,6 +954,76 @@ header('X-Robots-Tag: noindex, nofollow');
   .foot{margin-top:26px;padding-top:14px;border-top:1px solid var(--line);font-size:.76rem;color:var(--ink-mute);line-height:1.6}
   .foot b{color:var(--ink-soft)}
   .err{background:#fdf3f0;border:1px solid #eccfc4;border-radius:9px;padding:12px 14px;color:#7a3a22;margin:0 0 14px}
+
+/* ===== DARK PALETTE — work board (dark-anon-sweep, Ian 2026-08-16) ===== */
+html[data-lguser-theme="dark"]{
+  --bg:#15171a; --panel:#1b1e21; --ink:#e5e7e1; --ink-soft:#cdd0ca; --ink-mute:#a8ada6;
+  --line:#2c312d; --line-soft:#242826; --accent:#e8a07a; --accent-soft:#3a2a20;
+  --good:#b6c79a; --warn:#e8c073; --blocked:#f0937a;
+  --chrome:#0f1113; --chrome-ink:#e8e2d3; --chrome-mute:#b3ab9b;
+}
+html[data-lguser-theme="dark"] .rail{background:#202426}
+html[data-lguser-theme="dark"] .bar{background:#2c312d}
+html[data-lguser-theme="dark"] .absent{background:#2e211c}
+html[data-lguser-theme="dark"] .P3 .band__dot{background:#4a4f4a}
+html[data-lguser-theme="dark"] .desk{background:#1e2124}
+html[data-lguser-theme="dark"] .rail{background:#202426}
+html[data-lguser-theme="dark"] .bar{background:#2c312d}
+html[data-lguser-theme="dark"] .absent{background:#2e211c}
+html[data-lguser-theme="dark"] .P3 .band__dot{background:#4a4f4a}
+html[data-lguser-theme="dark"] .desk{background:#1e2124}
+html[data-lguser-theme="dark"] .desk__opt{background:#242826}
+html[data-lguser-theme="dark"] .desk--empty{background:#243024}
+html[data-lguser-theme="dark"] .cpy{background:#1b1e21}
+html[data-lguser-theme="dark"] .cpybox{background:#202426}
+html[data-lguser-theme="dark"] .proj{background:#1b1e21}
+html[data-lguser-theme="dark"] .proj__h{background:#202426}
+html[data-lguser-theme="dark"] .proj__h:hover{background:#242826}
+html[data-lguser-theme="dark"] .proj--unsorted{background:#1e2124}
+html[data-lguser-theme="dark"] .proj--unsorted .proj__h{background:#2e2a1f}
+html[data-lguser-theme="dark"] .w3{background:#4a4f4a}
+html[data-lguser-theme="dark"] .w9{background:#4a4f4a}
+html[data-lguser-theme="dark"] .row{background:#1b1e21}
+html[data-lguser-theme="dark"] .bdg--look{background:#2e2a1f}
+html[data-lguser-theme="dark"] .bdg--blocked{background:#2e211c}
+html[data-lguser-theme="dark"] .bdg--unowned{background:#262b30}
+html[data-lguser-theme="dark"] .bdg--done{background:#243024}
+html[data-lguser-theme="dark"] .row--open:hover{background:#1b1e21}
+html[data-lguser-theme="dark"] .modal{background:#1b1e21}
+html[data-lguser-theme="dark"] .phase2{background:#202426}
+html[data-lguser-theme="dark"] .err{background:#2e211c}
+html[data-lguser-theme="dark"] .err{background:#2e211c}/* OPACITY, not colour: .grip and .hist__dc fade the inherited ink. On a light
+   page 35% of near-black still reads; on dark, 35% of #e5e7e1 composites to
+   #323637 = 1.37:1. No colour override can fix an opacity — raise the opacity. */
+html[data-lguser-theme="dark"] .grip{opacity:.8}
+html[data-lguser-theme="dark"] .hist__dc{opacity:.85}
+/* badge inks re-paired against their NEW dark fills */
+html[data-lguser-theme="dark"] .bdg--done{color:#b6c79a}
+html[data-lguser-theme="dark"] .bdg--look{color:#e8c073}
+html[data-lguser-theme="dark"] .bdg--unowned{color:#cdd0ca}
+html[data-lguser-theme="dark"] .bdg--decide{background:#8a3f1d;color:#ffffff}
+html[data-lguser-theme="dark"] .cpy{color:var(--ink-soft);border-color:var(--line)}
+html[data-lguser-theme="dark"] textarea::placeholder,
+html[data-lguser-theme="dark"] input::placeholder{color:#9aa097}
+/* The DONE fade is deliberate — completed rows recede, and that meaning is kept.
+   But .62 of a muted ink reads 3.66:1 on the dark panel, so the fade is raised
+   just enough to clear AA rather than removed. Light is untouched: there the
+   same .62 sits on a white panel and already passes. */
+html[data-lguser-theme="dark"] .row--done,
+html[data-lguser-theme="dark"] .donebox .row{opacity:.82}
+/* text/ink pairs that only appear once panels are expanded */
+html[data-lguser-theme="dark"] .row__o,
+html[data-lguser-theme="dark"] .thrbox__no{color:var(--ink-mute)}
+html[data-lguser-theme="dark"] .grip{opacity:.8;color:var(--ink)}
+html[data-lguser-theme="dark"] .bdg--unowned{background:#262b30;color:#cdd0ca}
+html[data-lguser-theme="dark"] .bdg--done{background:#243024;color:#b6c79a}
+html[data-lguser-theme="dark"] .lane__watch{color:#e8a07a}
+html[data-lguser-theme="dark"] .thrbox__in{background:#15171a;color:var(--ink);border-color:var(--line)}
+html[data-lguser-theme="dark"] .thrbox__in::placeholder{color:#9aa097}
+/* .thrbox__no{opacity:.6} — the "no messages yet" note. Same opacity-not-colour
+   shape as .grip: .6 of a muted ink reads 3.4:1 on the dark panel. Raised in
+   dark only; light keeps its .6 and already passes there. */
+html[data-lguser-theme="dark"] .thrbox__no{opacity:.85}
 </style>
 </head>
 <body>
