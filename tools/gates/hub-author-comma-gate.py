@@ -292,8 +292,14 @@ def main():
                 inp.focus();
                 inp.value = %s;
                 inp.dispatchEvent(new Event('input', {bubbles: true}));
-                for (let i = 0; i < 20; i++) {
-                    await new Promise(r => setTimeout(r, 150));
+                // 40 x 200ms = 8s: the shared box runs several lanes' own CDP
+                // sessions concurrently, and this suggest fetch competes with
+                // all of them — 20 x 150ms (3s) read as "never returned a
+                // result" under real cross-lane load, not a defect (same
+                // fix applied to hub-author-banner-swap-gate.py's identical
+                // poll, same root cause).
+                for (let i = 0; i < 40; i++) {
+                    await new Promise(r => setTimeout(r, 200));
                     const box = modal.querySelector('[data-hub-suggest="author"]');
                     const item = box && box.querySelector('[data-pick]');
                     if (item) {

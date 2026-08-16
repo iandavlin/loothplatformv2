@@ -46,8 +46,16 @@ function bb_mirror_asset_ver(string $filename): string
 if (!function_exists('lg_hub_author_banner_swap_enabled')) {
     function lg_hub_author_banner_swap_enabled(): bool
     {
-        static $on = null;
-        if ($on !== null) return $on;
+        // NOT memoized with `static`: PHP-FPM workers are long-lived and
+        // reuse the same process across many requests, so a static cache
+        // here would stick the FIRST request's answer to every later one
+        // that worker happens to serve. Harmless in real production (the
+        // box has one flag state, changed rarely, via a deploy that
+        // recycles workers anyway) but a real risk against a lane preview,
+        // which exists specifically to serve ON and OFF side by side on the
+        // SAME pool — worth avoiding even though it was NOT what caused the
+        // one red run investigated here (that was the tracked default
+        // itself being flipped mid-session; see hub-author-banner-swap.php).
         $raw = @include __DIR__ . '/../../platform/config/hub-author-banner-swap.php';
         $on = is_array($raw) && !empty($raw['enabled']);
         // Box-local override, the FLAGS.md shape: tracked default first, the

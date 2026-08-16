@@ -297,19 +297,34 @@ function hub_resolve_profiles(array $wp_ids): array
 if (!function_exists('hub_author_delim')) {
     function hub_author_delim(): string
     {
-        static $delim = null;
-        if ($delim !== null) return $delim;
+        // NOT memoized with `static`: PHP-FPM workers are long-lived and
+        // reuse the same process across many requests, so a static cache
+        // would stick the FIRST request's answer to every later one that
+        // worker happens to serve. Harmless in real production (one flag
+        // state, changed rarely) but a real risk against a lane preview,
+        // which exists specifically to serve ON and OFF side by side on the
+        // SAME pool — see the identical note on
+        // lg_hub_author_banner_swap_enabled() (_chrome.php) for the actual
+        // incident this class of bug was checked against (a different,
+        // confirmed cause, kept here as defensive hardening regardless).
+        // Tracked file first, THEN the env/$_SERVER override — checked in
+        // that order so an override can force either direction (0 as well
+        // as 1), not just force ON. An earlier cut of this checked the
+        // override FIRST and only for '1', so it could turn the flag on but
+        // never definitively off (a value that wasn't '1' just fell through
+        // to the tracked file, which is not the same as "off" once that
+        // file's own default changes) — the same class of gap fixed on
+        // lg_hub_author_banner_swap_enabled() (_chrome.php).
         $on = false;
-        if (getenv('LG_HUB_AUTHOR_COMMA_FIX') === '1' || (($_SERVER['LG_HUB_AUTHOR_COMMA_FIX'] ?? '') === '1')) {
-            $on = true;
+        $path = dirname(__DIR__, 3) . '/platform/config/hub-author-comma-fix.php';
+        if (is_readable($path)) {
+            $raw = require $path;
+            $on = is_array($raw) && ($raw['enabled'] ?? false) === true;
         } else {
-            $path = dirname(__DIR__, 3) . '/platform/config/hub-author-comma-fix.php';
-            if (is_readable($path)) {
-                $raw = require $path;
-                $on = is_array($raw) && ($raw['enabled'] ?? false) === true;
-            } else {
-                error_log('[lg-hub-author-comma-fix] tracked config unreadable at ' . $path . ' — OFF (fail-closed)');
-            }
+            error_log('[lg-hub-author-comma-fix] tracked config unreadable at ' . $path . ' — OFF (fail-closed)');
+        }
+        foreach ([getenv('LG_HUB_AUTHOR_COMMA_FIX'), $_SERVER['LG_HUB_AUTHOR_COMMA_FIX'] ?? false] as $o) {
+            if ($o !== false && $o !== '') $on = ($o === '1' || $o === 'true');
         }
         return $delim = ($on ? "\x1F" : ',');
     }
