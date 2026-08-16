@@ -528,6 +528,30 @@ $idsNow = truth($BACK);
 $overlap = array_intersect($idsNow, ['2026', '2026-08-01']);
 is_($overlap === [], 'no date leaked into the index as an item id');
 
+/**
+ * THE DONE-LEDGER RENDERS ON THE BOARD (41d). Ian asked whether there was a file
+ * to move completed work to; this is that answer arriving where he looks.
+ */
+$dnFx = $tmp . '-done';
+@mkdir($dnFx, 0755, true);
+copy($BACK, $dnFx . '/BACKLOG.md');
+file_put_contents($dnFx . '/DONE.md',
+    "# Done\n\n- **18** · THE THING HE ALREADY USED · `fb83a6b` · landed 2026-08-16\n");
+$dnHtml = (string) shell_exec('LGB_MAIN_COPY=/nonexistent/m.md LGB_THREADS=/nonexistent/t.json LGB_BACKLOG='
+    . escapeshellarg($dnFx . '/BACKLOG.md') . ' ' . PHP_BINARY . ' ' . escapeshellarg($PAGE) . ' 2>/dev/null');
+is_(str_contains($dnHtml, 'THE THING HE ALREADY USED') && str_contains($dnHtml, 'fb83a6b'),
+    'the done-ledger renders on the board, carrying the landing sha');
+is_(str_contains($dnHtml, '1 landed'), '...counted, not described');
+
+// ABSENT IS A REAL STATE. An empty "Done" heading would read as "nothing has
+// shipped", which of this programme would be a lie.
+$noDnHtml = render($PAGE, $BACK);
+is_(str_contains($noDnHtml, 'No done-ledger yet'),
+    'with no ledger the board says so, and names what will write it');
+is_(!str_contains($noDnHtml, 'Done — the ledger'),
+    '...rather than drawing an empty Done heading');
+sh2('rm -rf ' . escapeshellarg($dnFx));
+
 // A missing archive must SAY so rather than draw a comforting zero.
 $noArch = $tmp . '-noarch.md';
 $src = (string) file_get_contents($BACK);

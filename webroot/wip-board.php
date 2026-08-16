@@ -257,6 +257,36 @@ function lgb_parse_details(string $path): array
  *
  * @return array<int,array{date:string,title:string,body:string}> newest first
  */
+/**
+ * THE DONE-LEDGER, rendered. Ian, 2026-08-16: *"do we have a file to move
+ * completed work to as a history or are we relying on git as a record"* — this
+ * is the answer showing up where he looks.
+ *
+ * `docs/DONE.md` is written mechanically at train landing from `Closes-Backlog:`
+ * trailers (tools/keeper/board-done-ledger.php). It is APPEND-ONLY, so the board
+ * renders it newest-first and never edits it.
+ *
+ * ABSENT IS A REAL STATE AND IT SAYS SO. Until a train lands carrying trailers
+ * there is no file, and the view says that plainly rather than showing an empty
+ * "Done" heading — an empty heading reads as "nothing has shipped", which of
+ * this programme would be a lie.
+ *
+ * @return array{lines:array<int,array{id:string,title:string,sha:string,when:string}>,present:bool}
+ */
+function lgb_parse_done(string $backlogPath): array
+{
+    $f = dirname($backlogPath) . '/DONE.md';
+    if (!is_readable($f)) { return ['lines' => [], 'present' => false]; }
+    $out = [];
+    foreach (explode("\n", (string) file_get_contents($f)) as $l) {
+        // - **18** · title · `sha` · landed 2026-08-16
+        if (preg_match('/^- \*\*([A-Z]?\d+(?:\.\d+)?)\*\*\s*·\s*(.*?)\s*·\s*`([0-9a-f]+)`\s*·\s*landed\s*(\S+)/u', $l, $m)) {
+            $out[] = ['id' => $m[1], 'title' => $m[2], 'sha' => $m[3], 'when' => $m[4]];
+        }
+    }
+    return ['lines' => array_reverse($out), 'present' => true];
+}
+
 function lgb_parse_history(string $path): array
 {
     if (!is_readable($path)) { return []; }
@@ -1934,6 +1964,30 @@ html[data-lguser-theme="dark"]{--line:#767c76}
   $byDate = [];
   foreach ($history as $h) { $byDate[$h['date']][] = $h; }
   ?>
+  <?php $done = lgb_parse_done($BACKLOG); ?>
+  <?php if ($done['present'] && $done['lines'] !== []): ?>
+    <details class="hist" open>
+      <summary class="hist__h">
+        <span class="hist__t">Done — the ledger</span>
+        <span class="hist__c"><?= count($done['lines']) ?> landed</span>
+      </summary>
+      <div class="hist__d">
+        <?php foreach ($done['lines'] as $d): ?>
+          <div class="doneline">
+            <span class="doneline__id"><?= lgb_h($d['id']) ?></span>
+            <span class="doneline__t"><?= lgb_h($d['title']) ?></span>
+            <span class="doneline__m"><?= lgb_h($d['sha']) ?> · <?= lgb_h($d['when']) ?></span>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    </details>
+  <?php elseif (!$done['present']): ?>
+    <!-- Said plainly: an empty "Done" heading would read as "nothing has
+         shipped", which of this programme would be a lie. -->
+    <div class="hist hist--none">No done-ledger yet — <code>docs/DONE.md</code> is
+      written at the first train landing that carries a <code>Closes-Backlog:</code> trailer.</div>
+  <?php endif; ?>
+
   <?php if ($history !== []): ?>
     <details class="hist">
       <summary class="hist__h">
@@ -2093,6 +2147,10 @@ html[data-lguser-theme="dark"]{--line:#767c76}
     .hist__b{white-space:pre-wrap;font-size:12px;margin:4px 0 8px;padding:8px;border-radius:6px;
              background:rgba(128,128,128,.08);max-height:340px;overflow:auto}
     .hist--none{font-size:12px;opacity:.7}
+    .doneline{display:flex;gap:8px;align-items:baseline;font-size:12px;padding:2px 0}
+    .doneline__id{font-weight:600;min-width:2.5em}
+    .doneline__t{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .doneline__m{font-size:10px;opacity:.55;font-family:ui-monospace,monospace;white-space:nowrap}
     .lane--thr>summary{list-style:none;cursor:pointer}
     .lane--thr>summary::-webkit-details-marker{display:none}
     .lane__s2{display:flex;gap:8px;align-items:center}
