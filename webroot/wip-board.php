@@ -451,6 +451,16 @@ $LGB_THREADS = getenv('LGB_THREADS') ?: '/home/ubuntu/.board-threads.json';
  */
 const LGB_ACTOR = 'ian-via-board';
 
+/**
+ * The media store: outside the WP library, outside git, and CAPPED at both ends.
+ * 4MB is a generous screenshot; 200MB is roughly fifty of them, which is a
+ * budget this box can afford at 92% full and a number somebody can revisit
+ * deliberately rather than discover during an outage.
+ */
+const LGB_MEDIA_DIR    = '/srv/board-media';
+const LGB_MEDIA_MAX    = 4194304;      // 4MB per image
+const LGB_MEDIA_BUDGET = 209715200;    // 200MB total
+
 /** Talk to the committer. Returns its own JSON answer, refusals included. */
 function lgb_commit(array $intent, string $sock): array
 {
@@ -671,6 +681,59 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 'questionsHtml' => lgb_render_questions(lgb_questions($BACKLOG)),
                 'branches'  => lgb_branch_states($LGB_THREADS),
             ]);
+            break;
+
+        /**
+         * PASTE AN IMAGE. Ian's screenshots are the fleet's best bug reports,
+         * and today every one of them arrives by a side channel and has to be
+         * described back into a lane. This puts the picture where the decision
+         * it caused lives.
+         *
+         * NEVER THE WP MEDIA LIBRARY, permanently and for a concrete reason: a
+         * WP upload gets an attachment post with its own public URL and shows up
+         * in media search, so a board screenshot of an admin screen, a member's
+         * data or an unreleased feature would become reachable from a MEMBER
+         * surface. It goes to a directory outside the library AND outside git —
+         * binaries bloat a checkout forever.
+         *
+         * THE CAPS ARE NOT DECORATION. This box is at 92% disk with 2.4GB free,
+         * past the 90% line the board's own capacity strip draws in red. A paste
+         * feature with no ceiling on a nearly-full disk is a slow outage, so the
+         * per-file cap AND a total budget are both enforced here, at build time,
+         * rather than discovered later.
+         */
+        case 'media_upload':
+            $b64 = (string) ($req['data'] ?? '');
+            if ($b64 === '') { $reply(['ok' => false, 'error' => 'no image data'], 400); }
+            $bin = base64_decode($b64, true);
+            if ($bin === false) { $reply(['ok' => false, 'error' => 'that is not an image'], 400); }
+            if (strlen($bin) > LGB_MEDIA_MAX) {
+                $reply(['ok' => false, 'error' => 'that image is larger than ' . (LGB_MEDIA_MAX >> 20) . 'MB'], 400);
+            }
+
+            // TYPE IS SNIFFED FROM THE BYTES, never taken from the client. An
+            // extension is a claim; the magic bytes are the file.
+            $fi   = new finfo(FILEINFO_MIME_TYPE);
+            $mime = (string) $fi->buffer($bin);
+            $ext  = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/gif' => 'gif', 'image/webp' => 'webp'][$mime] ?? null;
+            if ($ext === null) { $reply(['ok' => false, 'error' => 'only images can be pasted here (' . $mime . ')'], 400);}
+
+            if (!is_dir(LGB_MEDIA_DIR)) { $reply(['ok' => false, 'error' => 'the media store is not set up'], 500); }
+            $used = 0;
+            foreach ((array) glob(LGB_MEDIA_DIR . '/*') as $f) { $used += (int) @filesize((string) $f); }
+            if ($used + strlen($bin) > LGB_MEDIA_BUDGET) {
+                $reply(['ok' => false, 'error' => 'the board media store is full ('
+                    . round($used / 1048576) . 'MB of ' . (LGB_MEDIA_BUDGET >> 20) . 'MB) — nothing was deleted to make room'], 507);
+            }
+
+            // The NAME is derived here and never taken from the client: a
+            // client-supplied filename is a path, and a path is a way out of a
+            // directory.
+            $name = gmdate('Ymd-His') . '-' . bin2hex(random_bytes(4)) . '.' . $ext;
+            if (@file_put_contents(LGB_MEDIA_DIR . '/' . $name, $bin) === false) {
+                $reply(['ok' => false, 'error' => 'could not store the image'], 500);
+            }
+            $reply(['ok' => true, 'path' => '/board-media/' . $name, 'ref' => $name]);
             break;
 
         case 'chat_read':
@@ -1901,6 +1964,7 @@ header('X-Robots-Tag: noindex, nofollow');
     .br__s--open{background:rgba(74,158,255,.20)}
     .br__s--gone{background:rgba(200,70,70,.18)}
     .br__s--unknown{background:rgba(128,128,128,.20)}
+    .msg__img{max-width:100%;max-height:240px;border-radius:6px;display:block;margin:4px 0}
   </style>
   <script type="application/json" id="lgb-branchstate"><?php
     echo json_encode(lgb_branch_states($LGB_THREADS), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
@@ -2382,15 +2446,73 @@ header('X-Robots-Tag: noindex, nofollow');
       if (!btn) { return; }
       btn.dataset.was = 'Send';
 
+      /**
+       * A /board-media/ path in a message renders as the picture. Ian's
+       * screenshots are the fleet's best bug reports and today every one of them
+       * arrives by a side channel and has to be described back into a lane.
+       *
+       * THE TEXT IS ESCAPED FIRST and only then are known media paths turned
+       * into images — the pattern is anchored and narrow, so a message can
+       * never inject markup by looking like one.
+       *
+       * A FILE THAT IS GONE SAYS SO. The spec is explicit: a deleted image must
+       * read as "no longer stored", never as a broken image icon and never as a
+       * silent gap, because a gap looks like he never sent it.
+       */
+      function withMedia(text) {
+        return esc2(text).replace(/\/board-media\/[A-Za-z0-9._-]+\.(png|jpg|jpeg|gif|webp)/g, function (p) {
+          return '<a href="' + p + '" target="_blank" rel="noopener">'
+               + '<img class="msg__img" src="' + p + '" alt="pasted image" '
+               + 'onerror="this.replaceWith(Object.assign(document.createElement(\'em\'),'
+               + '{textContent:\'image no longer stored\'}))"></a>';
+        });
+      }
+
       function paint(msgs) {
         if (!msgs || !msgs.length) { return; }
         log.innerHTML = msgs.map(function (m) {
           return '<div class="msg ' + (m.mine ? 'msg--out' : 'msg--in') + '">'
                + '<span class="msg__w">' + esc2(m.when + ' · ' + m.who) + '</span>'
-               + esc2(m.text) + '</div>';
+               + withMedia(m.text) + '</div>';
         }).join('');
         log.scrollTop = log.scrollHeight;
       }
+
+      /**
+       * PASTE AN IMAGE STRAIGHT INTO THE BOX, as VS Code's chat does. The upload
+       * happens on paste; what lands in the message is the PATH, not the bytes —
+       * which keeps the thread cheap to render and lets keeper open the original
+       * from disk.
+       */
+      ta.addEventListener('paste', function (e) {
+        var items = (e.clipboardData && e.clipboardData.items) || [];
+        for (var i = 0; i < items.length; i++) {
+          if (items[i].type.indexOf('image/') !== 0) { continue; }
+          var file = items[i].getAsFile();
+          if (!file) { continue; }
+          e.preventDefault();
+          out.hidden = false; out.className = 'thrbox__say'; out.textContent = 'Uploading image…';
+          var fr = new FileReader();
+          fr.onload = function () {
+            var b64 = String(fr.result).split(',')[1] || '';
+            post({ action: 'media_upload', data: b64 }).then(function (res) {
+              if (res && res.ok) {
+                // The path goes into the message he is composing; it is committed
+                // when he sends, like any other words. Nothing is stored in the
+                // thread until he chooses to send it.
+                ta.value = (ta.value ? ta.value + '\n' : '') + res.path;
+                out.className = 'thrbox__say w2__say--ok';
+                out.textContent = 'Image attached — send to post it.';
+              } else {
+                out.className = 'thrbox__say w2__say--no';
+                out.textContent = (res && res.error) || 'the image could not be attached';
+              }
+            });
+          };
+          fr.readAsDataURL(file);
+          return;
+        }
+      });
 
       /**
        * NEAR-LIVE: poll for keeper's replies. Ian used this chat for the first

@@ -676,6 +676,43 @@ is_(str_contains($pageSrc, 'el.contains(document.activeElement)'),
 // The ranked accordions must NOT be in the refresh: they are what he DRAGS.
 is_(!preg_match("/swapIfChanged\('lgb-(proj|rank)/", $pageSrc),
     'the ranked list is deliberately NOT live-repainted — it would fight the drag');
+
+/**
+ * IMAGE PASTE (parity phase 1). Ian's screenshots are the fleet's best bug
+ * reports and every one currently arrives by a side channel.
+ *
+ * The properties gated here are the ones that would hurt if wrong: where the
+ * bytes go, what is trusted about them, and what a missing file looks like.
+ */
+is_(str_contains($pageSrc, "action: 'media_upload'"), 'an image can be pasted into the chat');
+is_(str_contains($pageSrc, "LGB_MEDIA_DIR    = '/srv/board-media'"),
+    '...stored OUTSIDE the WP media library, where a board screenshot cannot become member-reachable');
+is_(!preg_match('/wp_insert_attachment|wp_upload_bits|media_handle/', $pageSrc),
+    '...and never through the WP media library, which would give it a public URL');
+
+// A CLIENT-SUPPLIED FILENAME IS A PATH. The name is derived server-side.
+is_((bool) preg_match("/gmdate\('Ymd-His'\) \. '-' \. bin2hex\(random_bytes/", $pageSrc),
+    'the stored filename is DERIVED, never taken from the client');
+is_(str_contains($pageSrc, 'FILEINFO_MIME_TYPE'),
+    'the type is SNIFFED from the bytes — an extension is a claim, the magic bytes are the file');
+
+// THE CAPS. This box is at 92% disk; a paste feature without a ceiling is a slow
+// outage, and the budget must be a decision made now rather than discovered.
+// Asserted on the COMPARISONS, not the constant names. The first version
+// checked that the names appeared — so deleting the budget's DEFINITION left
+// every usage in place, the string still present, and the gate still green on a
+// file that would fatal at runtime. A name is not an enforcement.
+is_((bool) preg_match('/strlen\(\$bin\) > LGB_MEDIA_MAX/', $pageSrc),
+    'the per-image cap is actually COMPARED against, not merely named');
+is_((bool) preg_match('/\$used \+ strlen\(\$bin\) > LGB_MEDIA_BUDGET/', $pageSrc),
+    '...and so is the total budget, measured against what is already stored');
+is_((bool) preg_match("/const LGB_MEDIA_BUDGET\s*=\s*\d+/", $pageSrc),
+    '...with the budget actually defined, so the check cannot fatal instead of refusing');
+is_(str_contains($pageSrc, 'nothing was deleted to make room'),
+    '...and a full store REFUSES rather than quietly evicting something of his');
+
+is_(str_contains($pageSrc, 'image no longer stored'),
+    'a deleted image reads as gone — never a broken icon, never a silent gap');
 is_(!preg_match('/chat_send[\s\S]{0,900}?innerHTML\s*\+=/', $pageSrc),
     '...and never appends a message it made up from the typed text');
 is_(str_contains($openBox, 'Something else'),
