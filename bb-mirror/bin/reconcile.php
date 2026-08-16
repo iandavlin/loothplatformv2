@@ -166,7 +166,7 @@ if ($deep_due) {
             foreach ($wp as $id => $m) {
                 if (!isset($pg[$id]) || $m - $pg[$id] > 60) { $need[] = $id; }
             }
-            if (!$need) { echo "  deep $kind: in sync ({" . count($wp) . "} rows)\n"; continue; }
+            if (!$need) { echo "  deep $kind: in sync (" . count($wp) . " rows)\n"; continue; }
             $r = bb_mirror_walk_ids($need, match ($kind) {
                 'topic' => fn(int $id) => bb_mirror_upsert_topic($id, $db),
                 'reply' => fn(int $id) => bb_mirror_upsert_reply($id, $db),

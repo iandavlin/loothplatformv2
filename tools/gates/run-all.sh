@@ -1457,6 +1457,36 @@ echo "=== GATE 69: the loothprint EDIT DOOR — two named editors, and only for 
 # correct when you are asserting what ships; reading the EFFECTIVE state is not.
 run "loothprint-edit-door" python3 "$(dirname "$0")/loothprint-edit-door-gate.py"
 
+echo "=== GATE 70: the mirror pipe is LOUD, and reconcile can reach backwards ==="
+# Backlog 3.9. Two guarantees, each of which has already failed in production.
+#
+# A SKIP IS NOT A SUCCESS. bb_mirror_upsert_reply() returns without writing when a
+# reply is unmirrorable — correctly, because throwing there wedged live's reconcile
+# for 11 days from 2026-07-29. But _sync then answered 200 for a write and a drop
+# alike, so the 2026-08-09 analysis read 290 _sync POSTs, saw every one return 200,
+# and could not tell the 11 replies that vanished from the 61 that landed.
+#
+# ⚠️ IT ASSERTS 202 SPECIFICALLY, NOT "not 200". A 4xx/5xx looks like a stricter
+# fix and is a worse one: the WP hook is fire-and-forget, so an error status turns
+# an unmirrorable row into a retry storm against a condition retrying cannot fix.
+# That mutation reds on purpose.
+#
+# AND IT ASSERTS THE UPSERT STILL NEVER THROWS. Loud is not fatal — "fixing" the
+# silence by throwing trades a two-month stale row for an eleven-day outage.
+#
+# BACKWARDS REACH: the delta walk upserts WHERE post_modified_gmt >= bookmark - 60,
+# so anything that diverges and ages out is invisible forever. Measured on live
+# 2026-08-16: all five diverged replies were 60-73 days older than the bookmark.
+# The deep sweep must exist, be interval-bounded on its OWN state key, repair on a
+# MODIFIED-TIME difference (not just absence, or stale edits stay permanent), use
+# the poison-tolerant walker, and REFUSE AN EMPTY WP READ — zero rows must never
+# read as total divergence.
+#
+# Source-read only: no browser, no network, no DB, so it cannot flake under load.
+# ⚠️ Honest limit, in its docstring: a skip note DISABLED in place (if(false)) still
+# passes, because this leg reads source rather than executing. Deletion is caught.
+run "mirror-sync-loud" python3 "$(dirname "$0")/mirror-sync-loud-gate.py"
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"
