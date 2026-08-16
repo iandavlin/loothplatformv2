@@ -1426,6 +1426,28 @@ echo "=== GATE 68: the compose page wears the site chrome, in BOTH themes ==="
 # leg ok non-vacuously, 4 of 5, exit 1.
 run "compose-chrome" python3 "$(dirname "$0")/compose-chrome-gate.py"
 
+echo "=== GATE 71: every sitemap-listed URL serves OPEN content to a logged-out visitor ==="
+# The standing gate keeper promised Ian (backlog 40, job 3): sample real URLs
+# from the live /sitemap.xml (static/content/profiles/discussions) and prove
+# each one is actually open to anon, using a CONTENT-PRESENCE discriminator —
+# the page's own DB-sourced title/name appearing in an anon fetch — never a
+# login-string check (a locked-out page and a genuinely open page both
+# routinely contain "Sign in" somewhere in shared header chrome, so that
+# check proves nothing either way).
+#
+# FIRST REAL RUN FOUND TWO THINGS. One was a gate bug: WordPress's
+# wptexturize() swaps plain ASCII punctuation for typographic equivalents on
+# render (' - ' -> ' – ' en-dash), so a DB title with a plain hyphen no
+# longer substring-matched its own correctly-rendered page — fixed by
+# normalizing dash/quote variants on both sides before comparing. The other
+# was real: /u/ut-test-alice, a leaked test-fixture profile, sitemapped and
+# 404ing for anon — a third independent instance of the fixture-hygiene class
+# stripe-membership separately reported the same night. That stays a real RED
+# here on purpose: a sitemapped 404 is not "open" regardless of whether the
+# cause is a visibility lock or a leaked fixture row, and special-casing it
+# away would defeat the gate's own point.
+run "sitemap-anon-open" python3 "$(dirname "$0")/sitemap-anon-open-gate.py"
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"
