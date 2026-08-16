@@ -783,7 +783,7 @@ header('X-Robots-Tag: noindex, nofollow');
 <style>
   :root{
     --bg:#f6f3ee; --panel:#fffdf9; --ink:#1f1d1a; --ink-soft:#4a463f; --ink-mute:#8a8478;
-    --line:#e6e0d4; --line-soft:#efeae0; --accent:#b9450b; --accent-soft:#f4d8c4;
+    --line:#8a8478; --line-soft:#efeae0; --accent:#b9450b; --accent-soft:#f4d8c4;
     --good:#5a7a3a; --warn:#b8860b; --blocked:#8a3208; --chrome:#262320; --chrome-ink:#e8e2d3; --chrome-mute:#a49c8c;
   }
   *{box-sizing:border-box}
