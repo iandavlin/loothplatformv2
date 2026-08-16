@@ -50,6 +50,12 @@ if (!function_exists('lg_hub_author_banner_swap_enabled')) {
         if ($on !== null) return $on;
         $raw = @include __DIR__ . '/../../platform/config/hub-author-banner-swap.php';
         $on = is_array($raw) && !empty($raw['enabled']);
+        // Box-local override, the FLAGS.md shape: tracked default first, the
+        // gitignored .local.php wins only on an explicit enabled === true.
+        // This (not FPM pool env) is the one-truth dev2-ON mechanism — the
+        // runtime, wp-cli and the gates all read the same file.
+        $loc = @include __DIR__ . '/../../platform/config/hub-author-banner-swap.local.php';
+        if (is_array($loc) && array_key_exists('enabled', $loc)) $on = ($loc['enabled'] === true);
         foreach ([getenv('LG_HUB_AUTHOR_BANNER_SWAP'), $_SERVER['LG_HUB_AUTHOR_BANNER_SWAP'] ?? false] as $o) {
             if ($o !== false && $o !== '') $on = ($o === '1' || $o === 'true');
         }
