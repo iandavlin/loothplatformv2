@@ -1131,6 +1131,22 @@ echo "=== GATE 54: the weekly email on the logged-out front page ==="
 # prose at all, so it passed however the guard was mutated.
 run "weekly-front" python3 "$(dirname "$0")/weekly-front-gate.py"
 
+echo "=== GATE 61: the work board clears AA in dark (Ian's primary interface) ==="
+# Number 61 minted by keeper 2026-08-16. REGISTERED ONLY NOW, after train 2
+# DEPLOYED the board palette to the serve — this gate reads the SERVE, so
+# registering it before that deploy would have put a guaranteed-red gate in front
+# of every lane on the box. Merged was never enough; deployed was the condition.
+#
+# Asserts /wip-board.php clears AA in dark on all four states (app-dark x os-dark,
+# desktop x mobile), with collapsed <details> EXPANDED first — the board hides
+# most of itself, and a first-render probe measured 3 of 9 thread boxes.
+#
+# The LIGHT pass encodes Ian's ruling rather than remembering it: non-text
+# (border) contrast must be clean, while the light muted-ink TEXT cells he
+# accepted on 2026-08-16 are counted and reported, never failed. A gate that
+# reds forever on an accepted baseline teaches everyone to ignore it.
+run "board-dark-contrast" python3 "$(dirname "$0")/board-dark-contrast-gate.py"
+
 if [ "$red" -ne 0 ]; then
   echo "############ GATES RED — do not push ############"
   echo "RED GATES: ${RED_GATES:-unknown}"
