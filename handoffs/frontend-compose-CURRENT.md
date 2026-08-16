@@ -10,11 +10,11 @@ DIFFERENT LANE (layout-v2, branch `frontend-compose` @ `e2c19e4`, "root disk
 
 | | |
 |---|---|
-| Branch | **`compose-draft-first`**, tip `074a656`, pushed, 0 behind main, merges CLEAN |
+| Branch | **`compose-draft-first`**, pushed, 0 behind main, merges CLEAN. Tip is *this handoff commit*; the last CODE commit is `d7049e0` — stated this way on purpose, because a handoff naming its own branch tip is stale the instant it lands |
 | Worktree | ⚠️ **TWO.** `~/worktrees/compose-draft-first` is the live one. `~/worktrees/frontend-compose` is still parked on the SUPERSEDED `compose-loothprint-modal` |
 | Flags | `platform/config/frontend-compose.php` → `'enabled' => false` (tracked). dev2 is ON via the untracked `.local.php` — see below |
-| Merge | Waiting on keeper. Full suite result pending at time of writing |
-| Also mine | `notif-quickreply-v2` @ `8b988b5` (merges clean, gate 52 free) · `seo-canonical-hub` @ `a9251ae` (**MERGE READY**) |
+| Merge | Waiting on keeper. **Suite RAN: 53 gate blocks, all green except gate 47** — see below |
+| Also mine | `notif-quickreply-v2` @ `deae6f0` (merges clean, gate 52 free) · `seo-canonical-hub` @ `a9251ae` (**MERGE READY, proven by execution**) |
 
 ---
 
@@ -23,7 +23,8 @@ DIFFERENT LANE (layout-v2, branch `frontend-compose` @ `e2c19e4`, "root disk
 - **`compose-draft-first`** — LIVE. Draft-first media model + gates 46/47.
 - **`seo-canonical-hub`** @ `a9251ae` — **MERGE READY**, verified 8/16. Bare hub
   declares its own canonical + gate 20 covers the static sitemap.
-- **`notif-quickreply-v2`** @ `8b988b5` — merges clean, gate 52 free on main.
+- **`notif-quickreply-v2`** @ `deae6f0` — merges clean, gate 52 free on main. Carries
+  the FLAGS.md row it was missing, and the new (unnumbered) flag-register gate.
 - **`compose-loothprint-modal`** — ⚠️ **DEAD, DO NOT REVIVE.** Superseded: main
   deleted the modal it was built around. Its subtitle trim (`b457cd3`) keys on
   `#lpm-body`, which is **zero** on main. See below.
@@ -90,6 +91,51 @@ repointed is not evidence that it was finished. Read the file.**
 because it matched the explanatory comment that exists to tell the next reader why
 the selector changed. That is the assert-matches-prose trap. Assertions now target
 the live QUERY, and one asserts the COMMENT SURVIVES.
+
+## THE SUITE RESULT, and the real defect it found
+
+53 gate blocks on `303a1b8`. Everything green except three lines:
+
+- `directory-location-cap` NO VERDICT (exit 2) — another lane removed the mechanism
+- `compose-media` (46) NO VERDICT (exit 2) — **by design**, `lg_fc_working_draft()`
+  is not in the docroot (which symlinks to main). Green on merge + pull.
+- `compose-dark` 1280 + 390 (47) **RED — a real defect**, now fixed in `d7049e0`.
+
+⚠️ **Gate 46 exiting 2 rather than 3 is what made this run readable.** Under the
+pre-`074a656` code it would have exited 3, which `run-all.sh` reads as RED —
+indistinguishable in the banner from gate 47's genuine finding. The trap would have
+fired on this very run.
+
+### The defect: a token that flips lightness while its ink does not
+
+`background:var(--lg-sage-d,#6b7c52)` + hardcoded `color:#fff`. Right for the
+fallback (4.54:1); `--lg-sage-d` re-points to `#b0c693` in dark, so it renders
+**1.85:1** — illegible — and trips the bright-surface bar at luminance 0.52.
+
+**The gate saw ONE; there were THREE.** Only the default-selected licence renders
+selected on load. Driving the form found the same 1.85:1 on the type-list label and
+`.lgfc__chip`. The submit button matches the shape and is **fine** (12.23:1,
+overridden) — measured, not assumed.
+
+Two rejected fixes, both measured: re-pointing the token (it is used as *ink* in 3
+other places — would turn those dark-on-dark), and dark ink on the light sage
+(9.70:1 but still a luminance-0.52 slab). Darkening the fill clears both bars:
+`#ffffff` on `#3d5233` = 8.56:1 @ lum 0.073. Light mode measured **unchanged** at
+4.54:1 — a thin 0.04 margin worth knowing about.
+
+⚠️ Gate 47 stays RED until this merges and the serve pulls — it measures the served
+route. Same ordering as gates 20 and 46.
+
+## ALSO BUILT TODAY (both need a keeper decision)
+
+- `tools/gates/flag-register-gate.py` on `notif-quickreply-v2` — **UNREGISTERED, no
+  number minted.** A branch that adds a flag must register it in `FLAGS.md`, which
+  the register's own header makes a merge condition and which nothing enforced.
+  Red-first from real history. **Its first full-fleet run found 6 unregistered flags
+  across 5 branches**, zero false positives after narrowing what counts as a flag.
+- `/home/ubuntu/projects/docs/DARK-SAGE-FILL-CANDIDATES-2026-08-16.md` — 44
+  candidate sites for the flipping-token class, handed to dark-anon-sweep.
+  Explicitly CANDIDATES: the compose submit proves a static match can be healthy.
 
 ## OPEN — who unblocks what
 
