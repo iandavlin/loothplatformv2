@@ -1070,7 +1070,21 @@ echo "=== GATE 59: a guessed letter is a HIT or a MISS, and a resumed board PAIN
 # Re-measure before quoting it -- phases 5 and 6 changed the count.
 run "guitardle-letter-state" python3 "$(dirname "$0")/guitardle-letter-state-gate.py"
 
-if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; echo "RED GATES: ${RED_GATES:-unknown}"; exit 1; fi
+if [ "$red" -ne 0 ]; then
+  echo "############ GATES RED — do not push ############"
+  echo "RED GATES: ${RED_GATES:-unknown}"
+  # NO SILENT CAPS (keeper, 2026-08-16, from guitardle-fairness's finding): this
+  # exit is MID-FILE, so on a red run every gate registered below it never
+  # executes — and until today the summary never said so, which let gate 57 (and
+  # 50/56 on any red suite) report nothing while looking covered. Enumerate the
+  # skipped gates from the file itself so the list cannot drift as gates move.
+  skipped="$(awk '/^# RED-EXIT-SKIP-MARKER/{f=1;next} f' "$0" | grep -oE '^run "[^"]+"' | cut -d'"' -f2 | tr '\n' ' ')"
+  echo "SKIPPED (registered after this early exit, NO VERDICT): ${skipped:-none}"
+  exit 1
+fi
+# RED-EXIT-SKIP-MARKER — the red-exit above prints every run-line below this as
+# SKIPPED. Keep this marker immediately after that exit block; registering a
+# gate below here means it does not run when an earlier gate is red.
 
 echo "=== GATE 50: the work board renders EVERY item, and phase 1 cannot write ==="
 run "work-board" php "$(dirname "$0")/work-board-gate.php"
