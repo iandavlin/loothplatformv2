@@ -151,15 +151,7 @@ function lg_author_route(WP_REST_Request $req) {
     if ($avatar_url === '') $avatar_url = get_avatar_url($id, ['size' => 96]);
 
     // Bio + looth profile URL — useful for the banner header.
-    // Profile-sourced (Ian 2026-08-16 ruling; platform/config/profile-bio.php,
-    // OFF by default) — lg_profile_bio() returns null when off or the member
-    // has no public profile row, meaning "no opinion"; the legacy ACF
-    // author_about -> description chain is untouched in either case.
-    require_once dirname(__DIR__, 2) . '/platform/lib/lg-profile-bio.php';
-    $profileBio = lg_profile_bio($id);
-    $bio = $profileBio !== null
-        ? $profileBio['bio']
-        : trim((string) (get_user_meta($id, 'author_about', true) ?: get_user_meta($id, 'description', true) ?: ''));
+    $bio = trim((string) (get_user_meta($id, 'author_about', true) ?: get_user_meta($id, 'description', true) ?: ''));
     $looth_profile = trim((string) (get_user_meta($id, 'author_looth_group_profile', true) ?: ''));
 
     $payload = [
