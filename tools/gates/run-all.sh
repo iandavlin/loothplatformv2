@@ -1028,6 +1028,38 @@ if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push #########
 echo "=== GATE 50: the work board renders EVERY item, and phase 1 cannot write ==="
 run "work-board" php "$(dirname "$0")/work-board-gate.php"
 
+# Gate number 57 — ASSIGNED BY KEEPER 2026-08-16. I had used 56 as a working
+# placeholder; 56 was already taken (board committer, minted at the stripe
+# merge). A placeholder is still self-minting — ask keeper first.
+echo "=== GATE 57: a guessed letter is a HIT or a MISS, and a resumed board PAINTS ==="
+# Ian, playing on dev2 2026-08-16: "it's keeping track of letters that are in
+# the puzzle, but not the guesses that were misses. The letter only stays lit
+# for a correct letter." Then: "refreshing on dt lights all letters, but the
+# correct letter just selected from mobile isn't there."
+#
+# NOTHING WAS EVER LOST — the server row was complete throughout, and this gate
+# asserts that too, because a lost move would be a FAIRNESS bug rather than a
+# paint one. Every symptom was the client drawing a correct record wrongly:
+#   - positions=[] means BOTH "vowel bought" and "miss", so every miss was
+#     filed as a purchase — and .purchased is styled for VOWELS ONLY, so a
+#     missed consonant rendered untouched AND stayed tappable;
+#   - server play draws tiles with data-i, legacy with data-letter, and BOTH
+#     restores used the data-letter painter — zero matches, zero paint, while
+#     the same loop lit every letter including misses.
+#
+# KEYED TO STATE, NOT WIDTH. The obvious desktop-vs-mobile gate would be the
+# wrong axis and would PASS: there is no width branching in this code and both
+# widths measure identically. What differs is state — live play, after a
+# refresh, and across two devices — so those are the phases.
+#
+# Two devices are two ISOLATED BROWSER CONTEXTS, not two tabs: tabs share
+# cookies and localStorage, which hides the very bug under test.
+#
+# Asserts THIS TREE's client, substituted over CDP, because dev2 serves main.
+# LG_GDLE_SERVED=1 measures the served code instead — that is the red-first
+# direction, and how this gate was proven (4 assertions red on main).
+run "guitardle-letter-state" python3 "$(dirname "$0")/guitardle-letter-state-gate.py"
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"
