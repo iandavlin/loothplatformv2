@@ -113,12 +113,38 @@ def main():
                     if mode == "dark" and theme != "dark":
                         sys.exit(f"LIVENESS FAIL {key}/{dev}/{mode}: theme resolved {theme!r}")
 
+                    # HIDE INJECTED APP CHROME BEFORE THE SHUTTER. The docroot
+                    # injects /pwa.js into these snapshots, which mounts a fixed
+                    # bottom tabbar and an "Install Looth" banner. On a tall
+                    # captureBeyondViewport stitch they render at their viewport
+                    # position — i.e. straight across the MIDDLE of the image —
+                    # and in the first mobile run they sat directly on top of the
+                    # privacy dials, which are the control Ian is being asked to
+                    # look at. A picture that hides the subject under someone
+                    # else's furniture is worse than no picture.
+                    #
+                    # Done by COMPUTED position:fixed rather than by class name,
+                    # so it keeps working when the chrome is renamed, and scoped
+                    # to elements OUTSIDE .wrap so nothing belonging to the step
+                    # itself can be hidden by accident.
+                    hidden = js('''(function(){
+                      var w = document.querySelector('.wrap'), n = 0;
+                      Array.prototype.forEach.call(document.querySelectorAll('body *'), function(el){
+                        if (w && (el === w || w.contains(el))) return;
+                        var cs = getComputedStyle(el);
+                        if (cs.position === 'fixed' && cs.display !== 'none') {
+                          el.style.setProperty('display','none','important'); n++;
+                        }
+                      });
+                      return n;
+                    })()''')
+
                     name = f"{key}__{mode}__{dev}.png"
                     r = call("Page.captureScreenshot", format="png", captureBeyondViewport=True)
                     data = base64.b64decode(r["data"])
                     open(os.path.join(SHOTS, name), "wb").write(data)
                     made.append((key, mode, dev, name, len(data)))
-                    print(f"  {name}  {len(data)//1024}KB  theme={theme}")
+                    print(f"  {name}  {len(data)//1024}KB  theme={theme}  chrome_hidden={hidden}")
     finally:
         # Never leave the shared chrome profile stamped dark.
         try:
@@ -176,7 +202,10 @@ def main():
  img{{width:100%;height:auto;border:1px solid #c9c5b6;border-radius:6px;display:block}}
 </style></head><body>
 <div class="head">THE REAL SCREENS, PHOTOGRAPHED IN BOTH THEMES — not drawings. Both are
- shown side by side so you do not have to switch your own theme to check.</div>
+ shown side by side so you do not have to switch your own theme to check.<br>
+ The app's own bottom nav and “Install Looth” banner are hidden in these shots — they float
+ over the middle of a full-page capture and were covering the privacy dials. Everything you
+ see below is the step itself.</div>
 <div class="wrap">
 <h1>The sign-up step, light and dark</h1>
 <p class="lede">You reported the section headers were invisible in dark mode. They were:
