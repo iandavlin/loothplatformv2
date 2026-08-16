@@ -219,7 +219,38 @@ function lg_fc_enabled(): bool
         return $on = false;
     }
     $raw = require $path;
-    return $on = (is_array($raw) && ($raw['enabled'] ?? false) === true);
+    $on = (is_array($raw) && ($raw['enabled'] ?? false) === true);
+
+    /* ── THE BOX-LOCAL OVERRIDE, read AFTER the tracked default ──────────────
+       keeper, 2026-08-15: the flip moved out of the FPM pool env and into an
+       untracked platform/config/frontend-compose.local.php so that wp-cli, FPM,
+       WP-cron and the gates all agree on what is switched on. A pool env cannot
+       do that — it reaches FPM only, so the CLI and cron see the opposite state
+       and the reaper's schedule thrashes between them.
+
+       ⚠️ THIS READ IS THE HALF THAT WAS MISSING. The override file was created
+       carrying `'enabled' => true` and a docblock saying it is "read by
+       lg_fc_enabled() AFTER the tracked config" — and nothing read it. With the
+       pool env removed in the same change, the tracked `false` won and compose
+       went DARK on dev2: /compose/ answered 404 to an allowed admin, measured,
+       where the same request had served the form the night before. A config file
+       nobody reads is indistinguishable from a feature that is off.
+
+       LIVE IS PROTECTED BY ABSENCE, not by a check here: live's checkout has no
+       such file, so it takes the tracked default. That is why the file is
+       gitignored in the same commit as this read — committable box-local state
+       is one merge away from switching a member-facing surface on for everyone,
+       which is the exact side effect the move was made to prevent.
+
+       FAILS THE SAFE WAY. Unreadable or malformed → the tracked value stands. */
+    $local = dirname(__DIR__) . '/config/frontend-compose.local.php';
+    if (is_readable($local)) {
+        $lraw = require $local;
+        if (is_array($lraw) && array_key_exists('enabled', $lraw)) {
+            $on = ($lraw['enabled'] === true);
+        }
+    }
+    return $on;
 }
 
 const LG_FC_PATH = 'compose';

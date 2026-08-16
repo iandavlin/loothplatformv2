@@ -58,3 +58,9 @@ tools/dupe-merge/journal/
 __pycache__/
 *.pyc
 archive-poc/api/v0/_flags.local.php
+
+# Box-local feature-flag overrides (keeper, 2026-08-15). UNTRACKED ON PURPOSE:
+# live's checkout must not have one, because its absence is what keeps a
+# member-facing surface off there. A committed *.local.php is one merge away from
+# switching compose on for every edit_posts member on live.
+platform/config/*.local.php
