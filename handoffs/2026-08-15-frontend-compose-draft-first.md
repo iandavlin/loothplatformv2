@@ -217,6 +217,50 @@ dark width is a leg under 47, not a new gate.
 
 ---
 
+## THE FLAG MOVED TWICE IN ONE DAY — READ THIS BEFORE TOUCHING THE FLIP
+
+`lg_fc_enabled()` is the only read point, and what feeds it changed twice on
+2026-08-15. Both moves were made for good reasons and the second one shipped an
+outage, so the history is worth more than the current state alone.
+
+| mechanism | wp-cli / cron sees | FPM sees | gate 35 | Ian |
+|---|---|---|---|---|
+| tracked config only (`'enabled' => false`) | OFF | OFF | green | can't see it |
+| **pool env** `env[LG_FC_PREVIEW]=1` | **OFF** | **ON** | **RED** | can see it |
+| **untracked `frontend-compose.local.php`** | ON | ON | green | can see it |
+
+**The pool env cannot work, and the reason is structural.** `env[]` in an FPM pool
+reaches FPM only. wp-cli, WP-cron and every gate run in a different runtime and
+read the tracked default, so the box genuinely holds two flag states at once.
+Gate 35 reads the flag with `wp eval` (CLI) and measures the SERVED page (FPM), so
+it goes red on a healthy box — and it did, for the whole fleet, which is what
+made "gates are green" unavailable to everyone as merge evidence. No edit to
+gate 35 can fix that honestly: the disagreement is real, not a measurement
+artifact. The same split would also have made `lg_fc_sync_reaper_schedule()`
+thrash, since FPM requests would schedule the reaper and every CLI load would
+unschedule it.
+
+**The local-file mechanism is right, and it shipped half-built.** The file was
+created carrying `'enabled' => true` and a docblock saying it is *"read by
+`lg_fc_enabled()` after the tracked config"* — and nothing read it. With the pool
+env removed in the same change, the tracked `false` won and compose went dark:
+`/compose/` answered **404 / 5,114 bytes** to an allowed admin where it had served
+the form at 188,767 bytes the night before. FPM restarting on the reboot is what
+made it bite. **A config file nobody reads is indistinguishable from a feature
+that is off.**
+
+Commit `9003672` adds the missing read. Four states, red-first against the real
+function: override present → ON (old code: OFF, the outage), override absent →
+OFF (**this absence is the only thing keeping compose off on live**), override
+`false` → OFF, override malformed → OFF.
+
+⚠️ **The override file was not gitignored.** `git check-ignore` matched nothing, so
+one commit would have switched compose on for ~1,820 `edit_posts` members on live
+— the exact side effect the move existed to prevent. `platform/config/*.local.php`
+is ignored as of the same commit, verified against the real filename.
+
+---
+
 ## WHAT IS NOT DONE
 
 - **Ian has not seen it.** The flag stays OFF until he has.
