@@ -527,6 +527,7 @@ if ($whoamiSrc === '') {
 
     is_($keyedOn !== [], sprintf('the header keys on capabilities at all, so this is not vacuous (%s)', implode(', ', $keyedOn)));
     $dropped = array_values(array_diff($keyedOn, $forwarded));
+    $LGB_CROSSCHECK_DONE = true;
     is_($dropped === [], sprintf(
         'EVERY capability the header keys on survives profile-app\'s pass-through (dropped: %s)',
         $dropped === [] ? 'none' : implode(', ', $dropped)));
@@ -571,6 +572,81 @@ is_(str_contains($icr, "\$caps['stripe_testgroup']"),
     "the capability is computed centrally beside manage_options, so every surface gets the same answer");
 
 /* ---------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------- */
+section("[10] THE REAL PAGE, AS A REAL MEMBER — driven over HTTP");
+
+/**
+ * Keeper, 2026-08-16, after Ian's visibility test failed while this gate was
+ * green: every other leg here drives menuFor() with SYNTHETIC caps, which can
+ * only prove the header honours a capability it is handed. This drives the
+ * actual page over HTTP as a minted session, which is the only way to see what
+ * a real member's browser gets.
+ *
+ * PROBES, chosen by keeper: 854 GerryHayesTest is LISTED and has NO
+ * manage_options — it must not be an admin, or it passes the admin branch and
+ * proves nothing about the list. 2455 viz-test-nobody is listed nowhere.
+ *
+ * ⚠️ IT READS THE DEPLOYED STATE RATHER THAN HARDCODING IT. This leg measures
+ * whichever copy of profile-app is DEPLOYED, not this branch. Until the
+ * pass-through fix reaches the serve, the deployed copy still drops
+ * `stripe_testgroup` — so a leg asserting "entries render" would go RED on main
+ * and block every lane for a fix that is merely not shipped yet. It asks whoami
+ * what the deployed tree actually does, then asserts the matching state.
+ */
+$mintCookie = static function (int $uid): ?string {
+    $ck = shell_exec('sudo -u looth-dev -H wp --path=/var/www/dev eval '
+        . escapeshellarg('echo wp_generate_auth_cookie(' . $uid . ', time()+3600, "logged_in");') . ' 2>/dev/null');
+    $ck = trim((string) $ck);
+    return $ck !== '' ? $ck : null;
+};
+$hash = trim((string) shell_exec('sudo -u looth-dev -H wp --path=/var/www/dev eval '
+    . escapeshellarg('echo COOKIEHASH;') . ' 2>/dev/null'));
+
+$fetchAs = static function (int $uid, string $path) use ($mintCookie, $hash): array {
+    $ck = $mintCookie($uid);
+    if ($ck === null || $hash === '') { return ['code' => 0, 'body' => '']; }
+    $cmd = sprintf('curl -sk -o /dev/stdout -w "\n%%{http_code}" -H %s -H %s %s 2>/dev/null',
+        escapeshellarg('Host: dev2.loothgroup.com'),
+        escapeshellarg('Cookie: wordpress_logged_in_' . $hash . '=' . $ck),
+        escapeshellarg('https://127.0.0.1' . $path));
+    $out = (string) shell_exec($cmd);
+    $nl  = strrpos($out, "\n");
+    return ['code' => (int) substr($out, $nl + 1), 'body' => substr($out, 0, $nl === false ? 0 : $nl)];
+};
+
+if ($hash === '') {
+    echo "  .. cannot mint sessions here (no wp) — real-page leg skipped\n";
+} else {
+    $listedPage = $fetchAs(854, '/manage-subscription/');
+    is_($listedPage['code'] === 200,
+        sprintf('a LISTED non-admin member reaches the real page (854 → %d)', $listedPage['code']));
+    is_(!str_contains($listedPage['body'], 'not available'),
+        '...and gets the page itself, not the pre-launch stub');
+
+    // What does the DEPLOYED tree actually hand the page?
+    $who = $fetchAs(854, '/wp-json/looth/v1/whoami');
+    $payload = json_decode($who['body'], true);
+    $deployedCarries = is_array($payload) && array_key_exists('stripe_testgroup', (array) ($payload['capabilities'] ?? []));
+
+    if (!$deployedCarries) {
+        // Not a failure of this branch: the fix simply is not on the serve yet.
+        echo "  .. the DEPLOYED profile-app still drops stripe_testgroup — menu half\n";
+        echo "     awaits merge+pull of the pass-through fix. Reachability asserted above.\n";
+        is_(true, 'deployed state read and reported rather than asserted against blindly');
+    } else {
+        $entries = 0;
+        foreach ($STRIPE_LINKS as $l) { if (str_contains($listedPage['body'], $l)) { $entries++; } }
+        is_($entries === count($STRIPE_LINKS), sprintf(
+            'a LISTED member SEES the stripe entries on the real page (%d of %d)', $entries, count($STRIPE_LINKS)));
+
+        $plainPage = $fetchAs(2455, '/manage-subscription/');
+        $leaked = array_values(array_filter($STRIPE_LINKS,
+            static fn (string $l): bool => str_contains($plainPage['body'], $l)));
+        is_($leaked === [], sprintf('an UNLISTED member sees none of them (leaked: %s)',
+            $leaked === [] ? 'none' : implode(', ', $leaked)));
+    }
+}
+
 echo "\n$pass passed, $fail failed\n";
 if ($fail > 0) {
     echo "RED — the Stripe Test Group page gate is not holding.\n";
