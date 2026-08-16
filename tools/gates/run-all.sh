@@ -1398,6 +1398,34 @@ echo "=== GATE 66: hub author filter — a display name's own comma broke it ent
 # tree via the featured-members lane preview, so it must be UP for this to run.
 run "hub-author-comma" python3 "$(dirname "$0")/hub-author-comma-gate.py"
 
+echo "=== GATE 68: the compose page wears the site chrome, in BOTH themes ==="
+# Ian, 2026-08-16, testing /compose/ live: "can we get the header and footer so it
+# looks like a normal page?" Keeper's ruling alongside it: standalone pages MIMIC
+# the chrome (nothing renders from the WP theme), and the presence gets gated in
+# BOTH THEMES from birth.
+#
+# LIVENESS FIRST, and it is what makes the rest mean anything: a locked-out browser
+# serves a styled 403 that looks identical in every theme, so a chrome assertion
+# against it fails for the wrong reason — and a presence-only assertion could even
+# PASS on it.
+#
+# VISIBLE, NOT PRESENT. Computed display plus a real layout box, never a class name
+# in the HTML. Chrome sitting in the DOM at height 0 is exactly the
+# "presence is not reachability" shape that has bitten this box twice.
+#
+# BOTH THEMES because a token-coloured chrome can be perfectly present and
+# invisible in one of them — this same form produced one of those this week
+# (white ink on a token that flips lightness in dark).
+#
+# THE EMBED LEG IS AN ABSENCE ASSERTION, PAIRED WITH A LIVENESS ONE: "no chrome" is
+# trivially true of a 404, so it requires the form first and then judges the
+# absence, and SKIPS rather than scoring if that route is unreachable.
+#
+# RED-FIRST FROM REAL STATE, not a mutation — run against the serve before the
+# chrome shipped: liveness ok in BOTH themes, header and footer RED in both, embed
+# leg ok non-vacuously, 4 of 5, exit 1.
+run "compose-chrome" python3 "$(dirname "$0")/compose-chrome-gate.py"
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"

@@ -306,7 +306,12 @@ function lg_fc_types(): array
             // sit wherever they are put. Verified both resolve rather than
             // assumed — a silently-unresolved selector renders as nothing at all.
             'fields'   => [
-                // name                          label                    hint                                                             extra  acf_label
+                // The 4th column is VESTIGIAL as of 2026-08-16 and is kept only so the
+                // rows stay readable in one shape: it used to mark a field for the
+                // "Add extras" fold, and that fold is gone by Ian's ruling. Nothing
+                // reads it now, so every value is false — a true would describe a
+                // construct that no longer exists.
+                // name                          label                    hint                                                             (unused) acf_label
                 ['_post_title',                  "What’s it called?",     '',                                                              false, 'Title of your Loothprint'],
                 ['loothprint_more_images',       'Show it off',           'One or more photos of your print — finished, or better still in use.', false, 'Add one or more image(s) of your print in action'],
                 ['loothprint_3d_file',           'The print files',       'A ZIP with your STLs — and the editable source too, if you’re happy to share it.', false, '3D File Upload ZIP File'],
@@ -314,10 +319,18 @@ function lg_fc_types(): array
                 ['loothprint_category',          'What kind of print is it?', '',                                                          false, 'Type of Loothprint'],
                 ['content_topic_broad_terms',    'And roughly what area of work?', '',                                                     false, 'Content Topic'],
                 ['loothprint_creative_commons',  'Licence',               'The usual choice — leave it unless you know you want something else.', false, 'Creative Commons Use License (leave default if unsure)'],
-                ['loothprint_video_instructions','A video of it in use',  '',                                                              true,  'Video instructions for use/build'],
-                ['loothprint_onshape_link',      'Onshape / CAD link',    '',                                                              true,  'Onshape Project Link'],
-                ['loothprint_buy_me_a_coffee',   'Tip jar',               'Buy Me A Coffee or similar, if you’d like one.',                true,  "Link to your Buy Me A Coffee or other 'leave me a tip' site (optional)"],
+                ['loothprint_video_instructions','A video of it in use',  '',                                                              false, 'Video instructions for use/build'],
             ],
+            /* REMOVED FROM THE FORM 2026-08-16, Ian testing live: "remove tip jar
+               and onshape". loothprint_onshape_link and loothprint_buy_me_a_coffee
+               are gone from the field list only.
+               ⚠️ THE DATA IS UNTOUCHED AND STILL RENDERS. lg-layout-v2 Plugin.php
+               (~530-564) synthesises both into page callouts, and on dev2 today 7
+               published loothprints carry an Onshape link and 14 carry a tip jar,
+               out of 168. So those keep showing on the page while no author can now
+               edit or clear them. That is a RENDER/DATA question, raised to keeper
+               rather than answered here — deleting members' links is not a
+               form-side decision. */
             // Rendered by us, not by ACF — see lg_fc_comment_status().
             'comments' => ['label' => 'Let people comment', 'acf_label' => 'Commenting'],
             // The mock drops the featured_image control and promises the footer
@@ -767,7 +780,6 @@ function lg_fc_route(): void
         'form_attributes'    => [
             'class'             => 'acf-form lgfc__form',
             'data-lgfc-type'    => $type,
-            'data-lgfc-extras'  => implode(',', lg_fc_extra_field_names($type)),
         ],
         'html_after_fields'  => lg_fc_own_controls($t),
         'html_submit_button' => '<input type="submit" class="lgfc__submit" value="%s" />'
@@ -807,13 +819,47 @@ function lg_fc_acf_field_names(string $type): array
 function lg_fc_own_controls(array $t): string
 {
     $label = esc_html($t['comments']['label']);
-    return <<<HTML
-<div class="acf-field lgfc-field lgfc__own" data-lgfc-extra="1" data-name="lg_fc_comments">
+    $hero  = !empty($t['hero_from']) ? lg_fc_hero_control() : '';
+    return $hero . <<<HTML
+<div class="acf-field lgfc-field lgfc__own" data-name="lg_fc_comments">
   <div class="acf-label"><label>{$label}</label></div>
   <div class="acf-input"><div class="lgfc__chips">
     <label class="lgfc__chip"><input type="radio" name="lg_fc_comments" value="open" checked> <span>Yes</span></label>
     <label class="lgfc__chip"><input type="radio" name="lg_fc_comments" value="closed"> <span>No</span></label>
   </div></div>
+</div>
+HTML;
+}
+
+/**
+ * "Your hero image is the first photo unless you pick another" — the control that
+ * sentence has been promising.
+ *
+ * Ian, 2026-08-16, testing live: "There is no featured image". The footer prose
+ * has claimed a picker since the form shipped and there was never one to click:
+ * prose promising an absent control, which is a defect class in its own right
+ * because a member reads it and goes looking.
+ *
+ * EMPTY AND JS-FILLED ON PURPOSE. The photos live in ACF's gallery field, which
+ * builds its own DOM after ACF boots and mutates it on every add/remove/reorder.
+ * Rendering a server-side copy of that list would be a second source of truth
+ * that goes stale the moment somebody drags a photo — so the strip mirrors the
+ * gallery live instead, and stays hidden until there is something to choose.
+ *
+ * The hidden input carries only the chosen attachment id; lg_fc_hero_pick()
+ * re-validates it server-side (attachment, and parented to THIS post) because a
+ * hidden input is a member-controlled value.
+ */
+function lg_fc_hero_control(): string
+{
+    return <<<HTML
+<div class="acf-field lgfc-field lgfc__own lgfc__hero" data-name="lg_fc_hero" hidden>
+  <div class="acf-label"><label>Which photo leads?</label>
+    <p class="description">This is the one people see first, in the feed and at the top of your page.</p></div>
+  <div class="acf-input">
+    <input type="hidden" name="lg_fc_hero" value="">
+    <div class="lgfc__herostrip" role="radiogroup" aria-label="Choose the lead photo"></div>
+  </div>
 </div>
 HTML;
 }
@@ -840,6 +886,15 @@ function lg_fc_shed_site_chrome(): void
 {
     $drop = apply_filters('lg_fc_drop_handle_prefixes', [
         'bp-', 'bb-', 'buddy', 'fluent', 'fea-', 'wp-ulike', 'tutor', 'meprlms',
+        // ⚠️ THESE TWO LOOK LIKE THEY CONTRADICT THE SITE CHROME ADDED 2026-08-16
+        // (Ian: "can we get the header and footer so it looks like a normal
+        // page?"). They do not, and the distinction matters if you ever tidy this
+        // list: the chrome here is NOT enqueued. lg_fc_page_open() prints a plain
+        // <link> to /lg-shared/site-header.css and requires the partial directly,
+        // so it is untouched by a dequeue pass. Dropping these handles still keeps
+        // out whatever ELSE enqueues them site-wide (lg-layout-v2 does, on every
+        // page), which would otherwise load the same stylesheet twice.
+        // Remove them only if you also stop printing that <link>.
         'lg-shared-site-header', 'lg-site-footer', 'lg-wd-',
         'twentytwentyfive', 'wp-block-library', 'global-styles',
     ]);
@@ -868,6 +923,46 @@ function lg_fc_shed_site_chrome(): void
  * but it is the difference between deriving a default and overwriting a choice,
  * and that is the whole subject of this lane's hard constraint.
  */
+/**
+ * The hero the member actually PICKED, if they picked one.
+ *
+ * Ian, 2026-08-16, testing live: "There is no featured image". He was right, and
+ * the sharper version of it is that this form's own footer has been PROMISING a
+ * picker — "Your hero image is the first photo unless you pick another" — while no
+ * control to pick another existed. Prose promising an absent control.
+ *
+ * The server half was already here and already correct: lg_fc_hero_from_gallery()
+ * bails the moment a thumbnail is set ("the member picked one — never overwrite
+ * it"). So this only had to give them a way to set it. Runs at 19, BEFORE the
+ * auto-pick at 20, so a deliberate choice always beats "first photo".
+ *
+ * VALIDATED, not trusted: the id must be an attachment, and it must belong to
+ * THIS post — the draft-first model parents every upload to the post from birth,
+ * so post_parent is the honest test. Without it a member could point their hero
+ * at somebody else's image by editing one hidden input.
+ */
+function lg_fc_hero_pick($post_id): void
+{
+    if (!is_numeric($post_id)) {
+        return;
+    }
+    $post_id = (int) $post_id;
+    if (!isset($_POST['lg_fc_hero'])) {
+        return;
+    }
+    $att = absint($_POST['lg_fc_hero']);
+    if (!$att) {
+        return;   // "no explicit pick" — leave it to the auto-pick at 20
+    }
+    if (get_post_type($att) !== 'attachment') {
+        return;
+    }
+    if ((int) wp_get_post_parent_id($att) !== $post_id) {
+        return;   // not this post's media — refuse rather than reassign
+    }
+    set_post_thumbnail($post_id, $att);
+}
+add_action('acf/save_post', 'lg_fc_hero_pick', 19);   // BEFORE the auto-pick
 add_action('acf/save_post', 'lg_fc_hero_from_gallery', 20);
 
 function lg_fc_hero_from_gallery($post_id): void
@@ -985,7 +1080,7 @@ function lg_fc_render(string $type, int $edit = 0, bool $embed = false): void
   <?php acf_form('lg-fc-' . $type); ?>
 </div>
     <?php
-    lg_fc_page_close();
+    lg_fc_page_close($embed);
     remove_filter('acf/prepare_field', 'lg_fc_relabel', 20);
     unset($GLOBALS['lg_fc_editing']);
 }
@@ -1060,25 +1155,6 @@ function lg_fc_relabel($field)
 }
 
 /**
- * The field names the mock folds away under "Add extras".
- *
- * Emitted as a data attribute and matched in JS by data-name, rather than by
- * pushing a custom key through ACF's wrapper array. ACF decides for itself which
- * wrapper keys it will render, and a fold that silently stops folding because an
- * ACF upgrade dropped an unknown attribute is a defect nobody would look for.
- */
-function lg_fc_extra_field_names(string $type): array
-{
-    $out = [];
-    foreach (lg_fc_types()[$type]['fields'] as $f) {
-        if (!empty($f[3])) {
-            $out[] = $f[0];
-        }
-    }
-    return $out;
-}
-
-/**
  * EMBED IS STILL A WHOLE DOCUMENT, DELIBERATELY, and it is meant to be iframed.
  *
  * The obvious alternative — return an HTML fragment and inject it into the hub
@@ -1094,6 +1170,68 @@ function lg_fc_extra_field_names(string $type): array
  * `embed` changes is only the page furniture: no outer padding, no page
  * background, no min-height — so the card fills the frame it is given.
  */
+/**
+ * The $ctx the shared site chrome wants, built from in-process WP state.
+ *
+ * Ian, 2026-08-16, mid-test on /compose/: "can we get the header and footer so it
+ * looks like a normal page?" — he had just ruled the page-jump stays, so the page
+ * he lands on has to read as one of ours rather than a bare form.
+ *
+ * HOUSE DOCTRINE, not invented here: a standalone page MIMICS the chrome, it never
+ * renders the WP theme. This is a straight copy of lg-layout-v2's SiteHeader::viewer()
+ * — the existing WordPress-side caller — so every WP surface feeds the shared header
+ * identical identity. Role -> tier walks highest to lowest so a member holding several
+ * looth roles gets the top one, matching Arbiter and InternalRestController.
+ */
+function lg_fc_chrome_viewer(): array
+{
+    $user = wp_get_current_user();
+    $auth = ($user instanceof WP_User) && (int) $user->ID > 0;
+
+    $tier = 'public';
+    if ($auth) {
+        foreach (['looth4' => 'pro', 'looth3' => 'pro', 'looth2' => 'lite', 'looth1' => 'public'] as $role => $t) {
+            if (in_array($role, (array) $user->roles, true)) { $tier = $t; break; }
+        }
+    }
+
+    return [
+        'authenticated' => $auth,
+        'tier'          => $tier,
+        'display_name'  => $auth ? (string) $user->display_name : '',
+        'avatar_url'    => $auth ? (string) get_avatar_url($user->ID, ['size' => 96]) : null,
+        'capabilities'  => [
+            'manage_options'   => $auth && user_can($user->ID, 'manage_options'),
+            'edit_archive_poc' => $auth && user_can($user->ID, 'edit_archive_poc'),
+        ],
+        // null = let the header lazy-load these over REST.
+        'msg_unread'    => null,
+        'notif_unread'  => null,
+        // Compose is not a top-nav destination, so nothing is highlighted.
+        'active_nav'    => '',
+        'logout_url'    => wp_logout_url(home_url('/')),
+        // Contract (Ian 2026-06-03): the account chip goes to /u/<slug>; /profile/edit
+        // is only the slug-less fallback.
+        'profile_url'   => ($auth && $user->user_nicename)
+            ? '/u/' . rawurlencode((string) $user->user_nicename)
+            : '/profile/edit',
+    ];
+}
+
+/** The shared chrome partials, on disk. Absolute — NOT __DIR__-relative, which
+ *  resolves through the mu-plugin symlink into the repo where these do not sit. */
+const LG_FC_CHROME_HEADER = '/srv/lg-shared/site-header.php';
+const LG_FC_CHROME_FOOTER = '/srv/lg-shared/site-footer.php';
+const LG_FC_CHROME_CSS_FS = '/srv/lg-shared/site-header.css';
+
+/** True when this render should carry the site chrome. */
+function lg_fc_wants_chrome(bool $embed): bool
+{
+    // The embed variant is framed by another page that already has chrome — a
+    // second copy inside the frame would be two headers on one screen.
+    return !$embed && is_readable(LG_FC_CHROME_HEADER);
+}
+
 function lg_fc_page_open(string $title, bool $embed = false): void
 {
     ?>
@@ -1105,17 +1243,36 @@ function lg_fc_page_open(string $title, bool $embed = false): void
 <meta name="robots" content="noindex,nofollow">
 <title><?php echo esc_html($title); ?></title>
 <?php wp_head(); ?>
+<?php if (lg_fc_wants_chrome($embed)): ?>
+<link rel="stylesheet" href="/lg-shared/site-header.css?v=<?php echo is_readable(LG_FC_CHROME_CSS_FS) ? (int) filemtime(LG_FC_CHROME_CSS_FS) : 1; ?>">
+<?php endif; ?>
 <style><?php echo lg_fc_css(); ?></style>
 </head>
-<body class="lgfc-body<?php echo $embed ? ' lgfc-body--embed' : ''; ?>">
+<body class="lgfc-body<?php echo $embed ? ' lgfc-body--embed' : ''; ?><?php echo lg_fc_wants_chrome($embed) ? ' lgfc-body--chrome' : ''; ?>">
+<?php
+if (lg_fc_wants_chrome($embed)) {
+    require_once LG_FC_CHROME_HEADER;
+    if (function_exists('lg_shared_render_site_header')) {
+        lg_shared_render_site_header(lg_fc_chrome_viewer());
+    }
+}
+?>
 <main class="lgfc<?php echo $embed ? ' lgfc--embed' : ''; ?>">
     <?php
 }
 
-function lg_fc_page_close(): void
+function lg_fc_page_close(bool $embed = false): void
 {
     ?>
 </main>
+<?php
+if (lg_fc_wants_chrome($embed)) {
+    require_once LG_FC_CHROME_FOOTER;
+    if (function_exists('lg_shared_render_site_footer')) {
+        lg_shared_render_site_footer();
+    }
+}
+?>
 <script><?php echo lg_fc_js(); ?></script>
 <?php wp_footer(); ?>
 </body>
@@ -1272,7 +1429,40 @@ function lg_fc_css(): string
 .lgfc .acf-gallery-side{border-radius:11px;border:1px solid var(--lg-line,#e3ddd0)}
 
 /* ---- file ---- */
-.lgfc .acf-field-file .acf-input>.acf-file-uploader{
+/* THE PRINT-FILES ROW — Ian, 2026-08-16, testing live: "The print files is weird,
+   please make look nice". MEASURED BEFORE REDRAWING rather than restyled on a
+   hunch: the control rendered as a 21px-tall sliver reading "No file selected
+   [Add File]", directly beneath a 104px dashed drop-zone for photos. Beside the
+   thing above it, it read as an afterthought — which is exactly what he saw.
+
+   ⚠️ STYLED ON .hide-if-value, NOT ON A has-value CLASS. My first instinct was
+   `.acf-file-uploader:not(.has-value)`, and it would have been wrong: this build
+   never sets that class — measured in the live DOM, the uploader's class list is
+   exactly "acf-file-uploader", and `has-value` appears ZERO times in the served
+   page. The drop-zone would then have stayed on top of a chosen file. Also note
+   this page loads NO ACF stylesheet at all, so nothing here can be assumed from
+   how ACF looks in wp-admin.
+
+   .hide-if-value IS the empty state by definition — ACF hides it the instant a
+   file lands and reveals .show-if-value — so the drop-zone look disappears on its
+   own with no state class to track. */
+.lgfc .acf-field-file .acf-input>.acf-file-uploader{border:0;background:none}
+.lgfc .acf-file-uploader>.hide-if-value{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  min-height:104px;padding:14px;
+  border:1.5px dashed var(--lg-sage,#87986a);border-radius:11px;
+  background:var(--lg-paper,#fdfdfa)}
+.lgfc .acf-file-uploader>.hide-if-value::before{content:"Drop your ZIP here";
+  font:700 13.5px/1.3 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-sage-d,#6b7c52)}
+.lgfc .acf-file-uploader>.hide-if-value::after{content:"or tap to choose \00b7 STLs, and the source too if you like";
+  font-size:12.3px;color:var(--lg-mute,#6b6f6b);order:2;text-align:center}
+/* ACF's "No file selected" wording and its button share ONE <p>, so the text
+   cannot be display:none'd without taking the only tap target with it. Zero the
+   paragraph and give the size back to the button. */
+.lgfc .acf-file-uploader>.hide-if-value p{font-size:0;margin:8px 0 0;order:3}
+.lgfc .acf-file-uploader>.hide-if-value p .acf-button{font-size:12.5px}
+/* the chosen-file state stays a solid card, so "empty" and "filled" read apart */
+.lgfc .acf-file-uploader>.show-if-value{
   border:1px solid var(--lg-line,#e3ddd0);border-radius:11px;background:var(--lg-paper,#fdfdfa)}
 .lgfc .acf-file-uploader .file-wrap,.lgfc .acf-file-uploader .show-if-value{padding:9px 11px}
 .lgfc input[type=file]{font-size:13px;color:var(--lg-mute,#6b6f6b)}
@@ -1282,6 +1472,16 @@ function lg_fc_css(): string
 
 /* ---- our own controls ---- */
 .lgfc__own{padding:15px 0}
+/* the hero picker's strip — small, so it reads as "which of these", not a gallery */
+.lgfc__herostrip{display:flex;gap:8px;flex-wrap:wrap}
+.lgfc__heroopt{padding:0;border:2px solid transparent;border-radius:10px;background:none;
+  cursor:pointer;line-height:0;overflow:hidden;outline-offset:2px}
+.lgfc__heroopt img{width:66px;height:66px;object-fit:cover;border-radius:8px;display:block}
+.lgfc__heroopt:hover{border-color:var(--lg-line,#e3ddd0)}
+.lgfc__heroopt.is-on{border-color:var(--lg-sage-d,#6b7c52)}
+.lgfc__heroopt.is-on img{filter:none}
+.lgfc__heroopt:not(.is-on) img{filter:saturate(.72) brightness(.94)}
+.lgfc__hero[hidden]{display:none}
 .lgfc__ownlabel{font:700 14.5px/1.3 var(--lg-font-sans,system-ui,sans-serif);margin:0 0 8px}
 .lgfc__chips{display:flex;gap:6px;flex-wrap:wrap}
 .lgfc__chip{font:600 12.3px/1 var(--lg-font-sans,system-ui,sans-serif);
@@ -1291,17 +1491,6 @@ function lg_fc_css(): string
 .lgfc__chip:has(input:checked){background:var(--lg-sage-d,#6b7c52);
   border-color:var(--lg-sage-d,#6b7c52);color:#fff}
 
-/* ---- the extras fold ---- */
-.lgfc__fold{margin:4px 0 0;border:1px solid var(--lg-line,#e3ddd0);border-radius:11px;
-  background:var(--lg-paper,#fdfdfa);overflow:hidden}
-.lgfc__foldt{display:flex;align-items:center;gap:9px;width:100%;background:none;border:0;
-  padding:13px 14px;font:700 13.5px/1 var(--lg-font-sans,system-ui,sans-serif);
-  color:var(--lg-sage-d,#6b7c52);cursor:pointer;text-align:left}
-.lgfc__foldt .cv{margin-left:auto;color:var(--lg-mute,#6b6f6b);font-size:12px;font-weight:600}
-.lgfc__foldb{padding:0 14px 6px;display:none}
-.lgfc__fold[open] .lgfc__foldb,.lgfc__fold.is-open .lgfc__foldb{display:block}
-.lgfc__fold.is-open .lgfc__foldt .cv::after{content:" \25B2"}
-.lgfc__fold:not(.is-open) .lgfc__foldt .cv::after{content:" \25BC"}
 
 /* ---- footer: ACF's own submit row, dressed as the mock's ---- */
 .lgfc .acf-form-submit{margin:0;padding:15px 21px 19px;
@@ -1398,39 +1587,70 @@ CSS;
 function lg_fc_js(): string
 {
     return <<<'JS'
+/* THE HERO PICKER — mirrors ACF's gallery, live.
+   The gallery builds and rebuilds its own DOM (add, remove, reorder), so the strip
+   is rebuilt from it on every mutation rather than rendered once. It hides itself
+   whenever there is nothing to choose, which is also the state the form opens in,
+   so an empty form never shows an empty control.
+   DEFAULT = FIRST, matching the server: lg_fc_hero_from_gallery() takes the first
+   photo when nothing is picked, so the strip shows that same one as selected and
+   the picture never disagrees with what will be saved. */
 (function () {
-  var form = document.querySelector('[data-lgfc-extras]');
-  if (!form) return;
-  var names = (form.getAttribute('data-lgfc-extras') || '').split(',').filter(Boolean);
-  var nodes = [];
-  names.forEach(function (n) {
-    var el = form.querySelector('.acf-field[data-name="' + n + '"]');
-    if (el) nodes.push(el);
-  });
-  form.querySelectorAll('[data-lgfc-extra]').forEach(function (el) {
-    if (nodes.indexOf(el) === -1) nodes.push(el);
-  });
-  if (!nodes.length) return;
+  var wrap = document.querySelector('.lgfc__hero');
+  if (!wrap) return;
+  var input = wrap.querySelector('input[name="lg_fc_hero"]');
+  var strip = wrap.querySelector('.lgfc__herostrip');
+  var gal   = document.querySelector('.acf-field[data-name="loothprint_more_images"]');
+  if (!input || !strip || !gal) return;
 
-  var fold = document.createElement('div');
-  fold.className = 'lgfc__fold';
-  var btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'lgfc__foldt';
-  btn.setAttribute('aria-expanded', 'false');
-  btn.innerHTML = 'Add extras <span class="cv">' + nodes.length + ' optional</span>';
-  var body = document.createElement('div');
-  body.className = 'lgfc__foldb';
-  fold.appendChild(btn);
-  fold.appendChild(body);
+  function shots() {
+    return Array.prototype.slice.call(
+      gal.querySelectorAll('.acf-gallery-attachment')
+    ).map(function (el) {
+      var img = el.querySelector('img');
+      var id  = el.getAttribute('data-id') || (el.querySelector('input') || {}).value || '';
+      return { id: String(id || ''), src: img ? img.getAttribute('src') : '' };
+    }).filter(function (s) { return s.id && s.src; });
+  }
 
-  nodes[0].parentNode.insertBefore(fold, nodes[0]);
-  nodes.forEach(function (el) { body.appendChild(el); });
+  function paint() {
+    var list = shots();
+    if (list.length < 2) {          /* nothing to choose between */
+      wrap.hidden = true;
+      if (!list.length) input.value = '';
+      return;
+    }
+    wrap.hidden = false;
+    var current = input.value;
+    if (!current || !list.some(function (s) { return s.id === current; })) {
+      current = list[0].id;         /* default = first, same as the server */
+      input.value = current;
+    }
+    strip.innerHTML = '';
+    list.forEach(function (s) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'lgfc__heroopt' + (s.id === current ? ' is-on' : '');
+      b.setAttribute('role', 'radio');
+      b.setAttribute('aria-checked', s.id === current ? 'true' : 'false');
+      b.setAttribute('aria-label', 'Use this photo as the lead');
+      b.innerHTML = '<img alt="" src="' + s.src.replace(/"/g, '&quot;') + '">';
+      b.addEventListener('click', function () {
+        input.value = s.id;
+        paint();
+      });
+      strip.appendChild(b);
+    });
+  }
 
-  btn.addEventListener('click', function () {
-    var open = fold.classList.toggle('is-open');
-    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-  });
+  paint();
+  new MutationObserver(paint).observe(gal, { childList: true, subtree: true });
 })();
+
+/* THE "ADD EXTRAS" ACCORDION IS GONE — Ian, 2026-08-16, testing live: "and the
+   extras accordiian in general". Everything that used to fold now sits in the main
+   body in its declared order, which is also why the registry's `extra` column is
+   now false everywhere: nothing reads it, and leaving true values behind would
+   describe a construct that no longer exists. */
 JS;
 }

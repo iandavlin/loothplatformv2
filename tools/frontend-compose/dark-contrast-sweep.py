@@ -177,8 +177,25 @@ def main() -> int:
                  deviceScaleFactor=1, mobile=mobile,
                  screenWidth=args.width, screenHeight=1400)
 
-        # The standalone route, not the hub — see the REPOINTED note in COLLECT.
-        url = env["LG_GATE_HOST"] + "/preview/frontend-compose/compose/?type=loothprint"
+        # THE REAL ROUTE, not a lane preview. Repointed 2026-08-16 after this gate
+        # went silently inert: it drove /preview/frontend-compose/compose/, and
+        # that preview's nginx conf — while still present on disk — is included
+        # ZERO times in the vhost now that the lane's branch was retired. The URL
+        # 404s (5,114 bytes), so the gate reported CANNOT RUN forever while the
+        # compose form it exists to measure was serving perfectly at 200.
+        #
+        # A gate aimed at retired infrastructure is worse than no gate: it goes
+        # QUIET rather than red, which is the same failure this file was already
+        # repointed once for (it used to measure the deleted #lpm-overlay modal).
+        #
+        # It no longer needs the preview at all. The preview existed to FORCE the
+        # flag on via fastcgi_param; compose is now ON on dev2 through the tracked
+        # reader + platform/config/frontend-compose.local.php, so the real route
+        # serves the form to an entitled member. If the flag is ever OFF this
+        # returns no form and the gate exits 2 — a no-verdict, not a red — which
+        # is the correct answer to "the feature is switched off", and means
+        # flipping the default needs no edit here.
+        url = env["LG_GATE_HOST"] + "/compose/?type=loothprint"
         # trap: a localStorage write on about:blank is a silent no-op, so
         # navigate FIRST, set the theme, then navigate again.
         tab.call("Page.navigate", url=url); time.sleep(3)
