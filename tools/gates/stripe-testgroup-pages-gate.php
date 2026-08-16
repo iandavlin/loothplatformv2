@@ -498,6 +498,38 @@ if ($whoamiSrc === '') {
         '...true for a listed member');
     is_(($unlisted['stripe_testgroup'] ?? null) === false,
         '...and false for an unlisted one, not merely absent');
+
+    /**
+     * THE STRUCTURAL VERSION OF THE SAME BUG — keeper, 2026-08-16: make the
+     * silent discard impossible rather than merely fixed once.
+     *
+     * EVERY capability the header keys on must survive profile-app's
+     * pass-through. The allowlist names what it forwards, so a capability
+     * nobody remembered to name is dropped — and a dropped capability is
+     * INDISTINGUISHABLE from one that is false. That is why the failure looked
+     * like a gate refusing a listed member rather than a key going missing.
+     *
+     * This is a static cross-check between the two files, so it fails the day
+     * someone teaches the header a NEW capability and forgets the other end —
+     * which is the next instance of this bug, not a hypothetical one.
+     */
+    $headerSrc = (string) @file_get_contents($REPO . '/lg-shared/site-header.php');
+    preg_match_all("/caps\['([a-z_]+)'\]/", $headerSrc, $hm);
+    $keyedOn = array_values(array_unique($hm[1] ?? []));
+
+    // What the central computation actually forwards: the explicit keys it
+    // builds, plus the names in its pass-through loop.
+    preg_match_all("/'([a-z_]+)'\s*=>/", $cm[0], $em);
+    $explicit = $em[1] ?? [];
+    preg_match('/foreach \(\[(.*?)\] as/s', $cm[0], $fm);
+    preg_match_all("/'([a-z_]+)'/", $fm[1] ?? '', $pm);
+    $forwarded = array_values(array_unique(array_merge($explicit, $pm[1] ?? [])));
+
+    is_($keyedOn !== [], sprintf('the header keys on capabilities at all, so this is not vacuous (%s)', implode(', ', $keyedOn)));
+    $dropped = array_values(array_diff($keyedOn, $forwarded));
+    is_($dropped === [], sprintf(
+        'EVERY capability the header keys on survives profile-app\'s pass-through (dropped: %s)',
+        $dropped === [] ? 'none' : implode(', ', $dropped)));
 }
 
 $leak = array_values(array_filter($STRIPE_LINKS, static fn (string $l): bool => str_contains($mPlain, $l)));
