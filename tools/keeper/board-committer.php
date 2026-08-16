@@ -51,9 +51,10 @@ const ALLOWED_PATHS = [
     'docs/BACKLOG.md',
     'docs/board-notes/',      // per-item notes and chat threads
     'docs/board-media/',      // media references (the files live outside git)
+    'docs/board-lanes/',      // Ian's messages TO a lane (the replies are never committed)
 ];
 
-const INTENTS = [ 'reorder', 'note_append', 'media_ref' ];
+const INTENTS = [ 'reorder', 'note_append', 'media_ref', 'lane_message' ];
 
 /* ---------------------------------------------------------------------- */
 
@@ -252,6 +253,56 @@ function applyMediaRef( string $repo, string $id, string $ref, string $actor ): 
     return [ $rel ];
 }
 
+/**
+ * Ian's message TO a lane. Ian, 2026-08-16: "I would like to be able to
+ * interact with the lanes through the workboard."
+ *
+ * ONLY HIS HALF IS COMMITTED. The lanes' replies already live in the devmsg
+ * store and are rendered from a snapshot — committing both directions would put
+ * hundreds of commits a day on main and make the log useless. His words are the
+ * durable half because they are instructions, and an instruction should be
+ * findable from the item months later.
+ *
+ * THE LANE NAME IS THE DANGEROUS PART, because it is used twice: it becomes a
+ * FILENAME here, and downstream it becomes a TMUX SESSION NAME that the relay
+ * hands to lane-say. So it is validated to a strict token before it is either.
+ * Note the fence deliberately does NOT consult a list of known lanes: a fence
+ * that depends on a file being present fails open the day the file is missing,
+ * and this one must fail closed. Offering only real lanes is the page's job.
+ */
+function applyLaneMessage( string $repo, string $lane, string $text, string $actor ): array
+{
+    if ( ! preg_match( '/^[a-z][a-z0-9-]{1,30}$/', $lane ) ) {
+        refuse( 'that is not a lane name: ' . $lane );
+    }
+    if ( trim( $text ) === '' ) { refuse( 'empty message' ); }
+
+    $rel = 'docs/board-lanes/' . $lane . '.md';
+    if ( ! pathAllowed( $rel ) ) { refuse( 'path outside the fence: ' . $rel ); }
+
+    $dir = $repo . '/docs/board-lanes';
+    if ( ! is_dir( $dir ) && ! @mkdir( $dir, 0755, true ) ) { fail( 'could not create the lane directory' ); }
+
+    if ( ! is_file( $repo . '/' . $rel ) ) {
+        file_put_contents( $repo . '/' . $rel, "# Messages to " . $lane . "\n" );
+    }
+
+    /**
+     * The body is QUOTED, exactly like a note — and here that is not only about
+     * markdown. This text is on its way to a terminal, and a board message
+     * containing backticks has already been command-substituted away twice on
+     * this box. The relay is what actually defuses it (it delivers with
+     * `lane-say -f`, from a file, so the text never becomes argv), but the
+     * quoting keeps the stored form unambiguous about where the message ends.
+     */
+    $block = sprintf( "\n### %s — %s\n\n> %s\n",
+        gmdate( 'Y-m-d H:i:s' ), $actor,
+        str_replace( "\n", "\n> ", trim( $text ) ) );
+
+    file_put_contents( $repo . '/' . $rel, $block, FILE_APPEND );
+    return [ $rel ];
+}
+
 /* ---------------------------------------------------------------------- *
  * Main
  * ---------------------------------------------------------------------- */
@@ -294,6 +345,10 @@ switch ( $intent ) {
     case 'note_append':
         $touched = applyNote( CLONE_DIR, (string) ( $req['id'] ?? '' ), (string) ( $req['text'] ?? '' ), $actor );
         $summary = 'note on item ' . (string) ( $req['id'] ?? '?' );
+        break;
+    case 'lane_message':
+        $touched = applyLaneMessage( CLONE_DIR, (string) ( $req['lane'] ?? '' ), (string) ( $req['text'] ?? '' ), $actor );
+        $summary = 'message to ' . (string) ( $req['lane'] ?? '?' );
         break;
     case 'media_ref':
         $touched = applyMediaRef( CLONE_DIR, (string) ( $req['id'] ?? '' ), (string) ( $req['ref'] ?? '' ), $actor );

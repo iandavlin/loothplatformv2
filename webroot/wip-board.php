@@ -583,6 +583,20 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                                'order' => $built['order'], 'dry_run' => $dry], $LGB_SOCKET);
             break;
 
+        /**
+         * A message to a lane. The lane name is NOT trusted from the request
+         * beyond a shape check here — the committer re-validates it, because
+         * downstream it becomes a tmux session name and a filename, and a fence
+         * that only exists on the page is a fence a curl walks around.
+         */
+        case 'lane_message':
+            $lane = (string) ($req['lane'] ?? '');
+            $text = trim((string) ($req['text'] ?? ''));
+            if ($text === '') { $reply(['ok' => false, 'error' => 'an empty message is not a message'], 400); }
+            $res = lgb_commit(['intent' => 'lane_message', 'actor' => LGB_ACTOR,
+                               'lane' => $lane, 'text' => $text, 'dry_run' => $dry], $LGB_SOCKET);
+            break;
+
         case 'note':
             $id   = (string) ($req['id'] ?? '');
             $text = trim((string) ($req['text'] ?? ''));
@@ -667,6 +681,78 @@ function lgb_item_extras(string $backlogPath, string $id): array
         }
     }
     return ['thread' => $thread, 'options' => $options];
+}
+
+/**
+ * A LANE'S THREAD — Ian's half, and the lanes' half, from two different places.
+ *
+ * Ian, 2026-08-16: "I would like to be able to interact with the lanes through
+ * the workboard."
+ *
+ * HIS messages are committed (docs/board-lanes/<lane>.md) because they are
+ * instructions and belong in git, permanently and actor-stamped. THEIR replies
+ * are NOT: the lanes already post to the devmsg store, and committing that side
+ * too would put hundreds of commits a day on main. The relay snapshots them to
+ * a JSON file the way keeper already snapshots lane states for the light rail —
+ * an established pattern on this box, not a new one.
+ *
+ * The web user cannot read the devmsg database itself (it is `devmsg`-group,
+ * and that group has WRITE — putting the whole WordPress stack in it would let
+ * any PHP on the site send messages as ubuntu). So the board reads the
+ * snapshot, and where there is no snapshot it says so rather than implying a
+ * quiet lane.
+ */
+$LGB_THREADS = getenv('LGB_THREADS') ?: '/home/ubuntu/.board-threads.json';
+
+/** @return array{sent:array<int,array{when:string,who:string,text:string}>} */
+function lgb_lane_sent(string $backlogPath, string $lane): array
+{
+    $f = lgb_board_dir($backlogPath, 'board-lanes') . '/' . $lane . '.md';
+    if (!preg_match('/^[a-z][a-z0-9-]{1,30}$/', $lane) || !is_readable($f)) { return ['sent' => []]; }
+
+    $out = []; $cur = null; $buf = [];
+    $flush = static function () use (&$out, &$cur, &$buf): void {
+        if ($cur !== null) {
+            $cur['text'] = trim(implode("\n", array_map(
+                static fn (string $l): string => ltrim($l, '> '), $buf)));
+            $out[] = $cur;
+        }
+    };
+    foreach (explode("\n", (string) file_get_contents($f)) as $line) {
+        if (str_starts_with($line, '### ')) {
+            $flush(); $cur = null; $buf = [];
+            $head = trim(substr($line, 4));
+            if (preg_match('/^(\S+ \S+)\s*—\s*(.+)$/u', $head, $m)) {
+                $cur = ['when' => $m[1], 'who' => trim($m[2]), 'text' => ''];
+            }
+            continue;
+        }
+        if ($cur !== null && str_starts_with($line, '>')) { $buf[] = $line; }
+    }
+    $flush();
+    return ['sent' => $out];
+}
+
+/**
+ * @return array{ok:bool,why:?string,replies:array<int,array{when:string,text:string}>,
+ *               delivery:?array{ok:bool,why:string,when:string}}
+ */
+function lgb_lane_replies(string $path, string $lane): array
+{
+    if (!is_readable($path)) {
+        return ['ok' => false, 'why' => 'the relay has not written a snapshot yet', 'replies' => [], 'delivery' => null];
+    }
+    $raw = json_decode((string) file_get_contents($path), true);
+    if (!is_array($raw)) {
+        return ['ok' => false, 'why' => 'the thread snapshot is not valid JSON', 'replies' => [], 'delivery' => null];
+    }
+    $l = $raw['lanes'][$lane] ?? null;
+    return ['ok' => true, 'why' => null,
+            'replies'  => is_array($l['replies'] ?? null) ? $l['replies'] : [],
+            // A FAILED DELIVERY MUST BE VISIBLE. lane-say exiting non-zero means
+            // a lane did not hear him; a thread that looked sent anyway would be
+            // the worst lie this page could tell.
+            'delivery' => is_array($l['delivery'] ?? null) ? $l['delivery'] : null];
 }
 
 $backlog  = lgb_parse_backlog($BACKLOG);
@@ -902,11 +988,46 @@ header('X-Robots-Tag: noindex, nofollow');
         <?php foreach ((array) $sentinel['data']['lanes'] as $lane):
               $st = (string) ($lane['state'] ?? 'parked');
               $cls = in_array($st, ['working', 'parked', 'waiting'], true) ? $st : 'parked'; ?>
-          <div class="lane">
-            <span class="lane__d d--<?= lgb_h($cls) ?>"></span>
-            <span class="lane__n"><?= lgb_h((string) ($lane['name'] ?? '?')) ?></span>
-            <span class="lane__s"><?= lgb_h($st) ?></span>
-          </div>
+          <?php
+            $lname = (string) ($lane['name'] ?? '?');
+            $ok    = (bool) preg_match('/^[a-z][a-z0-9-]{1,30}$/', $lname);
+            $sent  = $ok ? lgb_lane_sent($BACKLOG, $lname)['sent'] : [];
+            $rep   = $ok ? lgb_lane_replies($LGB_THREADS, $lname) : ['ok' => false, 'why' => 'unnamed seat', 'replies' => [], 'delivery' => null];
+            $nmsg  = count($sent) + count($rep['replies']);
+          ?>
+          <details class="lane lane--thr">
+            <summary class="lane__s2">
+              <span class="lane__d d--<?= lgb_h($cls) ?>"></span>
+              <span class="lane__n"><?= lgb_h($lname) ?></span>
+              <span class="lane__s"><?= lgb_h($st) ?></span>
+              <?php if ($nmsg > 0): ?><span class="lane__b"><?= (int) $nmsg ?></span><?php endif; ?>
+            </summary>
+            <div class="thrbox" data-lane="<?= lgb_h($lname) ?>">
+              <?php if (!$ok): ?>
+                <div class="thrbox__no">This seat has no usable name, so there is nothing to address.</div>
+              <?php else: ?>
+                <?php if ($rep['delivery'] !== null && empty($rep['delivery']['ok'])): ?>
+                  <!-- lane-say exiting non-zero means a lane did not hear him.
+                       Never let that read as sent. -->
+                  <div class="thrbox__bad">NOT DELIVERED — <?= lgb_h((string) ($rep['delivery']['why'] ?? 'no reason given')) ?></div>
+                <?php endif; ?>
+                <div class="thrbox__log">
+                  <?php foreach ($sent as $m): ?>
+                    <div class="msg msg--out"><span class="msg__w"><?= lgb_h($m['when']) ?></span><?= lgb_h($m['text']) ?></div>
+                  <?php endforeach; ?>
+                  <?php foreach ($rep['replies'] as $m): ?>
+                    <div class="msg msg--in"><span class="msg__w"><?= lgb_h((string) ($m['when'] ?? '')) ?></span><?= lgb_h((string) ($m['text'] ?? '')) ?></div>
+                  <?php endforeach; ?>
+                  <?php if ($sent === [] && $rep['replies'] === []): ?>
+                    <div class="thrbox__no"><?= $rep['ok'] ? 'Nothing yet.' : lgb_h((string) $rep['why']) . '.' ?></div>
+                  <?php endif; ?>
+                </div>
+                <textarea class="thrbox__in" rows="2" placeholder="Message <?= lgb_h($lname) ?>…"></textarea>
+                <button class="thrbox__go">Send</button>
+                <div class="thrbox__say" hidden></div>
+              <?php endif; ?>
+            </div>
+          </details>
         <?php endforeach; ?>
       <?php else: ?>
         <div class="absent"><?= lgb_h($sentinel['why'] ?? 'no lane data') ?>.<br>
@@ -1258,6 +1379,23 @@ header('X-Robots-Tag: noindex, nofollow');
     .hist__b{white-space:pre-wrap;font-size:12px;margin:4px 0 8px;padding:8px;border-radius:6px;
              background:rgba(128,128,128,.08);max-height:340px;overflow:auto}
     .hist--none{font-size:12px;opacity:.7}
+    .lane--thr>summary{list-style:none;cursor:pointer}
+    .lane--thr>summary::-webkit-details-marker{display:none}
+    .lane__s2{display:flex;gap:8px;align-items:center}
+    .lane__b{margin-left:auto;font-size:11px;padding:1px 6px;border-radius:999px;background:rgba(74,158,255,.22)}
+    .thrbox{margin:6px 0 10px 16px;font-size:12px}
+    .thrbox__log{max-height:200px;overflow:auto;margin-bottom:6px}
+    .msg{padding:4px 6px;border-radius:6px;margin:3px 0;white-space:pre-wrap}
+    .msg--out{background:rgba(74,158,255,.16)}
+    .msg--in{background:rgba(128,128,128,.12)}
+    .msg__w{display:block;font-size:10px;opacity:.55}
+    .thrbox__in{width:100%;box-sizing:border-box;font:inherit;font-size:12px;padding:5px;border-radius:6px;
+                border:1px solid rgba(128,128,128,.35);background:transparent;color:inherit}
+    .thrbox__go{margin-top:5px;font:inherit;font-size:11px;padding:4px 10px;border-radius:6px;cursor:pointer;
+                border:1px solid rgba(128,128,128,.45);background:transparent;color:inherit}
+    .thrbox__no{opacity:.6}
+    .thrbox__bad{background:rgba(200,70,70,.18);padding:5px 7px;border-radius:6px;margin-bottom:5px}
+    .thrbox__say{margin-top:5px;padding:5px 7px;border-radius:6px}
   </style>
   <script type="application/json" id="lgb-details"><?php
     // ONE ENTRY PER ITEM, always. Only 7 of the file's 39 detail sections are
@@ -1556,6 +1694,46 @@ header('X-Robots-Tag: noindex, nofollow');
       n.textContent = text;
       if (ok) { setTimeout(function () { if (n.parentNode) { n.parentNode.removeChild(n); } }, 4000); }
     }
+
+    /* ---- MESSAGE A LANE ---------------------------------------------------
+     *
+     * Same rule as every other write on this page: the message is reported as
+     * sent only when the STORE says so. And "committed" is not "delivered" —
+     * the commit is the relay's inbox, not the lane's ear — so the wording says
+     * queued, and the thread shows NOT DELIVERED if the relay comes back unable
+     * to reach the seat. A board that said "sent" when a lane was down would be
+     * the same lie as a refused save reading as preserved.
+     */
+    document.querySelectorAll('.thrbox').forEach(function (box) {
+      var btn = box.querySelector('.thrbox__go'),
+          ta  = box.querySelector('.thrbox__in'),
+          out = box.querySelector('.thrbox__say');
+      if (!btn || !ta) { return; }
+      btn.addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation();     // must not toggle the row
+        var text = ta.value.trim();
+        if (!text) { return; }
+        btn.disabled = true; btn.textContent = 'Sending…';
+        post({ action: 'lane_message', lane: box.dataset.lane, text: text }).then(function (res) {
+          btn.disabled = false; btn.textContent = 'Send';
+          out.hidden = false;
+          if (res && res.ok) {
+            out.className = 'thrbox__say w2__say--ok';
+            out.textContent = 'Queued for ' + box.dataset.lane + ' — commit ' + (res.commit || '?')
+                            + '. It reaches the seat on the relay\'s next pass.';
+            var log = box.querySelector('.thrbox__log'), d = document.createElement('div');
+            d.className = 'msg msg--out'; d.textContent = text;
+            log.appendChild(d); log.scrollTop = log.scrollHeight;
+            ta.value = '';
+          } else {
+            out.className = 'thrbox__say w2__say--no';
+            out.textContent = 'NOT queued — ' + ((res && (res.why || res.error)) || 'it did not say why');
+          }
+        });
+      });
+      // Typing in the box must not collapse the row.
+      ta.addEventListener('click', function (e) { e.stopPropagation(); });
+    });
 
     document.getElementById('lgb-close').addEventListener('click', close);
     scrim.addEventListener('click', function (e) { if (e.target === scrim) close(); });

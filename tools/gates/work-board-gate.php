@@ -77,7 +77,10 @@ function render(string $page, ?string $backlog = null, ?string $sentinel = null)
      */
     global $BACK;
     $backlog ??= $BACK;
-    $env = 'LGB_MAIN_COPY=/nonexistent/main-copy.md ';
+    // Pinned for the same reason as the backlog copy: an unpinned render reads
+    // whatever snapshot the BOX happens to hold, and then this gate is
+    // measuring the box rather than the page.
+    $env = 'LGB_MAIN_COPY=/nonexistent/main-copy.md LGB_THREADS=/nonexistent/threads.json ';
     if ($backlog !== null)  { $env .= 'LGB_BACKLOG='  . escapeshellarg($backlog)  . ' '; }
     if ($sentinel !== null) { $env .= 'LGB_SENTINEL=' . escapeshellarg($sentinel) . ' '; }
     $cmd = $env . PHP_BINARY . ' ' . escapeshellarg($page) . ' 2>/dev/null';
@@ -372,7 +375,15 @@ $tmpRepo = sys_get_temp_dir() . '/lgb-proj-' . getmypid();
 @copy($PAGE, $tmpRepo . '/webroot/wip-board.php');
 $orphaned = (string) shell_exec('LGB_MAIN_COPY=/nonexistent/main-copy.md ' . PHP_BINARY . ' ' . escapeshellarg($tmpRepo . '/webroot/wip-board.php') . ' 2>/dev/null');
 is_(str_contains($orphaned, 'Unsorted'), "with an EMPTY map, items surface as Unsorted — the gap is visible, not absorbed");
-$unsortedRows = preg_match('/proj--unsorted.*?<\/details>/s', $orphaned, $um) ? preg_match_all('/data-item="/', $um[0]) : 0;
+// Anchored on the ELEMENT, not the class name. `proj--unsorted` also appears in
+// the STYLESHEET, so the match started there and ran to the first `</details>`
+// anywhere after it — which was fine until a `<details>` appeared earlier in the
+// document (the lane threads), at which point this counted zero rows and blamed
+// the page. Fourth time this gate has matched a string that also lives in CSS or
+// a comment; the cure is always the same — assert the markup that can only be
+// output.
+$unsortedRows = preg_match('/<details class="proj proj--unsorted".*?<\/details>/s', $orphaned, $um)
+    ? preg_match_all('/data-item="/', $um[0]) : 0;
 is_($unsortedRows === count($ids), sprintf(
     "...and ALL %d items are in it, so nothing is silently dropped when the map is empty (%d)",
     count($ids), $unsortedRows));
@@ -685,8 +696,67 @@ if (!$up) {
             is_($r['code'] === 409, 'a drag carrying another project\'s item is refused (409)');
         }
     }
+
+    /* Ian's lane threads share this server — driven here rather than in their
+     * own section because [6b] kills the port on its way out, and a section
+     * that calls a dead port reports the page as broken when it is not. */
+    $r = $call(['action' => 'lane_message', 'lane' => 'keeper', 'text' => '   ']);
+    is_($r['code'] === 400, 'an empty lane message is refused before the committer');
+
+    // The page must not be the only thing checking the name — but it must also
+    // not forward an obviously hostile one. Either way this must never come
+    // back ok, because that name becomes a filename AND a tmux session.
+    $r = $call(['action' => 'lane_message', 'lane' => '../../etc/cron.d/x', 'text' => 'x']);
+    is_(($r['json']['ok'] ?? null) !== true, 'a path-traversal lane name never comes back ok');
+    is_(str_contains((string) ($r['json']['why'] ?? $r['json']['error'] ?? ''), 'not a lane name')
+        || str_contains(strtolower((string) ($r['json']['error'] ?? '')), 'not answering'),
+        '...and is refused by the NAME fence, not by luck downstream');
 }
 if ($srvPid > 0) { shell_exec('kill ' . $srvPid . ' 2>/dev/null'); }
+
+section("[6d] TALKING TO A LANE FROM THE BOARD");
+
+/**
+ * Ian, 2026-08-16: "I would like to be able to interact with the lanes through
+ * the workboard." His half is committed; the lanes' replies come from a relay
+ * snapshot. The properties that matter are not that it renders — it is that a
+ * message he could not get delivered NEVER reads as sent, and that an absent
+ * relay reads as absent rather than as a quiet lane.
+ */
+$thr = $tmp . '-threads.json';
+file_put_contents($thr, json_encode(['lanes' => [
+    'stripe-membership' => ['replies' => [['when' => '2026-08-16 11:20', 'text' => 'RELAY FIXTURE REPLY']],
+                            'delivery' => ['ok' => true, 'why' => 'delivered', 'when' => '2026-08-16 11:20']],
+    'guitardle-fairness' => ['replies' => [],
+                            'delivery' => ['ok' => false, 'why' => 'lane not running — no tmux session', 'when' => '2026-08-16 11:21']],
+]]));
+$thrHtml = (string) shell_exec('LGB_MAIN_COPY=/nonexistent/main-copy.md LGB_THREADS=' . escapeshellarg($thr)
+    . ' LGB_BACKLOG=' . escapeshellarg($BACK) . ' ' . PHP_BINARY . ' ' . escapeshellarg($PAGE) . ' 2>/dev/null');
+
+$boxes = substr_count($thrHtml, 'class="thrbox"');
+is_($boxes > 0, sprintf('every named seat carries a thread (%d)', $boxes));
+is_(str_contains($thrHtml, 'RELAY FIXTURE REPLY'), 'a lane\'s reply reaches the thread from the relay snapshot');
+
+// THE ONE THAT MATTERS. lane-say exiting non-zero means a lane did not hear
+// him; if that renders as anything other than a failure, the board is lying
+// about the only thing it was built to tell him.
+// Matched on the ELEMENT plus the reason, not on the words. The page's own
+// JavaScript comment contains the phrase "NOT DELIVERED", so a bare-string
+// check was true on a render with no such banner — the third time tonight this
+// gate has caught itself matching prose instead of markup (see `f--bad` in the
+// footer, and `hist--none`). If a string can appear in a comment, assert the
+// class that can only appear in the output.
+is_(str_contains($thrHtml, 'class="thrbox__bad">NOT DELIVERED — lane not running'),
+    'a delivery the relay could NOT make is shown as NOT DELIVERED, with the reason');
+
+// An absent relay must read as absent, not as a lane with nothing to say.
+$noThrHtml = render($PAGE, $BACK);
+is_(str_contains($noThrHtml, 'the relay has not written a snapshot yet'),
+    'with no snapshot the board says so, rather than implying a quiet lane');
+is_(!str_contains($noThrHtml, 'class="thrbox__bad"'), '...and invents no failures either');
+@unlink($thr);
+
+
 
 section("[6] THE PAGE WRITES ONLY THROUGH THE COMMITTER");
 

@@ -228,6 +228,63 @@ is_(str_contains($audit, 'actor=ian-via-board'), 'the actor is in the audit line
 is_(substr_count($audit, "\n") >= 10, sprintf('every call left a line (%d)', substr_count($audit, "\n")));
 
 /* ---------------------------------------------------------------------- */
+section("[10] MESSAGES TO A LANE — Ian's half, and the name that becomes two dangerous things");
+
+/**
+ * Ian, 2026-08-16: "I would like to be able to interact with the lanes through
+ * the workboard." Only his half is committed; the lanes' replies are rendered
+ * from a snapshot and never enter git.
+ *
+ * The lane name is checked hard because it is used TWICE and both uses are
+ * dangerous: it becomes a filename here, and downstream the relay hands it to
+ * lane-say as a TMUX SESSION NAME.
+ */
+$r = svc($SVC, $clone, ['actor' => 'ian-via-board', 'intent' => 'lane_message',
+                        'lane' => 'stripe-membership', 'text' => 'how is the committer going?']);
+is_(($r['json']['ok'] ?? false) === true, 'a message to a real lane is committed');
+is_(in_array('docs/board-lanes/stripe-membership.md', (array) ($r['json']['changed'] ?? []), true),
+    '...into that lane\'s own file, inside the fence');
+$laneFile = (string) @file_get_contents($clone . '/docs/board-lanes/stripe-membership.md');
+is_(str_contains($laneFile, '> how is the committer going?'), '...with the body QUOTED, not merged into the document');
+is_(str_contains($laneFile, 'ian-via-board'), '...and stamped with who said it');
+
+// The name is the attack surface. Each of these becomes a filename AND a tmux
+// session name if it gets through.
+foreach ([
+    '../../etc/cron.d/x' => 'a path traversal',
+    'lane; rm -rf /'     => 'a shell metacharacter',
+    'Lane With Caps'     => 'spaces and capitals',
+    ''                   => 'an empty name',
+] as $bad => $why) {
+    $r = svc($SVC, $clone, ['actor' => 'ian-via-board', 'intent' => 'lane_message',
+                            'lane' => $bad, 'text' => 'x']);
+    // ASSERT THE REASON, NOT MERELY THE REFUSAL. Measured: with the name
+    // pattern relaxed to "not empty", the traversal and the metacharacter were
+    // STILL refused — by accident, downstream, because the write landed
+    // nowhere and the change-enumeration then reported nothing changed. Both
+    // assertions stayed green while the fence they name was gone. A red that
+    // is red for the wrong reason is a green in disguise.
+    is_(($r['json']['refused'] ?? false) === true
+        && str_contains((string) ($r['json']['why'] ?? ''), 'not a lane name'),
+        'lane name refused BY THE NAME FENCE — ' . $why);
+}
+
+$r = svc($SVC, $clone, ['actor' => 'ian-via-board', 'intent' => 'lane_message',
+                        'lane' => 'stripe-membership', 'text' => '   ']);
+is_(($r['json']['refused'] ?? false) === true, 'an empty message is refused, not committed as a blank');
+
+// A message carrying backticks must survive INTACT in the store — the relay is
+// what keeps it away from a shell, and it cannot do that if the committer has
+// already mangled or dropped it.
+$tick = 'run `redis-cli ping` and paste the output';
+$r = svc($SVC, $clone, ['actor' => 'ian-via-board', 'intent' => 'lane_message',
+                        'lane' => 'keeper', 'text' => $tick]);
+is_(($r['json']['ok'] ?? false) === true, 'a message containing backticks is accepted');
+$kf = (string) @file_get_contents($clone . '/docs/board-lanes/keeper.md');
+is_(str_contains($kf, '`redis-cli ping`'),
+    '...and stored VERBATIM — backticks intact, so the relay delivers what he typed');
+
+/* ---------------------------------------------------------------------- */
 section("[9] AN AMBIGUOUS INDEX IS REFUSED, NOT RESOLVED");
 
 /**
@@ -268,6 +325,6 @@ sh('git push -q origin HEAD:main', $clone);
 sh('rm -rf ' . escapeshellarg($tmp));
 echo "\n$pass passed, $fail failed\n";
 if ($fail > 0) { echo "RED — the committer's fences are not holding.\n"; exit(1); }
-echo "GREEN — only three shapes, only inside the fence, never without an actor, "
+echo "GREEN — only the allowlisted shapes, only inside the fence, never without an actor, "
    . "a drag cannot add or drop work, and every refusal is audited.\n";
 exit(0);
