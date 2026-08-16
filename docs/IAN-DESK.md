@@ -5,21 +5,19 @@ Ian (his rule, 8/15: "If you have anything waiting for me ask me always" +
 "always ask with a question box"). The WIP board renders it as the top
 strip. One line per item: what, why, and the single action.*
 
-- **Sign-up screens re-look — READY.** The rebuilt step with your three
-  additions (privacy moment, full-editor door, name + profile address up
-  front): https://dev2.loothgroup.com/footer-mockups/profiles-alive/built/step.html
-  — with the skipper's view and the post-save door pictured beside it.
-  Your nod moves it to a dev2 switch-on for a real-flow test.
-- **Mobile "+" frames look — waiting since Aug 9.** The logged-out phone
-  dash fix, light and dark: https://dev2.loothgroup.com/footer-mockups/anon-mobile-dash/
-  — a yes moves it to merge and dev2.
-- **Try a Loothprint on dev2.** Compose is on for you: open the hub, hit
-  compose. (The redundant opening text you flagged is being trimmed.)
-- **Back button — my move first.** Built and merged; I owe it a dev2
-  switch-on, then you get a try-it ping.
-- **Guitardle — waiting on the fix, not on you.** Your letters/cross-device
-  report is the team's top job; re-test when their ping comes.
-- **Live Stripe testers.** Whenever you're ready, recruit a few real
-  members by name; dev2 already tests with fake accounts.
+- **Author-archive pill — your nod.** The socials-row button opening the Hub
+  filtered to that member: https://dev2.loothgroup.com/footer-mockups/author-archive-link/
+  — a yes starts the build.
+- **Swatch sheet — your look.** Eighteen measured color pairs, both themes,
+  nine failures marked red: https://dev2.loothgroup.com/footer-mockups/swatch-sheet/
+  — after your look, replacement colors come back as pictures.
+- **Sign-up screens — re-look coming.** Dark approved; the container spread
+  you ordered is being applied and re-shot.
+- **Guitardle re-test — their ping coming.** The letter-paint fix is built;
+  clean suite and renumber in flight, then "ready for your re-test."
+- **Stripe re-test as Mikelle — fix coming.** The membership pages are
+  learning to carry capabilities; re-test when pinged.
+- **Live Stripe testers — whenever.** Invite links are being built so a
+  fresh recruit can join from nothing; recruit when ready.
 - *(Optional)* **Retraction verify** — one read-only line double-checking
   the three-member correction, whenever.
