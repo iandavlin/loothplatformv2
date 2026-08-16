@@ -503,6 +503,64 @@ def main():
         print("CANNOT RUN  no sampled URL yielded ground truth")
         return 2
 
+    # ── EVERY URL WE HAND GOOGLE MUST ANCHOR ITSELF (Ian, fix-it-now 2026-08-15)
+    #
+    # The canonical check above covers the DISCUSSION sitemap. It could not see
+    # the static one, and that is where the gap was: sitemap-static.xml lists
+    # exactly two URLs, and /hub/ — the busiest page on the site — carried no
+    # <link rel=canonical> and no og:url at all. Measured on dev2 AND live before
+    # this was written; both agreed, so it was shipped, not local.
+    #
+    # It matters for the same reason as the discussion case and no other:
+    # hub-polish.js rewrites the address bar to /hub/?type=… as soon as a filter
+    # is touched, and robots.txt carries `Disallow: /hub/?` — so the form a reader
+    # copies out of the address bar is one Google may not fetch, and nothing on
+    # the page said which URL owned the content.
+    #
+    # DRIVEN OFF THE SITEMAP, not off a hardcoded pair, so a third static entry is
+    # covered the day it is added rather than the day someone remembers this gate.
+    smap_static, sc = fetch(env, "/sitemap-static.xml", want_status=True)
+    if sc != 200:
+        print(f"CANNOT RUN  /sitemap-static.xml HTTP {sc} — the canonical check "
+              f"below would be vacuous, and a skipped check reads like a passed one")
+        return 2
+    static_locs = re.findall(r"<loc>([^<]+)</loc>", smap_static)
+    if not static_locs:
+        print("CANNOT RUN  sitemap-static.xml listed no URLs")
+        return 2
+    print(f"\nstatic      {len(static_locs)} sitemapped URL(s) — each must name itself")
+    for loc in static_locs:
+        page, pcode = fetch(env, loc, want_status=True)
+        if pcode != 200:
+            findings.append(f"{loc} — sitemapped but HTTP {pcode}")
+            print(f"  {loc}: RED  HTTP {pcode}")
+            continue
+        m_can = re.search(r'<link[^>]+rel=["\']canonical["\'][^>]*>', page, re.I)
+        m_og = re.search(r'<meta[^>]+property=["\']og:url["\'][^>]*>', page, re.I)
+        if not m_can:
+            findings.append(f"{loc} — sitemapped with NO <link rel=canonical>: we "
+                            f"hand Google the address and then say nothing about it, "
+                            f"while the address bar is rewritten to a robots-blocked "
+                            f"?filter form")
+            print(f"  {loc}: RED  no canonical")
+            continue
+        href = (re.search(r'href=["\']([^"\']+)["\']', m_can.group(0), re.I) or [None, ""])[1]
+        if href.rstrip("/") != loc.rstrip("/"):
+            findings.append(f"{loc} — canonical is not self-referencing: {href!r}")
+            print(f"  {loc}: RED  canonical points at {href!r}")
+            continue
+        if not m_og:
+            findings.append(f"{loc} — canonical present but no og:url; the share "
+                            f"form of the URL is left unanchored")
+            print(f"  {loc}: RED  no og:url")
+            continue
+        og = (re.search(r'content=["\']([^"\']+)["\']', m_og.group(0), re.I) or [None, ""])[1]
+        if og.rstrip("/") != loc.rstrip("/"):
+            findings.append(f"{loc} — og:url disagrees with the canonical: {og!r}")
+            print(f"  {loc}: RED  og:url {og!r}")
+            continue
+        print(f"  {loc}: ok   self-referencing canonical + og:url")
+
     print()
     if findings:
         print(f"RED  {len(findings)} finding(s):")

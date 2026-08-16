@@ -1405,18 +1405,47 @@ if ($lg_landing) {
       /hub/<category>/?… — it is a literal prefix match on /hub/? — so the
       variants ARE crawlable today and this is the only thing consolidating them.
 
-   3. The bare site-wide feed still declares NOTHING. Its routes carry filters
-      that legitimately produce different pages, and naming one of them canonical
-      would be a claim nobody has made. A wrong canonical is worse than none — it
-      actively tells Google to consolidate on the wrong URL. */
+   3. THE BARE HUB (/hub/) NOW DECLARES ITSELF — Ian ruled fix-it-now, 2026-08-15,
+      and this paragraph used to argue the opposite, so read why it changed.
+
+      The old reasoning was: the bare feed's routes carry filters that legitimately
+      produce different pages, so naming one canonical would be a claim nobody had
+      made, and a wrong canonical is worse than none. That is still true about the
+      FILTERED forms. It was the wrong conclusion for the BARE one, for a reason
+      that is measurable rather than arguable:
+
+        · /hub/ is one of only TWO urls in sitemap-static.xml (the other is /, and
+          / already carries a canonical). We hand Google the address and then say
+          nothing about it, while hub-polish.js rewrites the address bar to
+          /hub/?type=… the moment the reader touches a filter.
+        · robots.txt carries `Disallow: /hub/?` — VERIFIED on live and on dev2 by
+          fetching it, not assumed from this comment. So every filtered form of the
+          bare hub is UNCRAWLABLE. The canonical below can therefore only ever be
+          read on /hub/ itself, where it is self-referencing and cannot consolidate
+          anything onto the wrong URL.
+
+      That is the whole difference from the category case: there, `Disallow: /hub/?`
+      does NOT cover /hub/<category>/?… so the variants are crawlable and the bare
+      canonical is doing real consolidation work. Here it is doing one job only —
+      anchoring the sitemapped address to itself. */
 $lg_canonical_path = null;
 if ($lg_landing) {
     $lg_canonical_path = LG_BB_MIRROR_PUBLIC_PATH . '/' . rawurlencode((string)$lg_landing['forum_slug'])
                        . '/' . rawurlencode((string)$lg_landing['slug']) . '/';
 } elseif ($scoped_forum && !empty($scoped_forum['slug'])) {
     $lg_canonical_path = LG_BB_MIRROR_PUBLIC_PATH . '/' . rawurlencode((string)$scoped_forum['slug']) . '/';
+} else {
+    /* The bare hub, stripped of every filter — the exact string sitemap-static.xml
+       advertises, so the sitemap and the page cannot drift. */
+    $lg_canonical_path = rtrim(LG_BB_MIRROR_PUBLIC_PATH, '/') . '/';
 }
-bb_mirror_chrome_header($page_title, $lg_canonical_path);
+/* og:type — 'website' for the bare hub, 'article' everywhere else. NOT scope
+   creep for its own sake: this block already emitted og:type=article
+   unconditionally, so newly annotating the hub LISTING would have shipped a
+   fresh, knowingly-false claim that a feed of discussions is an article. One
+   parameter, default unchanged, so every existing caller is byte-identical. */
+bb_mirror_chrome_header($page_title, $lg_canonical_path,
+                        ($lg_landing || $scoped_forum) ? 'article' : 'website');
 
 // Posting is authenticated-only (BuddyBoss REST 401s anonymous writes). Gate
 // every post/reply affordance on this server-side so anon viewers receive no
