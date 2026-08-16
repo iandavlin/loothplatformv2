@@ -232,6 +232,46 @@ is_($rBefore === $rAfter, '...and commits no receipt');
 is_(str_contains($r['out'], '[dry run]'), '...and says so, so a rehearsal is never mistaken for a pass');
 
 /* ---------------------------------------------------------------------- */
+section("[8] IF IT CANNOT RECEIPT, IT DELIVERS NOTHING");
+
+/**
+ * The hole this closes was found by driving the REAL socket, not this fake one:
+ * the deployed committer did not yet allow `lane_receipt`, and this relay
+ * delivers first and receipts second. A receipt that can never commit leaves the
+ * message with no record, so the next pass sends it again — and the next.
+ * Keeper's requirement is "at worst re-deliver ONCE, never loop", and without a
+ * preflight a committer that refuses receipts turns every message into an
+ * unbounded repeat.
+ */
+$oldSvc = (string) file_get_contents($svcTmp);
+file_put_contents($svcTmp, str_replace("'lane_receipt'", "'lane_receipt_DISABLED'", $oldSvc));
+
+postMessage($clone, $bare, 'stripe-membership', 'must not be delivered without a receipt');
+sh('git fetch -q origin && git reset -q --hard origin/main', $clone);
+$before = substr_count((string) file_get_contents($log), 'ARGV:');
+$r = relay($RELAY, $paths);
+$after = substr_count((string) file_get_contents($log), 'ARGV:');
+
+is_($after === $before, sprintf('with receipts refused, NOTHING is delivered (%d calls before, %d after)', $before, $after));
+is_($r['rc'] === 3, '...and it reports CANNOT RUN rather than pretending it worked');
+is_(str_contains($r['out'] . $r['out'], 'receipt') || str_contains($r['out'], 'repeats'),
+    '...naming receipts as the reason, so the operator knows what to fix');
+
+file_put_contents($svcTmp, $oldSvc);
+
+/**
+ * AND THE PROBE ITSELF MUST COMMIT NOTHING. It did: `dry_run` in the request
+ * body is the LISTENER's contract, and this relay calls the committer directly,
+ * so the flag was ignored and every pass pushed a `preflight` receipt to main.
+ * At the proposed 30s cadence that is ~2,880 junk commits a day.
+ */
+sh('git fetch -q origin && git reset -q --hard origin/main', $ccl);
+$r = relay($RELAY, $paths);
+sh('git fetch -q origin && git reset -q --hard origin/main', $ccl);
+is_(!is_file($ccl . '/docs/board-lanes/preflight.receipts.md'),
+    'the capability probe commits NOTHING — no preflight receipt is ever pushed');
+
+/* ---------------------------------------------------------------------- */
 section("[7] IT REFUSES TO RUN HALF-CONFIGURED");
 
 $r = relay($RELAY, ['CLONE_DIR' => $tmp . '/nope', 'COMMITTER' => $svcTmp, 'LANE_SAY' => $fake,

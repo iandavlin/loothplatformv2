@@ -160,12 +160,27 @@ function parseReceipts(string $file): array
 }
 
 /** Hand a receipt to the committer. The relay never writes the repo itself. */
-function commitReceipt(string $lane, string $id, string $outcome, string $why, bool $dry): array
+function commitReceipt(string $lane, string $id, string $outcome, string $why, bool $dry, bool $probe = false): array
 {
     if ($dry) { return ['ok' => true, 'dry_run' => true]; }
     $payload = json_encode(['intent' => 'lane_receipt', 'actor' => ACTOR,
                             'lane' => $lane, 'id' => $id, 'outcome' => $outcome, 'why' => $why]);
-    $p = proc_open(['/usr/bin/php', COMMITTER],
+
+    /**
+     * THE PROBE MUST PASS --dry-run ON THE COMMAND LINE, not in the body.
+     *
+     * `dry_run` in the JSON is the LISTENER's contract — it translates that key
+     * into this flag. This function calls the committer DIRECTLY, so a body key
+     * means nothing here and the probe committed for real: a `preflight`
+     * receipt file, pushed to main, on every single pass. At the 30s cadence
+     * proposed for this relay that is roughly 2,880 junk commits a day. Caught
+     * by looking at what the sandbox actually contained rather than at what the
+     * relay reported.
+     */
+    $argv_ = ['/usr/bin/php', COMMITTER];
+    if ($probe) { $argv_[] = '--dry-run'; }
+
+    $p = proc_open($argv_,
         [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
     if (!is_resource($p)) { return ['ok' => false, 'error' => 'could not start the committer']; }
     fwrite($pipes[0], (string) $payload); fclose($pipes[0]);
@@ -255,6 +270,30 @@ if (!$dry && !is_readable(COMMITTER)) {
 $r = run('git fetch -q origin && git reset -q --hard origin/main', CLONE_DIR);
 if ($r['rc'] !== 0) { bail('could not sync the clone: ' . $r['out'], 2); }
 
+/**
+ * PREFLIGHT: PROVE A RECEIPT CAN BE WRITTEN BEFORE DELIVERING ANYTHING.
+ *
+ * Found by driving the real socket rather than the gate's fake one, which is
+ * the whole argument for doing that: the deployed committer did not yet allow
+ * `lane_receipt`, and this relay delivers first and receipts second. A receipt
+ * that can NEVER commit means the message has no record, so the next pass
+ * delivers it again — and the next, and the next. Keeper's requirement is "at
+ * worst re-deliver ONCE, never loop", and without this check a committer that
+ * refuses receipts turns every message into an unbounded repeat.
+ *
+ * So the capability is checked ONCE, up front, with a dry run that commits
+ * nothing. If receipts are not available this delivers NOTHING AT ALL — an
+ * undelivered message is recoverable, a lane spammed forever is not.
+ */
+if (!$dry) {
+    $pf = commitReceipt('preflight', '000-00000000', 'delivered', 'capability probe', false, true);
+    if (empty($pf['ok'])) {
+        bail('the committer will not accept a receipt (' . (string) ($pf['why'] ?? $pf['error'] ?? 'no reason')
+           . ') — refusing to deliver anything, because a message that cannot be receipted '
+           . 'is a message that repeats on every pass', 3);
+    }
+}
+
 $dir = CLONE_DIR . '/docs/board-lanes';
 $laneFiles = is_dir($dir) ? glob($dir . '/*.md') : [];
 $lanes = [];
@@ -294,8 +333,16 @@ foreach ($lanes as $lane) {
         // is the failure nobody can see.
         $cr = commitReceipt($lane, $m['id'], $outcome, (string) $d['why'], $dry);
         if (empty($cr['ok'])) {
-            say(sprintf('  ! %s %s: receipt did NOT commit (%s) — it may be delivered again next pass',
+            // STOP THE PASS. One un-receipted delivery re-sends once on the next
+            // pass, which is the accepted worst case. Carrying on would leave a
+            // second, a third and a fourth in the same state, and a receipt
+            // store that has started refusing is unlikely to accept the next
+            // one — that is how "at worst once" becomes "forever".
+            say(sprintf('  ! %s %s: receipt did NOT commit (%s) — STOPPING this pass so it cannot compound',
                 $lane, $m['id'], (string) ($cr['error'] ?? $cr['why'] ?? 'no reason')));
+            $delivery[$lane] = ['ok' => false, 'when' => gmdate('Y-m-d H:i'),
+                                'why' => 'delivered but not receipted — the pass was stopped'];
+            break 2;
         }
         $delivery[$lane] = ['ok' => $d['ok'], 'when' => gmdate('Y-m-d H:i'), 'why' => (string) $d['why']];
         say(sprintf('  %s %s %s — %s', $d['ok'] ? '→' : '✗', $lane, $m['id'], (string) $d['why']));
