@@ -108,6 +108,84 @@ if ($skipped_total > 0) {
     }
 }
 
+// ---------- deep sweep (the BACKWARDS reach) ------------------------------
+// ⚠️ THE DELTA WALK ABOVE IS FORWARD-ONLY, AND THAT IS A PERMANENT HOLE.
+// It upserts WHERE post_modified_gmt >= last_reconcile_at - 60. Anything that
+// diverged and then aged out of that window is invisible to every future pass,
+// no matter how wrong the mirror is. Measured on live 2026-08-16: FIVE replies
+// were diverged (4 missing, 1 stale) and ALL FIVE had WP timestamps 60-73 days
+// older than the bookmark. Reply 71432 had been serving the wrong author's
+// content since June and reconcile could not have repaired it in a thousand runs.
+//
+// So this pass asks the only question the delta walk cannot: does the mirror
+// actually MATCH? It compares ids and modified times across the whole table and
+// repairs only the rows that differ. That is what makes an aged-out drop
+// self-healing instead of permanent.
+//
+// COST IS BOUNDED TWO WAYS, because a full compare every 10 minutes is not free:
+//   · it runs at most every BB_MIRROR_DEEP_EVERY seconds (default 6h), tracked in
+//     its own sync_state key so it cannot interfere with the delta bookmark
+//   · it repairs only DIFFERING rows. The compare is two id/timestamp lists; the
+//     writes are proportional to the damage, which is normally zero.
+//
+// It cannot fix rows whose WP data is malformed — those are the 5 above, and they
+// will now be REPORTED every pass instead of being silently permanent.
+$deep_every = (int)(getenv('BB_MIRROR_DEEP_EVERY') ?: 21600);
+$row = $db->query("SELECT value FROM sync_state WHERE key = 'last_deep_at'")->fetch();
+$last_deep = $row ? (int)$row['value'] : 0;
+$deep_due  = (time() - $last_deep) >= $deep_every;
+echo "Deep sweep — " . ($deep_due ? "DUE" : sprintf("not due (%ds of %ds)", time() - $last_deep, $deep_every)) . "\n";
+
+if ($deep_due) {
+    try {
+        foreach (['topic', 'reply'] as $kind) {
+            // WP side: id -> modified epoch, published only (the mirror's contract).
+            $wp = [];
+            foreach ($wpdb->get_results($wpdb->prepare(
+                "SELECT ID, UNIX_TIMESTAMP(post_modified_gmt) AS m
+                   FROM {$wpdb->posts}
+                  WHERE post_type = %s AND post_status = 'publish'", $kind)) as $r) {
+                $wp[(int)$r->ID] = (int)$r->m;
+            }
+            // ⚠️ REFUSE TO SCORE AN EMPTY READ. A failed query returning zero rows
+            // would otherwise read as "the mirror is entirely wrong" and this pass
+            // would rewrite everything. Same guard compare-mirror.py carries, for
+            // the same reason — I hit exactly this while measuring, and a
+            // mis-parsed capture reported 5,305 replies missing that were all fine.
+            if (!$wp) {
+                echo "  deep $kind: SKIPPED — zero rows read from WP, refusing to treat that as total divergence\n";
+                continue;
+            }
+            $pg = [];
+            foreach ($db->query("SELECT id, extract(epoch from modified_at)::bigint AS m FROM $kind") as $r) {
+                $pg[(int)$r['id']] = (int)$r['m'];
+            }
+            // A row needs repair if it is absent, or the mirror's copy is older.
+            // 60s of slack keeps clock skew and one-second resolution out of it.
+            $need = [];
+            foreach ($wp as $id => $m) {
+                if (!isset($pg[$id]) || $m - $pg[$id] > 60) { $need[] = $id; }
+            }
+            if (!$need) { echo "  deep $kind: in sync ({" . count($wp) . "} rows)\n"; continue; }
+            $r = bb_mirror_walk_ids($need, match ($kind) {
+                'topic' => fn(int $id) => bb_mirror_upsert_topic($id, $db),
+                'reply' => fn(int $id) => bb_mirror_upsert_reply($id, $db),
+            }, $db);
+            printf("  deep %s: %d differed, %d repaired, %d UNREPAIRABLE %s\n",
+                $kind, count($need), $r['done'], $r['skipped'],
+                $r['skipped'] ? '(malformed WP data — see the skip lines above)' : '');
+        }
+        $st = $db->prepare(
+            "INSERT INTO sync_state (key, value) VALUES ('last_deep_at', ?)
+             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value");
+        $st->execute([(string) time()]);
+    } catch (Throwable $e) {
+        // Same rule as every other tail section: never wedge the bookmark write.
+        if ($db->inTransaction()) { try { $db->rollBack(); } catch (Throwable) {} }
+        echo "  deep sweep FAILED (continuing): " . $e->getMessage() . "\n";
+    }
+}
+
 // ---------- ghost sweep (the reverse pass) --------------------------------
 // The delta walk above is driven entirely from wp_posts, so it can only repair
 // rows that STILL EXIST in WordPress. Rows that exist only in the mirror —

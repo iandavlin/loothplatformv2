@@ -172,5 +172,33 @@ try {
     http_response_code(500); exit('sync error');
 }
 
+/* ⚠️ A SKIP IS NOT A SUCCESS, AND THE TRANSPORT MUST SAY SO.
+   The materializers skip silently when a row is unmirrorable — correctly, because
+   throwing here is what wedged live's reconcile for 11 days. But this endpoint
+   then answered 200 either way, so a dropped reply and a written one were
+   INDISTINGUISHABLE IN NGINX'S OWN ACCESS LOG. That is not a hypothetical: the
+   2026-08-09 analysis read 290 _sync POSTs, found every single one returning 200,
+   and could not separate the 11 replies that vanished from the 61 that landed.
+   Reply 71432 then sat wrong for over two months with only an EXTERNAL watcher
+   noticing.
+
+   202 Accepted is the honest answer: the request was well-formed and accepted, and
+   no row was written. It stays in the 2xx family ON PURPOSE — the WP-side hook is
+   fire-and-forget and a 4xx/5xx here would turn an unmirrorable row into a retry
+   storm against a condition that retrying cannot fix. What changes is that the
+   drop is now VISIBLE THE DAY IT HAPPENS, in the log we already keep, with the
+   reason in the body and in error_log. */
+$skip = function_exists('bb_mirror_last_skip') ? bb_mirror_last_skip() : null;
 header('Content-Type: application/json');
+if ($skip) {
+    http_response_code(202);
+    echo json_encode([
+        'ok'     => false,
+        'kind'   => $kind,
+        'id'     => $id,
+        'action' => $action,
+        'skipped' => $skip['reason'],
+    ]);
+    return;
+}
 echo json_encode(['ok' => true, 'kind' => $kind, 'id' => $id, 'action' => $action]);
