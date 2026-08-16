@@ -1139,7 +1139,7 @@ if (ssrPresent && !hasFilters) {
     a.innerHTML = `
       ${meta.is_sticky ? '<span class="acard__pin">📌 Pinned</span>' : ''}
       ${meta.has_image ? `<div class="acard__img-wrap">
-        <img class="acard__img" src="${escapeHtml(isGated && /ytimg\.com/.test(it.image_url || '') ? 'https://loothgroup.com/wp-content/uploads/2024/11/Featured-Image-Fallback-2.webp' : it.image_url)}" alt="" loading="lazy" width="560" height="320">
+        <img class="acard__img" src="${escapeHtml(isGated && /ytimg\.com/.test(it.image_url || '') ? 'https://loothgroup.com/wp-content/uploads/2024/11/Featured-Image-Fallback-2.webp' : it.image_url)}" alt="" loading="lazy" width="560" height="320" onerror="this.onerror=null;this.src='https://loothgroup.com/wp-content/uploads/2024/11/Featured-Image-Fallback-2.webp'">
         ${meta.yt_id && !isGated ? `<button type="button" class="acard__play" data-yt-play="${escapeHtml(meta.yt_id)}" aria-label="Play video"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>` : ''}
         ${isGated ? `<span class="acard__gate" aria-label="${tier} member content"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>` : ''}
       </div>` : ''}
