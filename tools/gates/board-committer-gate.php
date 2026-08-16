@@ -291,6 +291,82 @@ is_(str_contains($kf, '`redis-cli ping`'),
     '...and stored VERBATIM — backticks intact, so the relay delivers what he typed');
 
 /* ---------------------------------------------------------------------- */
+section("[13] THE CHAT, THE QUESTIONS RAIL, AND THE ONE-ANSWER RULE");
+
+/* --- the general chat: both directions, actor-stamped ------------------- */
+$r = svc($SVC, $clone, ['actor' => 'ian-via-board', 'intent' => 'keeper_message',
+                        'text' => "look at this\n    indented line\n      deeper"]);
+is_(($r['json']['ok'] ?? false) === true, 'Ian can send a chat message');
+$r = svc($SVC, $clone, ['actor' => 'keeper', 'intent' => 'keeper_message', 'text' => 'looking now']);
+is_(($r['json']['ok'] ?? false) === true, 'keeper replies through the SAME shape and the same path');
+$chat = (string) @file_get_contents($clone . '/docs/board-chat/keeper.md');
+is_(str_contains($chat, 'ian-via-board') && str_contains($chat, '— keeper'),
+    'both speakers are stamped, so who said what is a property of the repo');
+is_(str_contains($chat, ">     indented line"),
+    'a pasted indent is stored quoted, one marker deep — terminal output survives');
+
+/* --- open questions: append-only, and that is the whole design ---------- */
+$r = svc($SVC, $clone, ['actor' => 'ian-via-board', 'intent' => 'question_ask',
+                        'text' => 'why did we point the archive door at the Map?']);
+is_(($r['json']['ok'] ?? false) === true, 'Ian can drop a question the moment it occurs to him');
+$q1 = (string) ($r['json']['id'] ?? '');
+is_($q1 === 'q1', 'it takes a number from the file (' . $q1 . ')');
+
+$r = svc($SVC, $clone, ['actor' => 'keeper', 'intent' => 'question_ask',
+                        'text' => 'filed on his behalf from the VS chat']);
+is_(($r['json']['id'] ?? '') === 'q2', 'keeper can FILE a question too, so VS-chat questions stop evaporating');
+
+/**
+ * KEEPER'S NAMED ASSERTION: an open question cannot be removed except by
+ * gaining an answer. It is enforced by there being NO VERB that removes one —
+ * so this checks the whole surface, not just the happy path.
+ */
+$before = (string) file_get_contents($clone . '/docs/board-questions/questions.md');
+foreach ([
+    ['intent' => 'question_ask',    'text' => ''],
+    ['intent' => 'question_answer', 'id' => 'q99', 'text' => 'answer to nothing'],
+    ['intent' => 'question_answer', 'id' => 'not-an-id', 'text' => 'x'],
+] as $bad) {
+    $r = svc($SVC, $clone, ['actor' => 'keeper'] + $bad);
+    is_(($r['json']['refused'] ?? false) === true, 'refused: ' . json_encode($bad['id'] ?? $bad['intent']));
+}
+$after = (string) file_get_contents($clone . '/docs/board-questions/questions.md');
+is_($before === $after, 'and NOTHING those refusals touched changed the store');
+
+$r = svc($SVC, $clone, ['actor' => 'keeper', 'intent' => 'question_answer',
+                        'id' => 'q1', 'text' => 'because the Map already had the index']);
+is_(($r['json']['ok'] ?? false) === true, 'keeper answers a question');
+$qs = (string) file_get_contents($clone . '/docs/board-questions/questions.md');
+is_(str_contains($qs, 'why did we point the archive door at the Map?'),
+    'THE QUESTION IS STILL THERE after being answered — it gains an answer, it is not consumed');
+is_(str_contains($qs, 'answer to q1'), '...and the answer names which question it answers');
+
+/* --- decisions: one store, two doors, FIRST ANSWER WINS ----------------- */
+$r = svc($SVC, $clone, ['actor' => 'keeper', 'intent' => 'decision_pose', 'id' => 'aron',
+                        'question' => 'What happens to Aron Bach?',
+                        'options' => ['Retract to free', '- Give him a grace period', '   ']]);
+is_(($r['json']['ok'] ?? false) === true, 'keeper poses a decision with options');
+$dec = (string) @file_get_contents($clone . '/docs/board-decisions/aron.md');
+is_(substr_count($dec, "\n- ") === 2, 'an option that begins with a dash cannot invent a third option');
+
+$r = svc($SVC, $clone, ['actor' => 'ian-via-board', 'intent' => 'decision_answer',
+                        'id' => 'aron', 'choice' => 'Give him a grace period', 'door' => 'desk']);
+is_(($r['json']['ok'] ?? false) === true, 'Ian answers it from the desk door');
+$dec = (string) file_get_contents($clone . '/docs/board-decisions/aron.md');
+is_(str_contains($dec, 'via desk'), '...and the DOOR is recorded, not just the choice');
+
+$r = svc($SVC, $clone, ['actor' => 'ian-via-board', 'intent' => 'decision_answer',
+                        'id' => 'aron', 'choice' => 'Retract to free', 'door' => 'vs']);
+is_(($r['json']['refused'] ?? false) === true,
+    'THE SECOND DOOR IS REFUSED — first answer wins, so the two surfaces cannot disagree');
+is_(str_contains((string) file_get_contents($clone . '/docs/board-decisions/aron.md'), 'grace period')
+    && !str_contains((string) file_get_contents($clone . '/docs/board-decisions/aron.md'), '> Retract to free'),
+    '...and the ruling that stands is the FIRST one, unchanged');
+
+$r = svc($SVC, $clone, ['actor' => 'keeper', 'intent' => 'decision_pose', 'id' => 'aron',
+                        'question' => 'asking again', 'options' => ['x']]);
+is_(($r['json']['refused'] ?? false) === true, 're-posing an answered decision is refused — it would erase a ruling');
+
 section("[12] ADDING AND PROMOTING — position is rank, number is a permanent name");
 
 /**

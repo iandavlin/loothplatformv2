@@ -52,9 +52,12 @@ const ALLOWED_PATHS = [
     'docs/board-notes/',      // per-item notes and chat threads
     'docs/board-media/',      // media references (the files live outside git)
     'docs/board-lanes/',      // Ian's messages TO a lane (the replies are never committed)
+    'docs/board-chat/',       // the general Ian↔keeper chat — BOTH directions committed
+    'docs/board-questions/',  // Ian's open questions and their answers — APPEND ONLY
+    'docs/board-decisions/',  // posed decisions and their ONE answer
 ];
 
-const INTENTS = [ 'reorder', 'note_append', 'media_ref', 'lane_message', 'lane_receipt', 'item_add', 'item_promote' ];
+const INTENTS = [ 'reorder', 'note_append', 'media_ref', 'lane_message', 'lane_receipt', 'item_add', 'item_promote', 'keeper_message', 'question_ask', 'question_answer', 'decision_pose', 'decision_answer' ];
 
 /* ---------------------------------------------------------------------- */
 
@@ -300,6 +303,199 @@ function applyLaneMessage( string $repo, string $lane, string $text, string $act
         str_replace( "\n", "\n> ", trim( $text ) ) );
 
     file_put_contents( $repo . '/' . $rel, $block, FILE_APPEND );
+    return [ $rel ];
+}
+
+/**
+ * THE GENERAL CHAT — Ian ↔ keeper, and BOTH directions are committed.
+ *
+ * Ian's priority ruling, 2026-08-16: this ships before the lane relay, and it
+ * ships fast because NOTHING here touches a terminal. There is no delivery step,
+ * no tmux, no lane-say — a message is a commit, and being committed IS being
+ * delivered.
+ *
+ * Deliberately NOT the lane-thread shape. `lane_message` exists to be CARRIED to
+ * a seat and its replies are never committed; this is the opposite on both
+ * counts. One store where half the rows expect a delivery that will never come
+ * is a store nobody can reason about.
+ *
+ * The actor is the only thing separating the two speakers, and the committer
+ * stamps it into the commit — so "who said this" is a property of the
+ * repository, not a field in a file anyone could edit.
+ */
+function applyKeeperMessage( string $repo, string $text, string $actor ): array
+{
+    $text = rtrim( $text );
+    if ( trim( $text ) === '' ) { refuse( 'an empty message is not a message' ); }
+    if ( mb_strlen( $text ) > 20000 ) { refuse( 'that message is too long' ); }
+
+    $rel = 'docs/board-chat/keeper.md';
+    if ( ! pathAllowed( $rel ) ) { refuse( 'path outside the fence: ' . $rel ); }
+    $dir = $repo . '/docs/board-chat';
+    if ( ! is_dir( $dir ) && ! @mkdir( $dir, 0755, true ) ) { fail( 'could not create the chat directory' ); }
+    if ( ! is_file( $repo . '/' . $rel ) ) {
+        file_put_contents( $repo . '/' . $rel, "# The board chat — Ian and keeper\n" );
+    }
+
+    // Quoted line by line, which is what lets a pasted stack trace survive: the
+    // reader strips exactly one "> " and the indentation underneath is his.
+    file_put_contents( $repo . '/' . $rel, sprintf( "\n### %s — %s\n\n> %s\n",
+        gmdate( 'Y-m-d H:i:s' ), $actor,
+        str_replace( "\n", "\n> ", $text ) ), FILE_APPEND );
+    return [ $rel ];
+}
+
+/**
+ * OPEN QUESTIONS — Ian, 2026-08-16: "I feel like I ask questions stream of
+ * consciousness on here and they wind up getting lost."
+ *
+ * THE STORE IS APPEND-ONLY AND THERE IS NO VERB THAT REMOVES A QUESTION. That
+ * is the design answer to "they get lost": not a rule anyone has to remember,
+ * but the absence of any way to do it. A question leaves the OPEN list by
+ * GAINING AN ANSWER — an appended answer entry — and never by disappearing.
+ * Nothing here can delete, edit or reword an existing entry, so a question that
+ * was asked stays asked even if nobody likes it.
+ *
+ * Either side may ASK: keeper files the questions Ian raises in the VS chat that
+ * cannot be answered on the spot, so those stop evaporating too.
+ */
+function questionsFile( string $repo ): string { return $repo . '/docs/board-questions/questions.md'; }
+
+/** The next question number, from the file itself — max+1, never a gap-fill. */
+function nextQuestionId( string $repo ): string
+{
+    $f = questionsFile( $repo );
+    $max = 0;
+    if ( is_readable( $f ) ) {
+        foreach ( explode( "\n", (string) file_get_contents( $f ) ) as $l ) {
+            if ( preg_match( '/^### q(\d+) /', $l, $m ) ) { $max = max( $max, (int) $m[1] ); }
+        }
+    }
+    return 'q' . ( $max + 1 );
+}
+
+function applyQuestionAsk( string $repo, string $text, string $actor ): array
+{
+    $text = rtrim( $text );
+    if ( trim( $text ) === '' ) { refuse( 'an empty question is not a question' ); }
+    if ( mb_strlen( $text ) > 8000 ) { refuse( 'that question is too long' ); }
+
+    $rel = 'docs/board-questions/questions.md';
+    if ( ! pathAllowed( $rel ) ) { refuse( 'path outside the fence: ' . $rel ); }
+    $dir = $repo . '/docs/board-questions';
+    if ( ! is_dir( $dir ) && ! @mkdir( $dir, 0755, true ) ) { fail( 'could not create the questions directory' ); }
+    if ( ! is_file( questionsFile( $repo ) ) ) {
+        file_put_contents( questionsFile( $repo ), "# Open questions\n" );
+    }
+
+    $id = nextQuestionId( $repo );
+    file_put_contents( questionsFile( $repo ), sprintf( "\n### %s %s — %s\n\n> %s\n",
+        $id, gmdate( 'Y-m-d H:i:s' ), $actor, str_replace( "\n", "\n> ", $text ) ), FILE_APPEND );
+    $GLOBALS['MINTED'] = $id;
+    return [ $rel ];
+}
+
+function applyQuestionAnswer( string $repo, string $id, string $text, string $actor ): array
+{
+    if ( ! preg_match( '/^q\d+$/', $id ) ) { refuse( 'that is not a question id: ' . $id ); }
+    $text = rtrim( $text );
+    if ( trim( $text ) === '' ) { refuse( 'an empty answer is not an answer' ); }
+
+    $rel = 'docs/board-questions/questions.md';
+    if ( ! is_file( questionsFile( $repo ) ) ) { refuse( 'there are no questions yet' ); }
+
+    $raw = (string) file_get_contents( questionsFile( $repo ) );
+    if ( ! preg_match( '/^### ' . preg_quote( $id, '/' ) . ' /m', $raw ) ) {
+        refuse( 'no such question: ' . $id );
+    }
+    // An answer is APPENDED, like everything else here. It does not rewrite the
+    // question, so the record of what was asked cannot drift from what was
+    // answered.
+    file_put_contents( questionsFile( $repo ), sprintf( "\n#### answer to %s — %s — %s\n\n> %s\n",
+        $id, gmdate( 'Y-m-d H:i:s' ), $actor, str_replace( "\n", "\n> ", $text ) ), FILE_APPEND );
+    return [ $rel ];
+}
+
+/**
+ * DECISIONS — ONE STORE, TWO DOORS. Ian, 2026-08-16, on why:
+ * *"That way you can keep working here."*
+ *
+ * The same decision can be answered from his VS box or from the desk box on the
+ * board. FIRST ANSWER WINS, and that is enforced HERE rather than in either
+ * door: a second answer is refused, so the two surfaces cannot disagree about
+ * what was decided no matter which he reached first or how the timing fell.
+ * Enforcing it in a door would mean two implementations of "already answered",
+ * and the first time they drifted, a ruling would exist twice with different
+ * words.
+ *
+ * The answer records WHICH DOOR it came through, because when a ruling is
+ * queried months later "he pressed it on the board" and "he typed it in chat"
+ * are different kinds of evidence.
+ *
+ * `decision_pose` writes options as "- " lines — the format the board's existing
+ * per-item decision reader already understands, so this generalises that
+ * mechanism rather than inventing a second one.
+ */
+function decisionFile( string $repo, string $id ): string
+{
+    return $repo . '/docs/board-decisions/' . $id . '.md';
+}
+
+function decisionAnswered( string $repo, string $id ): bool
+{
+    $f = decisionFile( $repo, $id );
+    return is_readable( $f ) && (bool) preg_match( '/^#### answered /m', (string) file_get_contents( $f ) );
+}
+
+function applyDecisionPose( string $repo, string $id, string $question, array $options, string $actor ): array
+{
+    if ( ! preg_match( '/^[A-Za-z0-9][A-Za-z0-9._-]{0,40}$/', $id ) ) { refuse( 'that is not a decision id: ' . $id ); }
+    $question = trim( (string) preg_replace( '/\s+/u', ' ', $question ) );
+    if ( $question === '' ) { refuse( 'a decision needs a question' ); }
+
+    $clean = [];
+    foreach ( $options as $o ) {
+        $o = trim( (string) preg_replace( '/\s+/u', ' ', (string) $o ) );
+        // Flattened, and a leading dash stripped: an option that begins with "- "
+        // would write a second list row and invent an option nobody posed.
+        $o = ltrim( $o, "-* \t" );
+        if ( $o !== '' ) { $clean[] = $o; }
+    }
+    if ( $clean === [] ) { refuse( 'a decision needs at least one option' ); }
+
+    $rel = 'docs/board-decisions/' . $id . '.md';
+    if ( ! pathAllowed( $rel ) ) { refuse( 'path outside the fence: ' . $rel ); }
+    if ( decisionAnswered( $repo, $id ) ) { refuse( $id . ' has already been answered — re-posing it would erase a ruling' ); }
+
+    $dir = $repo . '/docs/board-decisions';
+    if ( ! is_dir( $dir ) && ! @mkdir( $dir, 0755, true ) ) { fail( 'could not create the decisions directory' ); }
+
+    $body = "# Decision " . $id . "\n\n> " . $question . "\n\n";
+    foreach ( $clean as $o ) { $body .= '- ' . $o . "\n"; }
+    file_put_contents( decisionFile( $repo, $id ), $body );
+    return [ $rel ];
+}
+
+/**
+ * THE ONE ANSWER. Refused if one already exists — first door through wins.
+ * "Other" is a first-class answer, recorded in HIS words rather than as a
+ * footnote to a button he did not press (Ian's round-4 correction).
+ */
+function applyDecisionAnswer( string $repo, string $id, string $choice, string $door, string $actor ): array
+{
+    if ( ! preg_match( '/^[A-Za-z0-9][A-Za-z0-9._-]{0,40}$/', $id ) ) { refuse( 'that is not a decision id: ' . $id ); }
+    if ( ! in_array( $door, [ 'desk', 'vs', 'chat' ], true ) ) { refuse( 'unknown door: ' . $door ); }
+    $choice = rtrim( $choice );
+    if ( trim( $choice ) === '' ) { refuse( 'an answer needs an answer' ); }
+
+    $rel = 'docs/board-decisions/' . $id . '.md';
+    if ( ! is_readable( decisionFile( $repo, $id ) ) ) { refuse( 'no such decision: ' . $id ); }
+    if ( decisionAnswered( $repo, $id ) ) {
+        refuse( $id . ' is already answered — the first door through wins, and this is not it' );
+    }
+
+    file_put_contents( decisionFile( $repo, $id ), sprintf( "\n#### answered %s — %s — via %s\n\n> %s\n",
+        gmdate( 'Y-m-d H:i:s' ), $actor, $door, str_replace( "\n", "\n> ", $choice ) ), FILE_APPEND );
     return [ $rel ];
 }
 
@@ -565,6 +761,29 @@ switch ( $intent ) {
     case 'lane_message':
         $touched = applyLaneMessage( CLONE_DIR, (string) ( $req['lane'] ?? '' ), (string) ( $req['text'] ?? '' ), $actor );
         $summary = 'message to ' . (string) ( $req['lane'] ?? '?' );
+        break;
+    case 'keeper_message':
+        $touched = applyKeeperMessage( CLONE_DIR, (string) ( $req['text'] ?? '' ), $actor );
+        $summary = 'chat message from ' . $actor;
+        break;
+    case 'question_ask':
+        $touched = applyQuestionAsk( CLONE_DIR, (string) ( $req['text'] ?? '' ), $actor );
+        $summary = 'question ' . (string) ( $GLOBALS['MINTED'] ?? '?' ) . ' from ' . $actor;
+        break;
+    case 'question_answer':
+        $touched = applyQuestionAnswer( CLONE_DIR, (string) ( $req['id'] ?? '' ),
+                                        (string) ( $req['text'] ?? '' ), $actor );
+        $summary = 'answer to ' . (string) ( $req['id'] ?? '?' );
+        break;
+    case 'decision_pose':
+        $touched = applyDecisionPose( CLONE_DIR, (string) ( $req['id'] ?? '' ), (string) ( $req['question'] ?? '' ),
+                                      is_array( $req['options'] ?? null ) ? $req['options'] : [], $actor );
+        $summary = 'posed decision ' . (string) ( $req['id'] ?? '?' );
+        break;
+    case 'decision_answer':
+        $touched = applyDecisionAnswer( CLONE_DIR, (string) ( $req['id'] ?? '' ), (string) ( $req['choice'] ?? '' ),
+                                        (string) ( $req['door'] ?? '' ), $actor );
+        $summary = 'answered decision ' . (string) ( $req['id'] ?? '?' );
         break;
     case 'item_add':
         $touched = applyItemAdd( CLONE_DIR, isset( $req['parent'] ) ? (string) $req['parent'] : null,
