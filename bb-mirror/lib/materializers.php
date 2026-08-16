@@ -466,8 +466,16 @@ function bb_mirror_upsert_reply(int $id, PDO $db): void {
     $topic_id = (int)($m['_bbp_topic_id'] ?? 0);
     $forum_id = (int)($m['_bbp_forum_id'] ?? 0);
     if (!$topic_id || !$forum_id) {
-        // Live carries exactly 2 of these (71432, 71433) — replies with no
-        // _bbp_topic_id row at all. Unmirrorable until the WP data is repaired.
+        // ⚠️ THIS IS THE ORPHAN STATE, AND IT IS LEGITIMATE — Ian's ruling,
+        // 2026-08-16: "If the topic is deleted, the replies should be orphaned."
+        // A reply whose topic was hard-deleted keeps existing and stops claiming a
+        // parent; it is preserved, not repaired and not deleted. So this branch is
+        // not only an error path — it is the designed resting place for a reply
+        // with no thread, and the 202 + note is how that state announces itself.
+        //
+        // (It is deliberately NOT a census of live ids. An earlier version of this
+        // comment named the two rows that happened to be here, which stops being
+        // true the moment anything is repaired or orphaned.)
         bb_mirror_note_skip('reply', $id, sprintf(
             'missing parentage meta (topic_id=%d forum_id=%d)', $topic_id, $forum_id));
         return;

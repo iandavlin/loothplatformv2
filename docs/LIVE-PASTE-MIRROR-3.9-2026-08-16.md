@@ -38,45 +38,77 @@ and the paste is stale.
 
 ---
 
-## Group B — 3 REAL member replies (do NOT delete)
+## Group B — 3 real member replies: make them FIRST-CLASS ORPHANS
 
-These are genuine answers that are currently invisible on the hub. **Their true topic
-is not recoverable from the data** — I checked: `71685` is an attachment
-(`archtop-invisible-repair-005`) whose own `post_parent` is 0, and `71671` does not
-exist in WordPress at all. So no query can tell us where they belong; only you can.
+**Ian's ruling:** *"If the topic is deleted, the replies should be orphaned."*
+So these are **not** deleted and **not** re-homed. They stay, preserved, and they
+stop claiming a parent that was never theirs.
 
-| id | author | says | claims topic |
+| id | author | says | currently claims |
 |---|---|---|---|
-| 71720 | patreon_63883555 | "I spray the wood with veneer softener and put a s…" | 71685 (an **attachment**) |
-| 71722 | patreon_120178820 | "You could try wetting it and then compressing in…" | 71685 (an **attachment**) |
-| 71728 | colingobrien | "The bubbles do appear to follow the grain." | 71671 (**absent**) |
+| 71720 | patreon_63883555 | "I spray the wood with veneer softener and put a s…" | topic **71685** — an *attachment* |
+| 71722 | patreon_120178820 | "You could try wetting it and then compressing in…" | topic **71685** — an *attachment* |
+| 71728 | colingobrien | "The bubbles do appear to follow the grain." | topic **71671** — *does not exist* |
 
-**Step 1 — read them in full so you can recognise the thread:**
+### What happened, for the record
+
+Their topic was **hard-deleted** in the 14–16 June window — not trashed, so there is
+no row to restore and no trash to empty. The dupe-merge journal is provably clean,
+so it was not that. The actor is unrecoverable: there is no audit trail for the
+period and the logs have rotated. That is why nothing can re-home these replies —
+**the destination genuinely no longer exists**, which is exactly the case Ian's
+ruling covers.
+
+### Why marking them matters even though nothing shows today
+
+All three are **absent from the mirror** (verified: 0 rows) — the sync has been
+correctly refusing them. The problem is what they still *assert*: 71720 and 71722
+name **71685**, which is a real attachment belonging to something else. Left as is,
+any future repair — a healer, a backfill, a well-meant re-run — would file two
+members' answers under an object that is not their conversation. Marking them
+topic-less removes that trap permanently.
+
+Afterwards the pipe treats them as a **legitimate, loud, graceful** state: the
+receiver answers 202 with `missing parentage meta`, and reconcile reports them as
+unrepairable rather than silently dropping them. That is the orphan state working
+as designed, not a fault.
+
+### Step 1 — cut the false parent (2 replies under the attachment)
 
 ```
-ssh live 'cd /var/www/loothgroup.com && wp db query "SELECT ID, post_date_gmt, post_content FROM wp_posts WHERE ID IN (71720,71722,71728)"'
+ssh live 'cd /var/www/loothgroup.com && wp db query "UPDATE wp_posts SET post_parent=0, post_modified_gmt=UTC_TIMESTAMP(), post_modified=NOW() WHERE ID IN (71720,71722) AND post_type='"'"'reply'"'"' AND post_status='"'"'publish'"'"' AND post_parent=71685"'
 ```
 
-**Step 2 — once you know the right topic id for one of them, re-parent it.** Replace
-`<REPLY_ID>` and `<TOPIC_ID>` with real numbers; the guard refuses anything that is
-not a published topic, so a typo cannot attach a reply to a page or an attachment:
+Expected: **2 rows affected.**
+
+### Step 2 — cut the false parent (1 reply under the absent topic)
 
 ```
-ssh live 'cd /var/www/loothgroup.com && wp db query "UPDATE wp_posts r JOIN wp_posts t ON t.ID=<TOPIC_ID> AND t.post_type='"'"'topic'"'"' AND t.post_status='"'"'publish'"'"' SET r.post_parent=t.ID, r.post_modified_gmt=UTC_TIMESTAMP() WHERE r.ID=<REPLY_ID> AND r.post_type='"'"'reply'"'"'"'
+ssh live 'cd /var/www/loothgroup.com && wp db query "UPDATE wp_posts SET post_parent=0, post_modified_gmt=UTC_TIMESTAMP(), post_modified=NOW() WHERE ID=71728 AND post_type='"'"'reply'"'"' AND post_status='"'"'publish'"'"' AND post_parent=71671"'
 ```
 
-```
-ssh live 'cd /var/www/loothgroup.com && wp post meta update <REPLY_ID> _bbp_topic_id <TOPIC_ID>'
-```
+Expected: **1 row affected.**
+
+### Step 3 — drop the false topic claim
+
+The guard names the exact bad values, so this cannot remove a healthy `_bbp_topic_id`
+from anything else:
 
 ```
-ssh live 'cd /var/www/loothgroup.com && wp post meta update <REPLY_ID> _bbp_forum_id $(ssh live "cd /var/www/loothgroup.com && wp post meta get <TOPIC_ID> _bbp_forum_id")'
+ssh live 'cd /var/www/loothgroup.com && wp db query "DELETE FROM wp_postmeta WHERE meta_key='"'"'_bbp_topic_id'"'"' AND ((post_id IN (71720,71722) AND meta_value=71685) OR (post_id=71728 AND meta_value=71671))"'
 ```
 
-Bumping `post_modified_gmt` is deliberate: it puts the reply back inside reconcile's
-window, so the mirror picks it up on the next pass without anything else being run.
+Expected: **3 rows affected.**
 
----
+**`_bbp_forum_id` is deliberately left in place** (3837 for the pair, 3829 for
+71728). It is the only surviving record of which conversation these answers came
+from, it costs nothing, and the mirror already refuses a reply without a topic — so
+keeping it changes no behaviour and preserves provenance if the thread is ever
+reconstructed.
+
+Bumping `post_modified_gmt` is also deliberate: it brings each row into reconcile's
+window once, so the pipe announces the orphan state immediately instead of leaving
+it to the six-hourly deep sweep.
 
 ## Verify (run after either group)
 
@@ -84,8 +116,9 @@ window, so the mirror picks it up on the next pass without anything else being r
 ssh live 'cd /var/www/loothgroup.com && wp db query "SELECT r.ID, r.post_status, r.post_parent, MAX(CASE WHEN m.meta_key='"'"'_bbp_topic_id'"'"' THEN m.meta_value END) AS topic_meta FROM wp_posts r LEFT JOIN wp_postmeta m ON m.post_id=r.ID WHERE r.ID IN (71432,71433,71720,71722,71728) GROUP BY r.ID, r.post_status, r.post_parent"'
 ```
 
-Healthy afterwards means: 71432 and 71433 show `trash`, and any reply you re-parented
-shows a `topic_meta` that is a real published topic.
+Healthy afterwards means: 71432 and 71433 show `trash`; and 71720, 71722, 71728 show
+`post_parent = 0` with `topic_meta` **NULL** — preserved, published, and honestly
+parentless. They are orphans by ruling, not casualties.
 
 ## The success signal
 
