@@ -1060,6 +1060,36 @@ echo "=== GATE (unnumbered — pending keeper): directory location cap — backl
 # and red-first proven against real live rows (Luke + Michael Swisher) even
 # before the banner has a final number.
 run "directory-location-cap" python3 "$(dirname "$0")/directory-location-cap-gate.py"
+echo
+echo "=== GATE 46: compose media — abandon leaves ZERO orphans, each post its own library ==="
+# Ian, 2026-08-15: no orphans ("obviously"), and "each post has its own library".
+# MEASURED BEFORE IT EXISTED: uploading through the real picker and abandoning
+# left an attachment with post_parent 0, the file on disk and nothing referencing
+# it. Neither this build nor WordPress core sweeps unattached media, and a
+# subscriber has upload_files, so an abandoning member could fill the library.
+#
+# Assertion 4 counts the SITE-WIDE unattached total, not just the rows the gate
+# made: a gate that only counts its own rows cannot see an orphan produced by a
+# path it did not model. Assertion 6 exists because wp_delete_auto_drafts()
+# removes the post and LEAVES its attachments. 7b PLANTS two cron entries and
+# proves the flag-off heal takes the whole HOOK, not just the next occurrence.
+#
+# ⚠️ DEPLOY COUPLING: this reports CANNOT RUN (exit 2, counted as no-verdict and
+# NOT as red) until the serve carries draft-first — the docroot mu-plugin is a
+# symlink into the serving checkout, so it needs the merge AND the pull.
+run "compose-media" python3 "$(dirname "$0")/compose-media-gate.py"
+echo
+echo "=== GATE 47: the compose form meets WCAG AA in DARK, and has no bright surfaces ==="
+# Ian, 2026-08-15: "compose works well. Needs some dark mode love." Dark contrast
+# has bitten this platform 3+ times, which is why it is a gated class. It reads
+# the RENDERED page rather than a hex-pair list, because the form's colours are
+# ACF/WP stylesheets meeting the site tokens and cannot be written down ahead.
+#
+# ⚠️ REPOINTED at the STANDALONE form. It measured the hub's injected modal until
+# Ian ruled the form leaves the modal (main 4dbb192 killed the embed); the
+# contrast concern moved with the surface rather than going away.
+run "compose-dark-1280" python3 "$(dirname "$0")/../frontend-compose/dark-contrast-sweep.py" --width 1280
+run "compose-dark-390"  python3 "$(dirname "$0")/../frontend-compose/dark-contrast-sweep.py" --width 390
 
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
