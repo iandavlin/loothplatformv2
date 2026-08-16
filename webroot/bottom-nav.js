@@ -340,6 +340,10 @@
         'padding:0 4px;box-sizing:border-box;border-radius:9px;background:#e23b3b;color:#fff;' +
         'font:700 10px/16px var(--lg-font-sans,system-ui,sans-serif);text-align:center;' +
         'box-shadow:0 0 0 2px var(--lg-cream,#fbfbf8);pointer-events:none}' +
+      // Dark only: #e23b3b under white 10px text measures 4.27:1 (gate 61's
+      // catch on the board page, 8/16) — a shade darker clears 4.5 without
+      // touching the light theme's brand red.
+      'html[data-lguser-theme="dark"] #' + BAR_ID + ' .lt-badge{background:#d33232}' +
       // notifications section in the sheet
       '.lt-notifs__h{display:flex!important;align-items:center;justify-content:space-between}' +
       '.lt-notifs__clear{border:0;background:none;color:var(--lg-sage-d,#6b7c52);font:700 12px/1 var(--lg-font-sans,system-ui,sans-serif);' +
