@@ -371,8 +371,13 @@
       '.lt-nbulk{border:1px solid var(--lg-rust,#c66845);border-radius:10px;padding:10px 12px;margin:0 0 10px}' +
       '.lt-nbulk__w{margin:0 0 8px;font:400 12px/1.5 var(--lg-font-sans,system-ui,sans-serif);' +
         'color:var(--lg-ink,#323532)}' +
-      '.lt-nbulk__b{width:100%;border:0;border-radius:8px;background:var(--lg-rust,#c66845);color:#fff;' +
+      // Same measured failure as the desktop button: white on --lg-rust is 3.84:1
+      // in light and 2.61:1 in DARK, because --lg-rust repoints LIGHTER under dark
+      // while the ink stays white. Darkened rust + white in light (4.77:1); dark
+      // ink on the light rust under dark (6.49:1). Measured in a browser, not guessed.
+      '.lt-nbulk__b{width:100%;border:0;border-radius:8px;background:#b35937;color:#fff;' +
         'padding:13px;font:700 13px/1 var(--lg-font-sans,system-ui,sans-serif);cursor:pointer}' +
+      'html[data-lguser-theme="dark"] .lt-nbulk__b{background:var(--lg-rust,#e08a72);color:#1a1d20}' +
       '.lt-notif-all{margin:4px 0 2px;border:0;background:none;color:var(--lg-sage-d,#6b7c52);cursor:pointer;' +
         'font:600 13px/1 var(--lg-font-sans,system-ui,sans-serif);text-align:left;padding:8px 6px}' +
       // settings panel (rendered by app-settings.js buildPanel)
