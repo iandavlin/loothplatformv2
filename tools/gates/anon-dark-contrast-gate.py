@@ -321,6 +321,42 @@ def wait_dark_resolved(s, deadline=8.0):
     return False
 
 
+# ── THE ATTRIBUTE IS NOT THE STYLESHEET ─────────────────────────────────────
+# Third timing layer, found 2026-08-16 and it invalidated a fix I had already
+# written. app-settings.js sets data-lguser-theme AND separately injects its dark
+# rules as <style id="lg-dark-style">. Those are not simultaneous. Between them
+# the page has the dark ATTRIBUTE but not the dark RULES: wrappers that are
+# styled server-side are already dark while every element app-settings.js styles
+# still wears its LIGHT ink.
+#
+# That window reads ~1.0-1.07:1 — light ink on a dark wrapper — and it is exactly
+# what the sweep photographed as "26 invisible search fields across five
+# surfaces". Measured on the settled page, all four of those inputs clear AA
+# comfortably (12.97, 12.23, 12.23, 12.98). There was no defect. The fix built
+# for it was dropped before it shipped.
+#
+# THE TELL, which was sitting in the data: on the settled page the hub input
+# reports its OWN background #222629 — app-settings.js's global input rule
+# applying. In the sweep that same input had a TRANSPARENT background, because
+# the rule was not there yet. Same page, same selector, two stylesheet states.
+#
+# Waiting on the attribute alone made the instrument honest for 86.php, whose CSS
+# is inline and server-rendered so it is present at first byte — which is why the
+# login-family results stand. It was never enough for anything app-settings.js
+# styles, which is most of the app.
+def wait_dark_styles(s, deadline=8.0):
+    """True once app-settings.js's dark stylesheet is actually in the document."""
+    start = time.monotonic()
+    while time.monotonic() - start < deadline:
+        try:
+            if s.js("!!document.getElementById('lg-dark-style')", quiet=True) is True:
+                return True
+        except Exception:                                      # noqa: BLE001
+            pass
+        time.sleep(0.2)
+    return False
+
+
 def measure(s, tok, host, probe_js, key, path_tpl, mode, device, metrics, extra_css=None,
             patience=1.0):
     """Arm anon, navigate into the requested dark state, and probe. Returns
@@ -360,6 +396,8 @@ def measure(s, tok, host, probe_js, key, path_tpl, mode, device, metrics, extra_
     if not resolved:
         s.goto(url, settle=2.4 * patience)
         resolved = wait_dark_resolved(s, deadline=8.0 * patience)
+    # ...and then for the RULES, not just the attribute. See wait_dark_styles.
+    styled = wait_dark_styles(s, deadline=8.0 * patience) if resolved else False
 
     if extra_css:
         s.js("""(function(css){
@@ -379,6 +417,7 @@ def measure(s, tok, host, probe_js, key, path_tpl, mode, device, metrics, extra_
     # "this surface was never dark when we looked at it".
     if isinstance(out, dict):
         out["resolved"] = resolved
+        out["darkStyles"] = styled
     return out
 
 
@@ -769,6 +808,14 @@ def main():
                             cannot_run.append(f"{label}: dark never resolved; retry errored ({str(e)[:60]})")
                             print(f"  CANNOT RUN  {label}  dark never resolved, retry errored")
                             continue
+                    if data.get("resolved") and not data.get("darkStyles"):
+                        cannot_run.append(
+                            f"{label}: theme attribute set but app-settings.js's dark STYLESHEET "
+                            f"(#lg-dark-style) never appeared — the page had the dark attribute "
+                            f"without the dark rules, which reads as light ink on dark wrappers "
+                            f"(~1:1). Findings DISCARDED; NO VERDICT.")
+                        print(f"  CANNOT RUN  {label}  dark stylesheet never injected — no verdict")
+                        continue
                     if not data.get("resolved") or data.get("theme") != "dark":
                         cannot_run.append(
                             f"{label}: DARK NEVER RESOLVED (theme={data.get('theme')}) even at "

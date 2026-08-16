@@ -208,6 +208,21 @@ def run_surface(s, probe_js, key, path, label, mode, device, outdir):
                 break
             time.sleep(0.2)
 
+    # ...and then wait for the RULES, not just the attribute. app-settings.js
+    # sets data-lguser-theme and separately injects <style id="lg-dark-style">;
+    # between them the page has the dark ATTRIBUTE without the dark RULES, so
+    # every element app-settings styles still wears its LIGHT ink on an already
+    # dark wrapper. That window reads ~1.0-1.07:1 and it is what this sweep
+    # photographed as "26 invisible search fields" — all four of which clear AA
+    # comfortably once settled. Recorded per row so a contaminated run cannot be
+    # read as truth.
+    _sd = time.monotonic() + 8.0
+    while time.monotonic() < _sd:
+        if s.js("!!document.getElementById('lg-dark-style')"):
+            break
+        time.sleep(0.2)
+    dark_styles = bool(s.js("!!document.getElementById('lg-dark-style')"))
+
     # --- did dark ACTUALLY resolve? ---------------------------------------
     resolved = s.js("document.documentElement.getAttribute('data-lguser-theme')||'(none)'")
     title = s.js("document.title||''")
@@ -230,6 +245,7 @@ def run_surface(s, probe_js, key, path, label, mode, device, outdir):
     data["device"] = device
     data["path"] = path
     data["resolvedTheme"] = resolved
+    data["darkStyles"] = dark_styles
     data["title"] = title
     data["gate403"] = bool(is403)
 
@@ -330,6 +346,17 @@ def main():
     # row that never resolved dark was measured in LIGHT: its findings are
     # phantoms, and because they are light-on-light they sort to the TOP of any
     # badness order. Anyone reading this ranking as a worklist needs to know.
+    nostyle = [r for r in rows if r.get("resolvedTheme") == "dark" and not r.get("darkStyles")]
+    if nostyle:
+        ghost = sum(len(r.get("findings") or []) for r in nostyle)
+        print(f"  ⚠ {len(nostyle)} run(s) had the dark ATTRIBUTE but NOT the dark STYLESHEET, "
+              f"carrying {ghost} finding(s) measured with light ink on dark wrappers.", flush=True)
+        print("    Those are phantoms of the same family as an unresolved page — they read "
+              "~1.0-1.07:1 and therefore rank FIRST. Re-run before fixing anything:", flush=True)
+        for r in nostyle:
+            print(f"      {r['surface']}/{r['mode']}/{r['device']}  "
+                  f"{len(r.get('findings') or [])} phantom finding(s)", flush=True)
+
     misses = [r for r in rows if r.get("resolvedTheme") != "dark"]
     if misses:
         ghost = sum(len(r.get("findings") or []) for r in misses)

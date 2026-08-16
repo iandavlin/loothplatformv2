@@ -1,5 +1,38 @@
 # dark-anon-sweep — state note (2026-08-15, re-chartered seat)
 
+> ## ⚠ CORRECTION 2 (2026-08-16) — THE "INVISIBLE SEARCH FIELDS" ARE A PHANTOM
+>
+> The worklist below calls them the wave's top item and a
+> members-cannot-use-this defect. **They are not a defect at all.** Measured on
+> the settled serve with liveness asserted and transitions frozen, all four
+> already pass: shop **12.97**, events **12.23**, hub **12.23**, directory
+> **12.98**. A fix was written for them and **dropped before it shipped**
+> (preserved at `~/projects/docs/DROPPED-field-ink-fix-phantom.patch`).
+>
+> **A THIRD TIMING LAYER.** `app-settings.js` sets `data-lguser-theme` and
+> *separately* injects `<style id="lg-dark-style">`. Between the two, the page has
+> the dark **attribute** but not the dark **rules** — server-styled wrappers are
+> already dark while everything app-settings styles still wears its light ink.
+> That window reads ~1.0–1.07:1, which is precisely the "invisible input" family.
+>
+> **The tell was in my own data:** on the settled page the hub input reports its
+> OWN background `#222629` (app-settings' global input rule applying). In the
+> sweep the same input had a *transparent* background — the rule was not there
+> yet. Same page, same selector, two stylesheet states.
+>
+> Waiting on the attribute made the instrument honest for **86.php**, whose CSS is
+> inline and server-rendered so it exists at first byte — which is why the
+> login-family results stand. It was never enough for anything app-settings.js
+> styles, which is most of the app.
+>
+> Both instruments now wait for `#lg-dark-style` too, and a run with the attribute
+> but no stylesheet is NO VERDICT rather than a finding. Predicate red-first
+> proven both directions (`anon-dark-styles-redfirst.py`).
+>
+> **Treat every non-login number in the table below as unverified** until the
+> sweep is re-run under the stylesheet precondition.
+
+
 > ## ⚠ CORRECTION (later the same session) — THE ACCORDION DEFECT IS REAL
 >
 > The section below says the charter's accordion defect does not exist. **That
