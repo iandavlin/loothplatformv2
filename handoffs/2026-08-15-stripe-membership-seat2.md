@@ -146,7 +146,8 @@ forged name into the commit and believe it.
 | Gate | Was | Now | |
 |---|---|---|---|
 | committer (**now gate 56**, keeper minted it) | 33 | **56** | + the ambiguous index, + `lane_message` and its name fence, + `lane_receipt` and the forged-row fence |
-| relay (**number not minted — asked**) | — | **20** | the shell property, idempotency, the attempt cap, the visible failure |
+| 56 committer (**now also: chat, questions, decisions, doorbell**) | 33 | **104** | |
+| relay (**number not minted — asked**) | — | **24** | the shell property, idempotency, the attempt cap, the visible failure |
 | 50 — work board (after the general chat) | 59 | **99** | + the general chat, and that it is not a second implementation |
 | 50 — work board | 59 | **95** | + the endpoint driven over real HTTP, + the source-of-truth preference in three states, + the shipped archive, + the lane threads |
 
@@ -390,6 +391,109 @@ not their instrument, so **re-run their probe once after this merges**. Our diff
 touch the same file in different regions (theirs ~line 965 in the head block,
 mine in the second block at ~1404): it should auto-merge, and a clean auto-merge
 is precisely the case where a new class arrives without a dark rule.
+
+---
+
+## IAN'S COCKPIT — the first cut (2026-08-16, ruled mid-session, ships before the relay)
+
+Ian flipped the priority: **the general chat ships first, the lane relay
+second**, because this half touches **no terminal at all**. A message is a
+commit; being committed **is** being delivered. That is the whole reason it
+could go out ahead of the relay.
+
+**Five new fenced shapes** (`keeper_message`, `question_ask`, `question_answer`,
+`decision_pose`, `decision_answer`) and four surfaces:
+
+| Surface | What it is |
+|---|---|
+| **Chat panel** | Ian ↔ keeper, both directions committed, both actor-stamped. The old Ask-keeper panel was **repointed**, not duplicated — it used to route through the lane-thread shape, which means terminal delivery. |
+| **Open questions rail** | Ian: *"I ask questions stream of consciousness and they wind up getting lost."* OPEN is derived from having no answer. Answered ones move to a drawer still showing question **and** answer. |
+| **Desk decision boxes** | Real buttons + an always-present "Something else…", inside Your Desk. |
+| **Doorbell** (`tools/keeper/board-doorbell.php`) | Keeper runs it as a background task; **its exit is the bell**, stall-watchdog pattern, relaunch order on every exit line. |
+
+### The rules that carry the weight
+
+- **An open question cannot be removed except by gaining an answer** — not a rule
+  anyone remembers, but **the absence of any verb that removes one**. Gated:
+  the question text is still present after being answered.
+- **First answer wins, enforced in the COMMITTER**, not in either door. If each
+  door checked "already answered" for itself there would be two implementations,
+  and the first time they drifted a ruling would exist twice with different
+  words. The answer records **which door** — months later "he pressed it on the
+  board" and "he typed it in chat" are different evidence.
+- **An answered desk box offers nothing to press.** Otherwise he presses it, the
+  committer refuses under first-answer-wins, and the board looks broken while
+  working exactly as designed.
+- **The chat refetches, it never fabricates** — gated against the *client
+  source*, because otherwise the rule holds only until someone "improves" the UX
+  with an optimistic append.
+- **The doorbell rings once per item then goes quiet**, and **keeper's own writes
+  never ring keeper**. Its memory sits beside keeper, not in the repo: losing it
+  costs one duplicate ring, the harmless direction.
+
+### Still to build (Ian's parity roadmap, in order)
+1. **Image paste** → dev-gated upload, outside the WP media library *and* outside
+   git, committed as the existing `media_ref` shape; keeper reads from disk.
+   (A WP upload gets an attachment post with a public URL — a board screenshot of
+   an admin screen would become member-reachable.)
+2. **Decision posing generalised to the chat** — mostly built; the mechanism
+   already reads options from a committed file and never invents them.
+3. **Paste-back** — the box itself. *The whitespace half is already done and
+   gated* (see below).
+4. **Near-live feel** — poll for new committed replies.
+
+Then the **lane relay resumes**.
+
+### The whitespace bug that phase 3 would have hit
+`ltrim($l, '> ')` strips a character **class** — every leading `>` *and* every
+leading space — so quoted terminal output came back with its indentation
+deleted. Stack traces, `systemctl` output and diffs are all indentation. Now
+strips exactly one `> `, proven with an exact round trip and gated both ways.
+
+---
+
+## Where the merge conflict actually was (I got this wrong twice)
+
+I warned that dark-board and this branch would collide on `wip-board.php`. **They
+did not.** Main does not carry dark-board's rules yet. The real collision was
+with `9efd372`, the **watch-only live terminals** lane, which added a watch link
+to the same team-row markup this lane had refactored into a shared renderer.
+
+**Resolved by keeping BOTH** — their watch link and this lane's renderer are
+different features that happened to share a region. Ian's watch-only ruling is
+untouched, with a comment at the site saying so. Branch is rebased onto main,
+zero behind, all gates green.
+
+## Two self-corrections worth inheriting
+
+1. **Never background a `git rebase` in a worktree you are still editing.** I
+   did; it stopped on the conflict, left me on a **detached HEAD** mid-replay,
+   and the suite chained behind it ran against a half-rebased tree. I caught it
+   only because a gate count dropped 75 → 56 and I chased the number instead of
+   shrugging. Nothing was lost (everything was pushed), but the suite result
+   would have been meaningless had I trusted it.
+2. **Do not gate a suite run on "load < 4".** A suite *with Chrome* is itself
+   above 4 on 2 cores, so that condition can essentially never fire while any
+   lane is running one — I starved my own suite four times while every other
+   lane got theirs through. **The flock mutex is already the box-wide
+   serialiser** for suites specifically. The load rule remains right for phases
+   that add load on top of what is there; it is wrong for the one heavy phase
+   that carries its own serialiser.
+
+## The assertion bug this session produced SEVEN times
+
+An assertion matching a **string that also lives in prose** — a CSS rule, a code
+comment, a container class, or a neighbouring `case`. Every one was green for a
+reason unrelated to the property it named, and one blamed a *working* page:
+
+`hist--none` (stylesheet) · `NOT DELIVERED` (JS comment) · `proj--unsorted`
+(stylesheet, pre-existing) · lane-name refusals (refused downstream by accident)
+· `item_add … 'id' =>` with `/s` (crossed into `item_promote`) · `w2__opts`
+contains `w2__opt` · the doorbell's own docblock saying "no checkout, no reset".
+
+**The cure is always the same**: strip comments before asserting about code,
+assert the markup that can only be *output* (`class="x">text`), and check a red
+is red **for the reason it claims**. Worth a line in CRAFT-STANDARD.
 
 ### ⚠️ If you touch the styles, read this first
 
