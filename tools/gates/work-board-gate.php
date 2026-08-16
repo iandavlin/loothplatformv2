@@ -601,6 +601,32 @@ is_(str_contains($deskHtml, 'desk__age'), '...showing how long it has waited, in
 // justify.
 is_(str_contains($deskHtml, 'desk__type--update') || str_contains($deskHtml, 'desk__type--question'),
     '...and carries a type derived from evidence, not guessed from prose');
+
+/**
+ * DISMISS — the third retirement door (41b). Most retirement is mechanical; this
+ * is for the case no rule can see. It COMMITS rather than hand-removing, so a
+ * dismissal has an author and a time.
+ */
+$dkey = $tmp . '-deskkey.json';
+file_put_contents($dkey, json_encode(['ts' => 1, 'lanes' => [], 'desk' => [
+    ['when' => '2026-08-16 19:00', 'who' => 'featured-members', 'text' => 'a thing', 'key' => 'abc123def456'],
+]]));
+$dkHtml = (string) shell_exec('LGB_MAIN_COPY=/nonexistent/m.md LGB_THREADS=' . escapeshellarg($dkey)
+    . ' LGB_BACKLOG=' . escapeshellarg($BACK) . ' ' . PHP_BINARY . ' ' . escapeshellarg($PAGE) . ' 2>/dev/null');
+is_(str_contains($dkHtml, 'data-dismiss="abc123def456"'),
+    'a desk row carries a dismiss control keyed to the RELAY\'s own key');
+is_(str_contains($dkHtml, "action: 'desk_dismiss'"), '...which commits the dismissal rather than hand-removing it');
+
+// A row with NO key (no relay yet) must not draw a button that cannot work.
+$noKey = $tmp . '-nokey.json';
+file_put_contents($noKey, json_encode(['ts' => 1, 'lanes' => [], 'desk' => [
+    ['when' => '2026-08-16 19:00', 'who' => 'featured-members', 'text' => 'a thing'],
+]]));
+$nkHtml = (string) shell_exec('LGB_MAIN_COPY=/nonexistent/m.md LGB_THREADS=' . escapeshellarg($noKey)
+    . ' LGB_BACKLOG=' . escapeshellarg($BACK) . ' ' . PHP_BINARY . ' ' . escapeshellarg($PAGE) . ' 2>/dev/null');
+is_(!str_contains($nkHtml, 'data-dismiss='),
+    '...and an item with no key draws NO button — one that cannot work is worse than none');
+@unlink($dkey); @unlink($noKey);
 $noDeskHtml = render($PAGE, $BACK);
 is_(!str_contains($noDeskHtml, 'one ruling needed on the digest floor'),
     '...and with no snapshot the desk invents nothing');

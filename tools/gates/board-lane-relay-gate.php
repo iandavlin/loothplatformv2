@@ -321,6 +321,66 @@ is_(str_contains($txt, 'digest floor') && !str_contains($txt, '-> Ian:'),
     '...and the item carries his message, not the addressing preamble');
 
 /* ---------------------------------------------------------------------- */
+section("[10] DESK ITEMS RETIRE MECHANICALLY — nothing waits to be noticed");
+
+/**
+ * Backlog 41(b), Ian: "completed work still listed on my desk."
+ *
+ * An item leaves when a FACT says so — its decision was answered, its work
+ * landed, or he dismissed it — never when somebody remembers to remove it.
+ * Backlog 18 is the cautionary case: a day marked UNOWNED after he had used the
+ * finished feature, because noticing was the only mechanism.
+ */
+$rdb = $tmp . '/retire.db';
+$rp = new PDO('sqlite:' . $rdb);
+$rp->exec('CREATE TABLE messages (id INTEGER PRIMARY KEY, sender TEXT, recipient TEXT, body TEXT, ts INTEGER, read_ts INTEGER)');
+$ri = $rp->prepare('INSERT INTO messages (sender,recipient,body,ts) VALUES (?,?,?,?)');
+$posted = 1000000;
+$ri->execute(['ubuntu', 'ubuntu', 'seat-decided -> Ian: which way?',   $posted]);
+$ri->execute(['ubuntu', 'ubuntu', 'seat-open -> Ian: still waiting',   $posted]);
+
+// its decision is answered AFTER the post
+@mkdir($clone . '/docs/board-decisions', 0755, true);
+file_put_contents($clone . '/docs/board-decisions/seat-decided.md',
+    "# Decision seat-decided\n\n> which way?\n\n- A\n\n#### answered "
+    . gmdate('Y-m-d H:i:s', $posted + 60) . " — ian-via-board — via desk\n\n> A\n");
+sh('git add -A && git -c user.name=t -c user.email=t@t commit -q -m dec && git push -q origin HEAD:main', $clone);
+sh('git fetch -q origin && git reset -q --hard origin/main', $clone);
+
+$rpaths = $paths; $rpaths['DEVMSG_DB'] = $rdb;
+relay($RELAY, $rpaths);
+$snapR = json_decode((string) @file_get_contents($snap), true);
+$liveWho    = array_column((array) ($snapR['desk'] ?? []), 'who');
+$retiredWho = array_column((array) ($snapR['deskRetired'] ?? []), 'who');
+
+is_(in_array('seat-open', $liveWho, true), 'an ask with nothing resolved STAYS on the desk');
+is_(in_array('seat-decided', $retiredWho, true),
+    'an ask whose decision has been ANSWERED retires — no hand-removal');
+is_(!in_array('seat-decided', $liveWho, true), '...and is gone from the live desk');
+
+/**
+ * RETIRED IS MARKED, NOT DELETED. A desk where things vanish is a desk nobody
+ * trusts, and the history view needs to show what was dealt with.
+ */
+$retRow = null;
+foreach ((array) ($snapR['deskRetired'] ?? []) as $r) { if (($r['who'] ?? '') === 'seat-decided') { $retRow = $r; } }
+is_(is_array($retRow) && ($retRow['retired'] ?? '') !== '',
+    '...carrying WHY it retired, so the history says what happened rather than just hiding it');
+is_(is_array($retRow) && str_contains((string) ($retRow['retired'] ?? ''), 'decision'),
+    '...and the reason names the decision, not a generic "done"');
+
+/* An answer that PREDATES the ask must not retire it. */
+file_put_contents($clone . '/docs/board-decisions/seat-open.md',
+    "# Decision seat-open\n\n> old one\n\n- A\n\n#### answered "
+    . gmdate('Y-m-d H:i:s', $posted - 3600) . " — ian-via-board — via desk\n\n> A\n");
+sh('git add -A && git -c user.name=t -c user.email=t@t commit -q -m old && git push -q origin HEAD:main', $clone);
+sh('git fetch -q origin && git reset -q --hard origin/main', $clone);
+relay($RELAY, $rpaths);
+$snapR2 = json_decode((string) @file_get_contents($snap), true);
+is_(in_array('seat-open', array_column((array) ($snapR2['desk'] ?? []), 'who'), true),
+    'a decision answered BEFORE the ask does not retire it — an old ruling cannot close a fresh question');
+
+/* ---------------------------------------------------------------------- */
 section("[7] IT REFUSES TO RUN HALF-CONFIGURED");
 
 $r = relay($RELAY, ['CLONE_DIR' => $tmp . '/nope', 'COMMITTER' => $svcTmp, 'LANE_SAY' => $fake,

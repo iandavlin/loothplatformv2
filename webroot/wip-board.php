@@ -794,6 +794,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                                'dry_run' => $dry], $LGB_SOCKET);
             break;
 
+        /** Dismiss a desk item — the third retirement door, committed not hand-removed. */
+        case 'desk_dismiss':
+            $res = lgb_commit(['intent' => 'desk_dismiss', 'actor' => LGB_ACTOR,
+                               'key' => (string) ($req['key'] ?? ''), 'dry_run' => $dry], $LGB_SOCKET);
+            break;
+
         case 'note':
             $id   = (string) ($req['id'] ?? '');
             $text = trim((string) ($req['text'] ?? ''));
@@ -1204,12 +1210,17 @@ function lgb_render_desk_items(array $items, array $decisions = []): string
         if (in_array($who, $open, true))      { $type = 'decision'; }
         elseif (str_ends_with($first, '?'))   { $type = 'question'; }
 
+        // The key is the relay's, so a dismissal names the same row the relay
+        // will see next pass. Absent (no relay yet) the control is not drawn —
+        // a button that cannot work is worse than no button.
+        $key = (string) ($d['key'] ?? '');
         $out .= '<div class="desk__i desk__i--compact" data-desk="' . (int) $i . '" tabindex="0" role="button" title="Open this">'
               . '<span class="desk__b"></span>'
               . '<span class="desk__seat">' . lgb_h($who) . '</span>'
               . '<span class="desk__type desk__type--' . $type . '">' . $type . '</span>'
               . '<span class="desk__snip">' . lgb_h(mb_strimwidth($first, 0, 72, '…', 'UTF-8')) . '</span>'
               . '<span class="desk__age">' . lgb_h(lgb_age((string) ($d['when'] ?? ''))) . '</span>'
+              . ($key !== '' ? '<button class="desk__x2" data-dismiss="' . lgb_h($key) . '" title="Dismiss — I am done with this">&#10005;</button>' : '')
               . '</span></div>';
     }
     return $out;
@@ -2135,6 +2146,8 @@ html[data-lguser-theme="dark"]{--line:#767c76}
     .desk__snip{flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.85}
     .desk__age{font-size:11px;opacity:.55;white-space:nowrap}
     .desk__i--compact:hover .desk__snip{opacity:1}
+    .desk__x2{background:none;border:0;color:inherit;opacity:.35;cursor:pointer;font-size:12px;padding:0 2px}
+    .desk__x2:hover{opacity:.9}
   </style>
   <script type="application/json" id="lgb-branchstate"><?php
     echo json_encode(lgb_branch_states($LGB_THREADS), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
@@ -2868,6 +2881,23 @@ html[data-lguser-theme="dark"]{--line:#767c76}
         });
       });
     })();
+
+    document.querySelectorAll('.desk__x2[data-dismiss]').forEach(function (b) {
+      b.addEventListener('click', function (e) {
+        e.stopPropagation();                    // dismissing must not also open it
+        var row = b.closest('.desk__i');
+        b.disabled = true; b.textContent = '…';
+        post({ action: 'desk_dismiss', key: b.dataset.dismiss }).then(function (res) {
+          if (res && res.ok) {
+            // Removed from view immediately, but it is not gone: the relay
+            // carries it into the retired list, so history keeps it.
+            if (row) { row.style.display = 'none'; }
+          } else {
+            b.disabled = false; b.textContent = '\u2715';
+          }
+        });
+      });
+    });
 
     document.getElementById('lgb-close').addEventListener('click', close);
     scrim.addEventListener('click', function (e) { if (e.target === scrim) close(); });
