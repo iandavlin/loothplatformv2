@@ -348,6 +348,49 @@ Ian. Raised; keeper's to settle before Ian uses it.
 robot noise. Leaving unattributed messages out of the threads drops nothing Ian
 needs. That validated the design rather than changing it.)
 
+### Write shapes v2 — `item_add` and `item_promote` (Ian, 8/16, keeper-queued after the relay)
+
+His words: *"Could I add things. Add headers and sub items. Or promote sub items
+to headers."* Keeper's design note is the invariant: **position is rank, number
+is a permanent name** — an add or a promotion must never renumber anything.
+
+- **Additive by construction**: `item_add` inserts one line and touches nothing
+  else. A new item lands at the **bottom** — nobody but Ian decides what
+  outranks existing work — and he drags it up through the reorder shape.
+- **The number is `max+1`, never a gap-fill.** Reusing a retired number makes an
+  old reference silently point at new work. A parent counts as taken even when no
+  item holds it (the real file has children of `11` and `4` with no item 11 or 4).
+- **IDS ARE DOTTED INTEGERS, NOT DECIMALS.** The file carries `3.10`, and
+  `(float)"3.10" === (float)"3.1"` — any numeric handling merges them, and
+  "next child + 0.1" hands out a number that already exists. Gated against the
+  real 3.9/3.10 pair.
+- **Promotion leaves a pointer**: content moves verbatim to the new number, the
+  old line becomes `4.2. → promoted to 36`. No name is ever retired.
+- **The page never mints a number** — it sends a title and an optional parent;
+  the committer mints from the file inside the same read-and-write. Gated, and
+  proven to bite by making the page send one.
+
+Gate 56: 56 → **75**. Gate 50: 99 → **105**.
+
+### The dark-mode pass — measured, and it does NOT need redoing for this lane
+
+dark-anon-sweep took the board's contrast (276 findings → 0) on branch
+`dark-board`, cut from main. **My first train was already on main**, so their pass
+covered nearly all of this lane's surfaces — both opacity cases they found
+(`.grip`, `.hist__dc`) are this lane's classes.
+
+**Exactly four classes are branch-only**: `.askk`, `.askk__w`, `.newitem`,
+`.newitem__t`. Three are layout-only. The fourth uses their flagged
+opacity-on-inherited-ink pattern — but at `.7`, not `.35`, which over their new
+rail background `#202426` composites to `#aaaca9` = **6.84:1**, clearing the bar.
+(Their `.35` cases measured 2.78:1; the difference is entirely the opacity value.)
+
+**So nothing here should reopen their zero** — but that figure is my arithmetic,
+not their instrument, so **re-run their probe once after this merges**. Our diffs
+touch the same file in different regions (theirs ~line 965 in the head block,
+mine in the second block at ~1404): it should auto-merge, and a clean auto-merge
+is precisely the case where a new class arrives without a dark rule.
+
 ### ⚠️ If you touch the styles, read this first
 
 - **There are TWO `<style>` blocks**: the original in the head, and a second one
