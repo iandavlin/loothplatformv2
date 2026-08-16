@@ -985,7 +985,7 @@ function lg_fc_render(string $type, int $edit = 0, bool $embed = false): void
   <?php acf_form('lg-fc-' . $type); ?>
 </div>
     <?php
-    lg_fc_page_close();
+    lg_fc_page_close($embed);
     remove_filter('acf/prepare_field', 'lg_fc_relabel', 20);
     unset($GLOBALS['lg_fc_editing']);
 }
@@ -1094,6 +1094,68 @@ function lg_fc_extra_field_names(string $type): array
  * `embed` changes is only the page furniture: no outer padding, no page
  * background, no min-height — so the card fills the frame it is given.
  */
+/**
+ * The $ctx the shared site chrome wants, built from in-process WP state.
+ *
+ * Ian, 2026-08-16, mid-test on /compose/: "can we get the header and footer so it
+ * looks like a normal page?" — he had just ruled the page-jump stays, so the page
+ * he lands on has to read as one of ours rather than a bare form.
+ *
+ * HOUSE DOCTRINE, not invented here: a standalone page MIMICS the chrome, it never
+ * renders the WP theme. This is a straight copy of lg-layout-v2's SiteHeader::viewer()
+ * — the existing WordPress-side caller — so every WP surface feeds the shared header
+ * identical identity. Role -> tier walks highest to lowest so a member holding several
+ * looth roles gets the top one, matching Arbiter and InternalRestController.
+ */
+function lg_fc_chrome_viewer(): array
+{
+    $user = wp_get_current_user();
+    $auth = ($user instanceof WP_User) && (int) $user->ID > 0;
+
+    $tier = 'public';
+    if ($auth) {
+        foreach (['looth4' => 'pro', 'looth3' => 'pro', 'looth2' => 'lite', 'looth1' => 'public'] as $role => $t) {
+            if (in_array($role, (array) $user->roles, true)) { $tier = $t; break; }
+        }
+    }
+
+    return [
+        'authenticated' => $auth,
+        'tier'          => $tier,
+        'display_name'  => $auth ? (string) $user->display_name : '',
+        'avatar_url'    => $auth ? (string) get_avatar_url($user->ID, ['size' => 96]) : null,
+        'capabilities'  => [
+            'manage_options'   => $auth && user_can($user->ID, 'manage_options'),
+            'edit_archive_poc' => $auth && user_can($user->ID, 'edit_archive_poc'),
+        ],
+        // null = let the header lazy-load these over REST.
+        'msg_unread'    => null,
+        'notif_unread'  => null,
+        // Compose is not a top-nav destination, so nothing is highlighted.
+        'active_nav'    => '',
+        'logout_url'    => wp_logout_url(home_url('/')),
+        // Contract (Ian 2026-06-03): the account chip goes to /u/<slug>; /profile/edit
+        // is only the slug-less fallback.
+        'profile_url'   => ($auth && $user->user_nicename)
+            ? '/u/' . rawurlencode((string) $user->user_nicename)
+            : '/profile/edit',
+    ];
+}
+
+/** The shared chrome partials, on disk. Absolute — NOT __DIR__-relative, which
+ *  resolves through the mu-plugin symlink into the repo where these do not sit. */
+const LG_FC_CHROME_HEADER = '/srv/lg-shared/site-header.php';
+const LG_FC_CHROME_FOOTER = '/srv/lg-shared/site-footer.php';
+const LG_FC_CHROME_CSS_FS = '/srv/lg-shared/site-header.css';
+
+/** True when this render should carry the site chrome. */
+function lg_fc_wants_chrome(bool $embed): bool
+{
+    // The embed variant is framed by another page that already has chrome — a
+    // second copy inside the frame would be two headers on one screen.
+    return !$embed && is_readable(LG_FC_CHROME_HEADER);
+}
+
 function lg_fc_page_open(string $title, bool $embed = false): void
 {
     ?>
@@ -1105,17 +1167,36 @@ function lg_fc_page_open(string $title, bool $embed = false): void
 <meta name="robots" content="noindex,nofollow">
 <title><?php echo esc_html($title); ?></title>
 <?php wp_head(); ?>
+<?php if (lg_fc_wants_chrome($embed)): ?>
+<link rel="stylesheet" href="/lg-shared/site-header.css?v=<?php echo is_readable(LG_FC_CHROME_CSS_FS) ? (int) filemtime(LG_FC_CHROME_CSS_FS) : 1; ?>">
+<?php endif; ?>
 <style><?php echo lg_fc_css(); ?></style>
 </head>
-<body class="lgfc-body<?php echo $embed ? ' lgfc-body--embed' : ''; ?>">
+<body class="lgfc-body<?php echo $embed ? ' lgfc-body--embed' : ''; ?><?php echo lg_fc_wants_chrome($embed) ? ' lgfc-body--chrome' : ''; ?>">
+<?php
+if (lg_fc_wants_chrome($embed)) {
+    require_once LG_FC_CHROME_HEADER;
+    if (function_exists('lg_shared_render_site_header')) {
+        lg_shared_render_site_header(lg_fc_chrome_viewer());
+    }
+}
+?>
 <main class="lgfc<?php echo $embed ? ' lgfc--embed' : ''; ?>">
     <?php
 }
 
-function lg_fc_page_close(): void
+function lg_fc_page_close(bool $embed = false): void
 {
     ?>
 </main>
+<?php
+if (lg_fc_wants_chrome($embed)) {
+    require_once LG_FC_CHROME_FOOTER;
+    if (function_exists('lg_shared_render_site_footer')) {
+        lg_shared_render_site_footer();
+    }
+}
+?>
 <script><?php echo lg_fc_js(); ?></script>
 <?php wp_footer(); ?>
 </body>
