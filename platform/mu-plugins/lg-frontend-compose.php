@@ -1246,7 +1246,20 @@ function lg_fc_sanitize_richtext(string $html): string
 {
     $clean = wp_kses($html, lg_fc_richtext_allowed());
     if ($clean !== '' && function_exists('wp_rel_ugc')) {
-        $clean = wp_rel_ugc($clean);
+        /* ⚠️ wp_rel_ugc() RETURNS SLASHED OUTPUT. It is built for filter contexts
+           that hand it slashed content, so it wp_slash()es on the way out — and
+           only the <a> cases show it, which is why reading the other test rows
+           would have missed it. The caller then applies its own wp_slash before
+           handing the value back to WordPress, so leaving this slashed stores a
+           member's link as href=\"/x\" — literal backslashes in their write-up,
+           on every link, forever.
+
+           This function's contract is therefore: takes raw, returns CLEAN AND
+           UNSLASHED. Slashing belongs to the caller that talks to $_POST, in one
+           place, so the two can never disagree about how many times it happened.
+
+           Found by running the sanitiser over a link case, not by reading it. */
+        $clean = wp_unslash(wp_rel_ugc($clean));
     }
     return $clean;
 }
@@ -1498,6 +1511,28 @@ function lg_fc_css(): string
 .lgfc .acf-input input:focus,.lgfc .acf-input textarea:focus{
   outline:2px solid var(--lg-sage,#87986a);outline-offset:1px;border-color:var(--lg-sage,#87986a)}
 .lgfc .acf-input input::placeholder,.lgfc .acf-input textarea::placeholder{color:var(--lg-mute,#6b6f6b);opacity:.62}
+
+/* ---- the rich-text editor ---- */
+/* TinyMCE arrives with wp-admin's own skin, which is a light grey toolbar and a
+   white border — the same shape as the oEmbed slab fixed earlier tonight, and for
+   the same reason: an admin control dropped into a member-facing page in a theme
+   it was never drawn for. Chrome is styled from the form's tokens so both themes
+   follow; the CONTENT is inside an iframe and is handled in JS, because page CSS
+   cannot cross that boundary. */
+.lgfc .acf-editor-wrap,.lgfc .wp-editor-container{
+  border:1px solid var(--lg-line,#e3ddd0);border-radius:9px;overflow:hidden;
+  background:var(--lg-paper,#fdfdfa)}
+.lgfc .wp-editor-container .mce-panel,.lgfc .mce-toolbar-grp,.lgfc .mce-toolbar{
+  background:var(--lg-paper,#fdfdfa);border-color:var(--lg-line,#e3ddd0)}
+.lgfc .mce-btn button{color:var(--lg-ink,#323532)}
+.lgfc .mce-ico{color:var(--lg-ink,#323532)}
+.lgfc .mce-btn:hover,.lgfc .mce-btn.mce-active{background:var(--lg-sage-tint,#eef2e3)}
+.lgfc .mce-statusbar,.lgfc .mce-path{display:none}
+/* The delayed editor shows a plain textarea until it is clicked; make that
+   placeholder read like the other fields rather than like a bare box. */
+.lgfc .acf-editor-wrap .wp-editor-area{border:0;background:var(--lg-paper,#fdfdfa);
+  color:var(--lg-ink,#323532);min-height:120px;padding:10px 12px;
+  font:500 14px/1.5 var(--lg-font-sans,system-ui,sans-serif)}
 
 /* ---- the video oEmbed ---- */
 /* ⚠️ THIS FIELD HAD NEVER BEEN STYLED HERE, and that only became visible tonight.
@@ -1814,6 +1849,75 @@ CSS;
 function lg_fc_js(): string
 {
     return <<<'JS'
+/* THE RICH-TEXT EDITOR'S DARK SKIN — the half page CSS cannot reach.
+   TinyMCE renders the write-up inside an IFRAME with its own document, so no rule
+   in this page applies to it. wp-admin's default content style is black on white,
+   which in dark mode is a full-width white slab: exactly the class that reddened
+   gate 47 tonight on the oEmbed field.
+
+   ⚠️ IT CANNOT BE DONE SERVER-SIDE. content_style via tiny_mce_before_init is
+   fixed at render, and our dark is a CLIENT attribute (html[data-lguser-theme])
+   resolved after paint — not prefers-color-scheme. So the theme has to be read
+   when the frame appears, and re-read when it changes.
+
+   The editor is DELAY-INIT by design (composers load on intent), so the iframe
+   does not exist at page load and there is nothing to hook at boot. A
+   MutationObserver is what survives that: it fires whenever the frame is created,
+   however long the member waits before clicking. */
+(function () {
+  var field = document.querySelector('.lgfc .acf-field[data-name="_post_content"]');
+  if (!field) return;
+
+  function tokens() {
+    var cs = getComputedStyle(document.querySelector('.lgfc') || document.body);
+    var g  = function (n, f) { return (cs.getPropertyValue(n) || '').trim() || f; };
+    return {
+      bg:   g('--lg-paper', '#fdfdfa'),
+      ink:  g('--lg-ink',   '#323532'),
+      link: g('--lg-sage-d', '#6b7c52'),
+      mute: g('--lg-mute',  '#6b6f6b')
+    };
+  }
+
+  function paint(doc) {
+    if (!doc || !doc.head) return;
+    var t = tokens();
+    var el = doc.getElementById('lgfc-skin');
+    if (!el) {
+      el = doc.createElement('style');
+      el.id = 'lgfc-skin';
+      doc.head.appendChild(el);
+    }
+    /* Deliberately narrow: surface, ink, links and the placeholder. The toolbar
+       decides what MARKUP exists; this only decides what colour it is. */
+    el.textContent =
+      'html,body{background:' + t.bg + ' !important;color:' + t.ink + ' !important;}' +
+      'body{font:500 14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;' +
+      'margin:10px 12px;}' +
+      'a{color:' + t.link + ';}' +
+      'p{margin:0 0 .75em;}' +
+      'body.mce-content-body[data-mce-placeholder]:not(.mce-visualblocks)::before{color:' + t.mute + ';}';
+  }
+
+  function frames() {
+    Array.prototype.forEach.call(field.querySelectorAll('iframe'), function (f) {
+      var doc = null;
+      try { doc = f.contentDocument; } catch (e) { return; }   /* never cross-origin here, but be safe */
+      if (doc) {
+        paint(doc);
+        /* TinyMCE rewrites its own document during init; paint again once it settles. */
+        if (!f.__lgfcPainted) { f.__lgfcPainted = 1; setTimeout(function () { paint(f.contentDocument); }, 400); }
+      }
+    });
+  }
+
+  new MutationObserver(frames).observe(field, { childList: true, subtree: true });
+  /* And follow the theme if the member flips it with the editor already open. */
+  new MutationObserver(frames).observe(document.documentElement,
+    { attributes: true, attributeFilter: ['data-lguser-theme'] });
+  frames();
+})();
+
 /* THE TAXONOMY PICKER — Ian, 2026-08-16: "The taxo pickers are wierd. Make modal
    or something slick please", and he picked the sheet-with-search shape from the
    mock.
