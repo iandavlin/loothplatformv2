@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tap a notification → reply modal — for Ian to pick</title>
+<link rel="stylesheet" href="_tokens.css">
+<style>
+  body { background: var(--lg-cream); color: var(--lg-ink); }
+  .page { max-width: 1180px; margin: 0 auto; padding: 38px 22px 80px; }
+  @media (max-width: 640px) { .page { padding: 22px 13px 50px; } }
+
+  h1 { font: 700 27px/1.22 var(--lg-font-hub); margin: 0 0 10px; }
+  .lede { font: 400 15px/1.62 var(--lg-font-sans); color: var(--lg-mute); margin: 0 0 6px; max-width: 76ch; }
+  .lede b { color: var(--lg-ink); }
+  .said { margin: 18px 0 0; padding: 15px 18px; border-left: 3px solid var(--lg-rust);
+    background: #fdf3ef; border-radius: 0 10px 10px 0; }
+  html[data-lguser-theme="dark"] .said { background: #2a1d19; }
+  html[data-lguser-theme="dark"] .said .who,
+  html[data-lguser-theme="dark"] .open h2,
+  html[data-lguser-theme="dark"] .decision--built h2 { color: #f0a688; }
+  .said p { font: 400 14px/1.6 var(--lg-font-sans); margin: 0; }
+  .said b { font-weight: 700; }
+  .said .who { display: block; font: 700 10.5px/1 var(--lg-font-sans); letter-spacing: .07em;
+    text-transform: uppercase; color: #aa593b; margin: 0 0 8px; }
+
+  .decision { margin: 24px 0 0; padding: 18px 20px; border: 2px solid var(--lg-sage);
+    border-radius: 14px; background: var(--lg-sage-tint); }
+  .decision h2 { font: 700 13px/1 var(--lg-font-sans); letter-spacing: .07em; text-transform: uppercase;
+    color: var(--lg-sage-d); margin: 0 0 10px; }
+  .decision p { font: 400 14px/1.62 var(--lg-font-sans); margin: 0 0 9px; }
+  .decision p:last-child { margin-bottom: 0; }
+  .decision b { font-weight: 700; }
+
+  h2.sec { font: 700 12px/1 var(--lg-font-sans); letter-spacing: .08em; text-transform: uppercase;
+    color: var(--lg-mute); margin: 46px 0 6px; padding-top: 18px; border-top: 1px solid var(--lg-line); }
+  .secnote { font: 400 13.5px/1.6 var(--lg-font-sans); color: var(--lg-mute); margin: 0 0 20px; max-width: 80ch; }
+  .secnote b { color: var(--lg-ink); }
+
+  /* option columns */
+  .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 26px; align-items: start; }
+  .opt > h3 { font: 700 17px/1.3 var(--lg-font-hub); margin: 0 0 3px; display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+  .pill { display: inline-block; font: 700 9.5px/1 var(--lg-font-sans); letter-spacing: .07em;
+    text-transform: uppercase; color: #fff; border-radius: 999px; padding: 5px 8px; }
+  .pill--rec { background: var(--lg-sage-d); }
+  .pill--alt { background: var(--lg-mute); }
+  .opt > p.why { font: 400 13.5px/1.6 var(--lg-font-sans); color: var(--lg-mute); margin: 4px 0 15px; }
+  .opt > p.why b { color: var(--lg-ink); }
+
+  /* ── phone frame ── */
+  .phone { width: 390px; max-width: 100%; margin: 0; border: 9px solid #23262a; border-radius: 34px;
+    background: var(--lguser-bg); overflow: hidden; position: relative;
+    box-shadow: 0 18px 44px -22px rgba(26,29,26,.55); }
+  .phone__scr { position: relative; height: 620px; overflow: hidden; background: var(--lg-cream); }
+  .phone__bar { height: 26px; background: var(--bg-card); border-bottom: 1px solid var(--lg-line);
+    display: flex; align-items: center; justify-content: space-between; padding: 0 14px;
+    font: 600 10.5px/1 var(--lg-font-sans); color: var(--lg-mute); }
+
+  /* the notif sheet sitting behind the modal */
+  .behind { padding: 12px 14px; filter: blur(1.4px); opacity: .45; }
+  .behind__h { font: 700 14px/1 var(--lg-font-sans); color: var(--lg-ink); margin: 0 0 10px; }
+  .lt-notif { display: flex; align-items: center; gap: 11px; width: 100%; text-align: left;
+    padding: 10px 8px; border-radius: 10px; }
+  .lt-notif.is-unread { background: var(--lg-sage-tint); }
+  .lt-notif-avi { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; background: #d4e0b8; }
+  .lt-notif-tx { min-width: 0; display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; }
+  .lt-notif-t { font: 500 13.5px/1.3 var(--lg-font-sans); color: var(--lg-ink); }
+  .lt-notif-time { font: 12px/1 var(--lg-font-sans); color: var(--lg-mute); }
+  .lt-notif-dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: #e23b3b; }
+
+  .scrim { position: absolute; inset: 0; background: rgba(20,22,20,.42); }
+
+  /* ── THE MODAL ── */
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--bg-card);
+    border-radius: 18px 18px 0 0; box-shadow: 0 -8px 34px rgba(26,29,26,.26); overflow: hidden; }
+  .sheet--desk { position: static; border-radius: 16px; box-shadow: 0 16px 50px -18px rgba(26,29,26,.4);
+    border: 1px solid var(--lg-line); width: 460px; max-width: 100%; }
+
+  .sh__head { display: flex; align-items: flex-start; gap: 10px; padding: 13px 14px 11px;
+    border-bottom: 1px solid var(--lg-line); }
+  .sh__avi { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; background: #d4e0b8;
+    display: inline-flex; align-items: center; justify-content: center;
+    font: 700 13px/1 var(--lg-font-sans); color: #56663d; }
+  .sh__ht { flex: 1 1 auto; min-width: 0; }
+  .sh__t { font: 600 14px/1.35 var(--lg-font-sans); color: var(--lg-ink); margin: 0; }
+  .sh__t b { font-weight: 700; }
+  .sh__time { font: 400 11.5px/1 var(--lg-font-sans); color: var(--lg-mute); display: block; margin-top: 4px; }
+  .sh__x { flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%; border: 0; background: none;
+    color: var(--lg-mute); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+
+  .sh__body { padding: 13px 14px 4px; }
+
+  /* the quoted source reply */
+  .quote { border-left: 3px solid var(--lg-sage); padding: 1px 0 1px 11px; margin: 0 0 12px; }
+  .quote__who { font: 700 12px/1.3 var(--lg-font-sans); color: var(--lg-ink); margin: 0 0 4px; }
+  .quote__tx { font: 400 13.5px/1.55 var(--lg-font-sans); color: var(--lg-ink); margin: 0; }
+  .quote__more { font: 600 12.5px/1 var(--lg-font-sans); color: var(--lg-sage-d);
+    background: none; border: 0; padding: 6px 0 0; cursor: pointer; display: block; }
+
+  /* option B's extra layer — what they were replying to */
+  .parent { border-left: 3px solid var(--lg-line); padding: 1px 0 1px 11px; margin: 0 0 10px; opacity: .72; }
+  .parent__lbl { font: 700 9.5px/1 var(--lg-font-sans); letter-spacing: .07em; text-transform: uppercase;
+    color: var(--lg-mute); margin: 0 0 5px; }
+  .parent__tx { font: 400 12.5px/1.5 var(--lg-font-sans); color: var(--lg-mute); margin: 0; }
+
+  /* the full-post link, INSIDE the modal */
+  .openfull { display: inline-flex; align-items: center; gap: 6px; text-decoration: none;
+    font: 700 12.5px/1 var(--lg-font-sans); color: var(--lg-sage-d);
+    background: var(--lg-sage-tint); border-radius: 9px; padding: 9px 12px; margin: 0 0 13px; }
+  .openfull .gi { width: 14px; height: 14px; }
+
+  /* the EXISTING composer */
+  .comp { border-top: 1px solid var(--lg-line); padding: 11px 14px 12px; background: var(--lguser-bubble); }
+  html[data-lguser-theme="dark"] .comp { background: #191c1f; }
+  .comp__row { display: flex; align-items: center; gap: 9px; margin: 0 0 9px; }
+  .comp__avi { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; background: var(--lg-sage); }
+  .comp__ctx { font: 500 11.5px/1 var(--lg-font-sans); color: var(--lg-mute); }
+  .comp__box { background: var(--bg-card); border: 1px solid var(--lg-line); border-radius: 11px;
+    padding: 10px 11px; min-height: 62px; font: 400 13.5px/1.5 var(--lg-font-sans); color: var(--lg-mute); }
+  .comp__foot { display: flex; align-items: center; justify-content: space-between; margin: 9px 0 0; }
+  .comp__tools { display: flex; gap: 4px; }
+  .comp__tool { width: 30px; height: 30px; border-radius: 8px; border: 0; background: none;
+    color: var(--lg-mute); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+  .comp__post { border: 0; border-radius: 999px; background: var(--lg-sage); color: #fff;
+    font: 700 12.5px/1 var(--lg-font-sans); padding: 9px 17px; cursor: pointer; }
+  .comp__post[disabled] { background: var(--lg-line); color: var(--lg-mute); }
+
+  /* NEW vs REUSED shading legend */
+  .isnew { position: relative; }
+  .isnew::after { content: "NEW"; position: absolute; top: 5px; right: 6px;
+    font: 700 8px/1 var(--lg-font-sans); letter-spacing: .06em; color: var(--lg-rust);
+    background: #fdf3ef; border: 1px solid #f0cdbf; border-radius: 4px; padding: 3px 4px; }
+  html[data-lguser-theme="dark"] .isnew::after { background: #2a1d19; border-color: #5a3527; }
+  .isreused::after { content: "EXISTS TODAY"; position: absolute; top: 7px; right: 8px;
+    font: 700 8px/1 var(--lg-font-sans); letter-spacing: .06em; color: var(--lg-sage-d);
+    background: var(--lg-sage-tint); border: 1px solid var(--lg-sage); border-radius: 4px; padding: 3px 4px; }
+  .isreused { position: relative; }
+  .legend2 { display: flex; gap: 16px; flex-wrap: wrap; font: 500 11.5px/1.4 var(--lg-font-sans);
+    color: var(--lg-mute); margin: 0 0 18px; }
+  .legend2 span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .sw--new { background: var(--lg-rust); }
+  .sw--old { background: var(--lg-sage); }
+
+  .cap { font: 600 11px/1.4 var(--lg-font-sans); color: var(--lg-mute); letter-spacing: .05em;
+    text-transform: uppercase; margin: 11px 0 0; }
+
+  /* edge-case + facts blocks */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; }
+  .card { border: 1px solid var(--lg-line); border-radius: 13px; background: var(--bg-card); padding: 15px 17px; }
+  .card h4 { font: 700 13.5px/1.35 var(--lg-font-hub); margin: 0 0 7px; }
+  .card p { font: 400 13px/1.6 var(--lg-font-sans); color: var(--lg-mute); margin: 0 0 8px; }
+  .card p:last-child { margin-bottom: 0; }
+  .card b { color: var(--lg-ink); font-weight: 700; }
+  .card code { font: 500 12px/1.5 ui-monospace, Menlo, monospace; background: var(--lg-sage-tint);
+    color: var(--lg-sage-d); border-radius: 4px; padding: 1px 5px; }
+
+  .warn { margin: 24px 0 0; padding: 17px 20px; border: 1px solid var(--lg-rust); border-radius: 13px;
+    background: #fdf3ef; }
+  html[data-lguser-theme="dark"] .warn { background: #2a1d19; }
+  .warn h3 { font: 700 12.5px/1 var(--lg-font-sans); letter-spacing: .06em; text-transform: uppercase;
+    color: var(--lg-rust); margin: 0 0 10px; }
+  .warn p { font: 400 13.5px/1.62 var(--lg-font-sans); margin: 0 0 9px; }
+  .warn p:last-child { margin-bottom: 0; }
+  .warn b { font-weight: 700; }
+  .warn code { font: 500 12px/1.5 ui-monospace, Menlo, monospace; background: rgba(198,104,69,.13);
+    border-radius: 4px; padding: 1px 5px; }
+
+  /* ── the sections added after the build. NO INLINE COLOURS: this page is served
+     from the docroot, which INJECTS the theme-boot script, so a member with a dark
+     profile repaints it — and an inline background beats every dark rule, leaving
+     light text on a light block. Learned from a mock that did exactly that. ── */
+  .decision--built { border-color: var(--lg-rust); background: #fdf3ef; }
+  /* NOT var(--lg-rust). #c66845 on this peach measures 3.52:1 — below AA, and at
+     700/13px it is not "large text" so 3:1 does not apply. Darkened to #aa593b =
+     4.58:1, measured in a real browser on the REAL injected page, not eyeballed.
+     The same rust-on-peach pair is used by .said .who and .open h2 below, so those
+     are corrected too rather than left as a known-bad pattern to copy. */
+  .decision--built h2 { color: #aa593b; }
+  html[data-lguser-theme="dark"] .decision--built { background: #2a1d19; border-color: #7a4632; }
+  html[data-lguser-theme="dark"] .decision--built p { color: #e8e3dd; }
+  .cd { background: rgba(198,104,69,.13); border-radius: 4px; padding: 1px 5px;
+    font: 500 12px/1.5 ui-monospace, Menlo, monospace; }
+  html[data-lguser-theme="dark"] .cd { background: rgba(198,104,69,.26); color: #f0c3b0; }
+  .shotfig { margin: 0; border: 1px solid var(--lg-line); border-radius: 14px;
+    overflow: hidden; background: var(--bg-card); }
+  .shotfig img { display: block; width: 100%; height: auto; }
+  .shotfig--dark { background: #101214; }
+  .opts--gap { margin-top: 18px; }
+  .card--gap { margin-top: 20px; }
+  .foot { margin: 40px 0 0; font: 400 12.5px/1.7 var(--lg-font-sans); color: var(--lg-mute); }
+  .foot code { font: 500 12px/1.5 ui-monospace, Menlo, monospace; background: var(--lg-sage-tint);
+    color: var(--lg-sage-d); border-radius: 4px; padding: 1px 5px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>Tap a notification → a reply modal</h1>
+  <p class="lede">Two layouts, drawn at <b>phone width first</b>. Everything on this page is a picture —
+    <b>no code has been written</b>. Pick A or B (or tell me neither) and I build only the one you pick.</p>
+
+  <div class="said">
+    <span class="who">Ian, 7/30</span>
+    <p>Tapping a notification <b>defaults to opening a reply modal</b>. The modal shows the reply that
+      generated the notification <b>plus a composer</b>, and carries a <b>link/button to the full post</b>.
+      No two-action row on the notification itself — the modal is the default, and the full-post link
+      lives inside it.</p>
+  </div>
+
+  <div class="decision">
+    <h2>The one thing to decide</h2>
+    <p><b>How much context does the modal show?</b> Both options open the same way, both carry the same
+      composer, and both put the full-post link in the same place. The <b>only</b> difference is whether
+      you also see <b>what they were replying to</b>.</p>
+    <p><b>A</b> shows just their reply. <b>B</b> shows your post above their reply, dimmed.</p>
+  </div>
+
+  <div class="decision decision--built">
+    <h2>You picked A — and it is built. This is the real thing.</h2>
+    <p>The four pictures below are <b>not drawings</b>. They are screenshots of the actual feature
+      running in a real browser, against the real database, as a real signed-in member — phone and
+      desktop, light and dark. The drawings further down are kept so you can see what you chose.</p>
+    <p><b>You cannot click it yet</b>, and I would rather say so than imply otherwise: the dev2 site
+      serves <code class="cd">main</code>,
+      and this is still on a branch. It merges switched <b>off</b> first; then I turn it on for a
+      preview link and you click the real control.</p>
+  </div>
+
+  <h2 class="sec">The built thing, running</h2>
+  <p class="secnote">Discussion name, then who replied and when, then what they said, then the
+    full-post link — and the composer under it, already saying who you are answering.</p>
+
+  <div class="opts">
+    <div class="opt">
+      <h3>Phone — light</h3>
+      <figure class="shotfig">
+        <img src="shots/nqr-phone-light.png" alt="The reply modal on a phone in light theme: the discussion name, the reply that generated the notification, a link to the full discussion, and the composer." style="display:block;width:100%;height:auto">
+      </figure>
+      <p class="cap">real screenshot · 390px · light</p>
+    </div>
+    <div class="opt">
+      <h3>Phone — dark</h3>
+      <figure class="shotfig shotfig--dark">
+        <img src="shots/nqr-phone-dark.png" alt="The same reply modal on a phone in dark theme, with a dark card, light text and a dark sage quote rule." style="display:block;width:100%;height:auto">
+      </figure>
+      <p class="cap">real screenshot · 390px · dark</p>
+    </div>
+  </div>
+
+  <div class="opts opts--gap">
+    <div class="opt">
+      <h3>Desktop — light</h3>
+      <figure class="shotfig">
+        <img src="shots/nqr-desktop-light.png" alt="The reply modal at desktop width in light theme." style="display:block;width:100%;height:auto">
+      </figure>
+      <p class="cap">real screenshot · 1280px · light</p>
+    </div>
+    <div class="opt">
+      <h3>Desktop — dark</h3>
+      <figure class="shotfig shotfig--dark">
+        <img src="shots/nqr-desktop-dark.png" alt="The reply modal at desktop width in dark theme." style="display:block;width:100%;height:auto">
+      </figure>
+      <p class="cap">real screenshot · 1280px · dark</p>
+    </div>
+  </div>
+
+  <div class="card card--gap">
+    <h4>One thing the pictures changed after you picked</h4>
+    <p>Every test was green and the modal still <b>never said which discussion you were in</b> — I only
+      saw it by looking at the screenshot. That exact complaint has reached you before, so the
+      discussion name is now the first line of the modal. It is in the pictures above.</p>
+  </div>
+
+  <h2 class="sec">What you chose, as drawn — kept for reference</h2>
+  <p class="secnote">Drawn over the real notification sheet, blurred behind. The <b>orange NEW</b> tag marks
+    pixels that do not exist today; the <b>green</b> tag marks the composer, which is the one already
+    shipped — I am reusing it, not building a second one.</p>
+
+  <div class="legend2">
+    <span><i class="sw sw--new"></i> new — the context block + the full-post link</span>
+    <span><i class="sw sw--old"></i> already shipped — the composer and its Post path</span>
+  </div>
+
+  <div class="opts">
+
+    <!-- ══════════ OPTION A ══════════ -->
+    <div class="opt">
+      <h3>A — Just their reply <span class="pill pill--rec">Recommended</span></h3>
+      <p class="why">The smallest thing that answers <b>“what did they say, and let me answer it.”</b>
+        The composer is above the fold on a phone with the keyboard up.</p>
+
+      <div class="phone">
+        <div class="phone__scr">
+          <div class="phone__bar"><span>9:41</span><span>Looth</span></div>
+
+          <div class="behind">
+            <p class="behind__h">Notifications</p>
+            <div class="lt-notif is-unread">
+              <span class="lt-notif-avi"></span>
+              <span class="lt-notif-tx"><span class="lt-notif-t">Dave Ellis replied to your post</span>
+              <span class="lt-notif-time">12m ago</span></span><span class="lt-notif-dot"></span>
+            </div>
+            <div class="lt-notif">
+              <span class="lt-notif-avi"></span>
+              <span class="lt-notif-tx"><span class="lt-notif-t">Marla Quinn reacted to your post</span>
+              <span class="lt-notif-time">1h ago</span></span>
+            </div>
+          </div>
+
+          <div class="scrim"></div>
+
+          <div class="sheet">
+            <div class="sh__head">
+              <span class="sh__avi">DE</span>
+              <span class="sh__ht">
+                <p class="sh__t"><b>Dave Ellis</b> replied to your post</p>
+                <span class="sh__time">12m ago · Setup &amp; Repair</span>
+              </span>
+              <button class="sh__x" aria-label="Close">
+                <svg class="gi" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+                  stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+
+            <div class="sh__body isnew">
+              <blockquote class="quote">
+                <p class="quote__who">Dave Ellis</p>
+                <p class="quote__tx">I ran the same relief spec on a ’72 Tele and got nowhere near that
+                  number. What gauge were you on when you measured it — and was the truss rod…</p>
+                <button class="quote__more">Show more</button>
+              </blockquote>
+
+              <a class="openfull" href="#">
+                <svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                  stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                Open the full discussion
+              </a>
+            </div>
+
+            <div class="comp isreused">
+              <div class="comp__row">
+                <span class="comp__avi"></span>
+                <span class="comp__ctx">Replying to: Dave Ellis</span>
+              </div>
+              <div class="comp__box">Write a reply…</div>
+              <div class="comp__foot">
+                <span class="comp__tools">
+                  <button class="comp__tool" aria-label="Add a photo">
+                    <svg class="gi" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="1.6"/><path d="m21 16-5-5L6 19"/></svg>
+                  </button>
+                  <button class="comp__tool" aria-label="Add a tag">
+                    <svg class="gi" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 12 22l-9-9V4h9z"/><circle cx="7.5" cy="7.5" r="1.3"/></svg>
+                  </button>
+                </span>
+                <button class="comp__post" disabled>Post</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="cap">A · phone · 390px</p>
+    </div>
+
+    <!-- ══════════ OPTION B ══════════ -->
+    <div class="opt">
+      <h3>B — Their reply, on your post <span class="pill pill--alt">Alternative</span></h3>
+      <p class="why">Adds <b>what they were replying to</b>, dimmed, above their reply. More context —
+        but it costs roughly a fifth of the screen before you reach the composer.</p>
+
+      <div class="phone">
+        <div class="phone__scr">
+          <div class="phone__bar"><span>9:41</span><span>Looth</span></div>
+
+          <div class="behind">
+            <p class="behind__h">Notifications</p>
+            <div class="lt-notif is-unread">
+              <span class="lt-notif-avi"></span>
+              <span class="lt-notif-tx"><span class="lt-notif-t">Dave Ellis replied to your post</span>
+              <span class="lt-notif-time">12m ago</span></span><span class="lt-notif-dot"></span>
+            </div>
+            <div class="lt-notif">
+              <span class="lt-notif-avi"></span>
+              <span class="lt-notif-tx"><span class="lt-notif-t">Marla Quinn reacted to your post</span>
+              <span class="lt-notif-time">1h ago</span></span>
+            </div>
+          </div>
+
+          <div class="scrim"></div>
+
+          <div class="sheet">
+            <div class="sh__head">
+              <span class="sh__avi">DE</span>
+              <span class="sh__ht">
+                <p class="sh__t"><b>Dave Ellis</b> replied to your post</p>
+                <span class="sh__time">12m ago · Setup &amp; Repair</span>
+              </span>
+              <button class="sh__x" aria-label="Close">
+                <svg class="gi" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+                  stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+
+            <div class="sh__body isnew">
+              <div class="parent">
+                <p class="parent__lbl">Your post</p>
+                <p class="parent__tx">Neck relief on a 1972 Telecaster — measured .012" at the 8th with
+                  the capo trick and I cannot get it to settle…</p>
+              </div>
+
+              <blockquote class="quote">
+                <p class="quote__who">Dave Ellis</p>
+                <p class="quote__tx">I ran the same relief spec on a ’72 Tele and got nowhere near that
+                  number. What gauge were you on when you measured…</p>
+                <button class="quote__more">Show more</button>
+              </blockquote>
+
+              <a class="openfull" href="#">
+                <svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                  stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                Open the full discussion
+              </a>
+            </div>
+
+            <div class="comp isreused">
+              <div class="comp__row">
+                <span class="comp__avi"></span>
+                <span class="comp__ctx">Replying to: Dave Ellis</span>
+              </div>
+              <div class="comp__box">Write a reply…</div>
+              <div class="comp__foot">
+                <span class="comp__tools">
+                  <button class="comp__tool" aria-label="Add a photo">
+                    <svg class="gi" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="1.6"/><path d="m21 16-5-5L6 19"/></svg>
+                  </button>
+                  <button class="comp__tool" aria-label="Add a tag">
+                    <svg class="gi" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 12 22l-9-9V4h9z"/><circle cx="7.5" cy="7.5" r="1.3"/></svg>
+                  </button>
+                </span>
+                <button class="comp__post" disabled>Post</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="cap">B · phone · 390px</p>
+    </div>
+  </div>
+
+  <h2 class="sec">On desktop — the same two, in the notifications panel</h2>
+  <p class="secnote">Desktop opens the same modal centred over the bell panel. Nothing else about the
+    desktop notification list changes — the <b>⋯ menu</b> thread-follow shipped stays exactly where it is.</p>
+
+  <div class="opts">
+    <div class="opt">
+      <h3>A — desktop</h3>
+      <div class="sheet sheet--desk">
+        <div class="sh__head">
+          <span class="sh__avi">DE</span>
+          <span class="sh__ht">
+            <p class="sh__t"><b>Dave Ellis</b> replied to your post</p>
+            <span class="sh__time">12m ago · Setup &amp; Repair</span>
+          </span>
+          <button class="sh__x" aria-label="Close">
+            <svg class="gi" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="sh__body isnew">
+          <blockquote class="quote">
+            <p class="quote__who">Dave Ellis</p>
+            <p class="quote__tx">I ran the same relief spec on a ’72 Tele and got nowhere near that number.
+              What gauge were you on when you measured it — and was the truss rod backed all the way off first?</p>
+          </blockquote>
+          <a class="openfull" href="#">
+            <svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            Open the full discussion
+          </a>
+        </div>
+        <div class="comp isreused">
+          <div class="comp__row"><span class="comp__avi"></span><span class="comp__ctx">Replying to: Dave Ellis</span></div>
+          <div class="comp__box">Write a reply…</div>
+          <div class="comp__foot">
+            <span class="comp__tools">
+              <button class="comp__tool" aria-label="Add a photo"><svg class="gi" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="1.6"/><path d="m21 16-5-5L6 19"/></svg></button>
+              <button class="comp__tool" aria-label="Add a tag"><svg class="gi" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 12 22l-9-9V4h9z"/><circle cx="7.5" cy="7.5" r="1.3"/></svg></button>
+            </span>
+            <button class="comp__post" disabled>Post</button>
+          </div>
+        </div>
+      </div>
+      <p class="cap">A · desktop</p>
+    </div>
+
+    <div class="opt">
+      <h3>B — desktop</h3>
+      <div class="sheet sheet--desk">
+        <div class="sh__head">
+          <span class="sh__avi">DE</span>
+          <span class="sh__ht">
+            <p class="sh__t"><b>Dave Ellis</b> replied to your post</p>
+            <span class="sh__time">12m ago · Setup &amp; Repair</span>
+          </span>
+          <button class="sh__x" aria-label="Close">
+            <svg class="gi" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="sh__body isnew">
+          <div class="parent">
+            <p class="parent__lbl">Your post</p>
+            <p class="parent__tx">Neck relief on a 1972 Telecaster — measured .012" at the 8th with the capo
+              trick and I cannot get it to settle anywhere sensible.</p>
+          </div>
+          <blockquote class="quote">
+            <p class="quote__who">Dave Ellis</p>
+            <p class="quote__tx">I ran the same relief spec on a ’72 Tele and got nowhere near that number.
+              What gauge were you on when you measured it — and was the truss rod backed all the way off first?</p>
+          </blockquote>
+          <a class="openfull" href="#">
+            <svg class="gi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            Open the full discussion
+          </a>
+        </div>
+        <div class="comp isreused">
+          <div class="comp__row"><span class="comp__avi"></span><span class="comp__ctx">Replying to: Dave Ellis</span></div>
+          <div class="comp__box">Write a reply…</div>
+          <div class="comp__foot">
+            <span class="comp__tools">
+              <button class="comp__tool" aria-label="Add a photo"><svg class="gi" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="1.6"/><path d="m21 16-5-5L6 19"/></svg></button>
+              <button class="comp__tool" aria-label="Add a tag"><svg class="gi" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 12 22l-9-9V4h9z"/><circle cx="7.5" cy="7.5" r="1.3"/></svg></button>
+            </span>
+            <button class="comp__post" disabled>Post</button>
+          </div>
+        </div>
+      </div>
+      <p class="cap">B · desktop</p>
+    </div>
+  </div>
+
+  <h2 class="sec">Which notifications get this — and which do not</h2>
+  <p class="secnote">“Tapping a notification opens a reply modal” is right for the rows that are
+    <b>about a reply</b>. The other three rows have nothing to reply to, so they keep doing exactly what
+    they do today. <b>This is a recommendation, not a decision I have made</b> — say the word and I change it.</p>
+
+  <div class="cards">
+    <div class="card">
+      <h4>Gets the reply modal — 4 rows</h4>
+      <p>“<b>Dave replied to your post</b>”, “replied to your comment”, “<b>mentioned you</b> in a discussion”,
+        and “replied in a discussion you follow”.</p>
+      <p>The rule is <b>quote whatever the notification points at</b>: the reply if it rang you about one,
+        and otherwise the discussion’s <b>opening post</b> — which is the case when someone
+        <b>@mentions you in a brand-new discussion</b>, where there is no reply yet to quote.</p>
+    </div>
+    <div class="card">
+      <h4>Keeps today’s behaviour — 3 rows</h4>
+      <p><b>Reactions</b> (“Marla reacted to your post”) — there is nothing they wrote to reply to.
+        Tapping still opens the discussion.</p>
+      <p><b>Messages</b> go to the DM thread; <b>connection</b> rows go to the profile. Both already have
+        their own reply surface and neither is a forum reply.</p>
+    </div>
+    <div class="card">
+      <h4>“Alice and 1 other replied”</h4>
+      <p>When two people reply before you look, the row <b>merges into one</b>. The link already points at
+        the <b>newest</b> reply, so that is the one the modal quotes.</p>
+      <p>Not hypothetical — I counted it on <b>live</b>: <b>3 of the 17</b> reply notifications there are
+        merged right now, and one of them is <b>four different people</b>.</p>
+      <p>Recommendation: the modal says so in words — “<b>showing the most recent of 4 replies</b>” — rather
+        than quietly showing one and hiding three.</p>
+    </div>
+    <div class="card">
+      <h4>Your half-written draft is safe</h4>
+      <p>The composer already keeps a draft <b>per discussion</b> (your ruling). Opening this modal restores
+        <b>your own</b> unfinished reply for that discussion, if you had one.</p>
+      <p>It never pre-fills with the other person’s words — that was the bug edit-post-parity fixed today,
+        and I am reusing their composer precisely so it cannot come back.</p>
+    </div>
+  </div>
+
+  <div class="warn">
+    <h3>Two things I found that you should know before picking</h3>
+    <p><b>1. Option B needs a fetch that A does not.</b> A quotes the reply that rang you. B also needs
+      <b>your original post</b>, which is a second thing to load and a second thing that can fail on a
+      bad connection. It is not a reason to reject B — it is why A is the recommendation.</p>
+    <p><b>2. Nothing today can hand me a reply’s text.</b> The notification stores who and where, not what
+      was said, and the only endpoint that reads a single reply returns its <b>photos and nothing else</b>.
+      So either option needs a small new read — one reply, by id, reusing the same public-forum check the
+      existing thread list already enforces. <b>No new way to post a reply</b> is being built: Post goes
+      through the same endpoint the composer already uses.</p>
+    <p><b>3. One row in four cannot quote a reply, and I only found that by reading the code.</b> An
+      <b>@mention in a brand-new discussion</b> rings you before any reply exists, so there is nothing to
+      quote but the opening post. Both options handle it the same way and neither breaks — I am flagging it
+      because “show the reply that generated the notification” quietly has an exception, and you should hear
+      it from me now rather than find it on your phone.</p>
+  </div>
+
+  <h2 class="sec">What is deliberately not changing</h2>
+  <div class="cards">
+    <div class="card">
+      <h4>No second action on the row</h4>
+      <p>Per your refinement: <b>no two-action row</b>. The row stays one tap, the modal is what that tap
+        does, and the full-post link lives inside the modal.</p>
+    </div>
+    <div class="card">
+      <h4>thread-follow’s ⋯ menu stays</h4>
+      <p>The per-row <b>⋯</b> (notify / email for that discussion) is already shipped and is untouched.
+        Swipe-to-delete and the <b>×</b> are untouched too.</p>
+    </div>
+    <div class="card">
+      <h4>It ships switched off</h4>
+      <p>This merges behind a flag that is <b>off by default</b>, so it reaches the dev server harmlessly and
+        you look at the real running thing before anyone else can. Nothing goes live on a green test alone.</p>
+    </div>
+  </div>
+
+  <p class="foot">
+    Lane <code>notif-quickreply</code> · branch <code>notif-quickreply</code> · mock only, no code written yet.<br>
+    Tell me <b>A</b> or <b>B</b> (or neither) and I will build that one, behind the off-by-default flag, and
+    bring you a real control to click.
+  </p>
+
+</div>
+</body>
+</html>

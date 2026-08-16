@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tap-to-reply — the BUILD, not the mock</title>
+<style>
+/* ⚠️ EVERY COLOUR IS PINNED ON THIS PAGE'S OWN BODY, on purpose.
+   The docroot injects the theme-boot script into pages under /footer-mockups/,
+   and it does not merely flip a class — it REWRITES the --lg-* tokens as inline
+   style on <html>. A page that leans on those tokens therefore INVERTS: the
+   charcoal slab renders white and the white card renders black. Pinning here
+   means what Ian sees is what was captured. */
+html, body { background:#f7f4ec !important; color:#2a2d2a !important; }
+body { margin:0; font:400 15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+.wrap { max-width:1180px; margin:0 auto; padding:28px 18px 60px; }
+h1 { font-size:23px; margin:0 0 6px; color:#2a2d2a; }
+.sub { color:#5c625c; margin:0 0 22px; font-size:14.5px; }
+h2 { font-size:16px; margin:30px 0 10px; color:#2a2d2a;
+     border-bottom:1px solid #ded8c9; padding-bottom:6px; }
+.row { display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start; }
+figure { margin:0; background:#fff; border:1px solid #ded8c9; border-radius:10px;
+         padding:10px; box-shadow:0 1px 2px rgba(0,0,0,.05); }
+figure.phone { max-width:412px; }
+figure.desk  { flex:1 1 640px; }
+img { display:block; width:100%; height:auto; border-radius:6px; }
+figcaption { font:600 12.5px/1.4 system-ui,sans-serif; color:#5c625c; padding:8px 2px 2px; }
+.note { background:#fdf3ef; border:1px solid #eddbd2; border-left:3px solid #aa593b;
+        border-radius:8px; padding:12px 14px; margin:22px 0; color:#2a2d2a; font-size:14px; }
+.note strong { color:#aa593b; }
+ul { margin:8px 0 0; padding-left:20px; }
+li { margin:3px 0; }
+code { background:#efeade; padding:1px 5px; border-radius:4px; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Tap a notification → reply, with the reply quoted</h1>
+<p class="sub">These are photographs of the <strong>running build</strong>, not the mock you
+picked from on 30 July. Same layout A you chose: the quote is <em>their</em> reply, never your
+own post, with a link to the full discussion beside the composer.</p>
+
+<div class="note">
+<strong>What to look at.</strong> The quote at the top of the composer is the reply that rang
+you. Under it, <em>“Showing the most recent of 4 replies”</em> — that line only appears when
+several people replied and the notification merged them, so you are never shown one answer
+while three are hidden. The composer itself is <strong>empty</strong>: it is waiting for you,
+not carrying someone else's text.
+</div>
+
+<h2>Phone — 390px</h2>
+<div class="row">
+  <figure class="phone">
+    <img src="build-shots/nqr-build-light-phone.png" alt="Tap-to-reply modal on a phone, light theme">
+    <figcaption>Light</figcaption>
+  </figure>
+  <figure class="phone">
+    <img src="build-shots/nqr-build-dark-phone.png" alt="Tap-to-reply modal on a phone, dark theme">
+    <figcaption>Dark</figcaption>
+  </figure>
+</div>
+
+<h2>Desktop — 1280px</h2>
+<div class="row">
+  <figure class="desk">
+    <img src="build-shots/nqr-build-light-desktop.png" alt="Tap-to-reply modal on desktop, light theme">
+    <figcaption>Light</figcaption>
+  </figure>
+  <figure class="desk">
+    <img src="build-shots/nqr-build-dark-desktop.png" alt="Tap-to-reply modal on desktop, dark theme">
+    <figcaption>Dark</figcaption>
+  </figure>
+</div>
+
+<h2>What was actually checked, in a real browser</h2>
+<p class="sub" style="margin-bottom:8px">All four of the pictures above passed every one of
+these. Nothing here is read off the source.</p>
+<ul>
+  <li>the modal <strong>opens</strong> from the notification's own link</li>
+  <li>the quote <strong>paints</strong> — and its HTML came from the real database, through
+      the branch's own endpoint</li>
+  <li>the composer opens <strong>empty</strong> (<code>''</code>, measured — not “nothing was
+      passed to it”)</li>
+  <li>the <strong>full-post link</strong> is there beside it</li>
+  <li>the merged-replies line renders when several people replied</li>
+  <li><strong>the scrub:</strong> close it, open an ordinary reply, and the quote is
+      <em>cleared</em> — 0 bytes left, not merely hidden. A leftover quote over an unrelated
+      reply would be its own small lie.</li>
+</ul>
+
+<div class="note">
+<strong>Still off.</strong> The feature is behind a flag that is <strong>off</strong>, so nothing
+has changed for anyone yet. It stays off until you have looked at the real thing on the site —
+these pictures are so you can decide whether it is worth switching on, not a substitute for
+that.
+</div>
+
+</div>
+</body>
+</html>

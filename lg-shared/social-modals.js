@@ -219,12 +219,38 @@ function notifCanFollow(n) {
   return (k === 'topic' || k === 'reply') && !!(n.ref.id);
 }
 
+/* notif-quickreply (Ian 7/30) — which rows open a reply modal instead of navigating.
+   REPLY-SHAPED ONLY, the four rungs of notify-bridge.php's reply ladder. Excluded on
+   purpose, each for its own reason: reaction.on_post (they reacted, they wrote nothing
+   to reply to), message (DMs own their thread + composer), connection_* (a profile).
+   A LIST, not a 'forum.' prefix test — a future forum.* event that is not a reply
+   would otherwise inherit a composer silently.
+   MIRRORED in webroot/bottom-nav.js (LT_QUICKREPLY_TYPES); change both together.
+   Note this is a different question from notifCanFollow above, which gates the ⋯ menu
+   on the REFERENT: a reaction on a topic can be followed but cannot be replied to. */
+var NQR_TYPES = {
+  'forum.reply_to_topic': 1, 'forum.reply_to_reply': 1,
+  'forum.mention': 1, 'forum.followed_topic': 1
+};
+function notifCanQuickReply(type) {
+  return !!(type && NQR_TYPES[type] === 1);
+}
+
 function renderNotifItem(n) {
   var unread = !n.is_read;
   var link   = n.link || '';
   var tag    = link ? 'a' : 'div';
   var attrs  = 'class="lg-notif__item' + (unread ? ' lg-notif__item--unread' : '') +
-               (link ? ' lg-notif__item--link' : '') + '" data-notif-id="' + esc(n.id) + '"';
+               (link ? ' lg-notif__item--link' : '') + '" data-notif-id="' + esc(n.id) + '"' +
+               // data-notif-type — see notifCanQuickReply. The LINK cannot tell a
+               // reply from a reaction (a reaction on a topic deep-links the same
+               // ?topic= URL), so tap-to-reply needs the event type rendered. Inert
+               // by itself; the type was always on the wire, just never emitted.
+               ' data-notif-type="' + esc(n.type || '') + '"' +
+               // actor_count: the backend COALESCES a second replier into one row, so
+               // "Alice and 1 other replied" quotes the newest of N. The modal has to
+               // say which, or it shows one reply and silently hides the others.
+               ' data-notif-actors="' + esc(String(n.actor_count || 1)) + '"';
   if (link) attrs += ' href="' + esc(link) + '" data-notif-link';
   var dots = notifCanFollow(n)
     ? '<button class="lg-notif__more" data-notif-more="' + esc(n.ref.id) + '"'
@@ -462,6 +488,20 @@ function loadNotifications() {
         row.addEventListener('click', function (e) {
           if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
           markNotifReadOnNav(row.getAttribute('data-notif-id'));
+          /* TAP-TO-REPLY (notif-quickreply, Ian 7/30 layout A) — desktop twin of the
+             bottom-nav handler. Same three-part guard, same fail-open contract: no
+             flag / no composer / unparseable link all return false, and false means
+             "follow the href", which is what this row did before. On desktop that
+             matters more than it looks: this panel is the site-wide header bell, so
+             most pages it opens on have no composer at all (pwa.js injects
+             hub-polish.js under /hub only) and correctly keep navigating. */
+          if (notifCanQuickReply(row.getAttribute('data-notif-type')) &&
+              typeof window.lgOpenNotifReply === 'function' &&
+              window.lgOpenNotifReply({ link: row.getAttribute('href'),
+                                        actors: row.getAttribute('data-notif-actors') })) {
+            e.preventDefault();
+            closeAllModals();   // never leave the bell panel sitting over the composer
+          }
         });
       });
     })

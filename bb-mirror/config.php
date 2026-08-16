@@ -559,3 +559,56 @@ if (!defined('LG_THREAD_FOLLOW_ENABLED')) {
         getenv('LG_BB_MIRROR_FOLLOW') === '1'
         || (($_SERVER['LG_BB_MIRROR_FOLLOW'] ?? '') === '1'));
 }
+
+// ---------- LG_NOTIF_QUICKREPLY_ENABLED — the tap-to-reply exposure gate ----------
+// DEFAULT OFF. Ian picked layout A on 2026-07-30 (quote their reply + composer +
+// full-post link; NOT the variant that also renders the member's own post), and it
+// still merges dark: it reaches the dev2 serve harmlessly, gets verified there on the
+// running thing, and only then does he turn it on. Pattern copied from
+// LG_AUTHOR_SOCIALS_ALL_MEMBERS (platform/mu-plugins/lg-author-socials.php:48).
+//
+// WHY THE DEFAULT MATTERS MORE THAN USUAL HERE: live pulls all of main, so one
+// unflagged half-finished member-facing feature blocks every other deploy behind it.
+// A 190-commit queue formed that way on 7/30.
+//
+// ONE FLAG, ONE READ POINT PER LAYER, greppable:
+//   bb-mirror/config.php    this define, override LG_BB_MIRROR_NOTIF_QUICKREPLY=1
+//                           via EITHER the pool environment OR a fastcgi_param
+//   api/v0/topic.php        lg_notif_quickreply_enabled() — gates the ?reply_context=
+//                           read, so OFF means the branch is UNREACHABLE, not merely
+//                           uncalled. A read path that only nothing-happens-to-call is
+//                           not off; this one 404s.
+//   web/_chrome.php         body[data-lg-notifreply] — the seam into the client,
+//                           because the modal is built in JS and a server gate cannot
+//                           reach it
+//   webroot/pwa.js          reads that attribute and does not even REQUEST
+//                           notif-reply.js when it is 0 — flag OFF ships no bytes
+//   webroot/notif-reply.js  lgNqrEnabled() — the only read in that file
+//   bottom-nav.js / social-modals.js  both fall back to today's navigation when the
+//                           modal is absent, which is also what happens off /hub
+// The client reads default to OFF when the attribute is absent, so a stale cached
+// shell degrades to "feature off" rather than to a half-wired feature.
+// TWO SOURCES, ONE MEANING — and the second one is not optional here. getenv() is how
+// a pool or a CLI harness turns this on. $_SERVER is how a SINGLE nginx location does:
+// platform/nginx/lane-preview-notif-quickreply.conf hands Ian a URL by setting
+// `fastcgi_param LG_BB_MIRROR_NOTIF_QUICKREPLY 1`, and a fastcgi_param lands in
+// $_SERVER, not reliably in the process environment.
+//
+// THIS WAS A REAL BUG, caught rebasing onto thread-follow's merged flag on 2026-07-31:
+// this define read getenv() ALONE while the preview conf fed it a fastcgi_param, so the
+// preview URL — the one artifact whose entire purpose is to let Ian click the real
+// control — would have served the flag OFF. A page that looks right and does nothing,
+// which is exactly the failure I flagged on the board and then shipped anyway.
+// A fastcgi_param can only be set by an nginx conf, never by a query string, so this is
+// not a way for a visitor to switch the feature on.
+if (!defined('LG_NOTIF_QUICKREPLY_ENABLED')) {
+    define('LG_NOTIF_QUICKREPLY_ENABLED',
+        getenv('LG_BB_MIRROR_NOTIF_QUICKREPLY') === '1'
+        || (($_SERVER['LG_BB_MIRROR_NOTIF_QUICKREPLY'] ?? '') === '1'));
+}
+if (!function_exists('lg_notif_quickreply_enabled')) {
+    /** The ONE read of the tap-to-reply gate. Filterable for a staged rollout. */
+    function lg_notif_quickreply_enabled(): bool {
+        return (bool) LG_NOTIF_QUICKREPLY_ENABLED;
+    }
+}

@@ -802,6 +802,11 @@ run "compose" python3 "$(dirname "$0")/compose-gate.py" \
 # THE GATE-NUMBER LEDGER (single source of truth; keeper mints, lanes never):
 #   34 stripe (34a webhook + 34b pages + 34c price + 34d sweep) · 35 compose/v2 · 36 dark-anon · 37 guitardle claim · 38 insert
 #   path · 39 featured-members · 40 guitardle score-integrity — NEXT FREE: 45. (43 offline-shell, 44 directory-location; cd0a2ed stays unmerged - superseded by 88c0fac.)
+#   ⚠️ THAT 'NEXT FREE: 45' IS STALE — 45, 48, 49, 50, 51, 53 and 56 are all
+#   registered above it. Minting from it duplicates; ask keeper, who mints.
+#   62 flag-register (keeper, 2026-08-16). 46 compose-media + 47 compose-dark
+#   were self-minted by a lane and keeper BLESSED them as-is on 8/16 —
+#   they predate enforcement and renumbering working gates is churn.
 # Gate 38 runs on the real stored-layout corpus via direct mysql; needs
 # neither Redis nor a WP bootstrap.
 echo "=== GATE 38: v2 insert path — OFF is identity, an insert only SURFACES declared meta ==="
@@ -1096,6 +1101,72 @@ echo "=== GATE 51: new members arrive alive — the profile-setup step, flag OFF
 # Companion: profile-setup-redfirst.py mutates the source 12 ways and requires a
 # RED from each — run it after touching either the feature or this gate.
 run "profile-setup" python3 "$(dirname "$0")/profile-setup-gate.py"
+echo
+echo "=== GATE 52: tap a notification, get a reply modal — and OFF is UNREACHABLE ==="
+# Number 52 ASSIGNED BY KEEPER 2026-08-15. Not read off this file: when this was
+# minted, 50 was already here and 51 belonged to a lane that had NOT yet merged —
+# so the highest number visible was not the next free one. Gate 51 has since
+# landed directly above, which is the proof rather than the refutation: the
+# number was safe only because it came from keeper. That is how the old "9/9"
+# collision happened, and it is why 52 survived a rebase onto a main that had
+# meanwhile taken 51 and 53.
+#
+# Backlog 5, Ian's layout A (2026-07-30): the quote is THEIR reply, never the
+# member's own post, with a full-post link beside the composer.
+#
+# THE ABSENCES ARE THE POINT. Three defects reached Ian on 7/30 through gates that
+# asserted only what should be PRESENT — a composer that kept the previous reply's
+# text, a reaction row that grew a composer it should never have had, and a flag
+# whose OFF state quietly did something. So this runs the SHIPPED state (flag off)
+# and asserts the quote branch is unreachable rather than merely uncalled, and that
+# the response is BYTE-IDENTICAL to origin/main with the parameter sent.
+#
+# AND THE ABSENCE IS PROVED NON-VACUOUS, which is the assertion that makes the rest
+# worth anything: `--expect-off --force-flag-on` MUST exit 1. Verified on the
+# replanted tree — it fails on exactly the two OFF assertions and nothing else.
+#   off:                    25 pass / 0 fail
+#   on:                     25 pass / 0 fail  (incl. a reply from another topic
+#                           refused — r.topic_id scoping is what stops the
+#                           visibility gate being walked around)
+#   off --force-flag-on:    22 pass / 2 fail, exit 1  ← the counter-proof
+run "notif-quickreply" python3 "$(dirname "$0")/notif-quickreply-gate.py" --expect-off
+
+echo "=== GATE 62: a branch that ADDS a flag must REGISTER it in docs/FLAGS.md ==="
+# docs/FLAGS.md has stated since 2026-08-09, in its own header, that "any merge
+# that adds, flips, or retires a flag updates this file IN THE SAME COMMIT —
+# keeper refuses the merge otherwise." NOTHING ENFORCED IT, and a rule with no
+# gate decays: on 2026-08-16 a single sweep found SIX unregistered flags across
+# FIVE branches, including two of my own. When six lanes break the same rule
+# independently, the rule was unenforced rather than disobeyed.
+#
+# CRAFT-STANDARD's law is why this exists rather than a reminder: a defect class
+# discovered TWICE must be encoded as a gate. This class turned up four times in
+# one lane in one session.
+#
+# ⚠️ IT CATCHES PROSE THAT IS *MISSING*, NEVER PROSE THAT IS *WRONG*. A docblock
+# naming a mechanism that has been deleted sails straight past this — that is how
+# the compose flag came to teach the dead pool-env mechanism for a whole day.
+# Stated here so nobody reads a green as "the flag docs are correct".
+#
+# WHAT COUNTS AS A FLAG is deliberately narrow: read from getenv()/$_SERVER,
+# define()d to a BOOLEAN expression, or a brand-new tracked platform/config/*.php
+# carrying an 'enabled' key. The first draft treated any new LG_* symbol as a flag
+# and RED-ed on LG_FC_DRAFT_META (a post-meta key) and LG_FC_DRAFT_TTL_DAYS (an
+# integer) — a gate that reds on non-defects blocks every lane, which is the exact
+# harm this one exists to prevent. A missed flag is a defect this gate FAILED to
+# catch; a false RED is a defect it CAUSES.
+#
+# RED-FIRST FROM REAL HISTORY rather than a mutation, which is stronger because the
+# red is a defect that actually shipped:
+#   notif-quickreply-v2 @ 8b988b5  RED  exit 1, naming both symbols
+#   notif-quickreply-v2 @ 51cb578  GREEN exit 0, after the row was added
+# and it stays green on branches that introduce no flag (seo-canonical-hub) and on
+# branches whose new LG_* symbols are constants (compose-draft-first).
+#
+# Reads only git — no browser, no network, no DB, so it cannot flake under load.
+# Merged branches give an empty diff vs their own merge-base and pre-FLAGS.md
+# branches have no register: both exit 2, never 1, so neither can redden a train.
+run "flag-register" python3 "$(dirname "$0")/flag-register-gate.py"
 
 echo "=== GATE 55: directory location cap — backlog 20, list views never exceed City/State ==="
 # Ian 8/15, via keeper: found live via member Luke (WP 2091) — an admin

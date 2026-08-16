@@ -80,6 +80,7 @@ read it, the pool env was removed in the same change, and compose went dark
 | `bell_follows_bb_subscriptions` (E4) | origin/notif-bridge | ❌ CLOSED by Ian 8/9, ships OFF. Listed above; the code stays so reversing the ruling needs no rediscovery |
 | notif-read-seen flag (P0 4.1) | origin/recap-read-timer | 35/35 green; renumbering to gate 21; needs `## Decision to arm` before ARM (not before merge) |
 | digest-images flag (P0 4.0) | origin/digest-images | ❌ WRONG PATTERN — documented as wp-config define (untracked on live, breaks deploy-by-pull). Must be reworked to tracked config BEFORE merge. Unowned |
+| `LG_NOTIF_QUICKREPLY_ENABLED` (env `LG_BB_MIRROR_NOTIF_QUICKREPLY`) | origin/notif-quickreply-v2 | Tap-to-reply from a notification. Defined in `bb-mirror/config.php`, **default OFF**; read from **both** `getenv()` and `$_SERVER`, because the lane preview feeds it a `fastcgi_param` and that does not reach `getenv()` — a real bug caught on 7/31, not a hypothetical. **NOT ARMED ON THIS BOX** (verified 8/16: absent from every FPM pool and from /etc/nginx). OFF ships no bytes — `pwa.js` does not even request `notif-reply.js` — and the API 404s rather than merely going uncalled. Gate 52. Merges clean into main; awaiting keeper |
 
 ## ⚠️ `dismiss_instead_of_delete` — the one flag here with a SCHEMA DEPENDENCY
 
