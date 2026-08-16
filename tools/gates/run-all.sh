@@ -1065,6 +1065,23 @@ echo "=== GATE 55: directory location cap — backlog 20, list views never excee
 # before the banner has a final number.
 run "directory-location-cap" python3 "$(dirname "$0")/directory-location-cap-gate.py"
 
+echo "=== GATE 57: notifications — filter by type, and a typed clear touches ONE type and ONE member ==="
+# Backlog 11.6 (Ian 8/1). Number 57 from keeper 2026-08-16, never self-minted.
+# Drives the REAL endpoint with a REAL second member present, because "only that
+# member" cannot be tested with one account — a single-account test passes on
+# code that clears the whole table. Probe members are per-run and PID-keyed, and
+# setup repairs on ENTRY as well as tearing down, so a killed run cannot leave
+# fake members in the directory.
+run "notif-type-filter" python3 "$(dirname "$0")/notif-type-filter-gate.py"
+
+echo "=== GATE 58: the featured card may only repeat what the member's profile publishes ==="
+# Ian 2026-08-16: "the text for my profile isn't anywhere on my profile." It was a
+# VISIBILITY LEAK — at_a_glance renders behind the header block, which defaults to
+# members-only, so the public front-page card was printing member-scoped text.
+# Number 58 from keeper. Resolves both fields exactly as the card does, so it
+# asserts what ships rather than a parallel idea of it.
+run "featured-card-text" python3 "$(dirname "$0")/featured-card-text-onprofile-gate.py"
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"
