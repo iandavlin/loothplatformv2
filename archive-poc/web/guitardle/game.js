@@ -598,11 +598,36 @@ function restoreSavedGame() {
     // UNDER SERVER PLAY THE SERVER OWNS THE POSITION, so a local snapshot is
     // only ever a mirror of it. It carries letters but NO positions -- it
     // cannot, the client never learns the phrase -- so it can neither paint a
-    // tile nor tell a hit from a miss. If the handshake has no position for us,
-    // this snapshot is stale by definition (another device finished the day, or
-    // the row was cleared), and replaying it anyway would mark EVERY letter a
-    // miss. Caught by the repro, which is the only reason this line exists.
-    if (serverPlay && !serverPositionMap()) { clearSavedGame(); return; }
+    // tile nor tell a hit from a miss. A snapshot the server's record does not
+    // account for is stale by definition (another device finished the day, the
+    // row was cleared, or it predates the switch to server play), and replaying
+    // it anyway marks EVERY letter a miss.
+    if (serverPlay) {
+        // AN EMPTY MAP IS NOT "NO MAP", and that distinction is the whole bug.
+        // The handshake builds the map by looping over revealed[], so a claimed
+        // row with nothing revealed yet encodes as PHP's [] -- a JSON ARRAY --
+        // and an empty array is TRUTHY in JavaScript. `!serverPositionMap()`
+        // therefore could not fire in exactly the state it was written for, and
+        // "the claim row IS the play session" makes that state the NORMAL one
+        // for every game between the claim and the first reveal.
+        //
+        // Replaying a snapshot against a map that knows no letters sends every
+        // lookup to the fallback branch, which asks PHRASE_LETTERS -- and that
+        // is ALWAYS '' under server play, because the client is never told the
+        // phrase (backlog 25). So hit=false for everything, and the board
+        // redraws letters the player EARNED as misses, painting none of them.
+        // That is worse than painting nothing: it tells the player they were
+        // wrong about letters they got right.
+        //
+        // The server owns the position, so a local snapshot naming a letter the
+        // server has never heard of is stale by definition -- another device
+        // finished the day, the row was cleared, or this snapshot predates the
+        // switch to server play. Clear it and let the server's own state paint.
+        const posMap = serverPositionMap();
+        const known  = posMap ? Object.keys(posMap) : [];
+        const stale  = (saved.revealed || []).some(L => known.indexOf(L) === -1);
+        if (!posMap || stale) { clearSavedGame(); return; }
+    }
 
     // The mode you started with is the mode you resume in.
     HARDCORE = !!saved.hardcore;
