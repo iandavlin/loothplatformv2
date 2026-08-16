@@ -454,6 +454,52 @@ $mNoCaps = menuFor($REPO, []);
 
 is_($mPlain !== '' && $mTester !== '', "the header renders at all, so these checks are not vacuous");
 
+/**
+ * ⚠️ THE CAPABILITY MUST SURVIVE THE JOURNEY, not just be honoured on arrival.
+ *
+ * Everything below drives menuFor() with a SYNTHETIC `stripe_testgroup` cap —
+ * which asserts the header HONOURS the capability, and can say nothing at all
+ * about whether the real page ever RECEIVES it. On 2026-08-16 it did not: the
+ * poller computed it correctly, and profile-app's capabilitiesFor() rebuilt the
+ * caps array from a named allowlist that did not include it, so the capability
+ * was received and dropped on the floor. Ian tested as a correctly-listed member
+ * and saw nothing; this gate was green throughout.
+ *
+ * So this asserts the OTHER half of the chain, against the real source rather
+ * than a fixture: does the central computation PASS the capability through?
+ * In-process on this tree deliberately — an HTTP leg would measure whichever
+ * copy is deployed, which is a different question and cannot red-first a fix
+ * that has not shipped yet.
+ *
+ * THE TRAP IS THE ALLOWLIST ITSELF: it silently discards every capability nobody
+ * remembered to name, and the discard is indistinguishable from the capability
+ * being false. Anything the header learns to key on must be added there too.
+ */
+$whoamiSrc = (string) @file_get_contents($REPO . '/profile-app/src/Whoami.php');
+if ($whoamiSrc === '') {
+    bad('cannot read profile-app/src/Whoami.php — the capability source is unreachable');
+} elseif (!preg_match('/private static function capabilitiesFor.*?
+    }/s', $whoamiSrc, $cm)) {
+    bad('capabilitiesFor() not found in profile-app/src/Whoami.php — it was renamed or moved');
+} else {
+    // Executed, not grepped: a mention of the string in a comment is not the
+    // capability surviving, and this gate has been fooled by prose before.
+    // Replace the WHOLE signature: swapping only "private static function" left
+    // the original name behind it and produced `function lgb_capsfor
+    // capabilitiesFor(...)`, a parse error inside eval that aborted the gate
+    // mid-run — which is the shape that looks like the gate ran.
+    eval(str_replace('private static function capabilitiesFor', 'function lgb_capsfor', $cm[0]));
+    $listed   = lgb_capsfor(1953, 'looth3', ['manage_options' => false, 'stripe_testgroup' => true]);
+    $unlisted = lgb_capsfor(999,  'looth3', ['manage_options' => false, 'stripe_testgroup' => false]);
+
+    is_(array_key_exists('stripe_testgroup', $listed),
+        'the central computation PASSES stripe_testgroup through — the menu can never see it otherwise');
+    is_(($listed['stripe_testgroup'] ?? null) === true,
+        '...true for a listed member');
+    is_(($unlisted['stripe_testgroup'] ?? null) === false,
+        '...and false for an unlisted one, not merely absent');
+}
+
 $leak = array_values(array_filter($STRIPE_LINKS, static fn (string $l): bool => str_contains($mPlain, $l)));
 is_($leak === [], sprintf(
     "a NON-listed member sees NO stripe menu entries (leaked: %s)",
