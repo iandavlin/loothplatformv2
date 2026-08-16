@@ -62,7 +62,7 @@ import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DIR_MEMBERS_PHP = os.path.join(REPO, "profile-app", "api", "v0", "directory-members.php")
-FLAG_FILE = os.path.join(REPO, "platform", "config", "directory-location-cap.php")
+FLAG_FILE = os.path.join(REPO, "profile-app", "config", "directory-location.php")
 FIXTURE_CACHE = "/tmp/.directory-location-cap-gate-fixtures.json"
 
 # Two real members, fetched read-only from live. LUKE is who keeper named
@@ -151,10 +151,18 @@ def php_harness(fixture, cap_on):
     if src is None:
         return None, "profile-app/api/v0/directory-members.php is missing"
 
-    m1 = re.search(r"function dir_location_cap_on\(\).*?\n\}\n", src, re.S)
     m2 = re.search(r"function dir_member_display\(array \$r, array \$vArr\): \?array\n\{.*?\n\}\n", src, re.S)
-    if not m1 or not m2:
-        return None, "could not extract dir_location_cap_on()/dir_member_display() from the source"
+    if not m2:
+        return None, "could not extract dir_member_display() from the source"
+    # Match the DEFINITION or a CALL, never the bare name: the file's own comment
+    # explains why that function was removed, and a bare-name check matched that
+    # prose and no-verdicted the gate. Same mistake as grepping a function name
+    # that its own definition satisfies — made twice in one day, so it is written
+    # down here rather than remembered.
+    if re.search(r"function\s+dir_location_cap_on\s*\(|dir_location_cap_on\s*\(\s*\)\s*[;)&|]", src):
+        return None, ("dir_location_cap_on() is back in directory-members.php — backlog 20 is "
+                      "meant to have ONE switch (keeper 2026-08-16). Two caps on one behaviour "
+                      "is what this gate now exists to prevent, not to test.")
 
     audiences = {
         "public": {"id": 0, "admin": False},
@@ -177,9 +185,17 @@ def php_harness(fixture, cap_on):
     # harness that re-hosts a function body inherits none of its imports.
     php += "require_once LG_PROFILE_APP_APP_ROOT . '/src/Flags.php';\n"
     php += "use Looth\\ProfileApp\\Visibility;\nuse Looth\\ProfileApp\\Block;\nuse Looth\\ProfileApp\\Flags;\n"
-    if cap_on:
-        php += "putenv('LG_DIRECTORY_LOCATION_CAP=1');\n"
-    php += m1.group(0) + "\n" + m2.group(0) + "\n"
+    # THE FLAG IS MOVED THE WAY THE RUNTIME READS IT. dir_member_display() calls
+    # Flags::bool('directory-location','coarsen_list_location'); Flags::forTest()
+    # is profile-app's own CLI-only seam for exactly this, so the gate and the
+    # server resolve the same source instead of a parallel env channel that could
+    # drift from it. (The previous env toggle tested a mechanism that no longer
+    # exists.) The `use` above is what stops the re-hosted body resolving an
+    # unqualified Flags:: to a global \Flags and fatalling — a harness that
+    # re-hosts a function body inherits NONE of that file's imports.
+    php += ("Flags::forTest('directory-location', ['coarsen_list_location' => "
+            + ("true" if cap_on else "false") + "]);\n")
+    php += m2.group(0) + "\n"
     php += "$r = json_decode('" + json.dumps({
         "id": fixture["id"], "location_address": fixture["location_address"],
         "location_postcode": None, "location_city": fixture["location_city"],
@@ -264,17 +280,17 @@ def main():
 
     flag_src = read(FLAG_FILE)
     if flag_src is None:
-        DEAD.append("[FLAG] platform/config/directory-location-cap.php is missing")
-    elif re.search(r"'enabled'\s*=>\s*true", flag_src):
-        window = flag_src[max(0, flag_src.find("'enabled' => true") - 400):flag_src.find("'enabled' => true")]
+        DEAD.append("[FLAG] profile-app/config/directory-location.php is missing")
+    elif re.search(r"'coarsen_list_location'\s*=>\s*true", flag_src):
+        window = flag_src[max(0, flag_src.find("'coarsen_list_location' => true") - 400):flag_src.find("'coarsen_list_location' => true")]
         if re.search(r"(?i)\bIan\b.{0,120}(ruled|ruling|decision|box|flip)", window, re.S):
             OK.append("[FLAG] flag is ON by an attributed ruling")
         else:
             RED.append("[FLAG] the tracked flag is ON with no ruling attribution beside it")
-    elif re.search(r"'enabled'\s*=>\s*false", flag_src):
+    elif re.search(r"'coarsen_list_location'\s*=>\s*false", flag_src):
         OK.append("[FLAG] the tracked flag defaults to false")
     else:
-        DEAD.append("[FLAG] could not find an 'enabled' => ... line to read")
+        DEAD.append("[FLAG] could not find a 'coarsen_list_location' => ... line to read")
 
     for label, spec in FIXTURE_SPECS.items():
         fixture = fetch_fixture(label, spec)
