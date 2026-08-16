@@ -674,6 +674,40 @@ writer — the relay half, built and gated (24) but **not yet armed**. Either wa
 for the relay, or extend the snapshot with a small separate writer that carries
 `-> Ian` posts.
 
+---
+
+## /srv/lg-stripe-billing IS NOW A SYMLINK (2026-08-16) — the cutover, done unhurried
+
+It was the last real directory among the `/srv` apps; every sibling
+(profile-app, membership-pages) already symlinked into the serving checkout.
+
+**It was NOT ancient, and that matters for the record.** `diff -rq` between the
+June directory and the monorepo copy found the code **content-identical** — same
+`composer.json`, same `composer.lock`, only `.gitignore` and `PICKUP.md` differ.
+The P1 that looked like staleness was a one-character nginx alias bug. Anyone
+re-reading the original diagnosis should know the directory was never serving
+old code.
+
+**How it was done, and why each step:**
+- `vendor/`, `.env` and `logs/` are **already gitignored in that app**, so placing
+  them in the serving checkout does **not** dirty a pull-only tree. Verified
+  clean after.
+- `vendor/` was **copied, not composer-installed** — the two `composer.lock`
+  files are byte-identical, so the copy is exactly the dependency set that was
+  already serving. No network, no resolver surprises.
+- `.env` carries Stripe keys. It is gitignored and was copied, never committed.
+- `logs/` is owned by **www-data**, which is what the billing pool runs as.
+- **Proved before swapping**: a probe on a spare port pointed at the
+  serving-checkout copy returned 200 with the real catalogue. Only then was the
+  directory renamed and the symlink made.
+- **Rollback exists**: `/srv/lg-stripe-billing.bak-20260816-183554`. Delete it
+  once a few days have passed without incident — it holds a `.env` with keys, so
+  it is not litter to leave forever.
+
+**Verified after**: `/billing/v1/products` 200 JSON, all five of Ian's pages
+serve Mikelle the real page, and profile-api / hub / manage-subscription
+unaffected.
+
 ### ⚠️ If you touch the styles, read this first
 
 - **There are TWO `<style>` blocks**: the original in the head, and a second one

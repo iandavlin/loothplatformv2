@@ -23,4 +23,4 @@ declare(strict_types=1);
  * fmodalApply's swap list is unchanged, so the bug ships exactly as found
  * until Ian has looked at the fix on the real dev2 serve.
  */
-return ['enabled' => false];
+return ['enabled' => true];

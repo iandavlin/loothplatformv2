@@ -37,6 +37,80 @@ if (!function_exists('looth_initials')) {
 }
 
 /**
+ * Backlog 27 — the archive-icon flag. Same getenv()/$_SERVER override pair
+ * every flag in this codebase uses (a lane preview sets fastcgi_param, which
+ * lands in $_SERVER but not reliably in getenv()). See
+ * platform/config/author-archive-icon.php for the full trace.
+ */
+if (!function_exists('looth_author_archive_icon_enabled')) {
+    function looth_author_archive_icon_enabled(): bool
+    {
+        static $on = null;
+        if ($on !== null) return $on;
+        if (getenv('LG_AUTHOR_ARCHIVE_ICON') === '1' || (($_SERVER['LG_AUTHOR_ARCHIVE_ICON'] ?? '') === '1')) {
+            return $on = true;
+        }
+        // profile-app/web/ -> repo root is two levels up.
+        $path = dirname(__DIR__, 2) . '/platform/config/author-archive-icon.php';
+        if (!is_readable($path)) {
+            error_log('[lg-author-archive-icon] tracked config unreadable at ' . $path . ' — OFF (fail-closed)');
+            return $on = false;
+        }
+        $raw = require $path;
+        return $on = (is_array($raw) && ($raw['enabled'] ?? false) === true);
+    }
+}
+
+/**
+ * Backlog 27 — is there a Hub archive to link to, and what does it say?
+ * Asks bb-mirror's author-activity loopback (the ONE shared predicate the
+ * Hub's own author banner uses — see platform/config/author-archive-icon.php)
+ * rather than counting anything here. Null wp_user_id (unbridged/ghost),
+ * loopback failure, or zero activity all return null — fail CLOSED, since a
+ * dead link on a member's own profile is worse than a missing icon.
+ * Returns ['href' => string] or null.
+ */
+if (!function_exists('looth_author_archive_icon')) {
+    function looth_author_archive_icon(int $userId): ?array
+    {
+        $wpId = \Looth\ProfileApp\Block::wpUserIdFor($userId);
+        if ($wpId === null) return null;
+
+        // The current request's own Host — bb-mirror's /bb-mirror-api/v0/ lives
+        // on the SAME vhost as this /u/ page, so forwarding it (rather than a
+        // separate constant this app has no reason to own) always resolves to
+        // that same vhost, previews included.
+        $hdrs = ['Host: ' . ($_SERVER['HTTP_HOST'] ?? 'dev2.loothgroup.com')];
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            // .php explicit, not the clean-URL rewrite alias: this is a
+            // loopback-only call this app fully controls both ends of, so
+            // there is no reason to depend on a second indirection.
+            CURLOPT_URL            => 'https://127.0.0.1/bb-mirror-api/v0/author-activity.php?wp_id=' . $wpId,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_1_1,
+            CURLOPT_TIMEOUT        => 3,
+            CURLOPT_HTTPHEADER     => $hdrs,
+        ]);
+        $body = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        curl_close($ch);
+        if ($code !== 200 || !$body) return null;
+        $data = json_decode($body, true);
+        if (!is_array($data) || empty($data['has_activity']) || empty($data['author_name'])) return null;
+
+        // Preview-aware, mirroring bb-mirror's own LG_BB_MIRROR_PUBLIC_PATH /
+        // LG_FC_COMPOSE_BASE pattern: under a lane preview the destination is
+        // THIS BRANCH's Hub, not main's — set only by an nginx conf, never a
+        // query string.
+        $hubBase = (string)($_SERVER['LG_AUTHOR_ARCHIVE_ICON_HUB_BASE'] ?? '/hub');
+        return ['href' => rtrim($hubBase, '/') . '/?author=' . rawurlencode((string)$data['author_name'])];
+    }
+}
+
+/**
  * Tiny inline-SVG preview of what a block looks like on the profile — shown on each caddy
  * chip so the owner can see what they're adding. Shapes only (the chip CSS frames them).
  */
@@ -1140,7 +1214,12 @@ function looth_render_header_block(array $header, string $role, string $headerVi
             if ($href === '') continue;
             $visible[] = ['kind' => $kind, 'href' => $href, 'raw' => $url];
         }
-        if ($visible || $isOwner) {
+        // Backlog 27 — one more icon in the SAME palette, not a pill and not a
+        // new row (Ian's ruling on the mock). Vis-0 refinement (Ian 8/16): a
+        // member with no Hub activity shows no icon at all — decided by the
+        // shared predicate, never a parallel count (see looth_author_archive_icon).
+        $archiveIcon = looth_author_archive_icon_enabled() ? looth_author_archive_icon($userId) : null;
+        if ($visible || $archiveIcon || $isOwner) {
             echo '<div class="lg-hlinks"' . ($isOwner ? ' data-hlinks-owner' : '') . '>';
             foreach ($visible as $v) {
                 $title = $v['kind'] === 'web'
@@ -1150,6 +1229,17 @@ function looth_render_header_block(array $header, string $role, string $headerVi
                    . ' rel="me noopener" target="_blank" title="' . looth_h((string)$title) . '"'
                    . ' aria-label="' . looth_h(ucfirst($v['kind'])) . '">'
                    . looth_social_icon($v['kind']) . '</a>';
+            }
+            if ($archiveIcon) {
+                // Last icon in the row (matches the approved mock). Same
+                // 34px circle, same sage, same hover as its neighbours —
+                // .lg-hlinks__a carries all of that already, no new class.
+                echo '<a class="lg-hlinks__a" href="' . looth_h($archiveIcon['href']) . '"'
+                   . ' title="Posts in the Hub" aria-label="Posts in the Hub">'
+                   . '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"'
+                   . ' stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+                   . '<path d="M4 4.5h9.5L18 9v10.5H4z"/><path d="M13.5 4.5V9H18"/>'
+                   . '<circle cx="10.5" cy="13" r="2.6"/><path d="m12.5 15 2.2 2.2"/></svg></a>';
             }
             if ($isOwner) {
                 // Pencil → jumps to the socials block (the inline editor lives there).

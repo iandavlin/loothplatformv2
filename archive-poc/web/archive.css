@@ -3711,6 +3711,9 @@ a.gdle-side-row__name:hover { color: var(--lg-sage-d); text-decoration: underlin
 html[data-lguser-theme="dark"] .gdle-card { background: #1d211b; }
 html[data-lguser-theme="dark"] .gdle-card__title { color: #e5e7e1; }
 html[data-lguser-theme="dark"] .gdle-side-row { color: #e5e7e1; }
+/* Rank numbers kept the light sage in dark — 3.54:1 once the weekly board
+   gained rows (gate 36's catch, 8/16 night). Dark sage clears 4.5 easily. */
+html[data-lguser-theme="dark"] .gdle-side-row__rank { color: #9cb37d; }
 html[data-lguser-theme="dark"] .gdle-side-row:nth-child(even) { background: #242a20; }
 html[data-lguser-theme="dark"] .gdle-side-row.is-first { background: #332d1c; }
 html[data-lguser-theme="dark"] .gdle-stat { background: #242a20; }

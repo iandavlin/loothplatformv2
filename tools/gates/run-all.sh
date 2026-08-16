@@ -1355,6 +1355,29 @@ echo "=== GATE 64: hub author-filter banner — the Advanced Search modal's in-p
 # (tools/preview/lane-preview.sh up featured-members).
 run "hub-author-banner-swap" python3 "$(dirname "$0")/hub-author-banner-swap-gate.py"
 
+echo "=== GATE 65: author archive icon — one predicate, two consumers, vis-0 both ways ==="
+# Backlog 27 (Ian 8/16). Number 65 from keeper. Ian ruled the mock: one more
+# icon in the profile's existing social palette, no pill, no new row; then
+# refined it — the icon shows only for members who have authored at least
+# one discussion or CPT post. Visibility comes from hub_author_activity_count()
+# (bb-mirror/web/forums/_hub-filters.php), the SAME predicate the Hub author
+# banner already uses — never a parallel count, so the icon and its
+# destination can never disagree. Flagged OFF by default
+# (platform/config/author-archive-icon.php); reads this branch's tree via
+# the featured-members lane preview, so it must be UP for this to run.
+run "author-archive-icon" python3 "$(dirname "$0")/author-archive-icon-gate.py"
+
+echo "=== GATE 66: hub author filter — a display name's own comma broke it entirely ==="
+# Found diagnosing backlog 38, not reported separately. hub_url() joined
+# multiple selected authors with implode(',', ...) and the parser split back
+# on the same character, so any ONE display name with its own comma sliced
+# into fragments matching neither the real author (measured live: "John
+# Lehmann, Old Naples Guitars" -> 2 bogus banners, 0 cards; 6 authors on
+# live carry a comma this way). Number 66 from keeper. Flagged OFF by
+# default (platform/config/hub-author-comma-fix.php); reads this branch's
+# tree via the featured-members lane preview, so it must be UP for this to run.
+run "hub-author-comma" python3 "$(dirname "$0")/hub-author-comma-gate.py"
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"

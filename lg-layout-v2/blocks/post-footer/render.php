@@ -65,11 +65,23 @@ if ($author_id) {
     }
 }
 
-/* Bio: ACF `author_about` → WP `description` → empty. */
+/* Bio: profile-sourced (Ian 2026-08-16: "it should just be flipped to the
+   about from the profile" — platform/config/profile-bio.php, OFF by
+   default). lg_profile_bio() returns null (not '') when the flag is off or
+   the member has no public profile row, meaning "I have no opinion" — the
+   legacy ACF `author_about` → WP `description` chain is untouched in either
+   case, so this ships without changing anything until the flag is on AND
+   the member has a public About to show. */
+require_once dirname(__DIR__, 3) . '/platform/lib/lg-profile-bio.php';
 $bio = '';
 if ($author_id) {
-    $bio = trim((string) (get_user_meta($author_id, 'author_about', true) ?: ''));
-    if ($bio === '') $bio = trim((string) (get_user_meta($author_id, 'description', true) ?: ''));
+    $profileBio = lg_profile_bio($author_id);
+    if ($profileBio !== null) {
+        $bio = $profileBio['bio'];
+    } else {
+        $bio = trim((string) (get_user_meta($author_id, 'author_about', true) ?: ''));
+        if ($bio === '') $bio = trim((string) (get_user_meta($author_id, 'description', true) ?: ''));
+    }
 }
 
 $pub_name = function_exists('get_bloginfo') ? (string) get_bloginfo('name') : '';
