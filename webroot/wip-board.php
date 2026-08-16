@@ -1438,7 +1438,7 @@ html[data-lguser-theme="dark"]{--line:#767c76}
     .w2__thread{white-space:pre-wrap;max-height:210px;overflow:auto;font-size:12px;
                 background:rgba(128,128,128,.08);padding:8px;border-radius:6px;margin:0 0 8px}
     .w2 textarea{width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:6px;
-                 border-radius:6px;border:1px solid rgba(128,128,128,.35);background:transparent;color:inherit}
+                 border-radius:6px;border:1px solid #8a8478;background:transparent;color:inherit}
     .w2__opts{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
     .w2__opt{font:inherit;font-size:12px;padding:5px 10px;border-radius:999px;cursor:pointer;
              border:1px solid rgba(128,128,128,.45);background:transparent;color:inherit}
@@ -1473,7 +1473,7 @@ html[data-lguser-theme="dark"]{--line:#767c76}
     .msg--in{background:rgba(128,128,128,.12)}
     .msg__w{display:block;font-size:10px;opacity:.55}
     .thrbox__in{width:100%;box-sizing:border-box;font:inherit;font-size:12px;padding:5px;border-radius:6px;
-                border:1px solid rgba(128,128,128,.35);background:transparent;color:inherit}
+                border:1px solid #8a8478;background:transparent;color:inherit}
     .thrbox__go{margin-top:5px;font:inherit;font-size:11px;padding:4px 10px;border-radius:6px;cursor:pointer;
                 border:1px solid rgba(128,128,128,.45);background:transparent;color:inherit}
     .thrbox__no{opacity:.6}

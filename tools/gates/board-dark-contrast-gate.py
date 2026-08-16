@@ -78,6 +78,19 @@ def wait_dark_styles(s, deadline=8.0):
 
 
 PATH = "/wip-board.php"
+
+# WHAT THE LIGHT PASS ASSERTS, AND WHY IT IS NOT "ZERO FINDINGS".
+# Ian ruled on this sheet, 2026-08-16, with the border rows on screen: "These are
+# the only real problems I see." The REAL defects are the non-text BORDER pairs;
+# the light muted-ink text failures are an ACCEPTED BASELINE, not a bug list.
+#
+# So a light pass demanding zero would be red forever on cells the owner has
+# already ruled on — and a gate that is permanently red for a known-accepted
+# reason is worse than no gate: it trains everyone to ignore it, and then it
+# cannot speak for the cells that DO matter. This asserts exactly his ruling:
+# NON-TEXT contrast must be clean in light; text is counted and REPORTED as the
+# accepted baseline, never failed.
+NON_TEXT_KINDS = ("field-border", "field-borderless", "icon-control")
 FREEZE = ("(function(){var t=document.createElement('style');"
           "t.textContent='*,*::before,*::after{transition:none!important;animation:none!important}';"
           "document.head.appendChild(t);})()")
@@ -104,7 +117,7 @@ def main():
     url = host + PATH
     red, cannot = [], []
 
-    for mode in ("app-dark", "os-dark"):
+    for mode in ("app-dark", "os-dark", "light"):
         for dev, metrics in (("desktop", g.DESKTOP), ("mobile", g.PHONE)):
             label = f"board/{mode}/{dev}"
             s = g.Session()
@@ -118,8 +131,10 @@ def main():
                 s.js("try{localStorage.clear()}catch(e){}")
                 if mode == "app-dark":
                     s.js("try{localStorage.setItem('lg-set-theme','dark')}catch(e){}")
+                if mode == "light":
+                    s.js("try{localStorage.setItem('lg-set-theme','default')}catch(e){}")
                 s.goto(url, settle=2.5)
-                if mode == "app-dark":
+                if mode in ("app-dark", "light"):
                     s.goto(url, settle=2.5)
 
                 # LIVENESS first — a gated 403 measures as nothing.
@@ -129,10 +144,13 @@ def main():
                 if not s.js("!!document.querySelector('.wrap, .app')"):
                     cannot.append(f"{label}: board markup absent — wrong page or it failed to render")
                     continue
-                if not g.wait_dark_resolved(s):
+                if mode != "light" and not g.wait_dark_resolved(s):
                     cannot.append(f"{label}: theme never resolved dark — measured LIGHT, no verdict")
                     continue
-                if not wait_dark_styles(s):
+                if mode == "light" and s.js("document.documentElement.getAttribute('data-lguser-theme')") == "dark":
+                    cannot.append(f"{label}: asked for LIGHT and got dark — no verdict")
+                    continue
+                if mode != "light" and not wait_dark_styles(s):
                     cannot.append(f"{label}: dark attribute set but #lg-dark-style never injected — "
                                   f"the page had the attribute without the rules; findings would be phantoms")
                     continue
@@ -143,6 +161,25 @@ def main():
                 time.sleep(0.5)
                 data = s.js(probe)
                 findings = data.get("findings", [])
+                if mode == "light":
+                    # Ian's ruling, encoded: borders are the defect, text is the
+                    # accepted baseline. Only non-text is allowed to fail here.
+                    borders = [f for f in findings if f.get("kind") in NON_TEXT_KINDS]
+                    text_n = len(findings) - len(borders)
+                    if borders:
+                        red.append(f"RED  {label}  {len(borders)} non-text (border) finding(s) "
+                                   f"— Ian ruled these are the real defects")
+                        seen = set()
+                        for f in borders:
+                            k = (f.get("kind"), f.get("fg"), f.get("bg"))
+                            if k in seen: continue
+                            seen.add(k)
+                            red.append(f"     {label}  {f.get('kind')} {f.get('ratio')}:1 "
+                                       f"(need {f.get('need')})  {f.get('fg')} on {f.get('bg')}")
+                    else:
+                        print(f"  ok   {label}  0 non-text finding(s); {text_n} text finding(s) "
+                              f"ACCEPTED BY IAN 8/16 (baseline, not asserted)")
+                    continue
                 if findings:
                     red.append(f"RED  {label}  {len(findings)} sub-AA finding(s) ({ex.get('opened')}/{ex.get('details')} <details> expanded)")
                     seen = set()
