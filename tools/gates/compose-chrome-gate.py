@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """
-compose-chrome-gate.py — the standalone compose page wears the site chrome, in
-BOTH themes, and the embed variant does not.
+compose-chrome-gate.py — GATE 68 — the standalone compose page wears the site
+chrome, in BOTH themes, and the embed variant does not.
 
-⚠️ NO GATE NUMBER YET. Keeper mints, lanes never. The ledger says 65 is next free;
-this file deliberately claims nothing until keeper says so.
+Number minted by keeper 2026-08-16. Lanes never self-number.
 
 WHY IT EXISTS. Ian, 2026-08-16, testing /compose/ live: "can we get the header and
 footer so it looks like a normal page?" Keeper's ruling with it: standalone pages
