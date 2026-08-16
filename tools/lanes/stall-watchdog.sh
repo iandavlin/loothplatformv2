@@ -40,7 +40,17 @@ while true; do
       # delivery three times in ten minutes.)
       if printf '%s' "$PANE" | grep -qE "^❯ .*[[:alnum:]]" \
          && ! printf '%s' "$PANE" | grep -q "Press up to edit queued messages"; then
-        echo "ALERT lost-instruction $L — parked with unsent composer text"; exit 0
+        # DEBOUNCE (8/16, fourth blindspot): while the CLI promotes a queued
+        # message into the composer between turns, the box transiently holds
+        # real text for a few seconds — a single sample cannot tell that from
+        # a lost instruction. Alarm only if the SAME text persists 20s later.
+        TXT1=$(printf '%s' "$PANE" | grep -E "^❯ " | head -1)
+        sleep 20
+        PANE2=$(tmux capture-pane -p -t "$L" 2>/dev/null)
+        TXT2=$(printf '%s' "$PANE2" | grep -E "^❯ " | head -1)
+        if [ -n "$TXT1" ] && [ "$TXT1" = "$TXT2" ]; then
+          echo "ALERT lost-instruction $L — parked with unsent composer text"; exit 0
+        fi
       fi
     fi
     L_LINE=$(lanes 2>/dev/null | grep -E "^$L ")
