@@ -1352,6 +1352,36 @@ function lg_fc_css(): string
    palette, so they are restated rather than left to a fallback that would stay
    cream on a dark card. */
 html[data-lguser-theme="dark"] .lgfc{--lg-paper:#20241f;--lg-rust-tint:#3a2320}
+/* SELECTED CHIPS IN DARK — Ian 2026-08-15: "compose works well. Needs some dark
+   mode love." Gate 47 caught this on its first real run; measured, 1.85:1.
+
+   THE CAUSE IS A TOKEN THAT FLIPS LIGHTNESS WHILE ITS INK DOES NOT. The selected
+   rules pair `background:var(--lg-sage-d,#6b7c52)` with a hardcoded `color:#fff`.
+   That is right for the FALLBACK — white on #6b7c52 is 4.54:1 — but --lg-sage-d
+   resolves to #b0c693 in dark (archive.css re-points it to --lguser-accent-d), and
+   white on #b0c693 is 1.85:1. Illegible, and a light slab in a dark page.
+
+   ⚠️ WHY NOT JUST RE-POINT --lg-sage-d FOR .lgfc, which was my first instinct:
+   this route uses that ONE token BOTH ways — as a FILL behind white ink (here and
+   the chip), and as INK on a dark surface (lines ~1265, ~1281, ~1299), where the
+   light value is exactly right. Re-pointing it would fix these two and turn those
+   three dark-on-dark. So the fill sites are named explicitly instead.
+
+   ⚠️ AND WHY NOT DARK INK ON THE LIGHT SAGE (#15171a on #b0c693 = 9.70:1, the
+   pairing pwa.js already documents): it clears the contrast bar and still leaves a
+   luminance-0.52 slab, which is the "bright surface in dark mode" half of the same
+   gate finding. Darkening the FILL clears both.
+
+   #ffffff on #3d5233 = 8.56:1, fill luminance 0.073. Keeps the light-mode idiom —
+   light ink on a sage fill — rather than inventing a new dark treatment.
+
+   THE GATE SAW ONE OF THESE; THERE WERE THREE. Only the default-selected licence
+   renders selected on load, so the type-list label and the .lgfc__chip carry the
+   identical defect and appear the moment a member picks anything. One cause, so
+   one fix — but the shade is Ian's to adjust, not load-bearing. */
+html[data-lguser-theme="dark"] .lgfc li:has(input:checked)>label,
+html[data-lguser-theme="dark"] .lgfc__chip:has(input:checked){
+  background:#3d5233;border-color:#3d5233;color:#fff}
 html[data-lguser-theme="dark"] .lgfc__card{box-shadow:0 10px 34px rgba(0,0,0,.28)}
 CSS;
 }
