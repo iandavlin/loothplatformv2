@@ -198,6 +198,103 @@ def main():
             OK.append("[C] the card renderer never reads WP author_about (the phantom bio's "
                       "actual source, via archive-poc-sync)")
 
+    # ── D. FULL-REPO INVENTORY — every author_about site is a KNOWN one ──────
+    # Keeper 2026-08-16: "gate 58 grows the assertion that author_about has
+    # zero readers." Not yet true — the flip is in progress, not finished —
+    # so this cannot assert an empty set without being wrong about the state
+    # of the work. What it CAN do, and the thing worth catching, is assert
+    # the set of sites is EXACTLY the known, tracked, still-open ones: any
+    # NEW usage (a re-introduced read, a fix that reverted, a copy-paste into
+    # a file nobody meant to touch) shows up here as an unexpected site and
+    # goes RED, the same day, instead of surfacing as another Ian report.
+    #
+    # Categories, current as of 2026-08-16 — update this dict as the flip
+    # progresses, and the CHANGE is the point: shrinking it is how "zero
+    # readers" gets proven true, one category at a time, rather than by
+    # asserting a future state that has not arrived yet.
+    KNOWN_AUTHOR_ABOUT_SITES = {
+        # Converted: reads the profile first, falls back to author_about only
+        # when the flag is off or the resolver has no opinion.
+        "lg-layout-v2/blocks/post-footer/render.php": "fallback-chain",
+        "archive-poc/standalone/engine/blocks/post-footer/render.php": "fallback-chain",
+        "platform/mu-plugins/archive-poc-sync.php": "fallback-chain",
+        # Not yet converted: the block EDITOR's pre-fill for an editable
+        # field, not a display read. Redirecting a SAVE path into the
+        # profile is a bigger design question (does editing move to the
+        # profile, or does the field retire alongside the key?) — flagged to
+        # keeper 2026-08-16, not decided unilaterally.
+        "lg-layout-v2/blocks/post-header/render.php": "editor-exposure",
+        "lg-layout-v2/src/EditorRest.php": "editor-exposure",
+        "lg-layout-v2/assets/lg-link-edit.js": "editor-exposure",
+        "archive-poc/standalone/engine/blocks/post-header/render.php": "editor-exposure",
+        "archive-poc/standalone/engine/src/EditorRest.php": "editor-exposure",
+        # Not yet converted: profile_app's OWN About editor already MIRRORS a
+        # save into author_about — found 2026-08-16, the actual reason Ian's
+        # WP field and profile About were byte-identical. The WP post editor
+        # (lg-link-edit.js, above) bypasses this mirror entirely, which is
+        # the real remaining drift vector. Retiring the key is a write-side
+        # decision too, not just a read-side one.
+        "profile-app/api/v0/me-about.php": "write-mirror",
+        "profile-app/bin/backfill-author-about.php": "write-mirror",
+        # Confirmed NOT live (readlink on the real mu-plugins symlink target,
+        # 2026-08-16) — a stale live-deploy staging copy and a standalone-PoC
+        # ("dark-launch, not installed" per its own doc) offline materializer.
+        # Tracked here so a real fix there is not chased a second time.
+        "archive-poc/deploy/archive-poc-sync.mu-plugin.php": "not-live",
+        "archive-poc/bin/materializer.php": "not-live",
+        # The resolver and its flag doc — reference the retired key's NAME in
+        # prose only, never a use.
+        "platform/lib/lg-profile-bio.php": "prose-only",
+        "platform/config/profile-bio.php": "prose-only",
+        # A comment noting the OPPOSITE — that practice-About deliberately
+        # has NO author_about mirror, unlike member-About's me-about.php.
+        "profile-app/api/v0/me-practice-about.php": "prose-only",
+    }
+    # Bare substring, deliberately: this inventory wants EVERY occurrence,
+    # including the "prose-only" ones (a docblock naming the retired key),
+    # so it can classify them — the classification, not the detection, is
+    # what tells a real use from a comment. A structural-only match here
+    # would make a comment silently invisible to the audit, the opposite of
+    # what an inventory is for.
+    found = {}
+    for root, dirs, files in os.walk(REPO):
+        dirs[:] = [d for d in dirs if d not in (".git", "node_modules")]
+        for fn in files:
+            if not fn.endswith((".php", ".js")):
+                continue
+            full = os.path.join(root, fn)
+            rel = os.path.relpath(full, REPO)
+            try:
+                with open(full, encoding="utf-8", errors="ignore") as fh:
+                    text = fh.read()
+            except OSError:
+                continue
+            if "author_about" not in text:
+                continue
+            found[rel] = len(re.findall(r"author_about", text))
+    unexpected = sorted(set(found) - set(KNOWN_AUTHOR_ABOUT_SITES))
+    missing = sorted(k for k in KNOWN_AUTHOR_ABOUT_SITES if k not in found
+                      and KNOWN_AUTHOR_ABOUT_SITES[k] != "prose-only")
+    if unexpected:
+        RED.append(f"[D] author_about appears in {len(unexpected)} FILE(S) not on the known "
+                   f"list — a new or reverted reader: {unexpected}")
+    elif missing:
+        # A tracked site losing its reference is GOOD (progress on the
+        # flip) but the list must be updated in the same commit, or the
+        # next unexpected addition hides behind a stale "already accounted
+        # for" count.
+        DEAD.append(f"[D] {missing} no longer reference author_about — update "
+                   f"KNOWN_AUTHOR_ABOUT_SITES to drop them (or promote them if the whole "
+                   f"category is now clear), this gate's inventory is stale")
+    else:
+        by_cat = {}
+        for rel, cat in KNOWN_AUTHOR_ABOUT_SITES.items():
+            if rel in found:
+                by_cat.setdefault(cat, []).append(rel)
+        OK.append(f"[D] every author_about reference in the repo is on the known, tracked "
+                  f"list — {len(found)} file(s) across categories "
+                  f"{sorted(by_cat.keys())}; nothing unexpected")
+
     if checked == 0:
         DEAD.append("no profile rendered usably — every assertion above would be vacuous")
 
