@@ -936,13 +936,23 @@ html[data-lguser-theme="dark"] .lg-fm-meter__next b{color:var(--lg-charcoal)}
         <div class="lg-fm-meter" id="lg-fm-meter">
           <div class="lg-fm-meter__top">
             <span class="lg-fm-meter__pct"><?= (int)$lg_fmCompleteness['pct'] ?>%</span>
-            <span class="lg-fm-meter__lbl">complete<?= $lg_fmCompleteness['card_ready'] ? ' — card ready' : '' ?></span>
+            <span class="lg-fm-meter__lbl">complete</span>
           </div>
           <div class="lg-fm-meter__bar"><div class="lg-fm-meter__fill<?= $lg_fmCompleteness['pct'] < 50 ? ' lg-fm-meter__fill--low' : '' ?>" style="width:<?= (int)$lg_fmCompleteness['pct'] ?>%"></div></div>
+          <?php /* Backlog 34 (Ian, 2026-08-15). Was "100% complete — CARD READY" and
+                   "Your card is ready." He ruled that framing says nothing to a member:
+                   "more complete profiles have a higher chance of becoming featured. Or
+                   something along those lines." So both states now lead with the reason
+                   to fill the profile in, and "card ready" — our word, not theirs — is
+                   gone from the surface. The card_ready FLAG stays in Completeness.php;
+                   only the wording changed. The untick reassurance above is untouched,
+                   also per the ruling. */ ?>
           <?php if ($lg_fmCompleteness['card_ready']): ?>
-          <p class="lg-fm-meter__next"><b>Your card is ready.</b> It would show your photo, name, what you do, and where you are.</p>
+          <p class="lg-fm-meter__next"><b>More complete profiles have a better chance of being featured.</b> Yours has everything we would put on the front page — your photo, your name, what you do, and where you are.</p>
           <?php elseif ($lg_fmNextLabel): ?>
-          <p class="lg-fm-meter__next"><b>Your card would be a photo and a name.</b> Next: <?= looth_h(lcfirst($lg_fmNextLabel)) ?>.</p>
+          <p class="lg-fm-meter__next"><b>More complete profiles have a better chance of being featured.</b> Next: <?= looth_h(lcfirst($lg_fmNextLabel)) ?>.</p>
+          <?php else: ?>
+          <p class="lg-fm-meter__next"><b>More complete profiles have a better chance of being featured.</b></p>
           <?php endif; ?>
         </div>
         <?php endif; ?>

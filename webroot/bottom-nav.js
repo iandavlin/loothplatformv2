@@ -365,6 +365,24 @@
       '.lt-saved-thumb{flex:0 0 auto;width:46px;height:46px;border-radius:8px;background:var(--lg-sage-3,#d4e0b8) center/cover no-repeat}' +
       '.lt-saved-t{min-width:0;font:600 13.5px/1.35 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#323532);' +
         'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}' +
+      // BACKLOG 11.6 chips + bulk clear (only in the DOM while the flag is on)
+      '.lt-nchips{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 9px;margin-bottom:4px;' +
+        'border-bottom:1px solid var(--lg-line,#e3ddd0)}' +
+      '.lt-nchip{white-space:nowrap;flex:0 0 auto;border:1px solid var(--lg-line,#e3ddd0);' +
+        'background:var(--lg-cream,#fbfbf8);color:var(--lg-ink,#323532);border-radius:999px;' +
+        'padding:7px 12px;font:500 12.5px/1 var(--lg-font-sans,system-ui,sans-serif);cursor:pointer}' +
+      '.lt-nchip.is-on{border-color:var(--lg-sage-d,#6b7c52);background:var(--lg-sage-tint,#eef2e3);' +
+        'font-weight:700;box-shadow:0 0 0 1px var(--lg-sage-d,#6b7c52)}' +
+      '.lt-nbulk{border:1px solid var(--lg-rust,#c66845);border-radius:10px;padding:10px 12px;margin:0 0 10px}' +
+      '.lt-nbulk__w{margin:0 0 8px;font:400 12px/1.5 var(--lg-font-sans,system-ui,sans-serif);' +
+        'color:var(--lg-ink,#323532)}' +
+      // Same measured failure as the desktop button: white on --lg-rust is 3.84:1
+      // in light and 2.61:1 in DARK, because --lg-rust repoints LIGHTER under dark
+      // while the ink stays white. Darkened rust + white in light (4.77:1); dark
+      // ink on the light rust under dark (6.49:1). Measured in a browser, not guessed.
+      '.lt-nbulk__b{width:100%;border:0;border-radius:8px;background:#b35937;color:#fff;' +
+        'padding:13px;font:700 13px/1 var(--lg-font-sans,system-ui,sans-serif);cursor:pointer}' +
+      'html[data-lguser-theme="dark"] .lt-nbulk__b{background:var(--lg-rust,#e08a72);color:#1a1d20}' +
       '.lt-notif-all{margin:4px 0 2px;border:0;background:none;color:var(--lg-sage-d,#6b7c52);cursor:pointer;' +
         'font:600 13px/1 var(--lg-font-sans,system-ui,sans-serif);text-align:left;padding:8px 6px}' +
       // settings panel (rendered by app-settings.js buildPanel)
@@ -1303,6 +1321,60 @@
       });
     } catch (e) {}
   }
+  /* BACKLOG 11.6 — the type the sheet is filtered to, or null for all. */
+  var sheetNotifType = null;
+  var SHEET_TYPE_LABELS = {
+    'connection_request':   'Requests',
+    'connection_accept':    'Accepted',
+    'forum.reply_to_topic': 'Replies',
+    'forum.reply_to_reply': 'Replies to you',
+    'forum.mention':        'Mentions',
+    'forum.followed_topic': 'Following',
+    'reaction.on_post':     'Reactions'
+  };
+  function sheetTypeLabel(t) {
+    return SHEET_TYPE_LABELS[t] || String(t).replace(/^.*\./, '').replace(/_/g, ' ');
+  }
+  /* Chips scroll sideways rather than wrapping, so the list itself never gets
+     pushed off the first screen on a phone. */
+  function sheetFilterHtml(counts, total) {
+    if (!counts) return '';
+    var types = Object.keys(counts).filter(function (t) { return t !== 'message' && counts[t] > 0; });
+    if (!types.length) return '';
+    var h = '<div class="lt-nchips"><button type="button" class="lt-nchip' +
+            (sheetNotifType === null ? ' is-on' : '') + '" data-nchip="">All ' + total + '</button>';
+    types.forEach(function (t) {
+      h += '<button type="button" class="lt-nchip' + (sheetNotifType === t ? ' is-on' : '') +
+           '" data-nchip="' + t + '">' + sheetTypeLabel(t) + ' ' + counts[t] + '</button>';
+    });
+    h += '</div>';
+    if (sheetNotifType && counts[sheetNotifType]) {
+      h += '<div class="lt-nbulk"><p class="lt-nbulk__w">Removes all ' + counts[sheetNotifType] +
+           ' permanently, and unread ones will not reach your weekly email.</p>' +
+           '<button type="button" class="lt-nbulk__b" data-nclear="' + sheetNotifType +
+           '">Clear all ' + counts[sheetNotifType] + '</button></div>';
+    }
+    return h;
+  }
+  function wireSheetFilter(box) {
+    [].forEach.call(box.querySelectorAll('[data-nchip]'), function (c) {
+      c.addEventListener('click', function () {
+        sheetNotifType = c.getAttribute('data-nchip') || null;
+        loadSheetNotifs(box, true);
+      });
+    });
+    var b = box.querySelector('[data-nclear]');
+    if (b) b.addEventListener('click', function () {
+      var t = b.getAttribute('data-nclear'); if (!t) return;
+      b.disabled = true;
+      fetch('/profile-api/v0/me/notifications/?type=' + encodeURIComponent(t),
+            { method: 'DELETE', credentials: 'include' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function () { sheetNotifType = null; loadSheetNotifs(box, true); })
+        .catch(function () { b.disabled = false; });
+    });
+  }
+
   function loadSheetNotifs(box, showAll) {
     if (!box) return;
     box.innerHTML = '<div class="lt-notif-empty">Loading…</div>';
@@ -1311,7 +1383,13 @@
     // "See all" asks for the whole store, not the default page. (The server clamps
     // this to config/notifications.php max_ids; 30-day retention is enforced by
     // prune-notifications.timer, so "the whole store" is a bounded ask.)
-    fetch('/profile-api/v0/me/notifications/' + (showAll ? '?limit=200' : ''), { credentials: 'include' })
+    // BACKLOG 11.6 — carry the active type filter. Same feature-detection as the
+    // desktop modal: the chips only appear if the server sent `counts`, which it
+    // does only while the flag is on, so an OFF box renders exactly as before.
+    var q = [];
+    if (showAll) q.push('limit=200');
+    if (sheetNotifType) q.push('type=' + encodeURIComponent(sheetNotifType));
+    fetch('/profile-api/v0/me/notifications/' + (q.length ? '?' + q.join('&') : ''), { credentials: 'include' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         // Unread-only — the sheet shows what's new (auto-marked read on view below).
@@ -1321,9 +1399,20 @@
         // fresh row that shows normally. (notifications lane, delete+rotation 2026-07-13)
         var all = ((d && d.items) || []).filter(function (n) { return !n.is_read; });
         var items = showAll ? all : all.slice(0, 8);
-        if (!items.length) { box.innerHTML = '<div class="lt-notif-empty">No notifications yet.</div>'; return; }
-        box.innerHTML = items.map(notifRow).join('') +
+        var nCounts = d && d.counts, nTotal = 0;
+        if (nCounts) Object.keys(nCounts).forEach(function (t) { if (t !== 'message') nTotal += nCounts[t]; });
+        var nFilter = sheetFilterHtml(nCounts, nTotal);
+        if (!items.length) {
+          // An empty FILTERED sheet is not an empty bell — keep the chips so the
+          // member can get back out of the filter they are standing in.
+          box.innerHTML = nFilter + '<div class="lt-notif-empty">' +
+            (sheetNotifType ? 'Nothing of that kind left.' : 'No notifications yet.') + '</div>';
+          wireSheetFilter(box);
+          return;
+        }
+        box.innerHTML = nFilter + items.map(notifRow).join('') +
           ((!showAll && all.length > 8) ? '<button type="button" class="lt-notif-all" data-notif-all>See all notifications</button>' : '');
+        wireSheetFilter(box);
         // "See all" expands the full list IN the sheet (no desktop nav); a tap on a
         // notification row goes through openNotifs (header bell, else expand here).
         var allBtn = box.querySelector('[data-notif-all]');

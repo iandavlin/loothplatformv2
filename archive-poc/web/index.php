@@ -836,7 +836,28 @@ function lg_resolve_featured_member(string $uuid, bool $isMember): ?array {
     $u = $st->fetch();
     if (!$u) return null;   // opted out, went private, or the row is gone — no band, not a broken one
 
-    $role = trim((string) $u['at_a_glance']);
+    // ── THE CARD MAY ONLY REPEAT WHAT THE PROFILE ITSELF PUBLISHES ──────────
+    // Ian, 2026-08-16: "the text for my profile isn't anywhere on my profile."
+    // He was right, and the reason is a visibility rule, not a missing field.
+    //
+    // at_a_glance is rendered by the profile's HEADER block, and that block's
+    // ceiling comes from profile_sections key='header' — defaulting to 'members'
+    // (Block::HEADER_DEFAULT) when the member has never set one. So for a member
+    // with no header row, an ANONYMOUS visitor never sees their glance on their
+    // own profile — while this card, which sits on the public front page, printed
+    // it to exactly that visitor. Measured 2026-08-16: 5 of the 8 opted-in public
+    // members have no header row, and Rick Liftig — featured at the time — had a
+    // long personal bio in at_a_glance that appears NOWHERE on his rendered
+    // profile. That is not a cosmetic mismatch, it is member-only text
+    // republished publicly, the same class as backlog 20.
+    //
+    // So the glance is used ONLY when the header block is public. Otherwise the
+    // card falls back to business_name, which is already public on the profile.
+    $hdr = $pdo->prepare("SELECT visibility FROM profile_sections WHERE user_id = :i AND key = 'header'");
+    $hdr->execute([':i' => (int) $u['id']]);
+    $headerVis = (string) ($hdr->fetchColumn() ?: 'members');   // no row => Block::HEADER_DEFAULT
+
+    $role = $headerVis === 'public' ? trim((string) $u['at_a_glance']) : '';
     if ($role === '') {
         $biz = str_replace(["\\'", '\\"'], ["'", '"'], (string) $u['business_name']);
         if ($biz !== '' && !str_ends_with((string) $u['display_name'], $biz)) $role = $biz;
@@ -865,7 +886,17 @@ function lg_resolve_featured_member(string $uuid, bool $isMember): ?array {
     // private About must never reach the open web through this card — see
     // tools/cut/featured-member-grants.sql's own note on this same rule.
     $bio = '';
-    $ab = $pdo->prepare("SELECT data->>'text' AS t FROM profile_sections WHERE user_id = :i AND key = 'about' AND visibility = 'public'");
+    // Same rule for the bio. A public About row is not enough: the profile only
+    // RENDERS about when it is in the member's resolved layout, and
+    // Block::defaultLayout() returns ['location'] (or nothing) — never 'about' —
+    // for anyone who has never customised theirs. So a NULL profile_layout means
+    // the About is stored, public, and invisible; the card must not publish it.
+    $ab = $pdo->prepare("SELECT ps.data->>'text' AS t
+                           FROM profile_sections ps
+                           JOIN users u2 ON u2.id = ps.user_id
+                          WHERE ps.user_id = :i AND ps.key = 'about'
+                            AND ps.visibility = 'public'
+                            AND u2.profile_layout @> '[\"about\"]'::jsonb");
     $ab->execute([':i' => (int) $u['id']]);
     $bioRow = $ab->fetch();
     if ($bioRow && trim((string) $bioRow['t']) !== '') $bio = trim((string) $bioRow['t']);
