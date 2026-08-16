@@ -749,6 +749,37 @@ is_(str_contains($thrHtml, 'RELAY FIXTURE REPLY'), 'a lane\'s reply reaches the 
 is_(str_contains($thrHtml, 'class="thrbox__bad">NOT DELIVERED — lane not running'),
     'a delivery the relay could NOT make is shown as NOT DELIVERED, with the reason');
 
+/**
+ * THE GENERAL CHAT — and the reason it needs its own assertions.
+ *
+ * Ian asked for two chats and was explicit that the general one is "a full
+ * surface on the page, not a demoted control". Keeper's extension settled the
+ * mechanism: the same thread, aimed at `keeper`.
+ *
+ * KEEPER IS NOT A LANE. It does not appear in the sentinel's seat list, so if
+ * the general chat were rendered by the per-seat loop it would not exist at all
+ * — which is exactly how it was built the first time. This asserts it is
+ * reachable independently of the seat list.
+ */
+is_(str_contains($thrHtml, 'class="askk"'), 'the general "Ask keeper" surface is on the page');
+is_(str_contains($thrHtml, 'data-lane="keeper"'), '...addressed to keeper, so a message has somewhere to go');
+
+$sentinelLanes = json_decode((string) @file_get_contents('/home/ubuntu/.sentinel-status.json'), true);
+$seatNames = array_column((array) ($sentinelLanes['lanes'] ?? []), 'name');
+is_(!in_array('keeper', $seatNames, true),
+    '...and keeper is NOT a seat, so this cannot have come from the lane loop (' . count($seatNames) . ' seats)');
+
+// SAME RENDERER, SAME FAILURE STATES. Two renderers would drift, and the first
+// thing to drift would be the failure states — the whole point of the feature.
+$kThr = $tmp . '-threads-k.json';
+file_put_contents($kThr, json_encode(['lanes' => ['keeper' => ['replies' => [],
+    'delivery' => ['ok' => false, 'why' => 'keeper is not answering', 'when' => '2026-08-16 13:00']]]]));
+$kHtml = (string) shell_exec('LGB_MAIN_COPY=/nonexistent/main-copy.md LGB_THREADS=' . escapeshellarg($kThr)
+    . ' LGB_BACKLOG=' . escapeshellarg($BACK) . ' ' . PHP_BINARY . ' ' . escapeshellarg($PAGE) . ' 2>/dev/null');
+is_(str_contains($kHtml, 'class="thrbox__bad">NOT DELIVERED — keeper is not answering'),
+    'a failed message to KEEPER is shown as NOT DELIVERED too — the general chat is not a second implementation');
+@unlink($kThr);
+
 // An absent relay must read as absent, not as a lane with nothing to say.
 $noThrHtml = render($PAGE, $BACK);
 is_(str_contains($noThrHtml, 'the relay has not written a snapshot yet'),

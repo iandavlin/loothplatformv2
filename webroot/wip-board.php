@@ -755,6 +755,52 @@ function lgb_lane_replies(string $path, string $lane): array
             'delivery' => is_array($l['delivery'] ?? null) ? $l['delivery'] : null];
 }
 
+/**
+ * ONE THREAD RENDERER, used by the per-lane threads AND by the general keeper
+ * chat.
+ *
+ * Ian asked for two chats — "a general chat on the page for overview and then
+ * sub chats on each board item/project" — and keeper's extension settled that
+ * the general one is *the same mechanism aimed at keeper*. So it must be the
+ * same CODE as well as the same store: two renderers would drift, and the first
+ * thing to drift would be the failure states, which are the whole point. A
+ * message he sends from the general chat and one he sends from a lane row are
+ * the same event, written the same way, shown the same way.
+ *
+ * @param array<int,array{when:string,who:string,text:string}> $sent
+ */
+function lgb_thread_box(string $lane, bool $ok, array $sent, array $rep, string $placeholder = ''): void
+{
+    $ph = $placeholder !== '' ? $placeholder : 'Message ' . $lane . '…';
+    ?>
+    <div class="thrbox" data-lane="<?= lgb_h($lane) ?>">
+      <?php if (!$ok): ?>
+        <div class="thrbox__no">This seat has no usable name, so there is nothing to address.</div>
+      <?php else: ?>
+        <?php if ($rep['delivery'] !== null && empty($rep['delivery']['ok'])): ?>
+          <!-- lane-say exiting non-zero means a lane did not hear him. Never let
+               that read as sent. -->
+          <div class="thrbox__bad">NOT DELIVERED — <?= lgb_h((string) ($rep['delivery']['why'] ?? 'no reason given')) ?></div>
+        <?php endif; ?>
+        <div class="thrbox__log">
+          <?php foreach ($sent as $m): ?>
+            <div class="msg msg--out"><span class="msg__w"><?= lgb_h($m['when']) ?></span><?= lgb_h($m['text']) ?></div>
+          <?php endforeach; ?>
+          <?php foreach ($rep['replies'] as $m): ?>
+            <div class="msg msg--in"><span class="msg__w"><?= lgb_h((string) ($m['when'] ?? '')) ?></span><?= lgb_h((string) ($m['text'] ?? '')) ?></div>
+          <?php endforeach; ?>
+          <?php if ($sent === [] && $rep['replies'] === []): ?>
+            <div class="thrbox__no"><?= $rep['ok'] ? 'Nothing yet.' : lgb_h((string) $rep['why']) . '.' ?></div>
+          <?php endif; ?>
+        </div>
+        <textarea class="thrbox__in" rows="2" placeholder="<?= lgb_h($ph) ?>"></textarea>
+        <button class="thrbox__go">Send</button>
+        <div class="thrbox__say" hidden></div>
+      <?php endif; ?>
+    </div>
+    <?php
+}
+
 $backlog  = lgb_parse_backlog($BACKLOG);
 $history  = lgb_parse_history($BACKLOG);
 $GLOBALS['LGB_ROW'] = 0;   // row keys; see the payload note below
@@ -1004,41 +1050,43 @@ header('X-Robots-Tag: noindex, nofollow');
               <span class="lane__s"><?= lgb_h($st) ?></span>
               <?php if ($nmsg > 0): ?><span class="lane__b"><?= (int) $nmsg ?></span><?php endif; ?>
             </summary>
-            <div class="thrbox" data-lane="<?= lgb_h($lname) ?>">
-              <?php if ($ok): ?>
-                <a class="lane__watch" target="_blank" rel="noopener"
-                   href="/lane-view/?arg=<?= lgb_h(rawurlencode($lname)) ?>">watch this seat's terminal (read-only)</a>
-              <?php endif; ?>
-              <?php if (!$ok): ?>
-                <div class="thrbox__no">This seat has no usable name, so there is nothing to address.</div>
-              <?php else: ?>
-                <?php if ($rep['delivery'] !== null && empty($rep['delivery']['ok'])): ?>
-                  <!-- lane-say exiting non-zero means a lane did not hear him.
-                       Never let that read as sent. -->
-                  <div class="thrbox__bad">NOT DELIVERED — <?= lgb_h((string) ($rep['delivery']['why'] ?? 'no reason given')) ?></div>
-                <?php endif; ?>
-                <div class="thrbox__log">
-                  <?php foreach ($sent as $m): ?>
-                    <div class="msg msg--out"><span class="msg__w"><?= lgb_h($m['when']) ?></span><?= lgb_h($m['text']) ?></div>
-                  <?php endforeach; ?>
-                  <?php foreach ($rep['replies'] as $m): ?>
-                    <div class="msg msg--in"><span class="msg__w"><?= lgb_h((string) ($m['when'] ?? '')) ?></span><?= lgb_h((string) ($m['text'] ?? '')) ?></div>
-                  <?php endforeach; ?>
-                  <?php if ($sent === [] && $rep['replies'] === []): ?>
-                    <div class="thrbox__no"><?= $rep['ok'] ? 'Nothing yet.' : lgb_h((string) $rep['why']) . '.' ?></div>
-                  <?php endif; ?>
-                </div>
-                <textarea class="thrbox__in" rows="2" placeholder="Message <?= lgb_h($lname) ?>…"></textarea>
-                <button class="thrbox__go">Send</button>
-                <div class="thrbox__say" hidden></div>
-              <?php endif; ?>
-            </div>
+            <?php if ($ok): ?>
+              <!-- KEPT FROM main: Ian ruled the live terminals WATCH-ONLY, and
+                   that ruling is unaffected by this lane's work — interaction
+                   happens through the thread below, never through keystrokes. -->
+              <a class="lane__watch" target="_blank" rel="noopener"
+                 href="/lane-view/?arg=<?= lgb_h(rawurlencode($lname)) ?>">watch this seat's terminal (read-only)</a>
+            <?php endif; ?>
+            <?php lgb_thread_box($lname, $ok, $sent, $rep); ?>
           </details>
         <?php endforeach; ?>
       <?php else: ?>
         <div class="absent"><?= lgb_h($sentinel['why'] ?? 'no lane data') ?>.<br>
           Showing nothing rather than a comforting zero.</div>
       <?php endif; ?>
+    </div>
+
+    <!-- ASK KEEPER — the GENERAL chat.
+         Ian, on round 4: the general chat is "a full surface on the page, not a
+         demoted control", because "how's it all going?" is the question he asks
+         most and it belongs to no single item. Keeper's extension settled the
+         mechanism: it is the same thread, aimed at `keeper`.
+         It needs its own rail because KEEPER IS NOT A LANE — it does not appear
+         in the sentinel's seat list, so without this there is no way to reach it
+         from the board at all. -->
+    <div class="rail">
+      <?php
+        $kSent = lgb_lane_sent($BACKLOG, 'keeper')['sent'];
+        $kRep  = lgb_lane_replies($LGB_THREADS, 'keeper');
+        $kN    = count($kSent) + count($kRep['replies']);
+      ?>
+      <div class="rail__h"><span>Ask keeper</span><span><?= $kN > 0 ? (int) $kN . ' messages' : 'anything, any time' ?></span></div>
+      <div class="askk">
+        <div class="askk__w">For anything that belongs to no single item — how is
+          it all going, what should you look at first, why is something stuck.
+          Replies come back here; they are person-paced, not instant.</div>
+        <?php lgb_thread_box('keeper', true, $kSent, $kRep, 'Ask keeper anything…'); ?>
+      </div>
     </div>
 
     <!-- capacity -->
@@ -1402,6 +1450,8 @@ header('X-Robots-Tag: noindex, nofollow');
     .thrbox__no{opacity:.6}
     .thrbox__bad{background:rgba(200,70,70,.18);padding:5px 7px;border-radius:6px;margin-bottom:5px}
     .thrbox__say{margin-top:5px;padding:5px 7px;border-radius:6px}
+    .askk__w{font-size:12px;opacity:.7;margin:4px 0 8px}
+    .askk .thrbox{margin-left:0}
   </style>
   <script type="application/json" id="lgb-details"><?php
     // ONE ENTRY PER ITEM, always. Only 7 of the file's 39 detail sections are
