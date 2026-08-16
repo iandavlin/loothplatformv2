@@ -192,6 +192,36 @@ function hub_viewer_saved_set(): array
     return $out;
 }
 
+/**
+ * THE ONE PREDICATE for "does this author have any Hub activity" — how many
+ * published topics + tier-visible content items carry this exact author name.
+ * Extracted from the author-banner's own count query (_feed.php) rather than
+ * reimplemented, so every caller — the banner, the archive-icon visibility
+ * check (backlog 38-adjacent, backlog 27), a future one — asks the SAME
+ * question the same way. Backlog 27's icon-visibility flag exists precisely
+ * to avoid a SECOND, independently-written count disagreeing with this one
+ * (keeper 2026-08-16: "one predicate, two consumers"). Name-keyed because
+ * that is still what hub_filter_where()'s author clause matches on today —
+ * matching id would be a MORE correct predicate but a DIFFERENT one from
+ * what ?author= actually filters by right now, which is exactly the
+ * disagreement this function exists to prevent.
+ */
+function hub_author_activity_count(PDO $db, string $authorName, array $content_tiers): int
+{
+    $atph = [];
+    foreach ($content_tiers as $i => $t) $atph[] = ':aht' . $i;
+    $atin = $atph ? implode(',', $atph) : "''";
+    $acs = $db->prepare(
+        "SELECT (SELECT count(*) FROM topic WHERE status='publish' AND LOWER(author_name) = LOWER(:an1))
+              + (SELECT count(*) FROM discovery.content_item WHERE LOWER(author_name) = LOWER(:an2) AND tier IN ($atin))"
+    );
+    $acs->bindValue(':an1', $authorName);
+    $acs->bindValue(':an2', $authorName);
+    foreach ($content_tiers as $i => $t) $acs->bindValue(':aht' . $i, $t);
+    $acs->execute();
+    return (int)$acs->fetchColumn();
+}
+
 function hub_resolve_profiles(array $wp_ids): array
 {
     $wp_ids = array_values(array_unique(array_filter(array_map('intval', $wp_ids), fn($i) => $i > 0)));
