@@ -553,7 +553,7 @@ def main():
         log(f"  LG_ANON_DASH_SIGNIN = {str(flag_on).lower()}  (read from {flag_path})")
     log("")
 
-    broken, dash_lies = [], []
+    broken, dash_lies, label_wrong = [], [], []
     try:
         for w in widths:
             mobile = w <= 640
@@ -609,17 +609,32 @@ def main():
                 # not just one of them: absence alone passes on a bar that failed
                 # to render at all, and this gate already carries a liveness
                 # assertion above for exactly that reason.
-                labels = [(sl.get("label") or "").strip() for sl in comp["slots"]]
+                # TOKEN-NORMALISED, not equality. The probe concatenates an
+                # element's text with its aria-label, so a slot reads back as
+                # "Account Account" — it read "You You" before this change too.
+                # My first version asserted equality against "Account" and so
+                # FAILED ON THE PAGE BEING RIGHT: a gate that reds on the correct
+                # state is worse than no gate, and it was caught only because
+                # someone read the output instead of trusting the exit code.
+                # Dedupe to the distinct tokens and match on those.
+                def _toks(sl):
+                    words = ((sl.get("label") or "").strip()).split()
+                    seen, out = set(), []
+                    for wd in words:
+                        if wd.lower() not in seen:
+                            seen.add(wd.lower()); out.append(wd)
+                    return " ".join(out)
+                labels = [_toks(sl) for sl in comp["slots"]]
                 if not check(f"{w}px: the person slot reads 'Account' to an anon visitor",
-                             "Account" in labels,
-                             f"anon bar labels are {labels!r} — expected one to be 'Account' "
+                             any("account" in l.lower() for l in labels),
+                             f"anon bar labels are {labels!r} — expected one to say 'Account' "
                              f"(Ian's pick; members keep 'You')"):
-                    dash_lies.append(w)
+                    label_wrong.append(w)
                 if not check(f"{w}px: no slot says 'You' to an anon visitor",
-                             "You" not in labels,
+                             not any("you" == t.lower() for l in labels for t in l.split()),
                              f"anon bar still says 'You' — labels {labels!r}; 'You' is the "
                              f"MEMBER label and is wrong for a visitor with no account"):
-                    dash_lies.append(w)
+                    label_wrong.append(w)
 
                 if flag_on:
                     # The fix is live by default: nothing may claim "post".
@@ -688,6 +703,10 @@ def main():
             log(f"  RED — a signed-out member is locked out at: "
                 f"{', '.join(str(x) for x in broken)}px")
             log("  Presence in the HTML is not the question; reachability is.")
+        if label_wrong:
+            log(f"  RED — the anon person slot shows the wrong label at: "
+                f"{', '.join(str(x) for x in sorted(set(label_wrong)))}px")
+            log("  Ian's pick 2026-08-16 is 'Account' for anon; 'You' is the MEMBER label.")
         if dash_lies:
             log(f"  RED — the mobile dash offers a logged-out visitor a compose control at: "
                 f"{', '.join(str(x) for x in dash_lies)}px")
