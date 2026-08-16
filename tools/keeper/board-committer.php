@@ -54,7 +54,7 @@ const ALLOWED_PATHS = [
     'docs/board-lanes/',      // Ian's messages TO a lane (the replies are never committed)
 ];
 
-const INTENTS = [ 'reorder', 'note_append', 'media_ref', 'lane_message' ];
+const INTENTS = [ 'reorder', 'note_append', 'media_ref', 'lane_message', 'lane_receipt' ];
 
 /* ---------------------------------------------------------------------- */
 
@@ -303,6 +303,59 @@ function applyLaneMessage( string $repo, string $lane, string $text, string $act
     return [ $rel ];
 }
 
+/**
+ * A DELIVERY RECEIPT — what makes the relay idempotent across a crash.
+ *
+ * Keeper's ruling, 2026-08-16: a delivered message gets a committed receipt in
+ * this same fenced store, and the relay skips anything receipted. So a crash
+ * between `lane-say` returning and the receipt landing can at worst re-deliver
+ * ONCE — never loop. That is the whole reason this is a committed fact rather
+ * than a file in the relay's own state: the relay may die, its disk may be
+ * rebuilt, and the record of what a lane has already been told must outlive it.
+ *
+ * A FAILURE IS RECEIPTED TOO, and that is not an afterthought. If only successes
+ * were recorded, an undeliverable message would be retried on every pass
+ * forever — which is precisely the watermark that advances only on success, the
+ * shape that wedged bb-mirror-reconcile for 11 days and 3,084 runs. Receipting
+ * failures lets the relay count attempts and give up, and lets the board show
+ * NOT DELIVERED instead of a message that looks sent.
+ */
+function applyLaneReceipt( string $repo, string $lane, string $id, string $outcome, string $why, string $actor ): array
+{
+    if ( ! preg_match( '/^[a-z][a-z0-9-]{1,30}$/', $lane ) ) {
+        refuse( 'that is not a lane name: ' . $lane );
+    }
+    // The id names a message by its POSITION and a hash of its body. Position
+    // alone would be silently wrong if the file were ever hand-edited; the hash
+    // makes an edited message read as NEW (re-deliver once) rather than as
+    // already-delivered, which is the safe direction to fail in.
+    if ( ! preg_match( '/^\d{3}-[0-9a-f]{8}$/', $id ) ) {
+        refuse( 'that is not a message id: ' . $id );
+    }
+    if ( ! in_array( $outcome, [ 'delivered', 'failed' ], true ) ) {
+        refuse( 'a receipt is delivered or failed, not: ' . $outcome );
+    }
+
+    $rel = 'docs/board-lanes/' . $lane . '.receipts.md';
+    if ( ! pathAllowed( $rel ) ) { refuse( 'path outside the fence: ' . $rel ); }
+
+    $dir = $repo . '/docs/board-lanes';
+    if ( ! is_dir( $dir ) && ! @mkdir( $dir, 0755, true ) ) { fail( 'could not create the lane directory' ); }
+    if ( ! is_file( $repo . '/' . $rel ) ) {
+        file_put_contents( $repo . '/' . $rel, "# Delivery receipts — " . $lane . "\n" );
+    }
+
+    // The reason is flattened to ONE line and capped: it comes from a
+    // subprocess's stderr, and a receipt file whose rows can span lines is a
+    // receipt file the relay cannot parse back reliably.
+    $why = trim( preg_replace( '/\s+/u', ' ', $why ) ?? '' );
+    if ( mb_strlen( $why ) > 200 ) { $why = mb_substr( $why, 0, 200 ) . '…'; }
+
+    file_put_contents( $repo . '/' . $rel, sprintf( "- %s · %s · %s · %s · %s\n",
+        gmdate( 'Y-m-d H:i:s' ), $id, $outcome, $actor, $why !== '' ? $why : '-' ), FILE_APPEND );
+    return [ $rel ];
+}
+
 /* ---------------------------------------------------------------------- *
  * Main
  * ---------------------------------------------------------------------- */
@@ -349,6 +402,11 @@ switch ( $intent ) {
     case 'lane_message':
         $touched = applyLaneMessage( CLONE_DIR, (string) ( $req['lane'] ?? '' ), (string) ( $req['text'] ?? '' ), $actor );
         $summary = 'message to ' . (string) ( $req['lane'] ?? '?' );
+        break;
+    case 'lane_receipt':
+        $touched = applyLaneReceipt( CLONE_DIR, (string) ( $req['lane'] ?? '' ), (string) ( $req['id'] ?? '' ),
+                                     (string) ( $req['outcome'] ?? '' ), (string) ( $req['why'] ?? '' ), $actor );
+        $summary = 'receipt for ' . (string) ( $req['id'] ?? '?' ) . ' on ' . (string) ( $req['lane'] ?? '?' );
         break;
     case 'media_ref':
         $touched = applyMediaRef( CLONE_DIR, (string) ( $req['id'] ?? '' ), (string) ( $req['ref'] ?? '' ), $actor );
