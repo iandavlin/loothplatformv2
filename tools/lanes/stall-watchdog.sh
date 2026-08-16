@@ -38,17 +38,18 @@ while true; do
       # SUBMITTED and is queued behind the seat's current turn — the opposite
       # of lost. (8/16: third watchdog blindspot; it re-alarmed on a healthy
       # delivery three times in ten minutes.)
-      if printf '%s' "$PANE" | grep -qE "^❯ .*[[:alnum:]]" \
+      # THE COMPOSER IS THE LAST ❯ LINE. Queued messages render with the same
+      # glyph higher in the pane (8/16, fifth blindspot: the check read the
+      # FIRST ❯ and alarmed for an hour on a healthy queued delivery).
+      TXT1=$(printf '%s' "$PANE" | grep -E "^❯" | tail -1)
+      if printf '%s' "$TXT1" | grep -qE "^❯ .*[[:alnum:]]" \
          && ! printf '%s' "$PANE" | grep -q "Press up to edit queued messages"; then
-        # DEBOUNCE (8/16, fourth blindspot): while the CLI promotes a queued
-        # message into the composer between turns, the box transiently holds
-        # real text for a few seconds — a single sample cannot tell that from
-        # a lost instruction. Alarm only if the SAME text persists 20s later.
-        TXT1=$(printf '%s' "$PANE" | grep -E "^❯ " | head -1)
+        # DEBOUNCE (8/16): queue promotion holds real text transiently.
+        # Alarm only if the SAME composer text persists 20s later.
         sleep 20
         PANE2=$(tmux capture-pane -p -t "$L" 2>/dev/null)
-        TXT2=$(printf '%s' "$PANE2" | grep -E "^❯ " | head -1)
-        if [ -n "$TXT1" ] && [ "$TXT1" = "$TXT2" ]; then
+        TXT2=$(printf '%s' "$PANE2" | grep -E "^❯" | tail -1)
+        if [ "$TXT1" = "$TXT2" ]; then
           echo "ALERT lost-instruction $L — parked with unsent composer text"; exit 0
         fi
       fi
