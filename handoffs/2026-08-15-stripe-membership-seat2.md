@@ -147,6 +147,7 @@ forged name into the commit and believe it.
 |---|---|---|---|
 | committer (**now gate 56**, keeper minted it) | 33 | **56** | + the ambiguous index, + `lane_message` and its name fence, + `lane_receipt` and the forged-row fence |
 | relay (**number not minted — asked**) | — | **20** | the shell property, idempotency, the attempt cap, the visible failure |
+| 50 — work board (after the general chat) | 59 | **99** | + the general chat, and that it is not a second implementation |
 | 50 — work board | 59 | **95** | + the endpoint driven over real HTTP, + the source-of-truth preference in three states, + the shipped archive, + the lane threads |
 
 **FULL SUITE: ALL GATES GREEN, exit 0, 51 gates**, run on the rebased branch
@@ -314,6 +315,55 @@ in relay state so it outlives the process and its disk.
 2. A multi-line failure reason could **forge a second receipt row** — mutation
    measured: 3 rows where 2 were expected. A forged `delivered` row would
    silently suppress a real message. Reasons are flattened to one line.
+
+### The general chat — a hole I nearly shipped
+
+I built the per-seat threads and was ready to call the extension done. Then I
+checked whether the general chat *worked*: **keeper is not a lane.** It is absent
+from the sentinel's seat list, so a chat rendered by the per-seat loop has **no
+surface for keeper at all** — Ian had no way to reach keeper from the board, which
+is the half he asks for most ("how's it all going?"). It now has its own rail, and
+the gate asserts keeper is **absent** from the seat list so this cannot quietly
+become a lane-loop artifact again.
+
+**One renderer, not two.** Both surfaces go through `lgb_thread_box()`. Two would
+drift, and the first thing to drift would be the failure states. The mutation that
+proves it: give the general chat its own markup that forgets the NOT DELIVERED
+banner, and exactly that assertion reddens.
+
+> What caught it was asking *can Ian actually do the thing he asked for*, not
+> *does my code render*. Same question that found the empty-message bug.
+
+### ⚠️ The general chat's REPLY path is a convention, not code
+
+Measured over the last 400 board messages: every lane prefixes its posts with its
+own name, so **per-lane threads are healthy**. But only **4 of 400** start with
+`keeper ->` — keeper answers lanes through `lane-say` into a terminal, which never
+touches the devmsg store and therefore can never appear in Ian's general chat.
+**So Ian can ask and see no reply even when keeper acted.** The fix is keeper
+adopting the convention of answering *on the board* when the question came from
+Ian. Raised; keeper's to settle before Ian uses it.
+
+(Also measured: the 62 unattributed messages are all `mirror-sync-watch` alerts —
+robot noise. Leaving unattributed messages out of the threads drops nothing Ian
+needs. That validated the design rather than changing it.)
+
+### ⚠️ If you touch the styles, read this first
+
+- **There are TWO `<style>` blocks**: the original in the head, and a second one
+  carrying all **38** classes this lane added (threads, messages, the NOT
+  DELIVERED banner, the archive, the write-layer confirmations, the ahead chip).
+  A pass that edits only the head block leaves every new surface untouched.
+- **The head block uses theme tokens** (`var(--accent)`, `var(--bg)`, …); the
+  second block **hardcodes** colours, including two literal `#4a9eff` where
+  `var(--accent)` exists. Most of it is translucent overlay + `color: inherit`
+  and so adapts by construction, but the hardcoded accent is a real token
+  violation and is **this lane's to fix**.
+- **dark-anon-sweep is taking a dark-mode contrast pass on the board** (keeper,
+  8/16). Their diff stays in the style block, this lane's stays in PHP. I posted
+  the above to them and am staying out of the style block until they answer —
+  and warned that a pass run against **main** would measure a board missing all
+  38 classes, because this branch is not merged.
 
 ### Left for keeper
 - **A gate number** for the relay gate (committer got 56).
