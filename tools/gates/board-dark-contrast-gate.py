@@ -28,6 +28,23 @@ produced a wrong answer on this box within the last 24h:
 A surface failing any precondition is NO VERDICT (exit 2), never red — "the page
 never got dark enough to measure" is the absence of a measurement, not a defect.
 
+DISCLOSED LIMIT — WHAT A GREEN HERE DOES AND DOES NOT COVER. The probe skips
+hidden elements, correctly (unreadable-because-hidden is not a defect). But the
+board collapses things: measured on the real page, thread boxes were 9 in the DOM
+and only 3 VISIBLE, and muted-text nodes 60 in the DOM and 24 visible. Those
+hidden nodes were NOT measured, so a green is a statement about the page as it
+first renders, not about every state it can reach.
+
+They are not unprotected — the collapsed nodes carry the SAME classes as the
+visible ones (.thr/.thrbox, .row__o and friends), so the same dark rules apply to
+them — but that is an argument from the CSS, not a measurement, and the two are
+not the same thing. Expanding every <details> before probing would close the gap
+and is the obvious next improvement to this gate.
+
+Verified present and visible at measurement time, so the zero is not vacuous:
+team lights 6/6, chips 43/43, desk strip 8/8, rails 2/2, rows 52/52, project
+accordions 15/15, history 1/1.
+
 Exit 0 green / 1 real findings / 2 cannot run.
 """
 import importlib.util, json, os, sys, time
