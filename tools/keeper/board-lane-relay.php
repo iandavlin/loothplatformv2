@@ -393,6 +393,53 @@ function deskItems(): array
     return array_reverse($out);
 }
 
+/**
+ * BRANCH STATE FOR THE CARDS — backlog 39, Ian: "So I can track branches better."
+ *
+ * The card→branch LINK is committed; the branch's STATE is derived here, every
+ * pass. Whether a branch still exists and whether it has merged change without
+ * anyone editing a file, so a state recorded at write time would be a fact that
+ * rots — and a stale badge is worse than no badge, because it is trusted.
+ *
+ * The BOARD CANNOT COMPUTE THIS ITSELF and must not learn how: it runs no
+ * commands at all, which is the property that keeps a web-facing page away from
+ * git. So the answer arrives the same way lane replies and desk items do —
+ * through the snapshot.
+ *
+ * @return array<string,array{exists:bool,merged:bool,ahead:int}>
+ */
+function branchStates(array $names): array
+{
+    $out = [];
+    foreach ($names as $b) {
+        // Re-validated even though the committer already fenced it: this string
+        // is about to be handed to git, and a fence that only exists at the
+        // write end is a fence with a back door.
+        if (!preg_match('#^[A-Za-z0-9][A-Za-z0-9._/-]{0,80}$#', $b) || str_contains($b, '..')) { continue; }
+        $ref = 'origin/' . $b;
+        $ok  = run('git rev-parse --verify -q ' . escapeshellarg($ref), CLONE_DIR)['rc'] === 0;
+        if (!$ok) { $out[$b] = ['exists' => false, 'merged' => false, 'ahead' => 0]; continue; }
+        $merged = run('git merge-base --is-ancestor ' . escapeshellarg($ref) . ' origin/main', CLONE_DIR)['rc'] === 0;
+        $ahead  = (int) trim(run('git rev-list --count origin/main..' . escapeshellarg($ref), CLONE_DIR)['out']);
+        $out[$b] = ['exists' => true, 'merged' => $merged, 'ahead' => $ahead];
+    }
+    return $out;
+}
+
+/** Which branches the board has attached to cards. */
+function attachedBranches(): array
+{
+    $dir = CLONE_DIR . '/docs/board-branches';
+    if (!is_dir($dir)) { return []; }
+    $names = [];
+    foreach ((array) glob($dir . '/*.md') as $f) {
+        foreach (explode("\n", (string) file_get_contents((string) $f)) as $line) {
+            if (preg_match('/^- (\S+) — /u', $line, $m)) { $names[] = $m[1]; }
+        }
+    }
+    return array_values(array_unique($names));
+}
+
 /* The inbound half. Independent of everything above. */
 $snapshotLanes = [];
 $reps = replies($lanes);
@@ -403,7 +450,8 @@ foreach ($lanes as $lane) {
 if (!$dry) {
     $tmp = SNAPSHOT . '.tmp';
     file_put_contents($tmp, json_encode(['ts' => time(), 'lanes' => $snapshotLanes,
-                                         'desk' => deskItems()], JSON_UNESCAPED_SLASHES));
+                                         'desk' => deskItems(),
+                                         'branches' => branchStates(attachedBranches())], JSON_UNESCAPED_SLASHES));
     // World-readable ON PURPOSE: the board is served by a pool user that is not
     // in the devmsg group and must never be — that group has WRITE, and it
     // would let any PHP on the site send messages as ubuntu. The snapshot is

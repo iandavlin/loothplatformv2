@@ -644,6 +644,47 @@ is_(str_contains($openBox, 'Something else'),
 
 sh2('rm -rf ' . escapeshellarg($fx));
 
+section("[6f] BRANCHES ON CARDS — the link is stored, the state is DERIVED");
+
+/**
+ * Backlog 39, Ian: "So I can track branches better."
+ *
+ * The card→branch LINK is committed. The branch's STATE is not: whether it still
+ * exists and whether it has merged change without anyone editing a file, so a
+ * state stored beside the link would be a fact that ROTS — and a stale badge is
+ * worse than no badge, because it gets trusted.
+ */
+$bfx = $tmp . '-br';
+@mkdir($bfx . '/board-branches', 0755, true);
+copy($BACK, $bfx . '/BACKLOG.md');
+file_put_contents($bfx . '/board-branches/29.md',
+    "# Branches — item 29\n- stripe-membership — 2026-08-16 18:00 — ian-via-board\n- dark-board — 2026-08-16 18:01 — ian-via-board\n");
+file_put_contents($bfx . '/snap.json', json_encode(['ts' => 1, 'lanes' => [], 'branches' => [
+    'stripe-membership' => ['exists' => true,  'merged' => false, 'ahead' => 10],
+    'dark-board'        => ['exists' => false, 'merged' => false, 'ahead' => 0],
+]]));
+$brHtml = (string) shell_exec('LGB_MAIN_COPY=/nonexistent/m.md LGB_THREADS=' . escapeshellarg($bfx . '/snap.json')
+    . ' LGB_BACKLOG=' . escapeshellarg($bfx . '/BACKLOG.md') . ' ' . PHP_BINARY . ' ' . escapeshellarg($PAGE) . ' 2>/dev/null');
+
+is_(str_contains($brHtml, 'stripe-membership') && str_contains($brHtml, 'dark-board'),
+    "a card's attached branches reach the modal payload");
+is_(str_contains($brHtml, 'id="lgb-branchstate"'), 'the derived state travels with the page');
+is_(str_contains($brHtml, '"exists":false'),
+    '...including that a branch is GONE from origin — the state the link cannot know');
+
+// THE STALE-BADGE GUARD. An unmeasured branch must say so, not inherit a
+// confident status from whatever was rendered last.
+is_((bool) preg_match("/if \(!st\)\s*\{\s*return \['unknown'/", $brHtml),
+    'a branch the snapshot has not measured renders UNKNOWN, never a guess');
+
+// And the page must STILL be unable to reach git — the whole reason the state
+// arrives through a snapshot instead of being computed here.
+$brCode = (string) preg_replace('!/\*.*?\*/!s', '', (string) file_get_contents($PAGE));
+$brCode = (string) preg_replace('!^\s*//.*$!m', '', $brCode);
+is_(!preg_match('/shell_exec|proc_open|\bexec\(|passthru|popen/', $brCode),
+    '...and the page still runs no command, so branches did not teach it git');
+sh2('rm -rf ' . escapeshellarg($bfx));
+
 section("[6a] THE BOARD SAYS WHICH COPY IT IS SHOWING");
 
 /**
@@ -843,12 +884,31 @@ section("[6d] TALKING TO A LANE FROM THE BOARD");
  * message he could not get delivered NEVER reads as sent, and that an absent
  * relay reads as absent rather than as a quiet lane.
  */
+/**
+ * THE FIXTURE NAMES LANES THE SENTINEL ACTUALLY REPORTS, read at gate time.
+ *
+ * It used to hardcode two seat names. The fleet then changed — one of them
+ * stopped being a seat — so the page rendered no thread for it, and a gate
+ * asserting on that thread went RED against a page that was working perfectly.
+ * A gate that fails because a lane parked is measuring the BOX, not the page.
+ */
+$seats = array_values(array_filter(array_column(
+    (array) (json_decode((string) @file_get_contents('/home/ubuntu/.sentinel-status.json'), true)['lanes'] ?? []),
+    'name')));
+if (count($seats) < 2) {
+    // Not enough seats to exercise both states — say so rather than assert into a
+    // fleet that cannot answer.
+    echo "  .. fewer than two seats reported; thread-state legs need two\n";
+    $seats = array_pad($seats, 2, $seats[0] ?? 'stripe-membership');
+}
+[$seatOk, $seatBad] = [$seats[0], $seats[1]];
+
 $thr = $tmp . '-threads.json';
 file_put_contents($thr, json_encode(['lanes' => [
-    'stripe-membership' => ['replies' => [['when' => '2026-08-16 11:20', 'text' => 'RELAY FIXTURE REPLY']],
-                            'delivery' => ['ok' => true, 'why' => 'delivered', 'when' => '2026-08-16 11:20']],
-    'guitardle-fairness' => ['replies' => [],
-                            'delivery' => ['ok' => false, 'why' => 'lane not running — no tmux session', 'when' => '2026-08-16 11:21']],
+    $seatOk  => ['replies' => [['when' => '2026-08-16 11:20', 'text' => 'RELAY FIXTURE REPLY']],
+                 'delivery' => ['ok' => true, 'why' => 'delivered', 'when' => '2026-08-16 11:20']],
+    $seatBad => ['replies' => [],
+                 'delivery' => ['ok' => false, 'why' => 'lane not running — no tmux session', 'when' => '2026-08-16 11:21']],
 ]]));
 $thrHtml = (string) shell_exec('LGB_MAIN_COPY=/nonexistent/main-copy.md LGB_THREADS=' . escapeshellarg($thr)
     . ' LGB_BACKLOG=' . escapeshellarg($BACK) . ' ' . PHP_BINARY . ' ' . escapeshellarg($PAGE) . ' 2>/dev/null');

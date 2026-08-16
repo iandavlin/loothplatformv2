@@ -665,6 +665,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                                'door' => 'desk', 'dry_run' => $dry], $LGB_SOCKET);
             break;
 
+        /** Attach a branch to a card. Backlog 39. */
+        case 'item_branch':
+            $br = trim((string) ($req['branch'] ?? ''));
+            if ($br === '') { $reply(['ok' => false, 'error' => 'a branch needs a name'], 400); }
+            $res = lgb_commit(['intent' => 'item_branch', 'actor' => LGB_ACTOR,
+                               'id' => (string) ($req['id'] ?? ''), 'branch' => $br,
+                               'dry_run' => $dry], $LGB_SOCKET);
+            break;
+
         case 'note':
             $id   = (string) ($req['id'] ?? '');
             $text = trim((string) ($req['text'] ?? ''));
@@ -988,6 +997,37 @@ function lgb_decisions(string $backlogPath): array
         $out[] = ['id' => $id, 'question' => $question, 'options' => $opts, 'answer' => $answer];
     }
     return $out;
+}
+
+/**
+ * BRANCHES ATTACHED TO A CARD — backlog 39, Ian: "So I can track branches better."
+ *
+ * The LINK comes from the committed store; the STATE comes from the relay
+ * snapshot, because whether a branch exists or has merged changes without
+ * anyone editing a file. A state stored beside the link would be a fact that
+ * rots, and a stale badge is worse than none — it is trusted.
+ *
+ * @return array<int,array{name:string,when:string,who:string}>
+ */
+function lgb_item_branches(string $backlogPath, string $id): array
+{
+    $f = lgb_board_dir($backlogPath, 'board-branches') . '/' . $id . '.md';
+    if (!preg_match('/^[A-Z]?\d+(\.\d+)?$/', $id) || !is_readable($f)) { return []; }
+    $out = [];
+    foreach (explode("\n", (string) file_get_contents($f)) as $line) {
+        if (preg_match('/^- (\S+) — (\S+ \S+) — (.+)$/u', $line, $m)) {
+            $out[] = ['name' => $m[1], 'when' => $m[2], 'who' => trim($m[3])];
+        }
+    }
+    return $out;
+}
+
+/** Branch states from the relay snapshot — derived, never stored beside the link. */
+function lgb_branch_states(string $path): array
+{
+    if (!is_readable($path)) { return []; }
+    $raw = json_decode((string) file_get_contents($path), true);
+    return is_array($raw) && is_array($raw['branches'] ?? null) ? $raw['branches'] : [];
 }
 
 $backlog  = lgb_parse_backlog($BACKLOG);
@@ -1691,6 +1731,17 @@ header('X-Robots-Tag: noindex, nofollow');
         <!-- ADD / PROMOTE. Shown only where they MEAN something: a sub-item can
              be promoted, a top-level item can take sub-items, and neither
              control appears where it would be a no-op. -->
+        <!-- BRANCHES. The link is committed; the state beside it is derived from
+             the relay snapshot every pass, because "merged" and "still exists"
+             change without anyone editing a file. -->
+        <div class="w2" id="lgb-brbox">
+          <div class="w2__h">Branches <span class="w2__c" id="lgb-brc"></span></div>
+          <div id="lgb-brlist"></div>
+          <input class="thrbox__in" id="lgb-brin" placeholder="attach a branch, e.g. stripe-membership">
+          <button class="w2__go" id="lgb-bradd">Attach branch</button>
+          <div class="thrbox__say" id="lgb-brsay" hidden></div>
+        </div>
+
         <div class="w2" id="lgb-structbox" hidden>
           <div class="w2__h">Structure</div>
           <div id="lgb-subwrap" hidden>
@@ -1794,7 +1845,18 @@ header('X-Robots-Tag: noindex, nofollow');
     .dbox{margin:6px 0;padding:7px 9px;border-radius:7px;background:rgba(74,158,255,.10)}
     .dbox__q{font-weight:600;margin-bottom:5px}
     .dbox__a{background:rgba(60,160,90,.14);padding:5px 7px;border-radius:6px}
+    .br{display:flex;gap:8px;align-items:baseline;padding:4px 6px;border-radius:6px;
+        background:rgba(128,128,128,.10);margin:3px 0;font-size:12px}
+    .br__n{font-family:ui-monospace,monospace}
+    .br__s{margin-left:auto;font-size:11px;padding:1px 7px;border-radius:999px}
+    .br__s--merged{background:rgba(60,160,90,.20)}
+    .br__s--open{background:rgba(74,158,255,.20)}
+    .br__s--gone{background:rgba(200,70,70,.18)}
+    .br__s--unknown{background:rgba(128,128,128,.20)}
   </style>
+  <script type="application/json" id="lgb-branchstate"><?php
+    echo json_encode(lgb_branch_states($LGB_THREADS), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
+  ?></script>
   <script type="application/json" id="lgb-details"><?php
     // ONE ENTRY PER ITEM, always. Only 7 of the file's 39 detail sections are
     // id-headed — the other 30 are the date-headed shipped archive — so keying
@@ -1828,6 +1890,7 @@ header('X-Robots-Tag: noindex, nofollow');
                     'needs'   => (bool) (!$it['done'] && $it['needsIan']),
                     'thread'  => $extras['thread'],
                     'options' => $extras['options'],
+                    'branches' => lgb_item_branches($BACKLOG, (string) $it['id']),
                 ];
             }
         }
@@ -1859,6 +1922,7 @@ header('X-Robots-Tag: noindex, nofollow');
       row.querySelectorAll('.bdg').forEach(function (b) { meta.appendChild(b.cloneNode(true)); });
       fillWrite(d);
       structFor(d);
+      fillBranches(d);
       scrim.classList.add('on');
       document.getElementById('lgb-close').focus();
     }
@@ -2145,6 +2209,56 @@ header('X-Robots-Tag: noindex, nofollow');
      * against the file — the same honesty as the drag: the screen may not claim
      * something the store has not confirmed.
      */
+    /**
+     * BRANCH STATE IS DERIVED AND SAYS SO WHEN IT DOES NOT KNOW.
+     *
+     * "merged", "open", "gone" come from the relay snapshot. If the snapshot is
+     * absent or has not seen this branch, the badge says UNKNOWN rather than
+     * guessing — an attached branch showing a confident "open" because nobody
+     * measured it is the stale-badge failure this board exists to avoid.
+     */
+    var BRSTATE = {};
+    try { BRSTATE = JSON.parse(document.getElementById('lgb-branchstate').textContent || '{}'); } catch (e) {}
+
+    function branchBadge(name) {
+      var st = BRSTATE[name];
+      if (!st)          { return ['unknown', 'not measured']; }
+      if (!st.exists)   { return ['gone',    'not on origin']; }
+      if (st.merged)    { return ['merged',  'merged']; }
+      return ['open', (st.ahead || 0) + ' ahead'];
+    }
+
+    function fillBranches(d) {
+      var list = document.getElementById('lgb-brlist'),
+          cnt  = document.getElementById('lgb-brc');
+      var brs = (d && d.branches) || [];
+      cnt.textContent = brs.length ? '' : '— none attached';
+      list.innerHTML = brs.map(function (b) {
+        var badge = branchBadge(b.name);
+        return '<div class="br"><span class="br__n">' + esc(b.name) + '</span>'
+             + '<span class="msg__w">' + esc(b.when + ' · ' + b.who) + '</span>'
+             + '<span class="br__s br__s--' + badge[0] + '">' + esc(badge[1]) + '</span></div>';
+      }).join('');
+      document.getElementById('lgb-brin').value = '';
+      document.getElementById('lgb-brsay').hidden = true;
+    }
+
+    document.getElementById('lgb-bradd').dataset.was = 'Attach branch';
+    document.getElementById('lgb-bradd').addEventListener('click', function () {
+      var name = document.getElementById('lgb-brin').value.trim(),
+          out  = document.getElementById('lgb-brsay');
+      if (!cur || !name) { return; }
+      var btn = this; busy(btn, true);
+      post({ action: 'item_branch', id: cur.id, branch: name }).then(function (res) {
+        busy(btn, false);
+        out.hidden = false;
+        out.className = 'thrbox__say ' + (res && res.ok ? 'w2__say--ok' : 'w2__say--no');
+        out.textContent = res && res.ok
+          ? 'Attached ' + name + ' — commit ' + (res.commit || '?') + '. Its state shows after the next relay pass.'
+          : landed(res);
+      });
+    });
+
     function structFor(d) {
       var box = document.getElementById('lgb-structbox'),
           sub = document.getElementById('lgb-subwrap'),
