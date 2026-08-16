@@ -597,6 +597,31 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                                'lane' => $lane, 'text' => $text, 'dry_run' => $dry], $LGB_SOCKET);
             break;
 
+        /**
+         * ADD AN ITEM, or a sub-item under one. Ian: "Could I add things. Add
+         * headers and sub items."
+         *
+         * The page sends only a title and an optional parent. IT DOES NOT SEND
+         * A NUMBER — the next free one is minted from the file inside the
+         * committer, where the read and the write are the same operation. A
+         * number chosen here would be computed from whatever copy of the
+         * backlog this page happens to be showing, which is exactly how two
+         * people adding at once would collide on one id.
+         */
+        case 'item_add':
+            $title = trim((string) ($req['title'] ?? ''));
+            if ($title === '') { $reply(['ok' => false, 'error' => 'an item needs a title'], 400); }
+            $res = lgb_commit(['intent' => 'item_add', 'actor' => LGB_ACTOR,
+                               'parent' => (string) ($req['parent'] ?? ''),
+                               'title' => $title, 'dry_run' => $dry], $LGB_SOCKET);
+            break;
+
+        /** Promote a sub-item to its own item. Ian: "promote sub items to headers." */
+        case 'item_promote':
+            $res = lgb_commit(['intent' => 'item_promote', 'actor' => LGB_ACTOR,
+                               'id' => (string) ($req['id'] ?? ''), 'dry_run' => $dry], $LGB_SOCKET);
+            break;
+
         case 'note':
             $id   = (string) ($req['id'] ?? '');
             $text = trim((string) ($req['text'] ?? ''));
@@ -1259,6 +1284,15 @@ header('X-Robots-Tag: noindex, nofollow');
       <?php };
   ?>
 
+  <!-- A NEW ITEM starts at the BOTTOM of the ranking, deliberately: position is
+       rank, and nothing new outranks existing work until Ian drags it up. Its
+       number is minted by the committer from the file, never guessed here. -->
+  <div class="newitem">
+    <textarea class="newitem__t" id="lgb-newtitle" rows="1" placeholder="Add an item to the board…"></textarea>
+    <button class="w2__go" id="lgb-newadd">Add</button>
+    <div class="w2__say" id="lgb-newsay" hidden></div>
+  </div>
+
   <?php foreach ($groups as $g):
         $needs = 0; foreach ($g['open'] as $o) { if ($o['needsIan'] || $o['look']) { $needs++; } }
         $unsorted = str_starts_with($g['name'], 'Unsorted'); ?>
@@ -1379,6 +1413,23 @@ header('X-Robots-Tag: noindex, nofollow');
           <button class="w2__go" id="lgb-decsend">Record my decision</button>
         </div>
 
+        <!-- ADD / PROMOTE. Shown only where they MEAN something: a sub-item can
+             be promoted, a top-level item can take sub-items, and neither
+             control appears where it would be a no-op. -->
+        <div class="w2" id="lgb-structbox" hidden>
+          <div class="w2__h">Structure</div>
+          <div id="lgb-subwrap" hidden>
+            <textarea id="lgb-subtitle" rows="2" placeholder="Add a sub-item under this one…"></textarea>
+            <button class="w2__go" id="lgb-subadd">Add sub-item</button>
+          </div>
+          <div id="lgb-promwrap" hidden>
+            <div class="w2__c">This is a sub-item. Promoting it gives it its own
+              number and leaves a pointer behind, so nothing that refers to the
+              old number stops working.</div>
+            <button class="w2__go" id="lgb-promote">Promote to its own item</button>
+          </div>
+        </div>
+
         <div class="w2">
           <div class="w2__h">Thread <span class="w2__c" id="lgb-threadc"></span></div>
           <pre class="w2__thread" id="lgb-thread"></pre>
@@ -1452,6 +1503,10 @@ header('X-Robots-Tag: noindex, nofollow');
     .thrbox__say{margin-top:5px;padding:5px 7px;border-radius:6px}
     .askk__w{font-size:12px;opacity:.7;margin:4px 0 8px}
     .askk .thrbox{margin-left:0}
+    .newitem{display:flex;gap:6px;align-items:flex-start;margin:10px 0}
+    .newitem__t{flex:1;font:inherit;font-size:13px;padding:6px;border-radius:6px;resize:vertical;
+                border:1px solid rgba(128,128,128,.35);background:transparent;color:inherit}
+    .newitem .w2__say{flex-basis:100%}
   </style>
   <script type="application/json" id="lgb-details"><?php
     // ONE ENTRY PER ITEM, always. Only 7 of the file's 39 detail sections are
@@ -1516,6 +1571,7 @@ header('X-Robots-Tag: noindex, nofollow');
       meta.innerHTML = '';
       row.querySelectorAll('.bdg').forEach(function (b) { meta.appendChild(b.cloneNode(true)); });
       fillWrite(d);
+      structFor(d);
       scrim.classList.add('on');
       document.getElementById('lgb-close').focus();
     }
@@ -1790,6 +1846,75 @@ header('X-Robots-Tag: noindex, nofollow');
       // Typing in the box must not collapse the row.
       ta.addEventListener('click', function (e) { e.stopPropagation(); });
     });
+
+    /* ---- ADD AND PROMOTE ---------------------------------------------------
+     *
+     * THE NUMBER IS NEVER GUESSED HERE. The page sends a title; the committer
+     * mints the id from the file and hands it back, and only then does the page
+     * tell Ian what his item is called. A number computed on this side would be
+     * derived from whatever copy of the backlog this page is showing.
+     *
+     * And a new item does not appear in the list until the page is reloaded
+     * against the file — the same honesty as the drag: the screen may not claim
+     * something the store has not confirmed.
+     */
+    function structFor(d) {
+      var box = document.getElementById('lgb-structbox'),
+          sub = document.getElementById('lgb-subwrap'),
+          pro = document.getElementById('lgb-promwrap');
+      var id = (d && d.id) || '';
+      var isSub = /^\d+\.\d+$/.test(id), isTop = /^\d+$/.test(id);
+      sub.hidden = !isTop; pro.hidden = !isSub;
+      box.hidden = !(isTop || isSub);          // letter ids get neither, correctly
+      document.getElementById('lgb-subtitle').value = '';
+    }
+
+    document.getElementById('lgb-subadd').dataset.was = 'Add sub-item';
+    document.getElementById('lgb-subadd').addEventListener('click', function () {
+      var t = document.getElementById('lgb-subtitle').value.trim();
+      if (!cur || !t) { return; }
+      var btn = this; busy(btn, true);
+      post({ action: 'item_add', parent: cur.id, title: t }).then(function (res) {
+        busy(btn, false);
+        tell(!!(res && res.ok), res && res.ok
+          ? 'Added as item ' + res.id + ' — reload to see it in the list.'
+          : landed(res));
+        if (res && res.ok) { document.getElementById('lgb-subtitle').value = ''; }
+      });
+    });
+
+    document.getElementById('lgb-promote').dataset.was = 'Promote to its own item';
+    document.getElementById('lgb-promote').addEventListener('click', function () {
+      if (!cur) { return; }
+      var btn = this; busy(btn, true);
+      post({ action: 'item_promote', id: cur.id }).then(function (res) {
+        busy(btn, false);
+        tell(!!(res && res.ok), res && res.ok
+          ? 'Promoted to item ' + res.id + ' — ' + cur.id + ' now points at it. Reload to see it.'
+          : landed(res));
+      });
+    });
+
+    (function () {
+      var btn = document.getElementById('lgb-newadd'),
+          ta  = document.getElementById('lgb-newtitle'),
+          out = document.getElementById('lgb-newsay');
+      btn.dataset.was = 'Add';
+      btn.addEventListener('click', function () {
+        var t = ta.value.trim();
+        if (!t) { return; }
+        busy(btn, true);
+        post({ action: 'item_add', title: t }).then(function (res) {
+          busy(btn, false);
+          out.hidden = false;
+          out.className = 'w2__say ' + (res && res.ok ? 'w2__say--ok' : 'w2__say--no');
+          out.textContent = res && res.ok
+            ? 'Added as item ' + res.id + ', at the bottom of the ranking — drag it where it belongs. Reload to see it.'
+            : landed(res);
+          if (res && res.ok) { ta.value = ''; }
+        });
+      });
+    })();
 
     document.getElementById('lgb-close').addEventListener('click', close);
     scrim.addEventListener('click', function (e) { if (e.target === scrim) close(); });

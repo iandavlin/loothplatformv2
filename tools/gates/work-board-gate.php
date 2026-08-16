@@ -697,6 +697,25 @@ if (!$up) {
         }
     }
 
+    /* ---- ADDING AND PROMOTING, from the page ---------------------------
+     *
+     * Ian: "Could I add things. Add headers and sub items. Or promote sub items
+     * to headers." The property that matters here is NOT that the controls
+     * render — it is that the page never decides the NUMBER. A number computed
+     * on this side would come from whatever copy of the backlog the page is
+     * showing, which is exactly how two adds at once collide on one id.
+     */
+    $r = $call(['action' => 'item_add', 'title' => '   ']);
+    is_($r['code'] === 400, 'an item with no title is refused before the committer');
+
+    $r = $call(['action' => 'item_add', 'title' => 'a real new item']);
+    is_(str_contains(strtolower((string) ($r['json']['error'] ?? '')), 'not answering'),
+        'a titled item passes the page\'s checks and reaches the committer');
+
+    $r = $call(['action' => 'item_promote', 'id' => '4.2']);
+    is_(str_contains(strtolower((string) ($r['json']['error'] ?? '')), 'not answering'),
+        'a promotion reaches the committer too');
+
     /* Ian's lane threads share this server — driven here rather than in their
      * own section because [6b] kills the port on its way out, and a section
      * that calls a dead port reports the page as broken when it is not. */
@@ -848,6 +867,29 @@ is_(!preg_match('/\$req\[\s*[\'"]actor[\'"]\s*\]/', $code),
     '...and is never read from the request, so it cannot be forged');
 
 is_(!preg_match('/\$_GET/', $code), "it still takes no query input at all — nothing to fuzz");
+
+/**
+ * THE PAGE NEVER MINTS A NUMBER. The committer computes the next free id from
+ * the file, inside the same read-and-write that commits it. If this page ever
+ * computed one, it would be derived from whatever copy of the backlog it
+ * happens to be rendering — and two people adding at once would be handed the
+ * same id. Asserted against the source because it is a property of the code,
+ * not of any one response.
+ */
+// Scoped to the ADD CALL ITSELF. The first version matched from the string
+// "item_add" to the next "'id' =>" anywhere after it — and sailed straight past
+// the case boundary into item_promote, which legitimately sends an id. A
+// non-greedy match with /s does not respect the boundary you had in mind.
+$addCall = preg_match('/\'intent\'\s*=>\s*\'item_add\'.*?\], \$LGB_SOCKET\)/s', $code, $am) ? $am[0] : '';
+is_($addCall !== '' && !preg_match('/[\'"]id[\'"]\s*=>/', $addCall),
+    'the page sends no id when adding — the committer mints it from the file');
+is_(str_contains($src, "action: 'item_add'") && !preg_match('/action:\s*[\'"]item_add[\'"][^}]*\bid:/', $src),
+    '...and the client sends none either, only a title and an optional parent');
+
+// The structure controls must appear only where they MEAN something — a
+// letter-id item (E1, S2) can be neither promoted nor given sub-items.
+is_(str_contains($src, "/^\\d+\\.\\d+$/.test(id)") && str_contains($src, "/^\\d+$/.test(id)"),
+    'promote and sub-add are offered by ID SHAPE, so a letter id gets neither');
 is_(str_contains($code, 'HTTP_X_LGB_WRITE'), 'a write must carry the board\'s own header');
 // The client DOES post now. What must still hold is that it can only post to
 // this page — the JS is checked against the raw source here (not the
