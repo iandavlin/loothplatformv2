@@ -469,6 +469,48 @@ filtered to `kind == 'field-borderless'`, not a hand-rolled colour read. Two
 hand-rolled measurements of the wrong property are what produced the "invisible
 text" and then the "phantom" claims above.
 
+### Hub border: root-caused to the exact winning rule (2026-08-16)
+
+Resolved with the browser's own `CSS.getMatchedStylesForNode`, which is
+authoritative about the cascade in a way grep is not. Rules on
+`form.hub-tsearch`, in cascade order:
+
+```
+.hub-tsearch                                    border:1px solid var(--lg-line)
+.hub-fmodal__search .hub-tsearch                border:1px solid var(--lg-line,#e3ddd0)
+html[…="dark"] .hub-tsearch                     border:1px solid #767c76 !important   <- the fix
+html[…="dark"] .hub-fmodal__search .hub-tsearch border-color:#2c312d   !important   <- WINS
+computed: rgb(44,49,45) = #2c312d
+```
+
+**The wrapper fix is applied and is simply outranked.** `LG_DARK_SEARCH_WRAPPER_FIX`
+is `true` in both copies (gate 49 is satisfied — this is NOT the paired-flag
+class), `hub-polish.js`'s `ensurePunchDarkCss()` does inject
+`.hub-tsearch{border:1px solid #767c76!important}`, and `#lg-punch-dark-css` is
+present in the document. A **more specific sibling dark rule kept the old literal
+`#2c312d`** when the token flipped.
+
+**The defect class is worth naming:** the flag flip updated one rule and left a
+more-specific rule for the same element on the stale value. Gate 49 catches a
+flag disagreeing *across files*; nothing catches **two rules for the same element
+disagreeing about the same colour**, which is what happened here.
+
+**Fix:** make that `.hub-fmodal__search .hub-tsearch` dark rule use the same
+`DARK_SEARCH_BORDER` token instead of the `#2c312d` literal. **Remaining step:
+locate its source string** — it is built by concatenation and does not grep as a
+literal (`hub-fmodal__search` + `2c312d` match nothing together in `webroot/`,
+`bb-mirror/`, `lg-shell/`). Find it by searching for the emitted rule text at
+runtime (`document.getElementById(...)` textContent scan across the injected
+`lg-*` style ids) rather than by grepping source.
+
+**Two probe lessons banked here, both mine:**
+- My first attempt read `document.styleSheets` at `settle=2.5` and concluded the
+  rule was "never injected". At `settle=3.0` it was there. **A negative result
+  from a stylesheet enumeration is a timing claim, not a fact** — assert the
+  specific style id exists before concluding absence.
+- "Injected but outranked" and "never injected" need completely different fixes.
+  Distinguish them with matched-rules, not by grepping for the value.
+
 ## Next
 
 The ranked wave list (110+ remaining) is the standing charter — badness order,
