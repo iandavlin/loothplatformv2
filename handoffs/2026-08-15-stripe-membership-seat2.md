@@ -12,7 +12,7 @@ Branch `stripe-membership`, rebased on `origin/main`.
 
 | Job | Outcome |
 |---|---|
-| **Charter extension (8/16): talk to lanes from the board** | **BOARD HALF DONE**, relay half designed and posted for keeper's review, not built. |
+| **Charter extension (8/16): talk to lanes from the board** | **DONE, BOTH HALVES.** Board half built+gated; relay built+gated after keeper approved the design. Timer NOT armed — keeper's, and last. |
 | **1. Wire the board's write layer** | **DONE AND DEPLOYED.** Drag-rank, notes, decisions — all three land through the committer. |
 | *(the charter's fallback)* **The board history view** | **DONE** — I was never blocked, so it became the next item rather than the substitute. |
 | **2. Rotate the leaked sandbox key** | **CANCELLED BY IAN** mid-session: *"keep sandbox keys. not worth rotating."* I touched no key. |
@@ -145,7 +145,8 @@ forged name into the commit and believe it.
 
 | Gate | Was | Now | |
 |---|---|---|---|
-| committer (**number still owed**) | 33 | **48** | + the ambiguous index, + the `lane_message` shape and its name fence |
+| committer (**now gate 56**, keeper minted it) | 33 | **56** | + the ambiguous index, + `lane_message` and its name fence, + `lane_receipt` and the forged-row fence |
+| relay (**number not minted — asked**) | — | **20** | the shell property, idempotency, the attempt cap, the visible failure |
 | 50 — work board | 59 | **95** | + the endpoint driven over real HTTP, + the source-of-truth preference in three states, + the shipped archive, + the lane threads |
 
 **FULL SUITE: ALL GATES GREEN, exit 0, 51 gates**, run on the rebased branch
@@ -280,12 +281,46 @@ still refused *by accident downstream* and looked green.
 reason; and an absent relay renders as **absent**, not as a quiet lane. All three
 gated, each broken to prove it bites.
 
+### The relay — BUILT (keeper approved the design 8/16, with one addition)
+
+`tools/keeper/board-lane-relay.php` + `tools/gates/board-lane-relay-gate.php`
+(20 assertions, **number not minted — asked keeper**).
+
+**Keeper's addition is the spine: idempotent across a crash.** Every attempt is
+receipted through the committer (`lane_receipt`), and a receipted message is
+never sent again. **The receipt is committed AFTER `lane-say` returns, and that
+order is deliberate** — die in between and the next pass re-delivers *once*,
+never loops. The other order risks a message recorded as delivered that never
+arrived, which is the failure nobody can see. It is committed rather than kept
+in relay state so it outlives the process and its disk.
+
+- **Failures are receipted too**, counted, abandoned after 3. Receipting only
+  successes retries an undeliverable message forever — the wedge shape.
+  Gated: a message *behind* a stuck one still goes out.
+- **The message never meets a shell**, proven not claimed: the gate's fake
+  `lane-say` records its whole argv *and* the bytes of the file, and asserts the
+  text is in the FILE verbatim (backticks, `$()`) and **nowhere** on the command
+  line.
+- **Its own clone** (`/home/ubuntu/board-lane-relay-clone`), separate from the
+  committer's — the committer `reset --hard`s before every write and a shared
+  reader would occasionally parse mid-reset.
+- **Fails safe pre-merge**: exit 3, "the committer is not deployed at …". It
+  cannot run for real until this merges and the serve pulls.
+
+**Two bugs the gates caught that nothing else would have:**
+1. PHP's array union keeps the **left** key, so a parsed message inherited an
+   empty `text` from its own initialiser — the relay delivered **empty
+   messages** while every count and log line said they had gone out.
+2. A multi-line failure reason could **forge a second receipt row** — mutation
+   measured: 3 rows where 2 were expected. A forged `delivered` row would
+   silently suppress a real message. Reasons are flattened to one line.
+
 ### Left for keeper
-- **Confirm the relay runs as `ubuntu`** (it must — devmsg group) and pick a
-  cadence. I suggested **30s**: person-paced for a chat, cheap.
-- Then the relay script (`tools/keeper/board-lane-relay.php` — I proposed writing
-  it into the repo so it is reviewable and gated rather than hand-authored on the
-  box), and the timer **last**.
+- **A gate number** for the relay gate (committer got 56).
+- **The timer, LAST**: merge → serve pull → hand-run the relay once clean →
+  *then* arm. Armed ahead of its code, it reddens `systemctl --failed` forever
+  and kills the alert channel — the mirror outbox timer did exactly that.
+- Cadence: I suggested **30s** (person-paced for a chat, cheap).
 
 ---
 
