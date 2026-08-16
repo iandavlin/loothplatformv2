@@ -25,4 +25,4 @@
  * preview sets fastcgi_param, which lands in $_SERVER but not reliably in
  * getenv()).
  */
-return ['enabled' => false];
+return ['enabled' => true];
