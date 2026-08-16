@@ -1029,10 +1029,10 @@ run "dark-onboard-subtext" python3 "$(dirname "$0")/dark-onboard-subtext-gate.py
 # saying gates were skipped. This gate was appended after it and therefore did
 # not run in the 2026-08-16 suite at all, while the summary named only the one
 # red gate. A gate that does not run is not coverage.
-# Gate number 57 — ASSIGNED BY KEEPER 2026-08-16. I had used 56 as a working
+# Gate number 59 — ASSIGNED BY KEEPER 2026-08-16. I had used 56 as a working
 # placeholder; 56 was already taken (board committer, minted at the stripe
 # merge). A placeholder is still self-minting — ask keeper first.
-echo "=== GATE 57: a guessed letter is a HIT or a MISS, and a resumed board PAINTS ==="
+echo "=== GATE 59: a guessed letter is a HIT or a MISS, and a resumed board PAINTS ==="
 # Ian, playing on dev2 2026-08-16: "it's keeping track of letters that are in
 # the puzzle, but not the guesses that were misses. The letter only stays lit
 # for a correct letter." Then: "refreshing on dt lights all letters, but the
