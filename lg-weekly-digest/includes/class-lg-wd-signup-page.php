@@ -185,14 +185,17 @@ class LG_WD_Signup_Page {
 		return self::route_images_through_resizer( $html );
 	}
 
-	/** The most recent issue whose own data says it was sent. */
+	/**
+	 * The most recent issue whose own data says it was sent.
+	 *
+	 * DELEGATES since 2026-08-15. The body moved to LG_WD_Issue::latest_sent_id()
+	 * when the front-page feed (backlog 8) needed the same answer; keeping a
+	 * second copy here is how the two surfaces would eventually disagree about
+	 * which issue is current. Behaviour is unchanged — same scan depth, same
+	 * `status === 'sent'` test, same 0 for none.
+	 */
 	private static function latest_sent_issue_id(): int {
-		foreach ( LG_WD_Issue::get_all_issues( 20 ) as $issue ) {
-			if ( ( $issue['status'] ?? '' ) === 'sent' ) {
-				return (int) $issue['id'];
-			}
-		}
-		return 0;
+		return LG_WD_Issue::latest_sent_id();
 	}
 
 	/**

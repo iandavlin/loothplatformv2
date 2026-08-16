@@ -126,6 +126,157 @@ function archive_poc_run_activity_strip(array $row, bool $is_member): array {
     return ['title' => $row['title'] ?? '', 'items' => $items, 'layout' => 'activity', 'tag' => null];
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   BACKLOG 8 — "This week's issue" for logged-out visitors.
+
+   Ian 2026-07-30, ruled 2026-08-15 after the mock ("build it and let me see it
+   on dev2"): Option A — the latest SENT issue's own stored sections, rendered
+   as the front page's own cards, under a newsletter masthead, with a free
+   sign-up ask. Flag platform/config/weekly-front.php, OFF in the repo.
+
+   THE CONTENT IS NOT DERIVED HERE. It comes from LG_WD_Front_Feed, which is a
+   thin public projection of LG_WD_Query::build_payload_from_issue() — the same
+   resolver the email itself goes through. This file fetches and draws; it never
+   decides what was in the week. See docs/BACKLOG-8-STORE-AND-BUILD-PLAN.md.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/** 15 minutes. The issue changes weekly; this is about not re-fetching, not freshness. */
+const LG_WEEKLY_FRONT_TTL = 900;
+
+/**
+ * The flag. Tracked PHP config, then getenv() and $_SERVER.
+ *
+ * BOTH overrides, because a fastcgi_param lands in $_SERVER but not reliably in
+ * the environment — reading only getenv() serves the OFF path on the very
+ * lane-preview URL built for someone to click. Same shape as the
+ * featured-members read below.
+ */
+function lg_weekly_front_enabled(): bool {
+    static $on = null;
+    if ($on !== null) return $on;
+    $cfg = @include __DIR__ . '/../../platform/config/weekly-front.php';
+    $on  = is_array($cfg) && !empty($cfg['enabled']);
+    // PER-BOX OVERRIDE, gitignored (the back-pill/compose pattern, b3bbbf9).
+    // dev2 runs this ON for Ian's look while the TRACKED default stays false,
+    // so a live pull cannot switch it on unverified: live is protected by the
+    // file being ABSENT, not by a check in the code.
+    //
+    // It replaced an FPM env[] flip, which could not be used here: dev2's pool
+    // files are SYMLINKS INTO THE SERVING CHECKOUT, so setting env[] there
+    // modifies two tracked files in ~/loothplatformv2-clean and a later
+    // `pull --ff-only` can refuse. A dev2-only switch must not dirty the serve.
+    // Sits BEFORE the env loop so a gate forcing a state still wins.
+    $loc = @include __DIR__ . '/../../platform/config/weekly-front.local.php';
+    if (is_array($loc) && array_key_exists('enabled', $loc)) {
+        $on = ($loc['enabled'] === true);
+    }
+    foreach ([getenv('LG_WEEKLY_FRONT'), $_SERVER['LG_WEEKLY_FRONT'] ?? false] as $o) {
+        if ($o !== false && $o !== '') $on = ($o === '1' || $o === 'true');
+    }
+    return $on;
+}
+
+/**
+ * Where the built feed is cached.
+ *
+ * The uid is IN THE NAME on purpose. PrivateTmp is off for the FPM service
+ * (measured), so sys_get_temp_dir() is the real, shared /tmp — shared with every
+ * other pool and every lane on the box. A fixed name is one stray root-owned
+ * file away from being permanently unwritable, which fails silently into
+ * "serve nothing" or "serve forever-stale" rather than into an error.
+ */
+function lg_weekly_front_cache_file(): string {
+    return sys_get_temp_dir() . '/lg_weekly_front_' . (function_exists('posix_geteuid') ? posix_geteuid() : 'x') . '.json';
+}
+
+/**
+ * Fetch the feed from WordPress over the loopback.
+ *
+ * admin-ajax, not wp-json: the endpoint is registered there so it cannot be
+ * intercepted by the strangler that owns `/`. Host header so WP builds its URLs
+ * for the public host rather than for 127.0.0.1.
+ */
+function lg_weekly_front_fetch(): array {
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL            => 'https://127.0.0.1/wp-admin/admin-ajax.php?action=lg_wd_front_feed',
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => 0,
+        CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_1_1,
+        CURLOPT_TIMEOUT        => 6,
+        CURLOPT_HTTPHEADER     => ['Host: ' . LG_ARCHIVE_POC_HOST],
+    ]);
+    $body = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+    // 404 is the flag being off on the WordPress side — a real answer, not a
+    // failure, and it must not be mistaken for one.
+    if ($code !== 200 || !$body) return [];
+    $p = json_decode($body, true);
+    return (is_array($p) && !empty($p['sections'])) ? $p : [];
+}
+
+/**
+ * The feed, cached, stale-while-revalidate.
+ *
+ * Same shape as the activity strip above — and note that pattern has never
+ * actually run on either box (no row uses it), so it is copied as a design,
+ * not inherited as a proven one. Touch the file BEFORE queueing the refresh so
+ * concurrent requests in the stale window see it as fresh and exactly one
+ * request refreshes; the refresh itself happens after the response is flushed,
+ * so WordPress's ~0.5s bootstrap never sits on a visitor's render.
+ */
+function lg_weekly_front_payload(): array {
+    if (!lg_weekly_front_enabled()) return [];
+
+    $file   = lg_weekly_front_cache_file();
+    $cached = is_file($file) ? json_decode((string) @file_get_contents($file), true) : null;
+
+    if (is_array($cached) && !empty($cached['sections'])) {
+        if (time() - (int) @filemtime($file) >= LG_WEEKLY_FRONT_TTL) {
+            @touch($file);
+            $GLOBALS['LG_WEEKLY_FRONT_REFRESH'] = $file;
+        }
+        return $cached;
+    }
+
+    $p = lg_weekly_front_fetch();
+    if (!empty($p)) @file_put_contents($file, json_encode($p), LOCK_EX);
+    return $p;
+}
+
+/**
+ * Post-response refresh, queued by lg_weekly_front_payload().
+ *
+ * IT FLUSHES THE RESPONSE ITSELF, and that is not belt-and-braces. The obvious
+ * move was to lean on archive_poc_flush_activity_refreshes(), which runs just
+ * above and already calls fastcgi_finish_request() — but it calls it only when
+ * it HAS jobs, and it never has any: the activity-strip layout is configured on
+ * neither box (measured 2026-08-15, zero rows in live's config.json, no cache
+ * file on either). So it returns at its first line every time, the response is
+ * still open when this runs, and the visitor would have waited out the whole
+ * WordPress fetch — the exact cost the queue exists to avoid.
+ *
+ * Guarded so that if the activity strip is ever switched on and flushes first,
+ * calling it again here is a harmless no-op rather than a warning.
+ */
+function lg_weekly_front_flush_refresh(): void {
+    $file = $GLOBALS['LG_WEEKLY_FRONT_REFRESH'] ?? '';
+    if (!$file) return;
+    if (function_exists('fastcgi_finish_request')) {
+        @fastcgi_finish_request();
+    }
+    $p = lg_weekly_front_fetch();
+    if (!empty($p)) {
+        @file_put_contents($file, json_encode($p), LOCK_EX);
+    } else {
+        // Failed refresh: keep serving the stale copy for another TTL rather
+        // than re-fetching on every render during a slow spell.
+        @touch($file);
+    }
+}
+
 /**
  * Run any queued activity-cache refreshes AFTER the response is flushed.
  * Call once at the very end of the page. Keeps the WP fetch entirely off the
@@ -1071,6 +1222,23 @@ if ($lg_ht_enabled) {
 <?php else: ?>
 <?php include __DIR__ . "/_render-main-row.php"; ?>
 <?php endif; ?>
+<?php /* ── BACKLOG 8 — "This week's issue", logged-out only ──────────────────
+         Placement is Ian's ruling of 2026-08-15 ("your recommended placement"):
+         directly under the welcome video and ABOVE the featured member. That is
+         why it is emitted here rather than as a rows.json row — the
+         featured-member band is itself emitted in this same iteration, right
+         after the video-promo row, so a configured row would always land BELOW
+         it. One inline condition, the same shape the band beside it already uses.
+
+         Anon only: a member gets the digest in their inbox and the Hub on the
+         page, and $is_member is false for every logged-out visitor including
+         the ?as=public preview. Flag OFF returns [] before any fetch happens. */
+      if (!$is_member && $row_id === 'video-promo-public'):
+          $lg_wk = lg_weekly_front_payload();
+          if (!empty($lg_wk['sections'])) {
+              include __DIR__ . '/_render-weekly-issue.php';
+          }
+      endif; ?>
 <?php if ($lg_fm && ($row_id === 'video-promo-members' || $row_id === 'video-promo-public')): ?>
       <section class="row row--featured-member" data-row-id="featured-member">
         <div class="lg-fm">
@@ -1152,3 +1320,4 @@ window.__LG_VIEWER_TIER__ = <?= json_encode($viewer_tier) ?>;</script>
 // Refresh any stale activity-strip caches AFTER the response is flushed, so the
 // WP fetch never blocks the visitor's page render.
 archive_poc_flush_activity_refreshes();
+lg_weekly_front_flush_refresh();   // backlog 8 — same post-response window

@@ -1103,6 +1103,33 @@ echo "=== GATE 59: a guessed letter is a HIT or a MISS, and a resumed board PAIN
 # 19); 19 was correct for the original four-phase gate, the others never were.
 # Re-measure before quoting it -- phases 5 and 6 changed the count.
 run "guitardle-letter-state" python3 "$(dirname "$0")/guitardle-letter-state-gate.py"
+echo "=== GATE 54: the weekly email on the logged-out front page ==="
+# Number 54 ASSIGNED BY KEEPER 2026-08-15. The lane charter said "next 52",
+# which was ALREADY STALE — profiles-alive holds 51, notif-quickreply-v2 holds
+# 52, dark-anon-sweep holds 53 — so it was re-asked rather than minted. Checked
+# free on origin/main again after merging main in, immediately before taking it.
+#
+# Backlog 8: Ian 2026-07-30, ruled 2026-08-15 after the mock ("build it and let
+# me see it on dev2"). Option A — the latest SENT issue's own stored sections
+# rendered as the front page's own cards, for logged-out visitors only.
+#
+# THE ASSERTION THAT EARNS THIS GATE is the one aimed at a SILENT failure: the
+# `tier` taxonomy stores looth-lite/looth-pro, the CSS is .rcard--gated-lite. An
+# unmapped slug yields .rcard--gated-looth-lite, which matches no rule — so a
+# member-only card renders with NO PADLOCK and reads as free content. Nothing
+# throws, and "a badge is present" passes on the broken output.
+#
+# Static: renders the partial in-process and calls the feed's predicates by
+# reflection. No browser, no network, no DB — cannot flake, and it runs the same
+# on a worktree as on main. Contrast is measured separately by
+# tools/preview/weekly-front-shots.py, deliberately not folded in here.
+#
+# Red-first: tools/gates/weekly-front-redfirst.sh breaks ELEVEN behaviours and
+# requires each to redden on its own assertion. Two of them were caught being
+# decoration and fixed — [E] and [F] were grepping the source for words the
+# file's own docblock satisfied, and [D] tested a card type that renders no
+# prose at all, so it passed however the guard was mutated.
+run "weekly-front" python3 "$(dirname "$0")/weekly-front-gate.py"
 
 if [ "$red" -ne 0 ]; then
   echo "############ GATES RED — do not push ############"

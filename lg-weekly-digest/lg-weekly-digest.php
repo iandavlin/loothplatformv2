@@ -45,6 +45,7 @@ require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-compose.php';
 require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-cron.php';
 require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-frontend.php';
 require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-signup-page.php';
+require_once LG_WD_PLUGIN_DIR . 'includes/class-lg-wd-front-feed.php';
 
 // ─────────────────────────────────────────────
 // Boot
@@ -57,6 +58,7 @@ add_action( 'plugins_loaded', function () {
     LG_WD_Frontend::init();
     LG_WD_Recap_Source::init();
     LG_WD_Signup_Page::init();
+    LG_WD_Front_Feed::init();
 } );
 
 // ─────────────────────────────────────────────

@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>The weekly email on the front page — for a look</title>
+<style>
+/* ── This page is MOCK CHROME. Nothing here is product CSS; the product is in
+      the framed panels, which load the real front-page stylesheet.
+      body#wkm + !important: a docroot page whose viewer has picked Dark gets an
+      injected body{background:#15171a!important} pre-paint, and this page is a
+      fixed artifact, not a themed surface. ───────────────────────────────── */
+body#wkm {
+  margin: 0 !important;
+  background: #f2f1ec !important;
+  color: #26281f !important;
+  font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+#wkm .wrap { max-width: 1180px; margin: 0 auto; padding: 22px 18px 80px; }
+
+#wkm .head { background: #1a1d1a; color: #e8eae2; border-radius: 14px; padding: 22px 24px; margin: 0 0 22px; }
+#wkm .head h1 { margin: 0 0 8px; font: 400 27px/1.2 "Lora", Georgia, serif; color: #fff; }
+#wkm .head p { margin: 0 0 8px; font-size: 13.5px; line-height: 1.6; color: #c2c8ba; max-width: 88ch; }
+#wkm .head p:last-child { margin-bottom: 0; }
+#wkm .head b { color: #fff; }
+#wkm .head .ask { color: #ecb351; font-style: italic; }
+
+#wkm h2.sec { margin: 36px 0 4px; font: 400 22px/1.25 "Lora", Georgia, serif; color: #1a1d1a; }
+#wkm h2.sec:first-of-type { margin-top: 8px; }
+#wkm p.sub { margin: 0 0 14px; font-size: 13.5px; line-height: 1.6; color: #5b5f55; max-width: 86ch; }
+#wkm p.sub b { color: #26281f; }
+#wkm code { background: #e7e5dc; border-radius: 4px; padding: 1px 5px;
+            font: 600 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color: #40443c; }
+
+/* the verdict strip on each option */
+#wkm .verdict { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+#wkm .tag { font: 700 11px/1 sans-serif; letter-spacing: .04em; text-transform: uppercase;
+            border-radius: 5px; padding: 6px 9px; }
+#wkm .tag--good { background: #dfe7d0; color: #3f4d2c; }
+#wkm .tag--bad  { background: #f6dcd2; color: #7d3418; }
+#wkm .tag--note { background: #e7e5dc; color: #55594e; }
+
+/* a framed panel = one real rendering at one real width */
+/* align-items:start, and it is load-bearing: the default `stretch` made the
+   short scaled desktop frame grow to match the tall phone frame beside it, so
+   every desktop panel was published with an empty half under it. Ian decides
+   from pictures; a picture with a blank bottom half reads as a broken mock. */
+#wkm .rig { display: grid; grid-template-columns: 1fr; gap: 16px; margin: 0 0 8px; align-items: start; }
+#wkm .rig--two { grid-template-columns: minmax(0, 1fr) 430px; }
+@media (max-width: 1000px) { #wkm .rig--two { grid-template-columns: 1fr; } }
+#wkm .frame { background: #fff; border: 1px solid #ddd9cc; border-radius: 12px; overflow: hidden; }
+#wkm .frame--dark { background: #15171a; border-color: #2c312d; }
+#wkm .frame__lbl { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+                   font: 700 11px/1 sans-serif; letter-spacing: .07em; text-transform: uppercase;
+                   padding: 9px 12px; border-bottom: 1px solid #e6e3d8; background: #faf9f5; color: #6b6f6b; }
+#wkm .frame--dark .frame__lbl { background: #1f2225; border-bottom-color: #2c312d; color: #a6ac9f; }
+#wkm .frame__lbl a { color: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+#wkm iframe { display: block; width: 100%; border: 0; background: transparent; }
+#wkm .scroller { overflow-x: auto; }
+/* desktop panels are rendered at a true 1280 and scaled to fit — the LAYOUT is
+   the real 1280 layout, only the photograph is smaller. */
+#wkm .shrink { width: 1280px; transform-origin: 0 0; }
+#wkm .shrinkbox { overflow: hidden; }
+
+#wkm .note { background: #fff; border: 1px solid #e3ddd0; border-left: 4px solid #ecb351;
+             border-radius: 10px; padding: 13px 16px; margin: 12px 0 0; font-size: 13.5px; line-height: 1.6; }
+#wkm .note b { color: #1a1d1a; }
+#wkm .note--bad { border-left-color: #c66845; }
+#wkm .note--good { border-left-color: #87986a; }
+
+#wkm table.m { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e3ddd0;
+               border-radius: 10px; overflow: hidden; margin: 14px 0 0; }
+#wkm table.m th { text-align: left; font: 800 11px/1.3 sans-serif; letter-spacing: .05em; text-transform: uppercase;
+                  color: #6b6f6b; background: #faf9f5; border-bottom: 1px solid #e3ddd0; padding: 9px 12px; }
+#wkm table.m td { border-bottom: 1px solid #f1efe7; padding: 9px 12px; font-size: 13px; line-height: 1.5;
+                  color: #3d4038; vertical-align: top; }
+#wkm table.m tr:last-child td { border-bottom: 0; }
+
+#wkm .decide { background: #1a1d1a; color: #e8eae2; border-radius: 14px; padding: 22px 24px; margin: 34px 0 0; }
+#wkm .decide h2 { margin: 0 0 4px; font: 400 22px/1.25 "Lora", Georgia, serif; color: #fff; }
+#wkm .decide > p { margin: 0 0 16px; font-size: 13.5px; color: #c2c8ba; }
+#wkm .q { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14);
+          border-radius: 11px; padding: 14px 16px; margin: 0 0 11px; }
+#wkm .q h3 { margin: 0 0 6px; font: 700 14.5px/1.35 sans-serif; color: #fff; }
+#wkm .q p { margin: 0 0 8px; font-size: 13px; line-height: 1.6; color: #c2c8ba; }
+#wkm .q p:last-child { margin-bottom: 0; }
+#wkm .q .rec { display: inline-block; background: #87986a; color: #14170f; border-radius: 5px;
+               padding: 3px 8px; font: 800 10.5px/1.4 sans-serif; letter-spacing: .05em;
+               text-transform: uppercase; margin-right: 7px; }
+#wkm .q b { color: #fff; }
+</style>
+</head>
+<body id="wkm">
+<div class="wrap">
+
+  <div class="head">
+    <h1>The weekly email, on the front page, for logged-out visitors</h1>
+    <p class="ask">&ldquo;Surface the most-recent weekly email on the FRONT PAGE for logged-out visitors.&rdquo;
+       &mdash; your ask, 30 July. Backlog item 8; nobody had picked it up until now.</p>
+    <p>Two ways to do it, both drawn below in the <b>real front page</b> &mdash; these are not pictures,
+       they are the live front-page stylesheet rendering real cards from a real issue, so what you see is
+       what the page would do. Each is shown at desktop and phone width, in light and dark.</p>
+    <p style="background:rgba(236,179,81,.14);border:1px solid rgba(236,179,81,.4);border-radius:9px;padding:11px 14px">
+       <b style="color:#ecb351">Ruled and built, 15 August.</b> You said &ldquo;build it and let me see it on
+       dev2&rdquo;, so <b>Option A below is now built</b> &mdash; with the placement and the padlocked
+       member-only cards recommended here. This page stays up as the record of what was decided and why.
+       Option B is <b>not</b> built and is one word away if you would rather have it.</p>
+    <p>The short version: <b>Option A shows the issue&rsquo;s contents as front-page cards.
+       Option B shows the actual email in a window.</b> I recommend A, and the reason is in the
+       dark-mode and phone panels rather than in an argument.</p>
+  </div>
+
+  <!-- ══════════════════ TODAY ══════════════════ -->
+  <h2 class="sec">First &mdash; what a logged-out visitor gets today</h2>
+  <p class="sub">Nothing, essentially. The front page carries <b>one secondary text button</b>, tucked in the
+     welcome video&rsquo;s copy: &ldquo;Weekly email&rdquo;. There is no issue, no date, no sense that
+     anything goes out weekly at all.</p>
+
+  <div class="rig">
+    <div class="frame">
+      <div class="frame__lbl"><span>Today &middot; desktop 1280 &middot; light</span>
+        <a href="panel.html?o=now&amp;t=light" target="_blank">open full size &#8599;</a></div>
+      <div class="shrinkbox"><iframe class="shrink" data-scale="0.66" src="panel.html?o=now&amp;t=light" height="470" title="Today, desktop light"></iframe></div>
+    </div>
+  </div>
+
+  <div class="note note--bad">
+    <b>And that one button is a dead end.</b> Measured on dev2 on 15 August: it points at
+    <code>/looth-group-weekly/</code>, which <b>redirects a logged-out visitor to the login page</b>
+    (<code>wp-login.php&hellip;action=bpnoaccess</code>). The standalone issue page <code>/weekly/</code> is
+    members-only in PHP and shows a signed-out visitor a sign-in card with no content whatsoever.
+    So the only weekly-email link on the anonymous front page today leads to a login wall. Worth fixing
+    whichever option you pick &mdash; it is a two-line change to point it at the public sign-up page,
+    which <i>is</i> open to everyone.
+  </div>
+
+  <!-- ══════════════════ OPTION A ══════════════════ -->
+  <h2 class="sec">Option A &mdash; &ldquo;This week&rsquo;s issue&rdquo;, as front-page cards <span style="font:700 12px/1 sans-serif;color:#87986a;letter-spacing:.06em;text-transform:uppercase;vertical-align:middle;">&nbsp;&nbsp;recommended</span></h2>
+  <p class="sub">A newsletter masthead &mdash; the email&rsquo;s own brown and gold, with the date it went out &mdash;
+     over the issue&rsquo;s actual contents, rendered as the same cards the rest of the front page already uses.
+     Member-only items keep their padlock, which is the point: a stranger sees what the week held and what
+     membership would open. Underneath, one free ask: <b>get it every Monday, no account needed</b>.</p>
+  <p class="sub">The <b>From the forum</b> strip at the bottom of the block is there because the real issues
+     carry one &mdash; the current live issue has two discussions in it. They are drawn with the front
+     page&rsquo;s discussion card rather than its article card, because that is genuinely what they are and
+     where they live.</p>
+  <div class="verdict">
+    <span class="tag tag--good">Reads the same stored issue</span>
+    <span class="tag tag--good">Correct on a phone by construction</span>
+    <span class="tag tag--good">Correct in dark by construction</span>
+    <span class="tag tag--good">Images already sized by the resizer</span>
+    <span class="tag tag--note">Looks like the front page, not like an email</span>
+  </div>
+
+  <div class="rig rig--two">
+    <div class="frame">
+      <div class="frame__lbl"><span>Option A &middot; desktop 1280 &middot; light</span>
+        <a href="panel.html?o=a&amp;t=light" target="_blank">open full size &#8599;</a></div>
+      <div class="shrinkbox"><iframe class="shrink" data-scale="0.66" src="panel.html?o=a&amp;t=light" height="900" title="Option A, desktop light"></iframe></div>
+    </div>
+    <div class="frame">
+      <div class="frame__lbl"><span>Option A &middot; phone 390 &middot; light</span>
+        <a href="panel.html?o=a&amp;t=light" target="_blank">open &#8599;</a></div>
+      <div style="display:flex;justify-content:center;padding:10px 0;background:#f4f3ee">
+        <iframe src="panel.html?o=a&amp;t=light" width="390" height="880" title="Option A, phone light" style="width:390px"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <div class="rig rig--two">
+    <div class="frame frame--dark">
+      <div class="frame__lbl"><span>Option A &middot; desktop 1280 &middot; dark</span>
+        <a href="panel.html?o=a&amp;t=dark" target="_blank">open full size &#8599;</a></div>
+      <div class="shrinkbox"><iframe class="shrink" data-scale="0.66" src="panel.html?o=a&amp;t=dark" height="900" title="Option A, desktop dark"></iframe></div>
+    </div>
+    <div class="frame frame--dark">
+      <div class="frame__lbl"><span>Option A &middot; phone 390 &middot; dark</span>
+        <a href="panel.html?o=a&amp;t=dark" target="_blank">open &#8599;</a></div>
+      <div style="display:flex;justify-content:center;padding:10px 0;background:#101215">
+        <iframe src="panel.html?o=a&amp;t=dark" width="390" height="880" title="Option A, phone dark" style="width:390px"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <div class="note note--good">
+    <b>Why the dark panel matters here.</b> You said on 14 August that dark mode for logged-out people needs
+    love &mdash; &ldquo;a ton of instructions and fields not ready for primetime in dark for logged out&rdquo;.
+    This block gets dark right for free, because it is built from the front page&rsquo;s own colour tokens:
+    when the page goes dark, the block goes dark with it. I measured every piece of text and every button in
+    this block, at both widths, in both themes, against the accessibility contrast standard &mdash;
+    <b>all twelve renderings pass</b>, and two colours had to be corrected to get there.
+  </div>
+
+  <!-- ══════════════════ OPTION B ══════════════════ -->
+  <h2 class="sec">Option B &mdash; the actual email, in a window</h2>
+  <p class="sub">The real thing: the issue rendered by the same code that sends it, dropped into the front
+     page in a frame. This is not a strawman &mdash; it is exactly the treatment already built for the public
+     sign-up page, moved here. Maximum fidelity: it <i>is</i> the email.</p>
+  <div class="verdict">
+    <span class="tag tag--good">It is literally the email</span>
+    <span class="tag tag--good">Reuses what the sign-up page already does</span>
+    <span class="tag tag--bad">You have rejected this framing once already</span>
+    <span class="tag tag--bad">Cannot follow dark mode</span>
+    <span class="tag tag--bad">A second full page load on the front page</span>
+  </div>
+
+  <div class="rig rig--two">
+    <div class="frame">
+      <div class="frame__lbl"><span>Option B &middot; desktop 1280 &middot; light</span>
+        <a href="panel.html?o=b&amp;t=light" target="_blank">open full size &#8599;</a></div>
+      <div class="shrinkbox"><iframe class="shrink" data-scale="0.66" src="panel.html?o=b&amp;t=light" height="900" title="Option B, desktop light"></iframe></div>
+    </div>
+    <div class="frame frame--dark">
+      <div class="frame__lbl"><span>Option B &middot; phone 390 &middot; dark</span>
+        <a href="panel.html?o=b&amp;t=dark" target="_blank">open &#8599;</a></div>
+      <div style="display:flex;justify-content:center;padding:10px 0;background:#101215">
+        <iframe src="panel.html?o=b&amp;t=dark" width="390" height="880" title="Option B, phone dark" style="width:390px"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <div class="note note--bad">
+    <b>Three things that panel is showing you, and none of them are fixable by tidying.</b>
+    <br><br>
+    <b>1. It cannot go dark.</b> An email has to carry its colours baked in, because inboxes strip
+    stylesheets &mdash; so the issue is permanently cream-and-brown. On a dark front page it stays a lit
+    panel in a dark room. Nothing in the frame can change that; it is a property of being an email.
+    <br><br>
+    <b>2. On a phone you get the top of it and little else.</b> The window is about 520px tall and the
+    logo alone takes most of that, so a visitor sees a masthead and the first heading. The issue is a long
+    document; the front page can only lend it a letterbox.
+    <br><br>
+    <b>3. This is the framing you have already turned down.</b> Back on 30 July, looking at this same
+    treatment on the sign-up page: <i>&ldquo;the email is now in a container where it floats left and right
+    to see the whole thing without having the text cut off. This sucks.&rdquo;</i> It is still switched
+    <b>off on the live site</b> for that reason. Putting it on the front page would be shipping it to more
+    people, not fewer.
+  </div>
+
+  <!-- ══════════════════ THE BUG ══════════════════ -->
+  <h2 class="sec">One thing I found on the way, which you will want fixed either way</h2>
+  <p class="sub">On dev2 the sample-email preview is switched on right now for you to test. Look at what it
+     says at the top of Option B&rsquo;s panel: <b>&ldquo;Week of August 15, 2026 &middot; 8 items&rdquo;</b> &mdash;
+     while the eight items below it are the ones from the issue that went out on <b>13 July</b>.</p>
+  <table class="m">
+    <tr><th>What</th><th>Detail</th></tr>
+    <tr><td><b>The symptom</b></td><td>An old issue re-rendered today is stamped with <i>today&rsquo;s</i>
+        date, so the public sample claims to be this week&rsquo;s issue while showing last month&rsquo;s.</td></tr>
+    <tr><td><b>The cause</b></td><td><code>class-lg-wd-email-builder.php</code> line 40 sets the date to
+        &ldquo;now&rdquo; every time it renders. That is harmless for a real send, because an issue is built and
+        posted the same day &mdash; and wrong the moment anything re-renders an old issue, which is exactly
+        what the public sample does, and exactly what this front-page block would do.</td></tr>
+    <tr><td><b>Why it matters</b></td><td>The sign-up page&rsquo;s pitch is &ldquo;this is an issue that
+        actually went out&rdquo;. A wrong date quietly makes that sentence false, and a visitor who
+        subscribes on Saturday and gets nothing until Monday has been told the wrong thing.</td></tr>
+    <tr><td><b>Size</b></td><td>Small. Pass the issue&rsquo;s own date into the builder instead of reading
+        the clock. It belongs in whichever build follows this decision.</td></tr>
+  </table>
+
+  <!-- ══════════════════ DECIDE ══════════════════ -->
+  <div class="decide">
+    <h2>What I need from you</h2>
+    <p>Three questions. Answer as briefly as you like &mdash; a word each is plenty &mdash; and I will build it.</p>
+
+    <div class="q">
+      <h3>1. Which one?</h3>
+      <p><span class="rec">My pick</span> <b>Option A</b> &mdash; the issue&rsquo;s contents as front-page cards.
+         It shows the same week&rsquo;s content from the same source, it works on a phone and in dark, and it
+         does not re-ship the framing you turned down in July.</p>
+      <p>Option B is the honest alternative and it is drawn fairly: if seeing the actual email is the whole
+         point for you, say so and I will build B instead.</p>
+    </div>
+
+    <div class="q">
+      <h3>2. Where should it sit?</h3>
+      <p><span class="rec">My pick</span> <b>Directly under the welcome video</b>, above the featured member
+         &mdash; which is where it is drawn in every panel above. High enough to be the shop window you
+         described, without pushing the welcome video off the top.</p>
+      <p>The alternative is lower down, under the featured member, if you would rather the person came first.</p>
+    </div>
+
+    <div class="q">
+      <h3>3. Should member-only items show at all?</h3>
+      <p><span class="rec">My pick</span> <b>Yes, with their padlock</b> &mdash; three of the seven cards in the
+         panels above are member-only, and seeing them locked is the clearest argument for joining that the
+         page can make. No titles are hidden and no member content leaks; the padlock and the tier badge are
+         already how the front page handles this everywhere else.</p>
+      <p>On the current live issue the mix is starker still: <b>four of its five videos are member-only</b>
+         (one Pro, three Lite). Public-only would leave that section showing a single video.</p>
+      <p>The alternative is public items only, which is safer but makes a thin, oddly short issue.</p>
+    </div>
+  </div>
+
+  <p class="sub" style="margin-top:26px">
+    Built by the guitardle-fairness seat, 15 August 2026, from backlog item 8. The panels above are live &mdash;
+    reload this page and they re-render from the real stylesheet and the real issue.
+    Option A has since been built behind a flag and switched on for dev2 only; live is untouched and stays
+    that way until you say otherwise.
+  </p>
+
+</div>
+
+<script>
+/* Two jobs, and both exist because the first draft got them wrong on the page
+   Ian was going to open:
+
+   1. SCALE the 1280-wide panels down to the column width, so a desktop
+      rendering can be shown at its true 1280 LAYOUT without a sideways
+      scrollbar. Only the photograph shrinks; the media queries still resolve
+      against 1280, which is the whole point of framing rather than screenshotting.
+
+   2. SIZE every panel to its own content. Fixed heights left the desktop panels
+      with dead space below the block and — worse — cut the PHONE panels off
+      above the sign-up button, so the one control the whole proposal is about
+      was missing from the picture. Same-origin, so the parent can just read the
+      panel's scrollHeight. Sizing to full height also parks every card inside
+      the frame's own viewport, which is what gets the lazy-loaded thumbnails to
+      paint; at a fixed short height they stayed grey placeholders. */
+(function () {
+  function sizeOne(fr) {
+    try {
+      var d = fr.contentDocument;
+      if (!d || !d.body) return false;
+      var h = Math.max(d.body.scrollHeight, d.documentElement.scrollHeight);
+      if (!h) return false;
+      fr.style.height = h + 'px';
+      if (fr.classList.contains('shrink')) {
+        var box = fr.parentElement;
+        var k = Math.min(1, box.clientWidth / 1280);
+        fr.style.transform = 'scale(' + k + ')';
+        box.style.height = (h * k) + 'px';
+      }
+      return true;
+    } catch (e) { return false; }
+  }
+  function fit() { document.querySelectorAll('#wkm iframe').forEach(sizeOne); }
+
+  /* A ResizeObserver on the panel's own <html>, rather than a handful of
+     setTimeouts. Timed re-measures kept leaving a tail of empty frame under the
+     phone panels: the height was taken before the card thumbnails had landed,
+     and whatever the last timeout saw is what stuck. The observer just follows
+     the content, so the frame is exactly as tall as the panel at all times. */
+  function watch(fr) {
+    sizeOne(fr);
+    try {
+      var d = fr.contentDocument;
+      if (!d) return;
+      new fr.contentWindow.ResizeObserver(function () { sizeOne(fr); })
+        .observe(d.documentElement);
+      d.querySelectorAll('img').forEach(function (im) {
+        if (!im.complete) im.addEventListener('load', function () { sizeOne(fr); });
+      });
+    } catch (e) { /* cross-origin would land here; these panels are same-origin */ }
+  }
+  document.querySelectorAll('#wkm iframe').forEach(function (fr) {
+    fr.addEventListener('load', function () { watch(fr); });
+    if (fr.contentDocument && fr.contentDocument.readyState === 'complete') watch(fr);
+  });
+  window.addEventListener('load', fit);
+  window.addEventListener('resize', fit);
+  fit();
+})();
+</script>
+</body>
+</html>
