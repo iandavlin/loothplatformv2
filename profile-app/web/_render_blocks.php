@@ -57,7 +57,14 @@ if (!function_exists('looth_author_archive_icon_enabled')) {
             return $on = false;
         }
         $raw = require $path;
-        return $on = (is_array($raw) && ($raw['enabled'] ?? false) === true);
+        $on = (is_array($raw) && ($raw['enabled'] ?? false) === true);
+        // Box-local override, the FLAGS.md shape — third reader found missing
+        // it on 8/16 (banner-swap and comma-fix got the same fix earlier the
+        // same night). Tracked default first; the gitignored .local.php wins
+        // only on an explicit enabled === true.
+        $loc = @include dirname(__DIR__, 2) . '/platform/config/author-archive-icon.local.php';
+        if (is_array($loc) && array_key_exists('enabled', $loc)) $on = ($loc['enabled'] === true);
+        return $on;
     }
 }
 
