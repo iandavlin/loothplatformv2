@@ -1124,14 +1124,34 @@ function lg_fc_relabel($field)
     $field['instructions'] = $hint;
     $field['wrapper']['class'] = trim(($field['wrapper']['class'] ?? '') . ' lgfc-field');
 
-    // ACF's _post_content pseudo-field is a WYSIWYG, which would pull TinyMCE
-    // into a member-facing composer. The mock draws a plain box, so it gets one.
-    // Deliberate deviation, recorded: the discussion composer uses Quill, so if
-    // rich text is later wanted here that is a parity decision to take on
-    // purpose rather than inherit from an ACF default nobody chose.
+    /* RICH TEXT — Ian, 2026-08-16: "rich text with light tinymce controls".
+       This is the parity decision the previous comment here said would have to be
+       taken on purpose: the field was deliberately downgraded to a textarea so a
+       member-facing composer would not drag TinyMCE in by an ACF default nobody
+       chose. It is now chosen.
+
+       A CUSTOM TOOLBAR, NOT ACF's 'basic'. ACF's basic maps to WordPress's teeny
+       mode, which carries underline, strikethrough, blockquote and three
+       alignments — more than "light", and every extra button is a tag the save
+       path then has to allow. This toolbar is exactly bold, italic, the two
+       lists, link/unlink and undo/redo, so the rule "nothing stored that the
+       toolbar cannot make" is a statement about one list rather than a hope.
+
+       DELAYED INIT (delay => 1) IS THE CRAFT LAW, not a preference: composers load
+       on intent, never eagerly. TinyMCE is heavy and most visitors to this form
+       are filling in a title and a file. ACF only boots the editor when the field
+       is first clicked.
+
+       media_upload OFF — the photo and ZIP fields own uploads here, and the media
+       modal is already scoped to this post's own library by lg_fc_scope_library().
+       A second, UNSCOPED uploader inside the editor would drive straight through
+       that. */
     if ($name === '_post_content') {
-        $field['type'] = 'textarea';
-        $field['rows'] = 4;
+        $field['type']         = 'wysiwyg';
+        $field['toolbar']      = 'lgfc_light';
+        $field['media_upload'] = 0;
+        $field['tabs']         = 'visual';
+        $field['delay']        = 1;
     }
 
     // ⚠️ PREFILL THE PSEUDO-FIELDS OURSELVES ON EDIT. ACF only fills _post_title
@@ -1155,11 +1175,131 @@ function lg_fc_relabel($field)
         if ($name === '_post_title') {
             $field['value'] = get_post_field('post_title', $edit_id);
         } elseif ($name === '_post_content') {
-            $field['value'] = get_post_field('post_content', $edit_id);
+            $field['value'] = lg_fc_content_for_editor(
+                (string) get_post_field('post_content', $edit_id));
         }
     }
     return $field;
 }
+
+/**
+ * The ONE list of tags this field may contain. The toolbar can make exactly these
+ * and nothing else, which is what makes the save filter a closed statement rather
+ * than a guess. Add a button here and you must add its tag, and the reverse.
+ */
+function lg_fc_richtext_allowed(): array
+{
+    return [
+        'p'      => [],
+        'br'     => [],
+        'strong' => [], 'b'  => [],
+        'em'     => [], 'i'  => [],
+        'ul'     => [], 'ol' => [], 'li' => [],
+        // rel is forced below; target is allowed so an editor-made link survives
+        // a round trip unchanged rather than being silently rewritten.
+        'a'      => ['href' => [], 'title' => [], 'target' => [], 'rel' => []],
+    ];
+}
+
+/**
+ * Stored write-up -> what the editor should be handed.
+ *
+ * ⚠️ BACK-COMPAT, AND IT IS NOT HYPOTHETICAL. Measured on dev2 before writing
+ * this: of 169 published loothprints, 43 already hold HTML, 54 are empty, and
+ * 72 ARE PLAIN TEXT — 32 of those containing newlines. Hand plain text with
+ * blank lines straight to a WYSIWYG and TinyMCE collapses it into one
+ * paragraph: 32 members' write-ups silently lose their structure the first time
+ * anyone opens the new editor and presses Post. That is the "eats line breaks"
+ * half of the ruling, with a number on it.
+ *
+ * So: content that already contains markup is passed through untouched (running
+ * wpautop over real HTML is how you get double paragraphs), and content that is
+ * plain gets wpautop, which is the same transformation the front end has always
+ * applied to it on display. The editor therefore shows what the reader already
+ * sees, which is the only definition of "unchanged" that matters to a member.
+ */
+function lg_fc_content_for_editor(string $raw): string
+{
+    if (trim($raw) === '') {
+        return '';
+    }
+    // A cheap, deliberate test: does this look like markup at all? strip_tags
+    // changing the string is the same question the back-compat count above asked,
+    // so the code and the measurement agree by construction.
+    if ($raw !== strip_tags($raw)) {
+        return $raw;
+    }
+    return wpautop($raw);
+}
+
+/**
+ * Save-side sanitisation: nothing is stored that the toolbar cannot make.
+ *
+ * Runs on the RAW POST value before ACF/WordPress writes it, because the field is
+ * a pseudo-field that lands in post_content rather than in meta — so an
+ * acf/update_value filter never sees it.
+ *
+ * wp_kses to lg_fc_richtext_allowed(), then links are forced to rel="nofollow ugc"
+ * — member-authored links on a public page, which is what ugc is for.
+ */
+function lg_fc_sanitize_richtext(string $html): string
+{
+    $clean = wp_kses($html, lg_fc_richtext_allowed());
+    if ($clean !== '' && function_exists('wp_rel_ugc')) {
+        /* ⚠️ wp_rel_ugc() RETURNS SLASHED OUTPUT. It is built for filter contexts
+           that hand it slashed content, so it wp_slash()es on the way out — and
+           only the <a> cases show it, which is why reading the other test rows
+           would have missed it. The caller then applies its own wp_slash before
+           handing the value back to WordPress, so leaving this slashed stores a
+           member's link as href=\"/x\" — literal backslashes in their write-up,
+           on every link, forever.
+
+           This function's contract is therefore: takes raw, returns CLEAN AND
+           UNSLASHED. Slashing belongs to the caller that talks to $_POST, in one
+           place, so the two can never disagree about how many times it happened.
+
+           Found by running the sanitiser over a link case, not by reading it. */
+        $clean = wp_unslash(wp_rel_ugc($clean));
+    }
+    return $clean;
+}
+
+/**
+ * The light toolbar itself. Registered as its own toolbar rather than overriding
+ * ACF's, so nothing else that asks for 'basic' changes underneath us.
+ */
+/**
+ * WIRE THE SANITISER. Defined-but-unhooked is indistinguishable from absent, and
+ * this one guards what gets STORED, so it is hooked next to the function rather
+ * than somewhere a tidy-up could separate them.
+ *
+ * ⚠️ WHY acf/pre_save_post AND NOT acf/update_value. _post_content is a
+ * PSEUDO-field: its value lands in the post's own post_content, not in meta, so
+ * the per-field update_value filter never runs for it. pre_save_post fires with
+ * the raw $_POST still in hand and before ACF writes the post, which is the last
+ * point where the submitted HTML can be replaced.
+ *
+ * Scoped to this form's own fields, so nothing else on the site that uses
+ * acf_form() has its content rewritten by us.
+ */
+add_filter('acf/pre_save_post', function ($post_id) {
+    if (!empty($_POST['acf']['_post_content']) && is_string($_POST['acf']['_post_content'])) {
+        $_POST['acf']['_post_content'] =
+            lg_fc_sanitize_richtext(wp_unslash($_POST['acf']['_post_content']));
+        // Re-slash: WordPress expects the superglobal to still be slashed when it
+        // writes. Unslashing without re-slashing is how a stray backslash ends up
+        // in a member's write-up.
+        $_POST['acf']['_post_content'] = wp_slash($_POST['acf']['_post_content']);
+    }
+    return $post_id;
+}, 5);
+
+add_filter('acf/fields/wysiwyg/toolbars', function (array $toolbars): array {
+    $toolbars['lgfc_light'] = [
+        1 => ['bold', 'italic', 'bullist', 'numlist', 'link', 'unlink', 'undo', 'redo'],
+    ];
+    return $toolbars;
+});
 
 /**
  * EMBED IS STILL A WHOLE DOCUMENT, DELIBERATELY, and it is meant to be iframed.
@@ -1371,6 +1511,28 @@ function lg_fc_css(): string
 .lgfc .acf-input input:focus,.lgfc .acf-input textarea:focus{
   outline:2px solid var(--lg-sage,#87986a);outline-offset:1px;border-color:var(--lg-sage,#87986a)}
 .lgfc .acf-input input::placeholder,.lgfc .acf-input textarea::placeholder{color:var(--lg-mute,#6b6f6b);opacity:.62}
+
+/* ---- the rich-text editor ---- */
+/* TinyMCE arrives with wp-admin's own skin, which is a light grey toolbar and a
+   white border — the same shape as the oEmbed slab fixed earlier tonight, and for
+   the same reason: an admin control dropped into a member-facing page in a theme
+   it was never drawn for. Chrome is styled from the form's tokens so both themes
+   follow; the CONTENT is inside an iframe and is handled in JS, because page CSS
+   cannot cross that boundary. */
+.lgfc .acf-editor-wrap,.lgfc .wp-editor-container{
+  border:1px solid var(--lg-line,#e3ddd0);border-radius:9px;overflow:hidden;
+  background:var(--lg-paper,#fdfdfa)}
+.lgfc .wp-editor-container .mce-panel,.lgfc .mce-toolbar-grp,.lgfc .mce-toolbar{
+  background:var(--lg-paper,#fdfdfa);border-color:var(--lg-line,#e3ddd0)}
+.lgfc .mce-btn button{color:var(--lg-ink,#323532)}
+.lgfc .mce-ico{color:var(--lg-ink,#323532)}
+.lgfc .mce-btn:hover,.lgfc .mce-btn.mce-active{background:var(--lg-sage-tint,#eef2e3)}
+.lgfc .mce-statusbar,.lgfc .mce-path{display:none}
+/* The delayed editor shows a plain textarea until it is clicked; make that
+   placeholder read like the other fields rather than like a bare box. */
+.lgfc .acf-editor-wrap .wp-editor-area{border:0;background:var(--lg-paper,#fdfdfa);
+  color:var(--lg-ink,#323532);min-height:120px;padding:10px 12px;
+  font:500 14px/1.5 var(--lg-font-sans,system-ui,sans-serif)}
 
 /* ---- the video oEmbed ---- */
 /* ⚠️ THIS FIELD HAD NEVER BEEN STYLED HERE, and that only became visible tonight.
@@ -1687,6 +1849,75 @@ CSS;
 function lg_fc_js(): string
 {
     return <<<'JS'
+/* THE RICH-TEXT EDITOR'S DARK SKIN — the half page CSS cannot reach.
+   TinyMCE renders the write-up inside an IFRAME with its own document, so no rule
+   in this page applies to it. wp-admin's default content style is black on white,
+   which in dark mode is a full-width white slab: exactly the class that reddened
+   gate 47 tonight on the oEmbed field.
+
+   ⚠️ IT CANNOT BE DONE SERVER-SIDE. content_style via tiny_mce_before_init is
+   fixed at render, and our dark is a CLIENT attribute (html[data-lguser-theme])
+   resolved after paint — not prefers-color-scheme. So the theme has to be read
+   when the frame appears, and re-read when it changes.
+
+   The editor is DELAY-INIT by design (composers load on intent), so the iframe
+   does not exist at page load and there is nothing to hook at boot. A
+   MutationObserver is what survives that: it fires whenever the frame is created,
+   however long the member waits before clicking. */
+(function () {
+  var field = document.querySelector('.lgfc .acf-field[data-name="_post_content"]');
+  if (!field) return;
+
+  function tokens() {
+    var cs = getComputedStyle(document.querySelector('.lgfc') || document.body);
+    var g  = function (n, f) { return (cs.getPropertyValue(n) || '').trim() || f; };
+    return {
+      bg:   g('--lg-paper', '#fdfdfa'),
+      ink:  g('--lg-ink',   '#323532'),
+      link: g('--lg-sage-d', '#6b7c52'),
+      mute: g('--lg-mute',  '#6b6f6b')
+    };
+  }
+
+  function paint(doc) {
+    if (!doc || !doc.head) return;
+    var t = tokens();
+    var el = doc.getElementById('lgfc-skin');
+    if (!el) {
+      el = doc.createElement('style');
+      el.id = 'lgfc-skin';
+      doc.head.appendChild(el);
+    }
+    /* Deliberately narrow: surface, ink, links and the placeholder. The toolbar
+       decides what MARKUP exists; this only decides what colour it is. */
+    el.textContent =
+      'html,body{background:' + t.bg + ' !important;color:' + t.ink + ' !important;}' +
+      'body{font:500 14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;' +
+      'margin:10px 12px;}' +
+      'a{color:' + t.link + ';}' +
+      'p{margin:0 0 .75em;}' +
+      'body.mce-content-body[data-mce-placeholder]:not(.mce-visualblocks)::before{color:' + t.mute + ';}';
+  }
+
+  function frames() {
+    Array.prototype.forEach.call(field.querySelectorAll('iframe'), function (f) {
+      var doc = null;
+      try { doc = f.contentDocument; } catch (e) { return; }   /* never cross-origin here, but be safe */
+      if (doc) {
+        paint(doc);
+        /* TinyMCE rewrites its own document during init; paint again once it settles. */
+        if (!f.__lgfcPainted) { f.__lgfcPainted = 1; setTimeout(function () { paint(f.contentDocument); }, 400); }
+      }
+    });
+  }
+
+  new MutationObserver(frames).observe(field, { childList: true, subtree: true });
+  /* And follow the theme if the member flips it with the editor already open. */
+  new MutationObserver(frames).observe(document.documentElement,
+    { attributes: true, attributeFilter: ['data-lguser-theme'] });
+  frames();
+})();
+
 /* THE TAXONOMY PICKER — Ian, 2026-08-16: "The taxo pickers are wierd. Make modal
    or something slick please", and he picked the sheet-with-search shape from the
    mock.

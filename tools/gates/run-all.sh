@@ -1426,6 +1426,37 @@ echo "=== GATE 68: the compose page wears the site chrome, in BOTH themes ==="
 # leg ok non-vacuously, 4 of 5, exit 1.
 run "compose-chrome" python3 "$(dirname "$0")/compose-chrome-gate.py"
 
+echo "=== GATE 69: the loothprint EDIT DOOR — two named editors, and only for the entitled ==="
+# Ruled scope item 4, shape picked by Ian 2026-08-16: the Edit button on a
+# Loothprint opens a two-line choice — "Details & files" (the acf_form that edits
+# the print's own fields) and "Page text" (the layout editor it always opened).
+#
+# THE DOOR IS WHAT THIS GUARDS, deliberately. The form and its permission check
+# existed for months and were reachable by NOBODY; the way in is the part that was
+# missing and therefore the part most likely to be lost again.
+#
+# SIGNED-IN LIVENESS, not just page liveness: the control renders only for
+# edit_archive_poc or the author, and that identity comes from a /whoami loopback
+# that is INTERMITTENT for a minted cookie — measured, the same tree gave items=2
+# then items=0. Without it "no menu" and "not recognised" are one observation and
+# the gate reports a coin toss. Signed-out => exit 2, never a fail.
+#
+# A REAL POST ID, not merely a link: the first build read a post_context key that
+# does not exist and would have shipped id=0 — a compose form for nothing.
+#
+# PAGE TEXT MUST STILL BE THERE: the ruling ADDED a door, it did not remove one.
+#
+# THE STRANGER LEG is an absence assertion paired with liveness on the same page,
+# because "no button" is trivially true of a 404.
+#
+# ⚠️ IT READS THE EFFECTIVE FLAG FROM THE SERVING CHECKOUT, NOT FROM THIS REPO, and
+# prints which directory it used. The box-local override is gitignored and exists
+# only beside the deployed app, so a repo-relative read always answers the tracked
+# default — this gate reported exactly that disagreement on its first run and
+# blamed the app, which was right. Reading the TRACKED file from the repo is
+# correct when you are asserting what ships; reading the EFFECTIVE state is not.
+run "loothprint-edit-door" python3 "$(dirname "$0")/loothprint-edit-door-gate.py"
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"
