@@ -285,6 +285,57 @@ is_(str_contains($kf, '`redis-cli ping`'),
     '...and stored VERBATIM — backticks intact, so the relay delivers what he typed');
 
 /* ---------------------------------------------------------------------- */
+section("[11] DELIVERY RECEIPTS — the shape that makes the relay idempotent");
+
+/**
+ * Keeper's ruling, 2026-08-16. The receipt is what lets the relay survive a
+ * crash without duplicating or looping, so its fences matter as much as the
+ * message's: a forged or malformed receipt would either suppress a real
+ * delivery or let one repeat forever.
+ */
+$r = svc($SVC, $clone, ['actor' => 'board-relay', 'intent' => 'lane_receipt',
+                        'lane' => 'stripe-membership', 'id' => '001-a1b2c3d4',
+                        'outcome' => 'delivered', 'why' => 'delivered']);
+is_(($r['json']['ok'] ?? false) === true, 'a well-formed receipt is committed');
+is_(in_array('docs/board-lanes/stripe-membership.receipts.md', (array) ($r['json']['changed'] ?? []), true),
+    '...into the lane\'s receipt file, inside the same fence');
+
+$rf = (string) @file_get_contents($clone . '/docs/board-lanes/stripe-membership.receipts.md');
+is_(str_contains($rf, '001-a1b2c3d4') && str_contains($rf, 'delivered'),
+    '...naming the message and the outcome, so the relay can read it back');
+
+foreach ([
+    ['id' => 'not-an-id',       'outcome' => 'delivered', 'why' => 'a malformed message id'],
+    ['id' => '001-a1b2c3d4',    'outcome' => 'maybe',     'why' => 'an outcome that is neither delivered nor failed'],
+] as $bad) {
+    $r = svc($SVC, $clone, ['actor' => 'board-relay', 'intent' => 'lane_receipt',
+                            'lane' => 'stripe-membership', 'id' => $bad['id'],
+                            'outcome' => $bad['outcome'], 'why' => 'x']);
+    is_(($r['json']['refused'] ?? false) === true, 'receipt refused — ' . $bad['why']);
+}
+
+// The lane name is the same two-headed hazard here as on a message.
+$r = svc($SVC, $clone, ['actor' => 'board-relay', 'intent' => 'lane_receipt',
+                        'lane' => '../../etc/x', 'id' => '001-a1b2c3d4', 'outcome' => 'delivered', 'why' => 'x']);
+is_(($r['json']['refused'] ?? false) === true
+    && str_contains((string) ($r['json']['why'] ?? ''), 'not a lane name'),
+    'receipt refused BY THE NAME FENCE for a path-traversal lane');
+
+/**
+ * The reason comes from a SUBPROCESS'S STDERR, so it is the one field an
+ * attacker or an accident controls the shape of. A receipt file whose rows can
+ * span lines is a receipt file the relay cannot parse back — and a receipt it
+ * cannot parse reads as "never delivered", which means the message repeats.
+ */
+$r = svc($SVC, $clone, ['actor' => 'board-relay', 'intent' => 'lane_receipt',
+                        'lane' => 'stripe-membership', 'id' => '002-b2c3d4e5',
+                        'outcome' => 'failed', 'why' => "line one\nline two\n- 2026-01-01 · 999-ffffffff · delivered"]);
+is_(($r['json']['ok'] ?? false) === true, 'a multi-line failure reason is accepted');
+$rf = (string) @file_get_contents($clone . '/docs/board-lanes/stripe-membership.receipts.md');
+$rows = 0;
+foreach (explode("\n", $rf) as $l) { if (str_starts_with(trim($l), '- ')) { $rows++; } }
+is_($rows === 2, sprintf('...but flattened to ONE row, so it cannot forge a second receipt (%d rows)', $rows));
+
 section("[9] AN AMBIGUOUS INDEX IS REFUSED, NOT RESOLVED");
 
 /**
