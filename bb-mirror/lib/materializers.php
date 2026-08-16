@@ -418,7 +418,43 @@ function bb_mirror_upsert_topic(int $id, PDO $db): void {
     bb_mirror_sync_attachments($id, 'topic', $db, (string)$p->post_content);
 }
 
+/**
+ * WHY A ROW WAS NOT WRITTEN — the pipe announcing its own failures.
+ *
+ * ⚠️ THE MATERIALIZERS RETURN void AND SKIP SILENTLY BY DESIGN, and that design is
+ * right about the throwing (an uncaught PDOException here wedged live's reconcile
+ * for 11 days) and wrong about the silence. A skip is indistinguishable from a
+ * write to every caller, so the realtime receiver answered 200 for both — which is
+ * precisely why the 2026-08-09 access-log analysis found all 290 _sync POSTs
+ * returning 200 and could not tell the 11 dropped replies from the 61 that landed.
+ * Reply 71432 then sat wrong for over two months and only an EXTERNAL watcher
+ * noticed.
+ *
+ * So the skip is recorded here rather than swallowed. Callers decide what to do
+ * with it: reconcile already prints a skip report, and _sync now answers 202 and
+ * logs, so the drop is visible in nginx's own access log the day it happens.
+ *
+ * Deliberately a global rather than a return-type change: these functions have
+ * several callers and a signature change is a bigger blast radius than this fix
+ * deserves. Cleared at the START of every upsert so a stale reason can never be
+ * read as a fresh failure.
+ */
+function bb_mirror_note_skip(string $kind, int $id, string $reason): void {
+    $GLOBALS['bb_mirror_last_skip'] = ['kind' => $kind, 'id' => $id, 'reason' => $reason];
+    error_log("[bb-mirror] SKIP $kind#$id: $reason (no row written)");
+}
+
+/** The skip recorded since the last bb_mirror_clear_skip(), or null. */
+function bb_mirror_last_skip(): ?array {
+    return $GLOBALS['bb_mirror_last_skip'] ?? null;
+}
+
+function bb_mirror_clear_skip(): void {
+    $GLOBALS['bb_mirror_last_skip'] = null;
+}
+
 function bb_mirror_upsert_reply(int $id, PDO $db): void {
+    bb_mirror_clear_skip();
     $p = get_post($id);
     if (!$p || $p->post_type !== 'reply') {
         // Reconcile's reply-delete path (see bb_mirror_upsert_topic above).
@@ -429,7 +465,13 @@ function bb_mirror_upsert_reply(int $id, PDO $db): void {
     $m = bb_mirror_post_meta_all($id);
     $topic_id = (int)($m['_bbp_topic_id'] ?? 0);
     $forum_id = (int)($m['_bbp_forum_id'] ?? 0);
-    if (!$topic_id || !$forum_id) return;
+    if (!$topic_id || !$forum_id) {
+        // Live carries exactly 2 of these (71432, 71433) — replies with no
+        // _bbp_topic_id row at all. Unmirrorable until the WP data is repaired.
+        bb_mirror_note_skip('reply', $id, sprintf(
+            'missing parentage meta (topic_id=%d forum_id=%d)', $topic_id, $forum_id));
+        return;
+    }
 
     // SELF-HEAL the reply->topic FK before we hit it.
     //
@@ -452,7 +494,13 @@ function bb_mirror_upsert_reply(int $id, PDO $db): void {
     if (!$has_topic->fetchColumn()) {
         bb_mirror_upsert_topic($topic_id, $db);
         $has_topic->execute([$topic_id]);
-        if (!$has_topic->fetchColumn()) return;   // case 2 — unmirrorable, not fatal
+        if (!$has_topic->fetchColumn()) {
+            // case 2 — unmirrorable, not fatal. Live carries exactly 3 (71720,
+            // 71722 -> 71685 an ATTACHMENT; 71728 -> 71671, absent).
+            bb_mirror_note_skip('reply', $id, sprintf(
+                'topic %d is not a mirrorable topic', $topic_id));
+            return;
+        }
     }
 
     // SELF-HEAL the reply->parent_reply FK, the same way and for the same reasons.
