@@ -2,8 +2,10 @@
 """
 GATE 57 — a guessed letter is a HIT or a MISS, and a resumed board PAINTS.
 
-KEEPER GATE NUMBER: 56 — requested 2026-08-16. Enumerated across every branch
-before asking (50-55 taken); lanes never mint. Do not renumber without asking.
+KEEPER GATE NUMBER: 57 — ASSIGNED by keeper 2026-08-16. This docstring said 56
+until 2026-08-16: 56 was a working placeholder this lane had written for itself,
+and it was already taken by the board committer at the stripe merge. A
+placeholder IS self-minting. Lanes never mint. Do not renumber without asking.
 
 Ian, playing on dev2 2026-08-16: "On desktop it's keeping track of letters that
 are in the puzzle, but not the guesses that were misses. The letter only stays
@@ -126,6 +128,14 @@ MISSES = [c for c in "BCDFGHJKLMNPQRSTVWXYZ" if c not in LETTERS]
 if len(HITS) < 2 or not MISSES:
     cannot_run("today's phrase %r has too few consonant hits/misses to test" % PHRASE)
 A_HIT, B_HIT, A_MISS = HITS[0], HITS[1], MISSES[0]
+# The fix also changed the VOWEL paths, and the first cut of this gate asserted
+# NEITHER -- the vowel behaviour was argued in a commit message and never
+# measured. A vowel is the only letter that is tapped TWICE (buy, then reveal),
+# so it is the only one that can be left half-resolved.
+V_HITS   = [c for c in "AEIOU" if c in LETTERS]
+V_MISSES = [c for c in "AEIOU" if c not in LETTERS]
+V_HIT  = V_HITS[0]   if V_HITS   else None
+V_MISS = V_MISSES[0] if V_MISSES else None
 
 
 # ── per-run probe member ─────────────────────────────────────────────────────
@@ -289,6 +299,8 @@ class Device:
             "look:Object.fromEntries([...document.querySelectorAll('.key[data-letter]')]"
             ".map(k=>[k.dataset.letter,getComputedStyle(k).backgroundColor+'|'"
             "+getComputedStyle(k).textDecorationLine])),"
+            "dis:Object.fromEntries([...document.querySelectorAll('.key[data-letter]')]"
+            ".map(k=>[k.dataset.letter,!!k.disabled])),"
             "serverPlay:(typeof serverPlay!=='undefined')?!!serverPlay:null})"))
 
     def tap(self, letter):
@@ -319,6 +331,7 @@ def cls_for(snap, letter):
 
 print("guitardle-letter-state — GATE 57")
 print("  phrase today: %r   hits used: %s %s   miss used: %s" % (PHRASE, A_HIT, B_HIT, A_MISS))
+print("  vowels used:  hit %s   miss %s" % (V_HIT or "(none today)", V_MISS or "(none today)"))
 print("  asserting: %s" % ("THIS TREE's client (substituted over CDP)" if LOCAL
                            else "dev2's SERVED client — LG_GDLE_SERVED=1"))
 print("  probe member: wp_user_id=%d\n" % UID)
@@ -465,6 +478,165 @@ try:
             check(False, "[4] legacy board became ready")
     finally:
         d.close()
+    print()
+
+    # ── PHASE 5 — VOWELS, the letter that is tapped TWICE ───────────────────
+    # The fix changed serverReveal() and handleVowel() as well, and the first
+    # cut of this gate exercised CONSONANTS ONLY. The vowel behaviour was
+    # REASONED in a commit message and never measured -- and this lane has been
+    # bitten twice today by exactly that gap. A vowel is bought on the first tap
+    # and revealed on the second, so it is the only letter that can sit
+    # half-resolved, and a vowel MISS is the case where "purchased" and
+    # "resolved" are easiest to confuse: both come back with positions=[].
+    print("PHASE 5 — a vowel is BOUGHT on tap 1 and RESOLVED on tap 2")
+    if not V_HIT or not V_MISS:
+        check(False, "[5] today's phrase can exercise a vowel hit AND a vowel miss",
+              "phrase %r has vowel hits %s and vowel misses %s -- the vowel leg "
+              "asserted NOTHING today; that is a gap, not a pass" % (PHRASE, V_HITS, V_MISSES))
+    else:
+        for label, letter, is_hit in (("hit", V_HIT, True), ("miss", V_MISS, False)):
+            wipe()
+            d = Device(br, DESKTOP)
+            try:
+                if not d.open():
+                    check(False, "[5/%s] board reached an authenticated server-play state" % label)
+                    continue
+                if LOCAL and not check(bool(d.subbed),
+                                       "[5/%s] this tree's client was substituted" % label):
+                    continue
+                # TAP 1 — bought, NOT resolved. It must not claim to be a hit or
+                # a miss yet, and it must stay TAPPABLE or the second tap (the
+                # one that actually reveals it) can never happen.
+                s1 = d.tap(letter)
+                c1 = cls_for(s1, letter)
+                check(c1 is not None and "purchased" in c1,
+                      "[5/%s] a vowel's FIRST tap marks it purchased" % label, "got %r" % c1)
+                check(c1 is not None and "hit" not in c1 and "miss" not in c1,
+                      "[5/%s] a vowel's FIRST tap does NOT resolve it to hit/miss" % label,
+                      "got %r -- it has been bought, not revealed" % c1)
+                check(s1.get("dis", {}).get(letter) is False,
+                      "[5/%s] a bought vowel stays TAPPABLE for its second tap" % label,
+                      "disabled=%s -- a disabled key can never be revealed" % s1.get("dis", {}).get(letter))
+                # TAP 2 — resolved, and the purchase is spent.
+                s2 = d.tap(letter)
+                c2 = cls_for(s2, letter)
+                want = "hit" if is_hit else "miss"
+                check(c2 is not None and want in c2,
+                      "[5/%s] a vowel's SECOND tap resolves it to %s" % (label, want),
+                      "got %r" % c2)
+                check(c2 is not None and "purchased" not in c2,
+                      "[5/%s] a resolved vowel is no longer marked purchased" % label,
+                      "got %r -- purchased and resolved are different states" % c2)
+                check(s2.get("dis", {}).get(letter) is True,
+                      "[5/%s] a resolved vowel is disabled" % label,
+                      "disabled=%s" % s2.get("dis", {}).get(letter))
+                if is_hit:
+                    check(len(s2["painted"]) >= 1,
+                          "[5/hit] a revealed vowel PAINTS in the word display",
+                          "painted=%s" % s2["painted"])
+                else:
+                    # The consonant version of this is the defect Ian reported.
+                    # A vowel miss is the same bug's other face: positions=[]
+                    # comes back for a purchase AND for a miss.
+                    look = s2.get("look") or {}
+                    untouched = next((c for c in "BCDFGHJKLMNPQRSTVWXYZ"
+                                      if c not in (A_HIT, A_MISS, B_HIT)), None)
+                    check(untouched and look.get(V_MISS) and look.get(V_MISS) != look.get(untouched),
+                          "[5/miss] a missed vowel RENDERS differently from an untouched key",
+                          "miss=%s untouched(%s)=%s" % (look.get(V_MISS), untouched, look.get(untouched)))
+            finally:
+                d.close()
+    print()
+
+    # ── PHASE 6 — LEGACY SNAPSHOT MEETS SERVER PLAY ────────────────────────
+    # REPRODUCED BEFORE IT WAS FIXED, on an ordinary member path with no DB
+    # surgery: play the game page directly, then enter via the front-page block.
+    #
+    #   /archive-poc/guitardle/index.html            -> LEGACY. The client knows
+    #     the phrase, so saveGame() writes a local snapshot: revealed ["C","B"].
+    #   the same page with ?sp=1 (added ONLY by the front-page block, for
+    #     members) -> SERVER play, with a claim row that has nothing revealed.
+    #
+    # restoreSavedGame() guards with `if (serverPlay && !serverPositionMap())`,
+    # meaning "the server has no position for us, so this snapshot is stale".
+    # THAT GUARD CANNOT FIRE HERE. The handshake builds the map by looping over
+    # revealed[], so an empty one encodes as PHP's [] -- a JSON ARRAY -- and an
+    # empty array is TRUTHY in JavaScript. Measured: serverPositionMap() === [].
+    #
+    # So the snapshot is replayed against a map that knows no letters. Every
+    # lookup misses and falls to the branch that asks PHRASE_LETTERS -- which is
+    # ALWAYS "" under server play, because the client is never told the phrase
+    # (backlog 25). hit=false for everything. Measured on the unfixed tree:
+    #   C (a genuine HIT) -> 'miss.used'   B (a miss) -> 'miss.used'   painted []
+    # Both struck through, the word blank. That is worse than not painting: the
+    # board tells the player they were WRONG about a letter they got RIGHT.
+    #
+    # NOT A RACE. init() does `await scoreSyncPromise` before restoreSavedGame()
+    # under server play, so scoreAuth is ALWAYS populated by then -- the empty
+    # map is guaranteed, not occasional.
+    #
+    # ⚠️ THE LIVENESS ASSERTION IS THE POINT. The first cut of this phase went
+    # GREEN ON THE UNFIXED TREE because it built the state with a DB rewind and
+    # never checked a snapshot existed -- under server play the client writes no
+    # localStorage at all (serverReveal calls no saveGame), so there was nothing
+    # to replay and "no key is a miss" passed on an empty board. An absence
+    # assertion with no liveness assertion is vacuous.
+    print("PHASE 6 — a LEGACY snapshot is never redrawn as a board of MISSES")
+    wipe()
+    d = Device(br, DESKTOP, sp=False)
+    try:
+        if not d.open():
+            check(False, "[6] the legacy board became ready")
+        elif LOCAL and not check(bool(d.subbed), "[6] this tree's client was substituted"):
+            pass
+        elif not check(d.state()["serverPlay"] is False,
+                       "[6] the first leg really is the LEGACY path",
+                       "serverPlay=%s" % d.state()["serverPlay"]):
+            pass
+        else:
+            d.tap(A_HIT)
+            s1 = d.tap(A_MISS)
+            snap = d.js("localStorage.getItem('guitardle_game')")
+            try:
+                saved = json.loads(snap) if snap else None
+            except Exception:
+                saved = None
+            # LIVENESS: there must BE a snapshot, and it must name the hit.
+            # Without this the rest passes on an empty board.
+            live = bool(saved) and A_HIT in (saved.get("revealed") or [])
+            if not check(live,
+                         "[6] LIVENESS: legacy play left a local snapshot naming the hit",
+                         "localStorage=%s -- with no snapshot the assertions below "
+                         "would pass having measured nothing" % snap):
+                pass
+            else:
+                check(cls_for(s1, A_HIT) and "hit" in cls_for(s1, A_HIT),
+                      "[6] setup: legacy called the hit a HIT before the switch",
+                      "got %r" % cls_for(s1, A_HIT))
+                # Enter the way the front-page block does: same browser, same
+                # origin, so the snapshot survives -- only ?sp=1 is added.
+                d.sp = True
+                d.cookies()
+                d.cmd("Page.navigate", url=d.url())
+                if check(d.wait(), "[6] the board came back under server play"):
+                    check(d.state()["serverPlay"] is True,
+                          "[6] the second leg really IS server-driven play",
+                          "serverPlay=%s" % d.state()["serverPlay"])
+                    s2 = d.state()
+                    c_hit = cls_for(s2, A_HIT)
+                    check(not (c_hit and "miss" in c_hit),
+                          "[6] a letter the player GOT RIGHT is never redrawn as a MISS",
+                          "%s reads %r with painted=%s -- this is the board calling a "
+                          "correct guess wrong" % (A_HIT, c_hit, s2["painted"]))
+                    # Whatever it decides, key and word must agree: a key claiming
+                    # a resolution the word display cannot corroborate is the whole
+                    # defect class this gate exists for.
+                    check(not (c_hit and "hit" in c_hit and not s2["painted"]),
+                          "[6] a letter drawn as a HIT is actually painted in the word",
+                          "%s reads %r but painted=%s" % (A_HIT, c_hit, s2["painted"]))
+    finally:
+        d.close()
+
 finally:
     cleanup()
 
