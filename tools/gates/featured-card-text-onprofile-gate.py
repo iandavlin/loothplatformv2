@@ -38,12 +38,14 @@ Exit codes follow run-all.sh: 0 green, 1 red, 2 no verdict.
 
 import html
 import json
+import os
 import re
 import subprocess
 import sys
 import urllib.request
 
 HOST = "https://dev2.loothgroup.com"
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # file -> gates -> tools -> repo (3 dirnames; got this wrong twice)
 OK, RED, DEAD = [], [], []
 
 
@@ -170,6 +172,31 @@ def main():
             else:
                 RED.append(f"[{slug}] the card would print a BIO the profile never shows: "
                            f"{probe[:70]!r} — sourced from profile_sections about/public")
+
+    # ── C. THE CARD MUST NEVER REACH INTO WP author_about ────────────────────
+    # Traced 2026-08-16: the phantom bio Ian saw was NOT profile_app at all — it is
+    # WP usermeta `author_about` on his admin account, reaching the card through
+    # archive-poc-sync (mu-plugin line ~154 sets bio = author_about ?: description).
+    # That key is still LIVE for the post author box and is editable in the editor,
+    # so it will keep drifting from the profile forever. The card's own resolver
+    # must therefore never touch it — asserted on the SOURCE, because a runtime
+    # check cannot prove the absence of a read that simply is not happening today.
+    card_php = os.path.join(REPO, "archive-poc", "web", "index.php")
+    try:
+        src = open(card_php, encoding="utf-8").read()
+    except OSError as e:
+        DEAD.append(f"[C] could not read the card renderer: {e}")
+    else:
+        # Match a real USE of the key, not the word in prose — this gate's sibling
+        # no-verdicted itself on its own explanatory comment earlier today.
+        hits = re.findall(r"""['"]author_about['"]|get_user_meta\s*\([^)]*author_about""", src)
+        if hits:
+            RED.append(f"[C] the featured card renderer references WP author_about "
+                       f"({len(hits)} use(s)) — that key is a member-editable field the profile "
+                       f"does not publish, and it is exactly where Ian's phantom bio came from")
+        else:
+            OK.append("[C] the card renderer never reads WP author_about (the phantom bio's "
+                      "actual source, via archive-poc-sync)")
 
     if checked == 0:
         DEAD.append("no profile rendered usably — every assertion above would be vacuous")
