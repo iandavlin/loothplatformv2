@@ -738,8 +738,17 @@ function lgb_lane_sent(string $backlogPath, string $lane): array
     $out = []; $cur = null; $buf = [];
     $flush = static function () use (&$out, &$cur, &$buf): void {
         if ($cur !== null) {
-            $cur['text'] = trim(implode("\n", array_map(
-                static fn (string $l): string => ltrim($l, '> '), $buf)));
+            // STRIP EXACTLY ONE "> ", never a character CLASS.
+            //
+            // ltrim($l, '> ') removes every leading '>' AND every leading space,
+            // so quoted terminal output came back with its indentation deleted:
+            //   "> ~~~~Active: failed"  ->  "Active: failed"
+            // Ian's paste-back is explicitly "multi-line terminal output, do not
+            // mangle whitespace", and stack traces, systemctl output and diffs
+            // are all indentation. Measured before fixing: 4- and 6-space
+            // indents both vanished.
+            $cur['text'] = rtrim(implode("\n", array_map(
+                static fn (string $l): string => (string) preg_replace('/^>\s?/', '', $l), $buf)));
             $out[] = $cur;
         }
     };

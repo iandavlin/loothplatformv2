@@ -799,6 +799,29 @@ is_(str_contains($kHtml, 'class="thrbox__bad">NOT DELIVERED — keeper is not an
     'a failed message to KEEPER is shown as NOT DELIVERED too — the general chat is not a second implementation');
 @unlink($kThr);
 
+/**
+ * WHITESPACE SURVIVES THE ROUND TRIP — Ian's paste-back requirement, gated
+ * before the phase that needs it is built.
+ *
+ * He will paste terminal output into these boxes: stack traces, systemctl
+ * status, diffs. All of it is INDENTATION. The store quotes each line with
+ * "> ", and the reader must strip exactly that — not a character class.
+ * `ltrim($l, '> ')` removes every leading '>' AND every leading space, which
+ * deleted 4- and 6-space indents outright. Measured, then fixed.
+ */
+$wsLane = $tmp . '-ws';
+@mkdir($wsLane . '/board-lanes', 0755, true);
+copy($BACK, $wsLane . '/BACKLOG.md');
+file_put_contents($wsLane . '/board-lanes/stripe-membership.md',
+    "# Messages\n\n### 2026-08-16 14:00 — ian-via-board\n\n> \$ systemctl status foo\n>     Active: failed\n>       Loaded: bad\n");
+$wsHtml = (string) shell_exec('LGB_MAIN_COPY=/nonexistent/main-copy.md LGB_THREADS=/nonexistent/t.json LGB_BACKLOG='
+    . escapeshellarg($wsLane . '/BACKLOG.md') . ' ' . PHP_BINARY . ' ' . escapeshellarg($PAGE) . ' 2>/dev/null');
+is_(str_contains($wsHtml, '    Active: failed'),
+    'a pasted 4-space indent survives the store round trip');
+is_(str_contains($wsHtml, '      Loaded: bad'),
+    '...and a 6-space one, so terminal output is not flattened');
+sh('rm -rf ' . escapeshellarg($wsLane));
+
 // An absent relay must read as absent, not as a lane with nothing to say.
 $noThrHtml = render($PAGE, $BACK);
 is_(str_contains($noThrHtml, 'the relay has not written a snapshot yet'),
