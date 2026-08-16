@@ -742,6 +742,35 @@ $depthOf = static function (string $needle) use ($pageSrc, $scriptStart): int {
 is_($depthOf('function withMedia(') === $depthOf('function fillWrite(')
     && $depthOf('function withMedia(') > 0,
     'withMedia and fillWrite share a scope — an item modal can actually call it');
+
+/**
+ * THE FIRST PAINT AND THE REPAINT MUST AGREE ABOUT IMAGES.
+ *
+ * The first paint is PHP; every repaint is JavaScript. Without a server-side
+ * equivalent, a pasted screenshot rendered as a RAW PATH until the first poll
+ * eight seconds later and then silently became a picture — the same
+ * two-renderers drift the region renderers were extracted to prevent, found only
+ * by rendering every surface together instead of one at a time.
+ */
+$mediaFx = $tmp . '-media';
+@mkdir($mediaFx . '/board-chat', 0755, true);
+copy($BACK, $mediaFx . '/BACKLOG.md');
+file_put_contents($mediaFx . '/board-chat/keeper.md',
+    "# chat\n\n### 2026-08-16 19:00 — ian-via-board\n\n> look\n> /board-media/20260816-1-abc.png\n");
+$mediaHtml = (string) shell_exec('LGB_MAIN_COPY=/nonexistent/m.md LGB_THREADS=/nonexistent/t.json LGB_BACKLOG='
+    . escapeshellarg($mediaFx . '/BACKLOG.md') . ' ' . PHP_BINARY . ' ' . escapeshellarg($PAGE) . ' 2>/dev/null');
+is_((bool) preg_match('#<img class="msg__img" src="/board-media/20260816-1-abc\.png"#', $mediaHtml),
+    'the SERVER paint renders a pasted image, not a raw path he has to wait out');
+is_(str_contains($mediaHtml, 'image no longer stored'),
+    '...carrying the same gone-file wording the client uses');
+
+// BOTH server paints, not just the chat. There are two call sites — the chat and
+// the thread box — and a mutation aimed at "the server paint" hit only one of
+// them while this gate stayed green, which is how half a fix ships.
+$mediaSrc = (string) file_get_contents($PAGE);
+is_(substr_count($mediaSrc, 'lgb_with_media($m[\'text\'])') === 2,
+    'BOTH server paints use it — the chat AND the item/lane threads');
+sh2('rm -rf ' . escapeshellarg($mediaFx));
 is_(!preg_match('/chat_send[\s\S]{0,900}?innerHTML\s*\+=/', $pageSrc),
     '...and never appends a message it made up from the typed text');
 is_(str_contains($openBox, 'Something else'),

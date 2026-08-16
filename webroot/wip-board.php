@@ -403,6 +403,30 @@ const LGB_DISK_RED_PCT  = 90;
 
 function lgb_h(string $s): string { return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8'); }
 
+/**
+ * A message's text, with pasted images shown as pictures.
+ *
+ * THE SERVER SIDE OF `withMedia`, and it exists because the two were drifting:
+ * the first paint is PHP and every repaint is JavaScript, so a pasted screenshot
+ * rendered as a raw path until the first poll eight seconds later and then
+ * silently became a picture. Same class as the empty-state drift the region
+ * renderers were extracted to prevent — found by rendering every surface
+ * together instead of one at a time.
+ *
+ * Escaped FIRST, then only anchored media paths become images, so a message can
+ * never inject markup by looking like one. A file that has gone renders as words
+ * rather than a broken-image icon, exactly as the client does.
+ */
+function lgb_with_media(string $text): string
+{
+    return (string) preg_replace(
+        '#/board-media/[A-Za-z0-9._-]+\.(?:png|jpe?g|gif|webp)#',
+        '<a href="$0" target="_blank" rel="noopener"><img class="msg__img" src="$0" alt="pasted image"'
+        . ' onerror="this.replaceWith(Object.assign(document.createElement(\'em\'),{textContent:\'image no longer stored\'}))"></a>',
+        lgb_h($text)
+    );
+}
+
 /* ---------------------------------------------------------------------- *
  * PHASE 2 — THE WRITE LAYER
  *
@@ -965,7 +989,7 @@ function lgb_thread_box(string $lane, bool $ok, array $sent, array $rep, string 
         <?php endif; ?>
         <div class="thrbox__log">
           <?php foreach ($sent as $m): ?>
-            <div class="msg msg--out"><span class="msg__w"><?= lgb_h($m['when']) ?></span><?= lgb_h($m['text']) ?></div>
+            <div class="msg msg--out"><span class="msg__w"><?= lgb_h($m['when']) ?></span><?= lgb_with_media($m['text']) ?></div>
           <?php endforeach; ?>
           <?php foreach ($rep['replies'] as $m): ?>
             <div class="msg msg--in"><span class="msg__w"><?= lgb_h((string) ($m['when'] ?? '')) ?></span><?= lgb_h((string) ($m['text'] ?? '')) ?></div>
@@ -1457,7 +1481,7 @@ header('X-Robots-Tag: noindex, nofollow');
         <div class="thrbox" data-chat="1">
           <div class="thrbox__log" id="lgb-chatlog">
             <?php foreach ($chat as $m): ?>
-              <div class="msg <?= $m['mine'] ? 'msg--out' : 'msg--in' ?>"><span class="msg__w"><?= lgb_h($m['when'] . ' · ' . $m['who']) ?></span><?= lgb_h($m['text']) ?></div>
+              <div class="msg <?= $m['mine'] ? 'msg--out' : 'msg--in' ?>"><span class="msg__w"><?= lgb_h($m['when'] . ' · ' . $m['who']) ?></span><?= lgb_with_media($m['text']) ?></div>
             <?php endforeach; ?>
             <?php if ($chat === []): ?><div class="thrbox__no">Nothing yet.</div><?php endif; ?>
           </div>
