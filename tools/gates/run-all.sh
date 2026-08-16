@@ -1023,11 +1023,12 @@ echo "=== GATE 53: .lgpo-subtext keeps a dark-theme ink (and OFF stays a no-op) 
 # assertions and requires each to redden.
 run "dark-onboard-subtext" python3 "$(dirname "$0")/dark-onboard-subtext-gate.py"
 
-if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; echo "RED GATES: ${RED_GATES:-unknown}"; exit 1; fi
-
-echo "=== GATE 50: the work board renders EVERY item, and phase 1 cannot write ==="
-run "work-board" php "$(dirname "$0")/work-board-gate.php"
-
+# ⚠️ REGISTERED BEFORE THE EARLY EXIT BELOW, DELIBERATELY. That `exit 1` is a
+# TERMINAL block in the middle of this file, so anything registered after it
+# NEVER RUNS on any run where an earlier gate is red — silently, with no line
+# saying gates were skipped. This gate was appended after it and therefore did
+# not run in the 2026-08-16 suite at all, while the summary named only the one
+# red gate. A gate that does not run is not coverage.
 # Gate number 57 — ASSIGNED BY KEEPER 2026-08-16. I had used 56 as a working
 # placeholder; 56 was already taken (board committer, minted at the stripe
 # merge). A placeholder is still self-minting — ask keeper first.
@@ -1063,6 +1064,12 @@ echo "=== GATE 57: a guessed letter is a HIT or a MISS, and a resumed board PAIN
 # 19); 19 was correct for the original four-phase gate, the others never were.
 # Re-measure before quoting it -- phases 5 and 6 changed the count.
 run "guitardle-letter-state" python3 "$(dirname "$0")/guitardle-letter-state-gate.py"
+
+if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; echo "RED GATES: ${RED_GATES:-unknown}"; exit 1; fi
+
+echo "=== GATE 50: the work board renders EVERY item, and phase 1 cannot write ==="
+run "work-board" php "$(dirname "$0")/work-board-gate.php"
+
 
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then

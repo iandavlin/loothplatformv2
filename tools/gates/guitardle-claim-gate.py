@@ -417,14 +417,30 @@ check('Playing for fun' in html and 'sign in to compete for the Weekly Top 5' in
 #
 # That check needs a browser, which would make this gate flaky on a 2-core box
 # and a DEAD gate blocks every lane — so what is gated here is the structural
-# guarantee underneath it: the remote path must replay through revealTiles(),
-# the same primitive the long-proven LOCAL restore uses. revealTiles is what
-# reveals a letter in ALL its positions; a hand-rolled loop that set one tile
-# would pass every server-side assertion in this file and still lose letters.
+# guarantee underneath it: BOTH restores must replay through the ONE shared
+# primitive that reveals a letter in ALL its positions. A hand-rolled loop that
+# set a single tile would pass every server-side assertion in this file and
+# still lose letters.
+#
+# ⚠️ THE PRIMITIVE MOVED 2026-08-16, and this gate was RED on the fix that
+# repaired the very defect it exists to prevent. It named revealTiles(letter)
+# directly. That was correct while there was one board shape, and became WRONG
+# when server-driven play arrived: server play draws tiles with data-i only (the
+# client is never told the phrase — backlog 25) while legacy uses data-letter,
+# and revealTiles() selects [data-letter]. So the assertion was SATISFIED by a
+# call that matched ZERO tiles and painted nothing — it passed while a resumed
+# board came back blank, which is exactly what Ian reported.
+#
+# Both restores now go through replayPosition(), which dispatches to
+# revealTiles() for legacy and revealTilesAt() for server play. The property is
+# unchanged and the assertion is stronger: it requires the shared entry point
+# AND that the entry point still reveals ALL positions on BOTH board shapes.
+# Gate 57 asserts the same property BEHAVIOURALLY in a real browser, at both
+# widths and across two devices; this stays as the cheap structural backstop.
 remote = js[js.find('function restoreRemoteGame'):]
 remote = remote[:remote.find('\n}\n')]
-check('revealTiles(letter)' in remote,
-      'the cross-device resume replays through revealTiles() — a letter comes '
+check('replayPosition(' in remote,
+      'the cross-device resume replays through replayPosition() — a letter comes '
       'back in EVERY position, not just the first')
 check('state.revealedLetters' in remote and 'state.purchasedVowels' in remote
       and 'lockHardcoreToggle()' in remote,
@@ -432,8 +448,19 @@ check('state.revealedLetters' in remote and 'state.purchasedVowels' in remote
       'the hardcore lock (mode you started in is the mode you resume in)')
 local = js[js.find('function restoreSavedGame'):]
 local = local[:local.find('\n}\n')]
-check('revealTiles(letter)' in local,
+check('replayPosition(' in local,
       'and the local restore still uses it too (the two paths have not drifted)')
+# The shared primitive must itself still reveal ALL positions, on BOTH board
+# shapes — otherwise "they both call replayPosition" is satisfied by a
+# replayPosition that sets one tile, and the guarantee is gone.
+replay = js[js.find('function replayPosition'):]
+replay = replay[:replay.find('\n}\n')]
+check('revealTilesAt(letter, positions)' in replay,
+      'replayPosition reveals ALL server-given positions (server play draws '
+      'tiles with data-i, so the data-letter painter matches nothing there)')
+check('revealTiles(letter)' in replay,
+      'replayPosition still uses the data-letter painter for the LEGACY board '
+      '(the shape live runs today)')
 check('Hardcore' in html and 'locks at your first move' in html.lower(),
       'How-to-Play explains Hardcore in plain English (it had NO player-visible '
       'copy at all — only a title= tooltip, invisible on touch)')
