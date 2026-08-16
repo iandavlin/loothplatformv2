@@ -20,7 +20,10 @@ GATE="tools/gates/weekly-front-gate.py"
 PARTIAL="archive-poc/web/_render-weekly-issue.php"
 FEED="lg-weekly-digest/includes/class-lg-wd-front-feed.php"
 CONFIG="platform/config/weekly-front.php"
-FILES=("$PARTIAL" "$FEED" "$CONFIG")
+# The front page is the OTHER reader of the box-local override. It joins the
+# mutation set because an override honoured by only one pool is a HALF-ON state.
+FRONT="archive-poc/web/index.php"
+FILES=("$PARTIAL" "$FEED" "$CONFIG" "$FRONT")
 
 SNAP="$(mktemp -d)"
 trap 'for f in "${FILES[@]}"; do cp "$SNAP/$(echo "$f" | tr / _)" "$f"; done; rm -rf "$SNAP"' EXIT
@@ -110,6 +113,30 @@ mutate "feed stops reading the tracked config" A \
 # ── A: read only one override channel ───────────────────────────────────────
 mutate "feed reads getenv() but not \$_SERVER" A \
   perl -0pi -e "s/\\\$_SERVER\['LG_WEEKLY_FRONT'\] \?\? false/false/" "$FEED"
+
+# ── A2: the box-local override, which is the whole dev2 flip ────────────────
+# Each of these is a state the flip could silently land in. The first two are
+# the HALF-ON case: one pool honours the override and the other does not, which
+# renders as an enabled front page fetching a 404 -- a broken feature, not an
+# off one.
+mutate "front page stops reading the box-local override" A2 \
+  perl -0pi -e "s#/weekly-front\.local\.php#/weekly-front.NOPE.php#" "$FRONT"
+
+mutate "feed stops reading the box-local override" A2 \
+  perl -0pi -e "s#/weekly-front\.local\.php#/weekly-front.NOPE.php#" "$FEED"
+
+# Precedence: an override read AFTER the env channels loses to a file on disk,
+# so a gate forcing a state would be silently overruled. Both the pattern and
+# the replacement are SINGLE-QUOTED and use no literal quote character -- under
+# `set -u` a $loc inside a double-quoted shell string is expanded by BASH before
+# perl ever sees it, which aborts the run with "unbound variable".
+mutate "front page reads the override AFTER the env channels" A2 \
+  perl -0pi -e 's{(    \$loc = \@include[^\n]*\n[^\n]*\n[^\n]*\n[^\n]*\n)(    foreach \(\[getenv[^\n]*\n[^\n]*\n[^\n]*\n)}{$2$1}s' "$FRONT"
+
+# !empty cannot express "force OFF": it reads an override saying enabled=false
+# identically to no override at all, so dev2 could not be switched back off.
+mutate "override uses !empty instead of array_key_exists" A2 \
+  perl -0pi -e 's{array_key_exists\([^,]*, }{!empty(}' "$FRONT"
 
 echo
 echo "red-first: $pass caught, $fail not caught"

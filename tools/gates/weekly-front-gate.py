@@ -58,7 +58,7 @@ WHAT IT ASSERTS, and why each one is here rather than being obvious:
 Usage:  python3 tools/gates/weekly-front-gate.py
 Exit:   0 green, 1 RED (real finding), 2 CANNOT RUN (missing php/files).
 """
-import json
+import json, re
 import os
 import shutil
 import subprocess
@@ -70,6 +70,9 @@ REPO = os.path.dirname(os.path.dirname(HERE))
 PARTIAL = os.path.join(REPO, "archive-poc", "web", "_render-weekly-issue.php")
 CONFIG = os.path.join(REPO, "platform", "config", "weekly-front.php")
 FEED = os.path.join(REPO, "lg-weekly-digest", "includes", "class-lg-wd-front-feed.php")
+# The OTHER reader. Both pools must honour the box-local override or the dev2
+# flip is half-on -- see section A2.
+FRONT = os.path.join(REPO, "archive-poc", "web", "index.php")
 
 FAILS = []
 PASSES = []
@@ -154,6 +157,19 @@ def flag_state(config_php):
     return r.stdout.strip()
 
 
+def pair_state(config_php, local_php):
+    """Read tracked config THEN the box-local override, exactly as both readers
+    do. array_key_exists, not !empty: an override saying enabled=false must be
+    able to force OFF over a tracked true, which `!empty` could not express."""
+    code = ("$c = @include $argv[1]; $on = is_array($c) && !empty($c['enabled']); "
+            "$l = @include $argv[2]; "
+            "if (is_array($l) && array_key_exists('enabled', $l)) "
+            "{ $on = ($l['enabled'] === true); } echo $on ? 'ON' : 'OFF';")
+    r = subprocess.run(["php", "-r", code, config_php, local_php],
+                       capture_output=True, text=True, timeout=30)
+    return r.stdout.strip()
+
+
 def main():
     if not shutil.which("php"):
         cannot("php is not on PATH")
@@ -198,6 +214,84 @@ def main():
             "lands in $_SERVER but not getenv()")
     else:
         ok("[A] the feed reads the config and both override channels")
+
+    # ── A2. THE BOX-LOCAL OVERRIDE, which is how dev2 is switched on ────────
+    # The dev2 flip is platform/config/weekly-front.local.php, NOT an FPM env[].
+    # env[] was wrong on this box: the pool files are SYMLINKS INTO THE SERVING
+    # CHECKOUT, so a "dev2-only" flip modifies tracked files there and a later
+    # `pull --ff-only` can refuse. These assertions exist because the override
+    # is now the only thing standing between "off for members" and "on", and
+    # LIVE IS PROTECTED BY THE FILE BEING ABSENT rather than by any code check.
+    with tempfile.TemporaryDirectory() as d:
+        tracked_off = os.path.join(d, "t-off.php")
+        tracked_on  = os.path.join(d, "t-on.php")
+        loc_on      = os.path.join(d, "l-on.php")
+        loc_off     = os.path.join(d, "l-off.php")
+        absent      = os.path.join(d, "l-absent.php")
+        open(tracked_off, "w").write("<?php return array('enabled' => false);\n")
+        open(tracked_on,  "w").write("<?php return array('enabled' => true);\n")
+        open(loc_on,      "w").write("<?php return array('enabled' => true);\n")
+        open(loc_off,     "w").write("<?php return array('enabled' => false);\n")
+
+        cases = [
+            (tracked_off, absent,  "OFF", "tracked false + NO override = OFF (this is LIVE)"),
+            (tracked_off, loc_on,  "ON",  "tracked false + override true = ON (this is dev2)"),
+            (tracked_off, loc_off, "OFF", "an override saying false keeps it OFF"),
+            (tracked_on,  loc_off, "OFF", "an override saying false OVERRIDES a tracked true"),
+            (tracked_on,  absent,  "ON",  "tracked true still governs when no override exists"),
+        ]
+        for cfg, loc, want, label in cases:
+            got = pair_state(cfg, loc)
+            if got != want:
+                bad("[A2] %s -- read %s, wanted %s" % (label, got, want))
+            else:
+                ok("[A2] " + label)
+
+    # BOTH READERS OR NEITHER. The front page (archive-poc pool) and the feed
+    # (looth-dev pool) run as DIFFERENT USERS, so an override honoured by only
+    # one of them is a HALF-ON state: an enabled front page fetching a 404, or a
+    # live endpoint nobody reads. That is invisible to any single-reader test.
+    front_src = open(FRONT, encoding="utf-8").read() if os.path.isfile(FRONT) else ""
+    for label, src in (("the front page", front_src), ("the feed", feed_src)):
+        if "weekly-front.local.php" not in src:
+            bad("[A2] %s does not read the box-local override -- the dev2 flip "
+                "would be HALF-ON, which looks like a broken feature" % label)
+        else:
+            ok("[A2] %s reads the box-local override" % label)
+    # Precedence: the override must sit BEFORE the env loop, or a gate forcing a
+    # state via LG_WEEKLY_FRONT would be silently overruled by a file on disk.
+    # WHAT THE FIVE CASES ABOVE DO **NOT** PROVE, said plainly: they exercise
+    # pair_state(), which is this gate's own model of the precedence, not the
+    # shipped readers -- those live inside a 1000-line front page and a WP class
+    # and cannot be honestly re-hosted (a lifted function body inherits none of
+    # its file's imports). So the semantic is pinned to the SOURCE here instead.
+    # array_key_exists is load-bearing and !empty cannot replace it: an override
+    # saying enabled=false must be able to force OFF over a tracked true, and
+    # !empty([...'enabled'=>false]) is indistinguishable from "key not present".
+    for label, src in (("the front page", front_src), ("the feed", feed_src)):
+        if "weekly-front.local.php" not in src:
+            continue
+        if "array_key_exists" not in src:
+            bad("[A2] %s does not use array_key_exists for the override -- with "
+                "!empty, an override saying false cannot force OFF" % label)
+        else:
+            ok("[A2] %s uses array_key_exists, so the override can force OFF" % label)
+
+    # ⚠️ ANCHOR ON THE CODE, NOT ON "getenv". The first cut of this assertion
+    # compared against src.index("getenv") and went RED on correct code: both
+    # files carry a DOCBLOCK above the function explaining "reading only
+    # getenv() serves the OFF path", and that prose sits earlier in the file
+    # than either construct. Matching a string that also lives in a comment is
+    # the recorded trap; the env CONSTANT only ever appears in real code.
+    env_call = re.compile(r"getenv\(\s*'LG_WEEKLY_FRONT'")
+    for label, src in (("the front page", front_src), ("the feed", feed_src)):
+        m = env_call.search(src)
+        if "weekly-front.local.php" in src and m:
+            if src.index("weekly-front.local.php") > m.start():
+                bad("[A2] %s reads the override AFTER the env channels -- a gate "
+                    "forcing a state would lose to a file on disk" % label)
+            else:
+                ok("[A2] %s reads the override BEFORE the env channels" % label)
 
     # ── B. nothing to say => nothing emitted ───────────────────────────────
     for label, empty in (("no payload", {}), ("no sections", {"sections": []})):

@@ -156,6 +156,20 @@ function lg_weekly_front_enabled(): bool {
     if ($on !== null) return $on;
     $cfg = @include __DIR__ . '/../../platform/config/weekly-front.php';
     $on  = is_array($cfg) && !empty($cfg['enabled']);
+    // PER-BOX OVERRIDE, gitignored (the back-pill/compose pattern, b3bbbf9).
+    // dev2 runs this ON for Ian's look while the TRACKED default stays false,
+    // so a live pull cannot switch it on unverified: live is protected by the
+    // file being ABSENT, not by a check in the code.
+    //
+    // It replaced an FPM env[] flip, which could not be used here: dev2's pool
+    // files are SYMLINKS INTO THE SERVING CHECKOUT, so setting env[] there
+    // modifies two tracked files in ~/loothplatformv2-clean and a later
+    // `pull --ff-only` can refuse. A dev2-only switch must not dirty the serve.
+    // Sits BEFORE the env loop so a gate forcing a state still wins.
+    $loc = @include __DIR__ . '/../../platform/config/weekly-front.local.php';
+    if (is_array($loc) && array_key_exists('enabled', $loc)) {
+        $on = ($loc['enabled'] === true);
+    }
     foreach ([getenv('LG_WEEKLY_FRONT'), $_SERVER['LG_WEEKLY_FRONT'] ?? false] as $o) {
         if ($o !== false && $o !== '') $on = ($o === '1' || $o === 'true');
     }

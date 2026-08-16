@@ -115,6 +115,15 @@ class LG_WD_Front_Feed {
 		$cfg = @include dirname( __DIR__, 2 ) . '/platform/config/weekly-front.php';
 		$on  = is_array( $cfg ) && ! empty( $cfg['enabled'] );
 
+		// Per-box override, gitignored — see the twin in archive-poc/web/index.php.
+		// BOTH readers must carry it or the flip is half-on: the front page and
+		// this feed run as DIFFERENT POOL USERS, and one alone gives an enabled
+		// page fetching a 404, or a live endpoint nobody reads.
+		$loc = @include dirname( __DIR__, 2 ) . '/platform/config/weekly-front.local.php';
+		if ( is_array( $loc ) && array_key_exists( 'enabled', $loc ) ) {
+			$on = ( $loc['enabled'] === true );
+		}
+
 		foreach ( [ getenv( 'LG_WEEKLY_FRONT' ), $_SERVER['LG_WEEKLY_FRONT'] ?? false ] as $o ) {
 			if ( $o !== false && $o !== '' ) {
 				$on = ( $o === '1' || $o === 'true' );
