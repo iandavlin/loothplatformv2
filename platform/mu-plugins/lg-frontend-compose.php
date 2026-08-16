@@ -819,13 +819,47 @@ function lg_fc_acf_field_names(string $type): array
 function lg_fc_own_controls(array $t): string
 {
     $label = esc_html($t['comments']['label']);
-    return <<<HTML
+    $hero  = !empty($t['hero_from']) ? lg_fc_hero_control() : '';
+    return $hero . <<<HTML
 <div class="acf-field lgfc-field lgfc__own" data-name="lg_fc_comments">
   <div class="acf-label"><label>{$label}</label></div>
   <div class="acf-input"><div class="lgfc__chips">
     <label class="lgfc__chip"><input type="radio" name="lg_fc_comments" value="open" checked> <span>Yes</span></label>
     <label class="lgfc__chip"><input type="radio" name="lg_fc_comments" value="closed"> <span>No</span></label>
   </div></div>
+</div>
+HTML;
+}
+
+/**
+ * "Your hero image is the first photo unless you pick another" — the control that
+ * sentence has been promising.
+ *
+ * Ian, 2026-08-16, testing live: "There is no featured image". The footer prose
+ * has claimed a picker since the form shipped and there was never one to click:
+ * prose promising an absent control, which is a defect class in its own right
+ * because a member reads it and goes looking.
+ *
+ * EMPTY AND JS-FILLED ON PURPOSE. The photos live in ACF's gallery field, which
+ * builds its own DOM after ACF boots and mutates it on every add/remove/reorder.
+ * Rendering a server-side copy of that list would be a second source of truth
+ * that goes stale the moment somebody drags a photo — so the strip mirrors the
+ * gallery live instead, and stays hidden until there is something to choose.
+ *
+ * The hidden input carries only the chosen attachment id; lg_fc_hero_pick()
+ * re-validates it server-side (attachment, and parented to THIS post) because a
+ * hidden input is a member-controlled value.
+ */
+function lg_fc_hero_control(): string
+{
+    return <<<HTML
+<div class="acf-field lgfc-field lgfc__own lgfc__hero" data-name="lg_fc_hero" hidden>
+  <div class="acf-label"><label>Which photo leads?</label>
+    <p class="description">This is the one people see first, in the feed and at the top of your page.</p></div>
+  <div class="acf-input">
+    <input type="hidden" name="lg_fc_hero" value="">
+    <div class="lgfc__herostrip" role="radiogroup" aria-label="Choose the lead photo"></div>
+  </div>
 </div>
 HTML;
 }
@@ -852,6 +886,15 @@ function lg_fc_shed_site_chrome(): void
 {
     $drop = apply_filters('lg_fc_drop_handle_prefixes', [
         'bp-', 'bb-', 'buddy', 'fluent', 'fea-', 'wp-ulike', 'tutor', 'meprlms',
+        // ⚠️ THESE TWO LOOK LIKE THEY CONTRADICT THE SITE CHROME ADDED 2026-08-16
+        // (Ian: "can we get the header and footer so it looks like a normal
+        // page?"). They do not, and the distinction matters if you ever tidy this
+        // list: the chrome here is NOT enqueued. lg_fc_page_open() prints a plain
+        // <link> to /lg-shared/site-header.css and requires the partial directly,
+        // so it is untouched by a dequeue pass. Dropping these handles still keeps
+        // out whatever ELSE enqueues them site-wide (lg-layout-v2 does, on every
+        // page), which would otherwise load the same stylesheet twice.
+        // Remove them only if you also stop printing that <link>.
         'lg-shared-site-header', 'lg-site-footer', 'lg-wd-',
         'twentytwentyfive', 'wp-block-library', 'global-styles',
     ]);
@@ -880,6 +923,46 @@ function lg_fc_shed_site_chrome(): void
  * but it is the difference between deriving a default and overwriting a choice,
  * and that is the whole subject of this lane's hard constraint.
  */
+/**
+ * The hero the member actually PICKED, if they picked one.
+ *
+ * Ian, 2026-08-16, testing live: "There is no featured image". He was right, and
+ * the sharper version of it is that this form's own footer has been PROMISING a
+ * picker — "Your hero image is the first photo unless you pick another" — while no
+ * control to pick another existed. Prose promising an absent control.
+ *
+ * The server half was already here and already correct: lg_fc_hero_from_gallery()
+ * bails the moment a thumbnail is set ("the member picked one — never overwrite
+ * it"). So this only had to give them a way to set it. Runs at 19, BEFORE the
+ * auto-pick at 20, so a deliberate choice always beats "first photo".
+ *
+ * VALIDATED, not trusted: the id must be an attachment, and it must belong to
+ * THIS post — the draft-first model parents every upload to the post from birth,
+ * so post_parent is the honest test. Without it a member could point their hero
+ * at somebody else's image by editing one hidden input.
+ */
+function lg_fc_hero_pick($post_id): void
+{
+    if (!is_numeric($post_id)) {
+        return;
+    }
+    $post_id = (int) $post_id;
+    if (!isset($_POST['lg_fc_hero'])) {
+        return;
+    }
+    $att = absint($_POST['lg_fc_hero']);
+    if (!$att) {
+        return;   // "no explicit pick" — leave it to the auto-pick at 20
+    }
+    if (get_post_type($att) !== 'attachment') {
+        return;
+    }
+    if ((int) wp_get_post_parent_id($att) !== $post_id) {
+        return;   // not this post's media — refuse rather than reassign
+    }
+    set_post_thumbnail($post_id, $att);
+}
+add_action('acf/save_post', 'lg_fc_hero_pick', 19);   // BEFORE the auto-pick
 add_action('acf/save_post', 'lg_fc_hero_from_gallery', 20);
 
 function lg_fc_hero_from_gallery($post_id): void
@@ -1346,7 +1429,40 @@ function lg_fc_css(): string
 .lgfc .acf-gallery-side{border-radius:11px;border:1px solid var(--lg-line,#e3ddd0)}
 
 /* ---- file ---- */
-.lgfc .acf-field-file .acf-input>.acf-file-uploader{
+/* THE PRINT-FILES ROW — Ian, 2026-08-16, testing live: "The print files is weird,
+   please make look nice". MEASURED BEFORE REDRAWING rather than restyled on a
+   hunch: the control rendered as a 21px-tall sliver reading "No file selected
+   [Add File]", directly beneath a 104px dashed drop-zone for photos. Beside the
+   thing above it, it read as an afterthought — which is exactly what he saw.
+
+   ⚠️ STYLED ON .hide-if-value, NOT ON A has-value CLASS. My first instinct was
+   `.acf-file-uploader:not(.has-value)`, and it would have been wrong: this build
+   never sets that class — measured in the live DOM, the uploader's class list is
+   exactly "acf-file-uploader", and `has-value` appears ZERO times in the served
+   page. The drop-zone would then have stayed on top of a chosen file. Also note
+   this page loads NO ACF stylesheet at all, so nothing here can be assumed from
+   how ACF looks in wp-admin.
+
+   .hide-if-value IS the empty state by definition — ACF hides it the instant a
+   file lands and reveals .show-if-value — so the drop-zone look disappears on its
+   own with no state class to track. */
+.lgfc .acf-field-file .acf-input>.acf-file-uploader{border:0;background:none}
+.lgfc .acf-file-uploader>.hide-if-value{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  min-height:104px;padding:14px;
+  border:1.5px dashed var(--lg-sage,#87986a);border-radius:11px;
+  background:var(--lg-paper,#fdfdfa)}
+.lgfc .acf-file-uploader>.hide-if-value::before{content:"Drop your ZIP here";
+  font:700 13.5px/1.3 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-sage-d,#6b7c52)}
+.lgfc .acf-file-uploader>.hide-if-value::after{content:"or tap to choose \00b7 STLs, and the source too if you like";
+  font-size:12.3px;color:var(--lg-mute,#6b6f6b);order:2;text-align:center}
+/* ACF's "No file selected" wording and its button share ONE <p>, so the text
+   cannot be display:none'd without taking the only tap target with it. Zero the
+   paragraph and give the size back to the button. */
+.lgfc .acf-file-uploader>.hide-if-value p{font-size:0;margin:8px 0 0;order:3}
+.lgfc .acf-file-uploader>.hide-if-value p .acf-button{font-size:12.5px}
+/* the chosen-file state stays a solid card, so "empty" and "filled" read apart */
+.lgfc .acf-file-uploader>.show-if-value{
   border:1px solid var(--lg-line,#e3ddd0);border-radius:11px;background:var(--lg-paper,#fdfdfa)}
 .lgfc .acf-file-uploader .file-wrap,.lgfc .acf-file-uploader .show-if-value{padding:9px 11px}
 .lgfc input[type=file]{font-size:13px;color:var(--lg-mute,#6b6f6b)}
@@ -1356,6 +1472,16 @@ function lg_fc_css(): string
 
 /* ---- our own controls ---- */
 .lgfc__own{padding:15px 0}
+/* the hero picker's strip — small, so it reads as "which of these", not a gallery */
+.lgfc__herostrip{display:flex;gap:8px;flex-wrap:wrap}
+.lgfc__heroopt{padding:0;border:2px solid transparent;border-radius:10px;background:none;
+  cursor:pointer;line-height:0;overflow:hidden;outline-offset:2px}
+.lgfc__heroopt img{width:66px;height:66px;object-fit:cover;border-radius:8px;display:block}
+.lgfc__heroopt:hover{border-color:var(--lg-line,#e3ddd0)}
+.lgfc__heroopt.is-on{border-color:var(--lg-sage-d,#6b7c52)}
+.lgfc__heroopt.is-on img{filter:none}
+.lgfc__heroopt:not(.is-on) img{filter:saturate(.72) brightness(.94)}
+.lgfc__hero[hidden]{display:none}
 .lgfc__ownlabel{font:700 14.5px/1.3 var(--lg-font-sans,system-ui,sans-serif);margin:0 0 8px}
 .lgfc__chips{display:flex;gap:6px;flex-wrap:wrap}
 .lgfc__chip{font:600 12.3px/1 var(--lg-font-sans,system-ui,sans-serif);
@@ -1461,6 +1587,66 @@ CSS;
 function lg_fc_js(): string
 {
     return <<<'JS'
+/* THE HERO PICKER — mirrors ACF's gallery, live.
+   The gallery builds and rebuilds its own DOM (add, remove, reorder), so the strip
+   is rebuilt from it on every mutation rather than rendered once. It hides itself
+   whenever there is nothing to choose, which is also the state the form opens in,
+   so an empty form never shows an empty control.
+   DEFAULT = FIRST, matching the server: lg_fc_hero_from_gallery() takes the first
+   photo when nothing is picked, so the strip shows that same one as selected and
+   the picture never disagrees with what will be saved. */
+(function () {
+  var wrap = document.querySelector('.lgfc__hero');
+  if (!wrap) return;
+  var input = wrap.querySelector('input[name="lg_fc_hero"]');
+  var strip = wrap.querySelector('.lgfc__herostrip');
+  var gal   = document.querySelector('.acf-field[data-name="loothprint_more_images"]');
+  if (!input || !strip || !gal) return;
+
+  function shots() {
+    return Array.prototype.slice.call(
+      gal.querySelectorAll('.acf-gallery-attachment')
+    ).map(function (el) {
+      var img = el.querySelector('img');
+      var id  = el.getAttribute('data-id') || (el.querySelector('input') || {}).value || '';
+      return { id: String(id || ''), src: img ? img.getAttribute('src') : '' };
+    }).filter(function (s) { return s.id && s.src; });
+  }
+
+  function paint() {
+    var list = shots();
+    if (list.length < 2) {          /* nothing to choose between */
+      wrap.hidden = true;
+      if (!list.length) input.value = '';
+      return;
+    }
+    wrap.hidden = false;
+    var current = input.value;
+    if (!current || !list.some(function (s) { return s.id === current; })) {
+      current = list[0].id;         /* default = first, same as the server */
+      input.value = current;
+    }
+    strip.innerHTML = '';
+    list.forEach(function (s) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'lgfc__heroopt' + (s.id === current ? ' is-on' : '');
+      b.setAttribute('role', 'radio');
+      b.setAttribute('aria-checked', s.id === current ? 'true' : 'false');
+      b.setAttribute('aria-label', 'Use this photo as the lead');
+      b.innerHTML = '<img alt="" src="' + s.src.replace(/"/g, '&quot;') + '">';
+      b.addEventListener('click', function () {
+        input.value = s.id;
+        paint();
+      });
+      strip.appendChild(b);
+    });
+  }
+
+  paint();
+  new MutationObserver(paint).observe(gal, { childList: true, subtree: true });
+})();
+
 /* THE "ADD EXTRAS" ACCORDION IS GONE — Ian, 2026-08-16, testing live: "and the
    extras accordiian in general". Everything that used to fold now sits in the main
    body in its declared order, which is also why the registry's `extra` column is
