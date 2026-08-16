@@ -573,6 +573,71 @@ is_(str_contains($icr, "\$caps['stripe_testgroup']"),
 
 /* ---------------------------------------------------------------------- */
 /* ---------------------------------------------------------------------- */
+section("[12] INVITE LINKS — a scoped, single-use door, and OFF is today's site");
+
+/**
+ * Ian found the hole and ruled the mechanism, 2026-08-16: the Test Group takes
+ * only EXISTING wp users, so a fresh recruit's complete join — the most
+ * important pre-cutover rehearsal — was untestable. A URL token, single-use,
+ * working across devices.
+ *
+ * This is a GATE BYPASS on the payment path, so every fence is asserted, and the
+ * OFF state is asserted FIRST: it is what lets this merge before cutover.
+ */
+$invSrc = (string) @file_get_contents($REPO . '/membership-pages/web/_invites.php');
+$gateSrc = (string) @file_get_contents($REPO . '/membership-pages/web/_admin-gate.php');
+
+if ($invSrc === '' || $gateSrc === '') {
+    bad('the invite module or the shared gate is missing');
+} else {
+    /* --- OFF IS TODAY'S SITE ------------------------------------------- */
+    is_((bool) preg_match('/if \(!lg_membership_invites_enabled\(\)\) \{ return false; \}/', $invSrc),
+        'with the flag OFF the invite check returns before reading anything — byte-identical to today');
+    is_(!preg_match("/'lgms_stripe_invites_on'\s*=>\s*'?1/", $invSrc),
+        '...and nothing in the module turns itself on');
+
+    /* --- FENCE 1: SCOPE ------------------------------------------------- */
+    is_(str_contains($invSrc, 'LG_MS_INVITE_SCOPE'),
+        'a token is scoped to named pages, not to "pre-launch" in general');
+    foreach (['manage-subscription', 'request-refund', 'affiliate-earnings'] as $shut) {
+        is_(!preg_match("/LG_MS_INVITE_SCOPE = \[[^\]]*'" . preg_quote($shut, '/') . "'/s", $invSrc),
+            "...and does NOT open " . $shut . " — an invitee has no business there");
+    }
+    is_((bool) preg_match("/LG_MS_INVITE_SCOPE = \[[^\]]*'lgjoin'/s", $invSrc),
+        '...but does open the join page itself, or the invite is useless');
+
+    // AND THE SCOPE IS ACTUALLY CONSULTED. The assertions above describe the
+    // LIST; deleting the line that CHECKS it left them all green while the token
+    // opened every pre-launch page — a general bypass, which is the one thing
+    // this must never become. Third time today a check has been strengthened
+    // from "the name is there" to "the property holds".
+    is_((bool) preg_match('/if \(!in_array\(lg_membership_invite_slug\(\), LG_MS_INVITE_SCOPE, true\)\) \{ return false; \}/', $invSrc),
+        '...and the scope is CHECKED, not merely declared');
+
+    /* --- FENCE 2 and 3: SPENT AND EXPIRED ------------------------------- */
+    // Single-quoted: in a double-quoted PHP string $rec['used_at'] interpolates
+    // and the braces make it a parse error — the assertion about a fence cannot
+    // itself be a syntax bug.
+    is_(str_contains($invSrc, 'if (!empty($rec[\'used_at\'])) { return false; }'),
+        'a SPENT invite admits nobody');
+    is_((bool) preg_match('/\$exp > 0 && \$exp < time\(\)/', $invSrc),
+        'an EXPIRED invite admits nobody, checked on every hit');
+
+    /* --- THE TOKEN IS NOT STORED --------------------------------------- */
+    is_(str_contains($invSrc, 'hash(\'sha256\', $token)'),
+        'the store holds a HASH — reading the database hands nobody a working invite');
+
+    /* --- THE PLACEMENT, which is the whole difference ------------------- */
+    is_((bool) preg_match('/lg_membership_invite_admits\(\)/', $gateSrc),
+        'the invite check lives in the gate BOTH doors delegate to');
+    $posMember = strpos($gateSrc, 'lg_membership_in_stripe_test_group');
+    $posInvite = strpos($gateSrc, 'lg_membership_invite_admits()');
+    is_($posMember !== false && $posInvite !== false && $posInvite > $posMember,
+        '...and LAST, so an invite only ever widens — it never decides for someone already through');
+    is_(str_contains($gateSrc, "require_once __DIR__ . '/_invites.php'"),
+        '...and the module travels WITH the gate, so the two doors cannot disagree about invites');
+}
+
 section("[11] SINGLE TIER IS DERIVED FROM THE CATALOGUE, NOT PREVIEWED");
 
 /**
