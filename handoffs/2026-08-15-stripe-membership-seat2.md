@@ -612,9 +612,24 @@ cap, so it could never notice that the real caps array never contains that key �
 the harness-must-run-as-the-real-user failure, one layer further out than the
 8/15 soft-launch bug.
 
-**Build it as keeper specified:** drive `/manage-subscription/` **over HTTP as a
-minted session** for a listed non-admin member and assert the five entries
-render; as a non-listed member, assert absent. **Red-first against the
+**Build it as keeper specified**, with the probes keeper named on 8/16: **854
+`GerryHayesTest`** as the listed probe (plain subscriber, **no**
+`manage_options`, on the list — it sidesteps the admin-branch trap) and **2455
+`viz-test-nobody`** as the unlisted probe. Drive `/manage-subscription/` **over
+HTTP as a minted session** for each and assert the five entries render / are
+absent.
+
+> **It must READ the deployed state, not hardcode it.** The HTTP leg measures
+> whichever copy of profile-app is *deployed*. Until `145a2c3` merges and the
+> serve pulls, the deployed copy still drops `stripe_testgroup` — so a leg that
+> hardcodes "entries render" goes RED on main and blocks every lane. Probe
+> whoami for the capability first and assert per-state, the same rule as
+> [[feedback-gate-reads-the-flag-not-a-hardcoded-state]].
+
+**The static half is already built** (34b, 79 assertions): the central
+computation passes the capability through, and **every capability the header
+keys on survives profile-app's allowlist** — a cross-check that fails the day
+someone teaches the header a new capability and forgets the other end. **Red-first against the
 pre-fix state** — revert the one-line pass-through and it must go red.
 
 The session-minting recipe is proven and is what I used for the trace:
@@ -626,6 +641,38 @@ admin branch and proves nothing about the list.
 
 **Ian can re-test as Mikelle only after this merges and the serve pulls** — the
 serve reads `loothplatformv2-clean`, so the fix is not live on dev2 yet.
+
+---
+
+## NEXT CHARTER: DESK AUTOMATION (Ian, 2026-08-16) — and the dependency that will bite
+
+Ian: *"are you hand populating my desk? Is there a way to do it mechanically?"*
+The desk becomes **derived**: (1) lane board posts addressed `-> Ian` render as
+desk items; (2) decisions render as the desk boxes; (3) keeper items go through
+the committer. `docs/IAN-DESK.md` retires to a fallback. Gate: a lane's `-> Ian`
+post appears on the desk within one refresh.
+
+**Item 2 IS ALREADY DONE** — the decisions store is committed and the desk boxes
+render from it on this branch today. Item 3 is the committer, already built.
+
+### ⚠️ ITEM 1 HAS A HARD DEPENDENCY — re-verified, not assumed
+
+**The board cannot read the msg store.** The page runs as the `looth-dev` pool
+and `/var/lib/devmsg/messages.db` is `devmsg`-group; tested as that exact user,
+it **cannot open it**. So lane posts cannot be read by the page directly, however
+the render is written.
+
+**Do NOT solve it by adding `looth-dev` to `devmsg`.** That group has **write**
+on the database — it would let any PHP on the WordPress site send messages as
+`ubuntu`. A far larger door than the one being opened, opened to fix a rendering
+problem.
+
+**The answer already exists**: the relay writes a **world-readable snapshot** for
+exactly this airlock reason, and the desk should take its lane items from that,
+the same way the lane threads already do. So item 1 depends on the snapshot
+writer — the relay half, built and gated (24) but **not yet armed**. Either wait
+for the relay, or extend the snapshot with a small separate writer that carries
+`-> Ian` posts.
 
 ### ⚠️ If you touch the styles, read this first
 
