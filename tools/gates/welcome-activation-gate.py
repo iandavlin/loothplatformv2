@@ -2,8 +2,12 @@
 """
 THE WELCOME ONE-SHOT REACHES BOTH RAILS, FIRES ONCE, AND NEVER RETRO-FIRES.
 
-⚠️ NOT REGISTERED IN run-all.sh AND DELIBERATELY UNNUMBERED — pending keeper's
-number. Lanes do not mint gate numbers.
+KEEPER GATE NUMBER: 63 — ASSIGNED by keeper 2026-08-16, and VERIFIED FREE before
+being written here rather than taken on trust: no hit on origin/main, none in any
+worktree on the box, and unregistered in main's run-all.sh. Keeper's own collision
+note names 59 as guitardle's and 62 as compose's; a third lane was told 57 in the
+same window as featured-members and both wrote it down, so "keeper said so" is not
+proof a number is free. Lanes do not mint numbers — they still check.
 
 STATE: GREEN on this branch (the fix is present, flag OFF), RED on main. It was
 written red-first, before the fix existed, against the property the product was
