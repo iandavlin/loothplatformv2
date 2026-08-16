@@ -750,6 +750,37 @@ flag off the check returns before reading anything — byte-identical to today.
 **To arm on dev2 when Ian wants to walk a fresh join:**
 `wp option update lgms_stripe_invites_on 1` (dev2-local, no tracked file).
 
+---
+
+## BOARD MECHANICS — backlog 41, all four parts (2026-08-16 night)
+
+Ian: *"My desk is now really verbose… more mechanical and less hand curated by
+keeper… completed work still listed on my desk."*
+
+| Part | What landed |
+|---|---|
+| **(a) compact desk** | One line per item — seat, type, snippet, age — body in the modal. The type is derived from evidence (open decision box → `decision`, trailing `?` → `question`, else `update`); no cleverer classifier, because guessing an ask-type from prose is typing dressed as deriving. |
+| **(b) mechanical retirement** | An item leaves when its decision was answered **after** the ask, its seat's branch **merged** after the ask, or it was **dismissed** (committed `desk_dismiss`, never hand-removed). Retired is **marked with its reason**, not deleted. |
+| **(c) hand-curation audit** | `docs/BACKLOG-41-HAND-CURATION-AUDIT.md` — measured: 37 of the last 40 backlog commits are keeper's, and the index carries **50** status markers. Each maps to a store that already exists. |
+| **(d) done-ledger** | `tools/keeper/board-done-ledger.php` writes `docs/DONE.md` from `Closes-Backlog:` trailers; completed items MOVE out of BACKLOG.md; the board renders it. |
+
+### The two guards worth keeping in mind
+
+- **Write before delete.** The ledger writes its line *before* removing the
+  backlog index line, so the worst case is a duplicate record rather than lost
+  work. Gated; swapping the order reddens it.
+- **The timestamp guard.** A decision answered *before* an ask must not retire
+  it, or an old ruling silently closes a fresh question — the desk would eat
+  exactly the asks that matter most.
+
+### ⚠️ The ledger is inert without merge discipline
+
+It fires **only** on `Closes-Backlog: N` trailers in landed commits. Without them
+it is correct and silent forever — the safe failure, not the useful one. This
+branch carries trailers for **39** and **41**, so the first real ledger entries
+write themselves at its merge; keep adding them or the file stays empty and the
+feature quietly isn't one.
+
 ### ⚠️ If you touch the styles, read this first
 
 - **There are TWO `<style>` blocks**: the original in the head, and a second one
