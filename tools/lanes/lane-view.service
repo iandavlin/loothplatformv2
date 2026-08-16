@@ -13,9 +13,15 @@
 #     manifest and attaches tmux with -r (read-only client) — see that script
 #   - -m 6: at most 6 concurrent viewers, so a stuck tab can't pile up clients
 
+# ⚠️ The ttyd PACKAGE ships its own enabled-by-default ttyd.service — a login
+# prompt on THIS SAME PORT (7681). It stole the port at boot 8/16 and this unit
+# lost the race. `systemctl disable --now ttyd` is part of installing this
+# service; if lane-view is "activating" in a restart loop, check for it first.
+
 [Unit]
 Description=Watch-only lane terminals for the work board (ttyd, dev-gated via nginx)
 After=network.target
+Conflicts=ttyd.service
 
 [Service]
 User=ubuntu
