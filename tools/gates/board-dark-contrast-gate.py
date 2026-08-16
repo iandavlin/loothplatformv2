@@ -79,6 +79,20 @@ FREEZE = ("(function(){var t=document.createElement('style');"
           "t.textContent='*,*::before,*::after{transition:none!important;animation:none!important}';"
           "document.head.appendChild(t);})()")
 
+# EXPAND EVERYTHING BEFORE MEASURING. The board collapses thread boxes, project
+# accordions and the done-box behind <details>, so a first-render probe measured
+# 3 of 9 thread boxes and 24 of 60 muted-text nodes — a green that described the
+# page as it opens, not every state it reaches. Opening them is the difference
+# between "no defect is visible" and "no defect is there", and this lane has been
+# bitten enough times by the gap between those two to close it rather than
+# document it. Returns the counts so the gate can PROVE it expanded something
+# instead of assuming the click worked.
+EXPAND = """(function(){
+  var d = document.querySelectorAll('details'), opened = 0;
+  for (var i = 0; i < d.length; i++) { if (!d[i].open) { d[i].open = true; opened++; } }
+  return {details: d.length, opened: opened};
+})()"""
+
 
 def main():
     env = g.gate_env()
@@ -120,12 +134,14 @@ def main():
                                   f"the page had the attribute without the rules; findings would be phantoms")
                     continue
 
+                ex = s.js(EXPAND)
+                time.sleep(0.4)          # let the opened panels lay out
                 s.js(FREEZE)
                 time.sleep(0.5)
                 data = s.js(probe)
                 findings = data.get("findings", [])
                 if findings:
-                    red.append(f"RED  {label}  {len(findings)} sub-AA finding(s)")
+                    red.append(f"RED  {label}  {len(findings)} sub-AA finding(s) ({ex.get('opened')}/{ex.get('details')} <details> expanded)")
                     seen = set()
                     for f in findings:
                         k = (f.get("kind"), f.get("fg"), f.get("bg"))
@@ -136,7 +152,7 @@ def main():
                                    f"(need {f.get('need')})  {f.get('fg')} on {f.get('bg')}  "
                                    f"[{str(f.get('sel',''))[-64:]}]")
                 else:
-                    print(f"  ok   {label}  0 finding(s), theme=dark, stylesheet present")
+                    print(f"  ok   {label}  0 finding(s), theme=dark, stylesheet present, {ex.get('opened')}/{ex.get('details')} <details> expanded")
             except Exception as e:                              # noqa: BLE001
                 cannot.append(f"{label}: {str(e)[:90]}")
             finally:
