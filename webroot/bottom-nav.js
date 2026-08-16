@@ -1388,7 +1388,7 @@
     h += '</div>';
     if (sheetNotifType && counts[sheetNotifType]) {
       h += '<div class="lt-nbulk"><p class="lt-nbulk__w">Removes all ' + counts[sheetNotifType] +
-           ' permanently, and unread ones will not reach your weekly email.</p>' +
+           ' permanently.</p>' +
            '<button type="button" class="lt-nbulk__b" data-nclear="' + sheetNotifType +
            '">Clear all ' + counts[sheetNotifType] + '</button></div>';
     }

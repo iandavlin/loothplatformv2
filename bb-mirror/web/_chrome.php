@@ -30,6 +30,34 @@ function bb_mirror_asset_ver(string $filename): string
 }
 
 /**
+ * Backlog 38 — see platform/config/hub-author-banner-swap.php for the full
+ * trace (the Advanced Search modal's in-place author-pick apply never updates
+ * the green author banner). Declared at TOP LEVEL (not inside
+ * bb_mirror_chrome_footer()) and early in this file so it is registered the
+ * moment _chrome.php is required — _feed.php's own author-header markup
+ * (rendered well before chrome_footer() is ever CALLED) needs the same
+ * answer chrome_footer uses to emit window.LG_HUB_AUTHOR_BANNER_SWAP, and a
+ * function-local var from inside chrome_footer() cannot reach it (that was
+ * the first cut of this fix — it read `true` in the footer's own script tag
+ * while _feed.php's markup, rendered earlier in the response, saw the flag
+ * as unset and never built the wrapper the swap needs. Caught by curling the
+ * fixed preview and finding the wrapper div simply absent).
+ */
+if (!function_exists('lg_hub_author_banner_swap_enabled')) {
+    function lg_hub_author_banner_swap_enabled(): bool
+    {
+        static $on = null;
+        if ($on !== null) return $on;
+        $raw = @include __DIR__ . '/../../platform/config/hub-author-banner-swap.php';
+        $on = is_array($raw) && !empty($raw['enabled']);
+        foreach ([getenv('LG_HUB_AUTHOR_BANNER_SWAP'), $_SERVER['LG_HUB_AUTHOR_BANNER_SWAP'] ?? false] as $o) {
+            if ($o !== false && $o !== '') $on = ($o === '1' || $o === 'true');
+        }
+        return $on;
+    }
+}
+
+/**
  * Map a top-level forum slug to a category color key.
  */
 function bb_mirror_cat_key(?string $parent_slug, ?string $own_slug = null): string
@@ -910,6 +938,18 @@ foreach ([getenv('LG_BACK_PILL'), $_SERVER['LG_BACK_PILL'] ?? false] as $lg_bp_o
 }
 if ($lg_bp_on): ?>
 <script>window.LG_BACK_PILL = true;</script>
+<?php endif;
+/* Backlog 38 — forums.js reads this global to decide whether fmodalApply
+   extends its existing chip-bar-style swap to the author banner too.
+   lg_hub_author_banner_swap_enabled() is declared near the top of this file
+   (function_exists-guarded) so _feed.php's own markup, rendered earlier in
+   the same response, can call the identical answer.
+
+   EMITTED ONLY WHEN ON, never as `= false`: flag off writes nothing at all, so
+   the served page is byte-for-byte unchanged and the client guard reads
+   undefined. */
+if (lg_hub_author_banner_swap_enabled()): ?>
+<script>window.LG_HUB_AUTHOR_BANNER_SWAP = true;</script>
 <?php endif; ?>
 <script src="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH) ?>/forums.js?v=<?= bb_mirror_asset_ver('forums.js') ?>" defer></script>
 <!-- Hub toolbar type-ahead: live search + author autocomplete (forums/_suggest.php). -->

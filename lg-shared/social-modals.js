@@ -438,7 +438,7 @@ function renderNotifFilter(counts, total) {
        they are about to lose BEFORE the tap, not after. */
     out += '<div class="lg-notif-bulk">' +
       '<p class="lg-notif-bulk__warn">This removes all ' + counts[notifFilterType] +
-      ' permanently. Anything here you have not read yet will not appear in your weekly email.</p>' +
+      ' permanently.</p>' +
       '<button type="button" class="lg-notif-bulk__b" data-notif-clear-type="' + esc(notifFilterType) +
       '">Clear all ' + counts[notifFilterType] + ' &ldquo;' + esc(notifTypeLabel(notifFilterType)) + '&rdquo;</button>' +
       '</div>';

@@ -182,6 +182,46 @@ def main():
         else:
             OK.append("[D] a request sending BOTH type and all takes the type branch")
 
+        # ── D2. IAN'S STANDING PRINCIPLE (2026-08-16) ───────────────────────
+        # "no notifs for things people have actually interacted with." So neither
+        # the bell nor the weekly digest may resurface a handled item — and the
+        # digest must exclude them by its OWN clause, not merely because the row
+        # happened to be deleted. Asserted against Recap::outstanding()'s real SQL
+        # rather than a description of it, because that clause is the only thing
+        # standing between a tidied bell and a spam email.
+        rec = open(os.path.join(REPO, "profile-app/src/Recap.php"), encoding="utf-8").read()
+        m = re.search(r"private static function outstanding\(\): string.*?\n    \}", rec, re.S)
+        clause = m.group(0) if m else ""
+        if not clause:
+            DEAD.append("[D2] could not read Recap::outstanding() — the digest's exclusion clause")
+        else:
+            # EACH DISJUNCT, not a bare substring. The first draft of this checked
+            # whether "n.is_read = false" appeared ANYWHERE in the clause — and it
+            # appears twice, so deleting the guard from the hub-rows arm left the
+            # gate green on a genuinely broken digest. Third time today a
+            # presence-check matched something other than the thing under test.
+            flat = re.sub(r"\s+", " ", clause)
+            checks = [
+                (r"n\.type = 'connection_request' AND c\.status = 'pending'",
+                 "an ANSWERED connection request is excluded by its EDGE, not by whether the "
+                 "bell was opened"),
+                (r"n\.type = 'connection_accept' +AND c\.status = 'accepted' AND n\.is_read = false",
+                 "an accepted-request notice is excluded once read"),
+                (r"n\.connection_id IS NULL AND n\.is_read = false",
+                 "a READ hub notification (reply/mention/reaction) is excluded — this is the arm "
+                 "that keeps a tidied bell from mailing the member anyway"),
+                (r"dismissed_at IS NULL",
+                 "a CLEARED notification is excluded from the digest"),
+            ]
+            missing = [why for pat, why in checks if not re.search(pat, flat)]
+            if missing:
+                RED.append("[D2] the digest's outstanding() clause no longer guarantees: "
+                           + "; ".join(missing) + " — Ian's rule is that a handled item never "
+                           "comes back, and this clause is what enforces it")
+            else:
+                OK.append("[D2] the digest excludes cleared, read, and edge-answered items by its "
+                          "own clause — a tidied bell cannot produce a spam email")
+
         # ── E. code list vs database constraint ─────────────────────────────
         src = open(os.path.join(REPO, "profile-app/src/Notifications.php"), encoding="utf-8").read()
         m = re.search(r"const FILTER_TYPES = \[(.*?)\];", src, re.S)

@@ -1571,7 +1571,19 @@ $header_cat = $scoped_forum
 
   <?php if (!$scoped_forum) hub_render_sponsor_rail(); // hub front door only; CSS shows it in stream view ?>
 
+  <?php /* Backlog 38: wrapped as ONE addressable unit only when the flag is on
+           (lg_hub_author_banner_swap_enabled() is declared in _chrome.php,
+           required at the top of this file) so fmodalApply (forums.js) can
+           swap it the same way it already swaps .hub-chipbar. Flag off ->
+           bare sibling divs, unchanged from before this existed
+           (platform/config/hub-author-banner-swap.php). */
+        if (lg_hub_author_banner_swap_enabled() && $hub_author_headers): ?>
+  <div id="hub-author-headers">
+    <?php foreach ($hub_author_headers as $_hah) hub_render_author_header($_hah, $hub_filters, $sort_param); ?>
+  </div>
+  <?php else: ?>
   <?php foreach ($hub_author_headers as $_hah) hub_render_author_header($_hah, $hub_filters, $sort_param); ?>
+  <?php endif; ?>
 
   <div id="hub-feed-results">
   <?php if (!$topics): ?>
