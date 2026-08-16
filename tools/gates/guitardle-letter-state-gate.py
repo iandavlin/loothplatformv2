@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
 """
-GATE 57 — a guessed letter is a HIT or a MISS, and a resumed board PAINTS.
+GATE 59 — a guessed letter is a HIT or a MISS, and a resumed board PAINTS.
 
-KEEPER GATE NUMBER: 57 — ASSIGNED by keeper 2026-08-16. This docstring said 56
-until 2026-08-16: 56 was a working placeholder this lane had written for itself,
-and it was already taken by the board committer at the stripe merge. A
-placeholder IS self-minting. Lanes never mint. Do not renumber without asking.
+KEEPER GATE NUMBER: 59 — ASSIGNED by keeper 2026-08-16. It took THREE numbers to
+land on one, and the history is the lesson rather than trivia:
+  56  a "working placeholder" this lane wrote for itself. Already taken by the
+      board committer at the stripe merge. A PLACEHOLDER IS STILL SELF-MINTING.
+  57  assigned by keeper — and assigned to featured-members in the same window,
+      who registered it in run-all.sh first. Two lanes, both told 57, both
+      correct to write it down. Caught by a lane reading another lane's diff
+      against main, never by the allocation itself.
+  59  assigned after that collision surfaced. Verified free against main AND
+      every worktree on the box before being written here.
+Lanes never mint, and "keeper said so" is not proof a number is free — check.
 
 Ian, playing on dev2 2026-08-16: "On desktop it's keeping track of letters that
 are in the puzzle, but not the guesses that were misses. The letter only stays
@@ -329,7 +336,7 @@ def cls_for(snap, letter):
     return None
 
 
-print("guitardle-letter-state — GATE 57")
+print("guitardle-letter-state — GATE 59")
 print("  phrase today: %r   hits used: %s %s   miss used: %s" % (PHRASE, A_HIT, B_HIT, A_MISS))
 print("  vowels used:  hit %s   miss %s" % (V_HIT or "(none today)", V_MISS or "(none today)"))
 print("  asserting: %s" % ("THIS TREE's client (substituted over CDP)" if LOCAL
@@ -642,9 +649,9 @@ finally:
 
 print()
 if fails:
-    print("############ GATE 57 RED — %d assertion(s) failed ############" % len(fails))
+    print("############ GATE 59 RED — %d assertion(s) failed ############" % len(fails))
     for f in fails:
         print("  - " + f)
     sys.exit(1)
-print("############ GATE 57 GREEN ############")
+print("############ GATE 59 GREEN ############")
 sys.exit(0)
