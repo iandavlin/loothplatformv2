@@ -109,7 +109,58 @@ final class Arbiter
         // is consumed (deleted) by the dismiss-welcome REST endpoint.
         // Idempotent: re-running Arbiter on a stable looth2 user does NOT
         // re-set the flag (oldTier === winning).
-        if ( self::isUpgradeToPaid( $oldTier, $winning ) ) {
+        // FIRST ACTIVATION (backlog: the welcome one-shot, 2026-08-16).
+        //
+        // isUpgradeToPaid() asks whether a TRANSITION happened, which is really a
+        // question about role ORDERING: the Patreon path creates the account with
+        // the paid role already on it, so $oldTier already equals $winning and that
+        // rail can never present a transition. The email-first minter creates with
+        // no role, so it can. Same money, same tier, different product by rail.
+        //
+        // So we additionally ask a question about the MEMBER: have they ever been
+        // marked activated? That is rail-agnostic by construction.
+        //
+        // FLAG OFF ⇒ nothing below runs and NOTHING is written — not even the
+        // marker. That is what keeps the off state a byte-identical no-op rather
+        // than "the old behaviour plus a harmless write".
+        $welcomeCfg   = self::welcomeActivationCfg();
+        $upgrade      = self::isUpgradeToPaid( $oldTier, $winning );
+        $shouldWelcome = $upgrade;
+
+        if ( ! empty( $welcomeCfg['enabled'] ) ) {
+            $isPaid = in_array( $winning, [ 'looth2', 'looth3', 'looth4' ], true );
+            $marker = (string) get_user_meta( $wpUserId, '_lg_membership_activated_at', true );
+            $firstActivation = ( $isPaid && $marker === '' );
+
+            // PROVENANCE IS PART OF THE VALUE, because one write serves two very
+            // different cases. A member activating NOW gets a true activation date.
+            // One of the 1,225 who activated months or years ago and is merely being
+            // SWEPT past the fence must NOT get today's date under a field called
+            // _lg_membership_activated_at — that field would then be confidently
+            // wrong for every one of them, and WHICH members it lied about would
+            // depend on whether anyone remembered to run the backfill first, which
+            // is exactly the kind of dependency the fence exists to remove.
+            //
+            // Three provenances, all non-empty, so the first-activation test itself
+            // is unchanged: a bare ISO date (observed live), 'pre-cutover:' (swept),
+            // and 'backfill:' (tools/welcome-activation-backfill.php).
+            $afterCutover = $firstActivation && self::registeredAfterCutover( $user, $welcomeCfg );
+
+            if ( $firstActivation ) {
+                update_user_meta(
+                    $wpUserId,
+                    '_lg_membership_activated_at',
+                    ( $afterCutover ? '' : 'pre-cutover:' ) . gmdate( 'c' )
+                );
+            }
+
+            // The fence guards FIRST ACTIVATION ONLY. A genuine looth2 → looth3
+            // upgrade is welcomed today and stays welcomed: fencing it would remove
+            // a working behaviour while fixing a broken one.
+            $shouldWelcome = $upgrade || $afterCutover;
+        }
+
+        if ( $shouldWelcome ) {
             update_user_meta( $wpUserId, '_lg_pending_welcome', (string) $winning );
             // Fire the welcome email once. WelcomeMailer is idempotent —
             // it tracks delivery via _lg_welcome_email_sent_at user meta
@@ -147,6 +198,67 @@ final class Arbiter
             }
         }
         return $best;
+    }
+
+    /**
+     * The tracked first-activation config, read through __DIR__.
+     *
+     * NOT an env var: the arbiter runs inside cron sweeps and lg-wp-cron.service
+     * carries no Environment=, so a pool variable would arm a flag that then
+     * no-ops forever in the context that matters most. __DIR__ resolves through
+     * the mu-plugin symlink into the serving checkout.
+     *
+     * Unreadable or malformed FAILS CLOSED — the failure mode of a broken fence
+     * is a mass mail, so "we could not read the config" must mean "do nothing".
+     */
+    private static function welcomeActivationCfg(): array
+    {
+        static $cfg = null;
+        if ( $cfg !== null ) {
+            return $cfg;
+        }
+        $cfg  = [ 'enabled' => false, 'cutover' => '' ];
+        $file = __DIR__ . '/../../platform/config/welcome-activation.php';
+        if ( is_readable( $file ) ) {
+            $loaded = require $file;
+            if ( is_array( $loaded ) ) {
+                $cfg = $loaded + $cfg;
+            }
+        }
+        return $cfg;
+    }
+
+    /**
+     * Was this account registered at or after the cutover?
+     *
+     * This is the guard that does not depend on anybody remembering to run a
+     * backfill. Every one of the 1,225 members who already hold a paid tier
+     * registered before any cutover we would set, so arming the flag cannot mail
+     * an existing member even with no backfill at all.
+     *
+     * Returns FALSE for an empty or unparseable cutover, and false when the
+     * registration date is missing — fail closed, always.
+     */
+    private static function registeredAfterCutover( $user, array $cfg ): bool
+    {
+        $cutover = trim( (string) ( $cfg['cutover'] ?? '' ) );
+        if ( $cutover === '' ) {
+            return false;
+        }
+        $cutTs = strtotime( $cutover . ' 00:00:00 UTC' );
+        if ( $cutTs === false ) {
+            return false;
+        }
+        $registered = trim( (string) ( $user->user_registered ?? '' ) );
+        if ( $registered === '' ) {
+            return false;
+        }
+        // wp_users.user_registered is stored UTC.
+        $regTs = strtotime( $registered . ' UTC' );
+        if ( $regTs === false ) {
+            return false;
+        }
+        return $regTs >= $cutTs;
     }
 
     /**
