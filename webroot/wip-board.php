@@ -1403,6 +1403,34 @@ header('X-Robots-Tag: noindex, nofollow');
         </div>
         <?php
         /**
+         * DERIVED DESK ITEMS — Ian: "are you hand populating my desk? Is there a
+         * way to do it mechanically?"
+         *
+         * A lane's "-> Ian" post IS a desk item; nobody copies it across. Two of
+         * featured-members' went missing on 8/16 purely because a hand lagged.
+         * They arrive through the relay snapshot because the board cannot read
+         * the message store itself — that store is `devmsg`-group, and putting
+         * the web user in it would hand every PHP file on the site the ability
+         * to send messages as ubuntu.
+         */
+        $deskAuto = [];
+        if (is_readable($LGB_THREADS)) {
+            $snapRaw = json_decode((string) file_get_contents($LGB_THREADS), true);
+            if (is_array($snapRaw) && is_array($snapRaw['desk'] ?? null)) { $deskAuto = $snapRaw['desk']; }
+        }
+        foreach (array_reverse($deskAuto) as $d): ?>
+          <div class="desk__i">
+            <span class="desk__b"></span>
+            <span class="desk__x">
+              <b><?= lgb_h((string) ($d['who'] ?? '?')) ?></b>
+              <span><?= lgb_linkify((string) ($d['text'] ?? '')) ?></span>
+              <span class="q__w"><?= lgb_h((string) ($d['when'] ?? '')) ?></span>
+            </span>
+          </div>
+        <?php endforeach; ?>
+
+        <?php
+        /**
          * DECISION BOXES — real controls, right where he already looks.
          *
          * Ian's stated purpose, 2026-08-16: *"That way you can keep working

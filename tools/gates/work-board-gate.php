@@ -570,6 +570,22 @@ file_put_contents($fx . '/board-decisions/price.md',
     "# Decision price\n\n> Set the price?\n\n- 9 a month\n"
   . "\n#### answered 2026-08-16 13:00 — ian-via-board — via vs\n\n> 9 a month\n");
 
+// A DERIVED DESK ITEM. Ian's "-> Ian" posts must reach his desk without anyone
+// copying them across — the whole point of the automation.
+$dsnap = $tmp . '-desk.json';
+file_put_contents($dsnap, json_encode(['ts' => 1, 'lanes' => [], 'desk' => [
+    ['when' => '2026-08-16 15:00', 'who' => 'featured-members', 'text' => 'one ruling needed on the digest floor'],
+]]));
+$deskHtml = (string) shell_exec('LGB_MAIN_COPY=/nonexistent/m.md LGB_THREADS=' . escapeshellarg($dsnap)
+    . ' LGB_BACKLOG=' . escapeshellarg($BACK) . ' ' . PHP_BINARY . ' ' . escapeshellarg($PAGE) . ' 2>/dev/null');
+is_(str_contains($deskHtml, 'one ruling needed on the digest floor'),
+    "a lane's post to Ian reaches his desk without anyone copying it across");
+is_(str_contains($deskHtml, 'featured-members'), '...naming the lane that is waiting on him');
+$noDeskHtml = render($PAGE, $BACK);
+is_(!str_contains($noDeskHtml, 'one ruling needed on the digest floor'),
+    '...and with no snapshot the desk invents nothing');
+@unlink($dsnap);
+
 $fxHtml = (string) shell_exec('LGB_MAIN_COPY=/nonexistent/m.md LGB_THREADS=/nonexistent/t.json LGB_BACKLOG='
     . escapeshellarg($fx . '/BACKLOG.md') . ' ' . PHP_BINARY . ' ' . escapeshellarg($PAGE) . ' 2>/dev/null');
 

@@ -349,6 +349,50 @@ foreach ($lanes as $lane) {
     }
 }
 
+/**
+ * IAN'S DESK, DERIVED — Ian, 2026-08-16: *"are you hand populating my desk? Is
+ * there a way to do it mechanically?"*
+ *
+ * Lanes already address him directly ("<lane> -> Ian: …") and those posts were
+ * reaching nobody: keeper hand-copied them onto the desk, and two of
+ * featured-members' went missing the same day simply because that hand lagged.
+ * The desk should BE the store.
+ *
+ * THE BOARD CANNOT READ THE MESSAGE STORE ITSELF — it is served by a pool user
+ * that is not in the `devmsg` group and must not be, because that group has
+ * WRITE and would let any PHP on the site send messages as ubuntu. So the desk
+ * items come through the same airlock the replies already use: this snapshot.
+ * Adding them here rather than building a second reader keeps one process
+ * holding the devmsg privilege instead of two.
+ *
+ * @return array<int,array{when:string,who:string,text:string}> newest last
+ */
+function deskItems(): array
+{
+    if (!is_readable(DEVMSG_DB)) { return []; }
+    $out = [];
+    try {
+        $db = new PDO('sqlite:file:' . DEVMSG_DB . '?mode=ro&immutable=1', null, null,
+                      [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+        $rows = $db->query('SELECT ts, body FROM messages ORDER BY ts DESC LIMIT 2000');
+        foreach ($rows as $row) {
+            $body = (string) ($row['body'] ?? '');
+            // "<lane> -> Ian: …", case-insensitive on the name only. Anything
+            // addressed elsewhere is NOT a desk item — a post to keeper that
+            // merely mentions Ian is not something waiting on him, and putting
+            // it on his desk would make the desk noise he learns to skim.
+            if (!preg_match('/^([a-z][a-z0-9-]{1,30})\s*->\s*ian\b\s*:?\s*(.*)$/is', $body, $m)) { continue; }
+            if (count($out) >= 30) { break; }
+            $out[] = ['when' => gmdate('Y-m-d H:i', (int) $row['ts']),
+                      'who'  => $m[1],
+                      'text' => trim($m[2]) !== '' ? trim($m[2]) : $body];
+        }
+    } catch (Throwable $e) {
+        return [];
+    }
+    return array_reverse($out);
+}
+
 /* The inbound half. Independent of everything above. */
 $snapshotLanes = [];
 $reps = replies($lanes);
@@ -358,7 +402,8 @@ foreach ($lanes as $lane) {
 }
 if (!$dry) {
     $tmp = SNAPSHOT . '.tmp';
-    file_put_contents($tmp, json_encode(['ts' => time(), 'lanes' => $snapshotLanes], JSON_UNESCAPED_SLASHES));
+    file_put_contents($tmp, json_encode(['ts' => time(), 'lanes' => $snapshotLanes,
+                                         'desk' => deskItems()], JSON_UNESCAPED_SLASHES));
     // World-readable ON PURPOSE: the board is served by a pool user that is not
     // in the devmsg group and must never be — that group has WRITE, and it
     // would let any PHP on the site send messages as ubuntu. The snapshot is

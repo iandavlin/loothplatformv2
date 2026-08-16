@@ -283,6 +283,44 @@ is_(!is_file($ccl . '/docs/board-lanes/preflight.receipts.md'),
     'the capability probe commits NOTHING — no preflight receipt is ever pushed');
 
 /* ---------------------------------------------------------------------- */
+section("[9] IAN'S DESK IS DERIVED FROM THE STORE, NOT FROM ANYONE'S DILIGENCE");
+
+/**
+ * Ian: "are you hand populating my desk? Is there a way to do it mechanically?"
+ * Two of featured-members' posts to him went missing the same day purely
+ * because a hand lagged. The desk should BE the store.
+ *
+ * The board cannot read the message database itself — it is served by a pool
+ * user that is not in the `devmsg` group and must not be, since that group has
+ * WRITE. So desk items ride the snapshot that already carries the replies.
+ */
+$deskDb = $tmp . '/desk.db';
+$pdo = new PDO('sqlite:' . $deskDb);
+$pdo->exec('CREATE TABLE messages (id INTEGER PRIMARY KEY, sender TEXT, recipient TEXT, body TEXT, ts INTEGER, read_ts INTEGER)');
+$ins = $pdo->prepare('INSERT INTO messages (sender,recipient,body,ts) VALUES (?,?,?,?)');
+$ins->execute(['ubuntu', 'ubuntu', 'featured-members -> Ian: one ruling needed on the digest floor', 1000]);
+$ins->execute(['ubuntu', 'ubuntu', 'stripe-membership -> keeper: a status post, NOT for his desk', 1001]);
+$ins->execute(['ubuntu', 'ubuntu', 'guitardle-fairness -> keeper: mentions Ian but is addressed to keeper', 1002]);
+$ins->execute(['ubuntu', 'ubuntu', 'dark-anon-sweep -> Ian: the white search panel in dark mode', 1003]);
+
+$dpaths = $paths; $dpaths['DEVMSG_DB'] = $deskDb;
+relay($RELAY, $dpaths);
+$snapD = json_decode((string) @file_get_contents($snap), true);
+$desk  = (array) ($snapD['desk'] ?? []);
+
+is_(count($desk) === 2, sprintf('a lane\'s "-> Ian" post reaches the desk (%d of 2)', count($desk)));
+$who = array_column($desk, 'who');
+is_(in_array('featured-members', $who, true),
+    '...including the one that went missing when a hand lagged');
+is_(!in_array('stripe-membership', $who, true),
+    'a post addressed to KEEPER is not a desk item — his desk is what waits on HIM');
+is_(!in_array('guitardle-fairness', $who, true),
+    '...and merely MENTIONING him does not put it there, or the desk becomes noise he skims');
+$txt = implode(' | ', array_column($desk, 'text'));
+is_(str_contains($txt, 'digest floor') && !str_contains($txt, '-> Ian:'),
+    '...and the item carries his message, not the addressing preamble');
+
+/* ---------------------------------------------------------------------- */
 section("[7] IT REFUSES TO RUN HALF-CONFIGURED");
 
 $r = relay($RELAY, ['CLONE_DIR' => $tmp . '/nope', 'COMMITTER' => $svcTmp, 'LANE_SAY' => $fake,
