@@ -967,6 +967,11 @@ html[data-lguser-theme="dark"] .bar{background:#2c312d}
 html[data-lguser-theme="dark"] .absent{background:#2e211c}
 html[data-lguser-theme="dark"] .P3 .band__dot{background:#4a4f4a}
 html[data-lguser-theme="dark"] .desk{background:#1e2124}
+html[data-lguser-theme="dark"] .rail{background:#202426}
+html[data-lguser-theme="dark"] .bar{background:#2c312d}
+html[data-lguser-theme="dark"] .absent{background:#2e211c}
+html[data-lguser-theme="dark"] .P3 .band__dot{background:#4a4f4a}
+html[data-lguser-theme="dark"] .desk{background:#1e2124}
 html[data-lguser-theme="dark"] .desk__opt{background:#242826}
 html[data-lguser-theme="dark"] .desk--empty{background:#243024}
 html[data-lguser-theme="dark"] .cpy{background:#1b1e21}
@@ -986,6 +991,7 @@ html[data-lguser-theme="dark"] .bdg--done{background:#243024}
 html[data-lguser-theme="dark"] .row--open:hover{background:#1b1e21}
 html[data-lguser-theme="dark"] .modal{background:#1b1e21}
 html[data-lguser-theme="dark"] .phase2{background:#202426}
+html[data-lguser-theme="dark"] .err{background:#2e211c}
 html[data-lguser-theme="dark"] .err{background:#2e211c}/* OPACITY, not colour: .grip and .hist__dc fade the inherited ink. On a light
    page 35% of near-black still reads; on dark, 35% of #e5e7e1 composites to
    #323637 = 1.37:1. No colour override can fix an opacity — raise the opacity. */
@@ -1005,6 +1011,19 @@ html[data-lguser-theme="dark"] input::placeholder{color:#9aa097}
    same .62 sits on a white panel and already passes. */
 html[data-lguser-theme="dark"] .row--done,
 html[data-lguser-theme="dark"] .donebox .row{opacity:.82}
+/* text/ink pairs that only appear once panels are expanded */
+html[data-lguser-theme="dark"] .row__o,
+html[data-lguser-theme="dark"] .thrbox__no{color:var(--ink-mute)}
+html[data-lguser-theme="dark"] .grip{opacity:.8;color:var(--ink)}
+html[data-lguser-theme="dark"] .bdg--unowned{background:#262b30;color:#cdd0ca}
+html[data-lguser-theme="dark"] .bdg--done{background:#243024;color:#b6c79a}
+html[data-lguser-theme="dark"] .lane__watch{color:#e8a07a}
+html[data-lguser-theme="dark"] .thrbox__in{background:#15171a;color:var(--ink);border-color:var(--line)}
+html[data-lguser-theme="dark"] .thrbox__in::placeholder{color:#9aa097}
+/* .thrbox__no{opacity:.6} — the "no messages yet" note. Same opacity-not-colour
+   shape as .grip: .6 of a muted ink reads 3.4:1 on the dark panel. Raised in
+   dark only; light keeps its .6 and already passes there. */
+html[data-lguser-theme="dark"] .thrbox__no{opacity:.85}
 </style>
 </head>
 <body>
