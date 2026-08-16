@@ -6431,8 +6431,31 @@
       // — measured live 1.13:1 fill-vs-page, 1.22:1 the (nonexistent) border-
       // vs-page reading. Gate 36 / backlog 21. Giving it a real border here,
       // since forums.css is static and cannot self-gate a flag.
+      // ...and the SAME token at the specificity forums.css uses, or the fix
+      // above is applied and silently outranked. Root-caused 2026-08-16 with
+      // CSS.getMatchedStylesForNode, because grep could not see it: forums.css
+      // 5339-5342 carries
+      //     html[…dark] .hub-fmodal__search .hub-tsearch,
+      //     html[…dark] .hub-fmodal-page .feed-sort-bar .lg-quickq
+      //         { background:#262b30!important; border-color:#2c312d!important }
+      // a GROUPED selector, which is why `hub-fmodal__search` and `2c312d`
+      // never matched on one line. It is (0,4,1) against the (0,2,1) of the
+      // rule above, so #2c312d won and the served border measured 1.35:1
+      // fill-vs-page — the wrapper fix looked applied and did nothing.
+      //
+      // THE CLASS, worth a guard we do not have: gate 49 catches a flag
+      // disagreeing ACROSS FILES. Nothing catches TWO RULES FOR THE SAME
+      // ELEMENT disagreeing about the same colour, which is what happened when
+      // the token flipped and this more-specific sibling kept the old literal.
+      //
+      // Matching its specificity exactly and relying on source order (this
+      // <style> is appended to <head> at runtime, after the linked forums.css)
+      // rather than escalating with an id or an extra class — same weight,
+      // later wins, and it stays readable next to the rule it is correcting.
       (LG_DARK_SEARCH_WRAPPER_FIX
-        ? D + ' .hub-tsearch{border:1px solid #767c76!important}'
+        ? D + ' .hub-tsearch{border:1px solid #767c76!important}' +
+          D + ' .hub-fmodal__search .hub-tsearch,' +
+          D + ' .hub-fmodal-page .feed-sort-bar .lg-quickq{border-color:#767c76!important}'
         : '');
     (document.head || document.documentElement).appendChild(st);
   }
