@@ -581,6 +581,26 @@ $deskHtml = (string) shell_exec('LGB_MAIN_COPY=/nonexistent/m.md LGB_THREADS=' .
 is_(str_contains($deskHtml, 'one ruling needed on the digest floor'),
     "a lane's post to Ian reaches his desk without anyone copying it across");
 is_(str_contains($deskHtml, 'featured-members'), '...naming the lane that is waiting on him');
+
+/**
+ * COMPACT DESK ROWS — Ian, 2026-08-16 night: "My desk is now really verbose…
+ * should go to modals."
+ *
+ * One line each; the body one click away. A desk that answers "and here is
+ * everything about it" stops being scannable, which is how a desk gets skimmed
+ * and then ignored.
+ */
+is_(str_contains($deskHtml, 'desk__i--compact'), 'desk rows are compact, one line each');
+is_(str_contains($deskHtml, 'id="lgb-deskbodies"'),
+    '...with the full bodies carried for the modal — the verbosity MOVED, it was not deleted');
+is_(str_contains($deskHtml, 'desk__age'), '...showing how long it has waited, in words rather than a timestamp');
+
+// THE TYPE IS DERIVED FROM EVIDENCE, never guessed from prose. An item with an
+// open decision box reads "decision"; a question mark reads "question";
+// everything else is "update" rather than a cleverer classification nobody can
+// justify.
+is_(str_contains($deskHtml, 'desk__type--update') || str_contains($deskHtml, 'desk__type--question'),
+    '...and carries a type derived from evidence, not guessed from prose');
 $noDeskHtml = render($PAGE, $BACK);
 is_(!str_contains($noDeskHtml, 'one ruling needed on the digest floor'),
     '...and with no snapshot the desk invents nothing');

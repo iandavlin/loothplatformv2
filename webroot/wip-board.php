@@ -1159,14 +1159,57 @@ function lgb_branch_states(string $path): array
  * carry the honesty. So the live tick asks the server for the SAME HTML this
  * page paints, produced by these functions.
  */
-function lgb_render_desk_items(array $items): string
+/**
+ * How old a desk item is, in the words a person uses. Ian reads "2h", not a
+ * timestamp — the desk answers "what is waiting on me and how long has it been",
+ * and a date makes him do the subtraction himself.
+ */
+function lgb_age(string $when): string
 {
+    $t = strtotime($when . ' UTC') ?: strtotime($when);
+    if (!$t) { return ''; }
+    $s = max(0, time() - $t);
+    if ($s < 3600)  { return max(1, (int) round($s / 60)) . 'm'; }
+    if ($s < 86400) { return (int) round($s / 3600) . 'h'; }
+    return (int) round($s / 86400) . 'd';
+}
+
+/**
+ * COMPACT DESK ROWS. Ian, 2026-08-16 night: *"My desk is now really verbose…
+ * should go to modals."*
+ *
+ * One line each — seat, what it is, how old — and the full body one click away.
+ * The desk answers "what is waiting on me" at a glance; the moment it starts
+ * answering "and here is everything about it" it stops being scannable, which is
+ * the failure that makes a desk get skimmed and then ignored.
+ *
+ * WHAT THE "type" IS AND IS NOT. It is derived from evidence: an item with a
+ * posed decision reads "decision", one whose text ends in a question mark reads
+ * "question", everything else reads "update". No cleverer classification is
+ * attempted, because guessing an ask-type from prose is exactly the typing-
+ * dressed-as-deriving this board refuses elsewhere.
+ */
+function lgb_render_desk_items(array $items, array $decisions = []): string
+{
+    $open = [];
+    foreach ($decisions as $dec) { if (($dec['answer'] ?? null) === null) { $open[] = $dec['id']; } }
+
     $out = '';
-    foreach (array_reverse($items) as $d) {
-        $out .= '<div class="desk__i"><span class="desk__b"></span><span class="desk__x">'
-              . '<b>' . lgb_h((string) ($d['who'] ?? '?')) . '</b> '
-              . '<span>' . lgb_linkify((string) ($d['text'] ?? '')) . '</span> '
-              . '<span class="q__w">' . lgb_h((string) ($d['when'] ?? '')) . '</span>'
+    foreach (array_reverse($items) as $i => $d) {
+        $who  = (string) ($d['who'] ?? '?');
+        $text = trim((string) ($d['text'] ?? ''));
+        $first = trim(explode("\n", $text)[0] ?? '');
+
+        $type = 'update';
+        if (in_array($who, $open, true))      { $type = 'decision'; }
+        elseif (str_ends_with($first, '?'))   { $type = 'question'; }
+
+        $out .= '<div class="desk__i desk__i--compact" data-desk="' . (int) $i . '" tabindex="0" role="button" title="Open this">'
+              . '<span class="desk__b"></span>'
+              . '<span class="desk__seat">' . lgb_h($who) . '</span>'
+              . '<span class="desk__type desk__type--' . $type . '">' . $type . '</span>'
+              . '<span class="desk__snip">' . lgb_h(mb_strimwidth($first, 0, 72, '…', 'UTF-8')) . '</span>'
+              . '<span class="desk__age">' . lgb_h(lgb_age((string) ($d['when'] ?? ''))) . '</span>'
               . '</span></div>';
     }
     return $out;
@@ -1691,7 +1734,12 @@ html[data-lguser-theme="dark"]{--line:#767c76}
             $snapRaw = json_decode((string) file_get_contents($LGB_THREADS), true);
             if (is_array($snapRaw) && is_array($snapRaw['desk'] ?? null)) { $deskAuto = $snapRaw['desk']; }
         }
-        echo '<div id="lgb-desklist">' . lgb_render_desk_items($deskAuto) . '</div>'; ?>
+        echo '<div id="lgb-desklist">' . lgb_render_desk_items($deskAuto, lgb_decisions($BACKLOG)) . '</div>';
+        // The bodies travel with the page so a click opens instantly and needs
+        // no round trip — the desk is the first thing he touches.
+        echo '<script type="application/json" id="lgb-deskbodies">'
+           . json_encode(array_values(array_reverse($deskAuto)), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES)
+           . '</script>'; ?>
 
         <?php
         /**
@@ -2078,6 +2126,15 @@ html[data-lguser-theme="dark"]{--line:#767c76}
     .br__s--gone{background:rgba(200,70,70,.18)}
     .br__s--unknown{background:rgba(128,128,128,.20)}
     .msg__img{max-width:100%;max-height:240px;border-radius:6px;display:block;margin:4px 0}
+    .desk__i--compact{display:flex;gap:8px;align-items:center;cursor:pointer;padding:3px 0}
+    .desk__seat{font-weight:600;font-size:12px;white-space:nowrap}
+    .desk__type{font-size:10px;text-transform:uppercase;letter-spacing:.04em;padding:1px 6px;border-radius:999px;white-space:nowrap}
+    .desk__type--decision{background:rgba(200,120,40,.22)}
+    .desk__type--question{background:rgba(74,158,255,.20)}
+    .desk__type--update{background:rgba(128,128,128,.18)}
+    .desk__snip{flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.85}
+    .desk__age{font-size:11px;opacity:.55;white-space:nowrap}
+    .desk__i--compact:hover .desk__snip{opacity:1}
   </style>
   <script type="application/json" id="lgb-branchstate"><?php
     echo json_encode(lgb_branch_states($LGB_THREADS), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
@@ -2777,6 +2834,40 @@ html[data-lguser-theme="dark"]{--line:#767c76}
         });
       });
     });
+
+    /**
+     * A DESK ROW OPENS ITS FULL BODY. The row is one line by design; this is
+     * where the verbosity went, not where it was deleted — Ian still needs the
+     * whole message, just not all of them at once.
+     */
+    (function () {
+      var bodies = [];
+      try { bodies = JSON.parse(document.getElementById('lgb-deskbodies').textContent || '[]'); } catch (e) {}
+      document.querySelectorAll('.desk__i--compact[data-desk]').forEach(function (row) {
+        var openIt = function () {
+          var d = bodies[parseInt(row.dataset.desk, 10)];
+          if (!d) { return; }
+          title.textContent = (d.who || '?') + ' — ' + (d.when || '');
+          body.innerHTML = withMedia(d.text || '').replace(
+            /(https?:\/\/[^\s<)]+|\/[a-z0-9][\w./-]*\/)/gi,
+            function (m) { return '<a href="' + m + '" target="_blank" rel="noopener">' + m + '</a>'; });
+          document.getElementById('lgb-copytext').textContent = (d.who || '') + ': ' + (d.text || '') + '\n\nMy answer:\n';
+          meta.innerHTML = '';
+          // A desk item is not a backlog card: it has no thread, no branches and
+          // no structure controls, and showing empty ones would imply it does.
+          ['lgb-structbox', 'lgb-brbox', 'lgb-decbox'].forEach(function (id) {
+            var el = document.getElementById(id); if (el) { el.hidden = true; }
+          });
+          cur = null;
+          scrim.classList.add('on');
+          document.getElementById('lgb-close').focus();
+        };
+        row.addEventListener('click', openIt);
+        row.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openIt(); }
+        });
+      });
+    })();
 
     document.getElementById('lgb-close').addEventListener('click', close);
     scrim.addEventListener('click', function (e) { if (e.target === scrim) close(); });
