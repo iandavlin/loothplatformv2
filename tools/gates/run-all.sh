@@ -1225,6 +1225,17 @@ echo "=== GATE 58: the featured card may only repeat what the member's profile p
 # asserts what ships rather than a parallel idea of it.
 run "featured-card-text" python3 "$(dirname "$0")/featured-card-text-onprofile-gate.py"
 
+echo "=== GATE 64: hub author-filter banner — the Advanced Search modal's in-place apply must swap it too ==="
+# Backlog 38 (Ian 8/16), P0. Number 64 from keeper. Ian reported the green
+# author banner missing for one author and present for another; disproved
+# name fragility (reproduces identically for both, via real clicks through
+# the real suggest dropdown) and root-caused it to forums.js's fmodalApply —
+# it swaps the feed cards, modal body and chip bar in place but never the
+# banner, which sits outside all three. Flagged OFF by default
+# (platform/config/hub-author-banner-swap.php); reads this branch's tree via
+# the featured-members lane preview, so it must be UP for this to run
+# (tools/preview/lane-preview.sh up featured-members).
+run "hub-author-banner-swap" python3 "$(dirname "$0")/hub-author-banner-swap-gate.py"
 
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then

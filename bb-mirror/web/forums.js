@@ -925,6 +925,21 @@
           var bar = document.querySelector('.feed-sort-bar');
           if (bar) bar.insertAdjacentElement('beforebegin', document.importNode(newC, true));
         }
+        // Backlog 38 (flag-gated, window.LG_HUB_AUTHOR_BANNER_SWAP): the green
+        // author banner sits OUTSIDE #hub-feed-results (server order: sponsor
+        // rail, banner, results), so it was never part of this swap — picking an
+        // author from the modal's dropdown updated the cards + chip bar but left
+        // the banner exactly as it was: absent if none was showing, stale if a
+        // different author's was already up. Same old/new pattern as .hub-chipbar
+        // just above. oldR is #hub-feed-results, already resolved above, and
+        // stays a valid anchor (only its .feed child's innerHTML was replaced).
+        if (window.LG_HUB_AUTHOR_BANNER_SWAP) {
+          var oldAH = document.getElementById('hub-author-headers');
+          var newAH = doc.getElementById('hub-author-headers');
+          if (oldAH && newAH) oldAH.replaceWith(document.importNode(newAH, true));
+          else if (oldAH && !newAH) oldAH.remove();
+          else if (!oldAH && newAH && oldR) oldR.insertAdjacentElement('beforebegin', document.importNode(newAH, true));
+        }
         // Sort/Saved pills keep the new filter set (hrefs are server-built).
         var newAs = {}, list = doc.querySelectorAll('.feed-sort-bar a');
         for (var i = 0; i < list.length; i++) newAs[list[i].textContent.trim()] = list[i].getAttribute('href');
