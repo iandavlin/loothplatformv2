@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-GATE NUMBER PENDING (keeper) — sitemap-anon-open-gate — backlog 40, job 3.
+GATE 71 (keeper, 2026-08-16) — sitemap-anon-open-gate — backlog 40, job 3.
 The standing gate keeper promised Ian: every URL this site tells Google to
 crawl must actually be OPEN to the same anonymous visitor Google is.
 
