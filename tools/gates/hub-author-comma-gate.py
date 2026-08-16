@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-GATE NUMBER PENDING (keeper) — hub-author-comma-gate. Number requested
-2026-08-16, apply on delivery. Reads THIS BRANCH'S TREE via the
-featured-members lane preview.
+GATE 66 — hub-author-comma-gate. Number from keeper, 2026-08-16. Reads THIS
+BRANCH'S TREE via the featured-members lane preview.
 
 A display name containing a literal comma broke the Hub's author filter
 entirely. hub_url() joined multiple selected authors with implode(',', ...)
