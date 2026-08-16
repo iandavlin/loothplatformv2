@@ -1372,6 +1372,38 @@ function lg_fc_css(): string
   outline:2px solid var(--lg-sage,#87986a);outline-offset:1px;border-color:var(--lg-sage,#87986a)}
 .lgfc .acf-input input::placeholder,.lgfc .acf-input textarea::placeholder{color:var(--lg-mute,#6b6f6b);opacity:.62}
 
+/* ---- the video oEmbed ---- */
+/* ⚠️ THIS FIELD HAD NEVER BEEN STYLED HERE, and that only became visible tonight.
+   It lived inside the "Add extras" fold, so it rendered collapsed and the dark
+   sweep never reached it. Ian's ruling 1 pulled it into the main body, and gate 47
+   immediately went red on TWO BRIGHT SURFACES in dark mode — measured #ffffff at
+   716x293 (div.acf-oembed) and #f9f9f9 at 714x250 (its inner div.canvas). Zero
+   contrast failures, because neither box holds text; they are luminance slabs, and
+   only the surface half of that gate could see them.
+
+   The lesson worth keeping: MOVING A CONTROL INTO VIEW IS A THEME CHANGE. Nothing
+   about this field changed except that it is now visible, and it arrived carrying
+   ACF's admin-white defaults into a dark page.
+
+   Styled with the SAME tokens as the text inputs above rather than with hardcoded
+   dark values, so light stays coherent and dark follows automatically —
+   --lg-paper is already re-pointed to #20241f for .lgfc in dark, which is why
+   there is no separate dark rule here. Hardcoding #20241f would have fixed the
+   gate and left light mode painted with a dark-mode colour. */
+.lgfc .acf-oembed{border:1px solid var(--lg-line,#e3ddd0);border-radius:9px;
+  background:var(--lg-paper,#fdfdfa);overflow:hidden}
+.lgfc .acf-oembed .title{padding:0;border-bottom:1px solid var(--lg-line,#e3ddd0)}
+.lgfc .acf-oembed .title .input-search{border:0;border-radius:0;background:none}
+.lgfc .acf-oembed .canvas{background:var(--lg-paper,#fdfdfa);min-height:0;
+  color:var(--lg-mute,#6b6f6b)}
+/* The empty preview is a 250px void until a URL is pasted. Give it a real height
+   only once it has something to show; empty, it is a slim hint rather than a slab. */
+.lgfc .acf-oembed .canvas:not(:has(iframe)):not(:has(img)){min-height:64px;
+  display:flex;align-items:center;justify-content:center}
+.lgfc .acf-oembed .canvas-media{width:100%}
+.lgfc .acf-oembed .canvas-media iframe,.lgfc .acf-oembed .canvas-media img{
+  display:block;width:100%;border:0}
+
 /* ---- chips: taxonomy checkbox lists and the licence radio ---- */
 .lgfc .acf-checkbox-list,.lgfc .acf-radio-list{list-style:none;margin:0;padding:0;
   display:flex;gap:6px;flex-wrap:wrap}
