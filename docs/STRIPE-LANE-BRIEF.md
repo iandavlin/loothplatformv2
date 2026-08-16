@@ -211,7 +211,12 @@ Everything below is a decision, not a task. Nothing here is blocked on code.
 
 ### The two he must do himself
 
-- **Rotate the key.** He already has a real, charges-enabled Stripe account
+- **Rotate the key — the LIVE one only.** The **sandbox** key is settled: Ian,
+  2026-08-15, *"keep sandbox keys. not worth rotating."* That closes the
+  rotation this lane owed after leaking a test key into a transcript, and nobody
+  should re-open it. What follows is about the LIVE key, a different decision
+  and still his.
+  He already has a real, charges-enabled Stripe account
   ("Loothgroup", `acct_1LJOi5Hg6gcIV22b`) that predates this work, and a working
   master key to it sat in the website database for years. Roll it, then we stage
   removal of the old copy.

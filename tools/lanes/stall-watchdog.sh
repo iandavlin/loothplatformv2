@@ -34,20 +34,49 @@ while true; do
     # No 10-minute grace — a sticky note nobody pressed Enter on is a stall
     # the moment it exists (the 8/14 class: 'draw the door pictures' sat idle).
     if lanes 2>/dev/null | grep -E "^$L " | grep -q parked; then
-      if printf '%s' "$PANE" | grep -qE "^❯ .*[[:alnum:]]"; then
-        echo "ALERT lost-instruction $L — parked with unsent composer text"; exit 0
+      # "Press up to edit queued messages" at the prompt means a message was
+      # SUBMITTED and is queued behind the seat's current turn — the opposite
+      # of lost. (8/16: third watchdog blindspot; it re-alarmed on a healthy
+      # delivery three times in ten minutes.)
+      # THE COMPOSER IS THE LAST ❯ LINE. Queued messages render with the same
+      # glyph higher in the pane (8/16, fifth blindspot: the check read the
+      # FIRST ❯ and alarmed for an hour on a healthy queued delivery).
+      TXT1=$(printf '%s' "$PANE" | grep -E "^❯" | tail -1)
+      if printf '%s' "$TXT1" | grep -qE "^❯ .*[[:alnum:]]" \
+         && ! printf '%s' "$PANE" | grep -q "Press up to edit queued messages"; then
+        # DEBOUNCE (8/16): queue promotion holds real text transiently.
+        # Alarm only if the SAME composer text persists 20s later.
+        sleep 20
+        PANE2=$(tmux capture-pane -p -t "$L" 2>/dev/null)
+        TXT2=$(printf '%s' "$PANE2" | grep -E "^❯" | tail -1)
+        if [ "$TXT1" = "$TXT2" ]; then
+          echo "ALERT lost-instruction $L — parked with unsent composer text"; exit 0
+        fi
       fi
     fi
     L_LINE=$(lanes 2>/dev/null | grep -E "^$L ")
     # A pane with live background shells is WORKING even at an idle prompt
     # (8/15: two seats false-alarmed all day while running background jobs).
     if echo "$L_LINE" | grep -q "shell" ; then rm -f "$STATED/$L"; continue; fi
+    # 8/16: the CLI prints the shell count in the PANE status bar ("· 2 shell"),
+    # not in the `lanes` line — the check above never matched and six seats
+    # false-alarmed through a whole dispatch morning. An active spinner
+    # ("Actioning… (Nm Ns · ↓ Nk tokens)") is likewise WORKING: `lanes` can
+    # read a mid-turn seat as parked.
+    if printf '%s' "$PANE" | grep -qE "[0-9]+ shell|↓ [0-9.]+k tokens"; then
+      rm -f "$STATED/$L"; continue
+    fi
     if echo "$L_LINE" | grep -q parked; then
       # A lane parked ON A QUESTION is answered, not aged: escalate immediately
       # (Ian 8/15: "If it stops to ask a question, we should answer the question").
       QF="$HOME/worktrees/$L/.lane-state/QUESTION"
       if [ -f "$QF" ]; then
-        echo "ALERT question-waiting $L — ANSWER IT: $(head -c 300 "$QF")"; exit 0
+        # Ian 8/16, verbatim, because this rule kept getting lost: "Every thing
+        # that stops a lane on my decision needs to end with a decision box.
+        # Always." The alert carries the rule so it fires in the trigger path.
+        echo "ALERT question-waiting $L — ANSWER IT: $(head -c 300 "$QF")"
+        echo "==> IF THIS IS IAN'S DECISION: this keeper turn ENDS WITH THE DECISION BOX (sharpen inside the box, never bounce to the lane first)."
+        exit 0
       fi
       # Park-ok entries EXPIRE (8/15: a stale exemption is a silent blind spot).
       # Format: "<lane> <expires-epoch> [# comment]". Bare legacy lines = expired.

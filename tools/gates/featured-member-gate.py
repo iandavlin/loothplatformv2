@@ -66,6 +66,7 @@ INDEX_PHP = os.path.join(REPO, "archive-poc", "web", "index.php")
 FLAG_FILE = os.path.join(REPO, "platform", "config", "featured-members.php")
 AUTH_PHP = os.path.join(REPO, "profile-app", "src", "Auth.php")
 COMPLETENESS_PHP = os.path.join(REPO, "profile-app", "src", "Completeness.php")
+ME_FEATURED_PHP = os.path.join(REPO, "profile-app", "api", "v0", "me-featured.php")
 
 RED, DEAD, OK = [], [], []
 
@@ -95,6 +96,27 @@ def php(user, script_path):
         return p.returncode, p.stdout, p.stderr
     except Exception as e:
         return -1, "", str(e)
+
+
+def php_eval_expr(expr, cwd_dir):
+    """Run a PHP snippet with __DIR__ meaning `cwd_dir` — i.e. as if the code
+    lived in that directory, the same as the real caller. Written to a real
+    temp .php FILE inside that directory (not `php -r`, whose __DIR__ is not
+    the caller's) so a relative __DIR__-based path resolves exactly the way
+    the actual server-side include does. No sudo/DB needed — pure filesystem."""
+    tmp = os.path.join(cwd_dir, ".featured-member-gate-c4-tmp.php")
+    try:
+        with open(tmp, "w") as f:
+            f.write("<?php " + expr)
+        p = subprocess.run(["php", tmp], capture_output=True, text=True, timeout=10)
+        return p.returncode, p.stdout, p.stderr
+    except Exception as e:
+        return -1, "", str(e)
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
 
 
 def section_a_constraints():
@@ -131,48 +153,45 @@ def section_a_constraints():
 
     # A2: featured_history must reject a second open row.
     #
-    # STATE-AWARE since 2026-08-15 (keeper): Ian featured a REAL member from
-    # the dash, and this probe's seed-insert was rejected by the very
-    # constraint under test — which the old code misread as CANNOT RUN. If a
-    # real open row exists it IS row one: probe the rejection against it and
-    # touch nothing. (Near-miss recorded: the failure looked like stale test
-    # residue; deleting it would have un-featured Ian's actual pick. Verify
-    # the row, never assume the probe owns whatever it collides with.)
+    # Since the feature went live (2026-08-15) there can be a REAL open row
+    # here — Ian himself featuring a real member through the real dash — and
+    # this test must never touch it: the earlier version unconditionally
+    # inserted a synthetic "first" row, which after that point started
+    # colliding with the real one (the constraint has no concept of test vs.
+    # real, by design) and reported DEAD ("could not seed") instead of
+    # testing anything. Check for a real open row first; if one exists, use
+    # IT as the first half of the proof (read-only, never deleted) and only
+    # insert+clean up the synthetic SECOND row.
     u1, u2 = "eeeeeeee-1111-1111-1111-111111111111", "eeeeeeee-2222-2222-2222-222222222222"
     psql("postgres", "looth",
          f"DELETE FROM discovery.featured_history WHERE member_uuid IN ('{u1}','{u2}')")
-    _, live_open, _ = psql("postgres", "looth",
-        "SELECT count(*) FROM discovery.featured_history WHERE ended_at IS NULL")
-    if (live_open or "").strip() not in ("0", ""):
-        rc2, _, err2 = psql("postgres", "looth",
-            f"INSERT INTO discovery.featured_history (member_uuid, display_name) VALUES ('{u2}','Gate Test B')")
-        if rc2 == 0:
-            RED.append("[A2] featured_history_one_open did NOT reject a second concurrently-open "
-                       "row — Ian's ONE AT A TIME ruling is not actually enforced")
-            psql("postgres", "looth",
-                 f"DELETE FROM discovery.featured_history WHERE member_uuid='{u2}'")
-        elif "featured_history_one_open" in err2 or "duplicate key" in err2:
-            OK.append("[A2] one-open-row constraint rejects a second row — proven against the "
-                      "REAL currently-featured member, nothing touched")
-        else:
-            DEAD.append(f"[A2] second INSERT failed for an unexpected reason: {err2[:200]}")
-        psql("postgres", "looth",
-             f"DELETE FROM discovery.featured_history WHERE member_uuid IN ('{u1}','{u2}')")
+    rc0, out0, err0 = psql("postgres", "looth",
+        "SELECT member_uuid FROM discovery.featured_history WHERE ended_at IS NULL LIMIT 1")
+    if rc0 != 0:
+        DEAD.append(f"[A2] could not check for an existing open row: {err0[:200]}")
         return
-    rc, _, err = psql("postgres", "looth",
-        f"INSERT INTO discovery.featured_history (member_uuid, display_name) VALUES ('{u1}','Gate Test A')")
-    if rc != 0:
-        DEAD.append(f"[A2] could not seed the first open row: {err[:200]}")
+    real_open = out0.strip() if out0.strip() else None
+
+    if real_open is None:
+        rc, _, err = psql("postgres", "looth",
+            f"INSERT INTO discovery.featured_history (member_uuid, display_name) VALUES ('{u1}','Gate Test A')")
+        if rc != 0:
+            DEAD.append(f"[A2] could not seed the first open row: {err[:200]}")
+            return
+    # else: a real open row already exists — that's our "first", untouched.
+
+    rc2, _, err2 = psql("postgres", "looth",
+        f"INSERT INTO discovery.featured_history (member_uuid, display_name) VALUES ('{u2}','Gate Test B')")
+    if rc2 == 0:
+        RED.append("[A2] featured_history_one_open did NOT reject a second concurrently-open "
+                   "row — Ian's ONE AT A TIME ruling is not actually enforced")
+    elif "featured_history_one_open" in err2 or "duplicate key" in err2:
+        source = "the real currently-open row" if real_open else "a synthetic first row"
+        OK.append(f"[A2] the one-open-row-at-a-time constraint rejects a second open row "
+                  f"(tested against {source}), as designed")
     else:
-        rc2, _, err2 = psql("postgres", "looth",
-            f"INSERT INTO discovery.featured_history (member_uuid, display_name) VALUES ('{u2}','Gate Test B')")
-        if rc2 == 0:
-            RED.append("[A2] featured_history_one_open did NOT reject a second concurrently-open "
-                       "row — Ian's ONE AT A TIME ruling is not actually enforced")
-        elif "featured_history_one_open" in err2 or "duplicate key" in err2:
-            OK.append("[A2] the one-open-row-at-a-time constraint rejects a second open row, as designed")
-        else:
-            DEAD.append(f"[A2] second INSERT failed for an unexpected reason: {err2[:200]}")
+        DEAD.append(f"[A2] second INSERT failed for an unexpected reason: {err2[:200]}")
+
     psql("postgres", "looth",
          f"DELETE FROM discovery.featured_history WHERE member_uuid IN ('{u1}','{u2}')")
 
@@ -360,6 +379,44 @@ def section_c_flag_off():
                        "card even with the feature meant to be off")
         else:
             OK.append("[C3] index.php's real-member resolution is gated behind the flag check")
+
+    # C4: me-featured.php's OWN include of the flag file must resolve to a
+    # REAL, readable file — found 2026-08-15 via a live PUT that came back
+    # 403 feature_disabled with the tracked flag reading enabled=true: the
+    # file used `__DIR__ . '/../../platform/config/...'`, one `..` short for
+    # api/v0's extra directory level (u.php and index.php sit one level
+    # shallower, where that same two-dot pattern IS correct — a straight
+    # copy-paste without adjusting for the depth). `@include` swallowed the
+    # miss silently and `$cfg` fell back to false, so the member-visible
+    # symptom (every PUT refused) looked identical to the flag being
+    # genuinely off — no static check anywhere caught it because C1-C3 all
+    # assert the FLAG FILE's own content, never that a CALLER can actually
+    # reach it. This does not re-derive the path by counting dots (that is
+    # exactly the class of arithmetic that produced the bug); it extracts the
+    # literal expression from the source and asks PHP to resolve it for
+    # real, the same way the running server would.
+    me_featured_src = read(ME_FEATURED_PHP)
+    if me_featured_src is None:
+        DEAD.append("[C4] profile-app/api/v0/me-featured.php is missing")
+    else:
+        m = re.search(r"@include\s+__DIR__\s*\.\s*'([^']+featured-members\.php)'", me_featured_src)
+        if not m:
+            RED.append("[C4] me-featured.php no longer includes the flag file the way this "
+                       "check expects — could not find the @include __DIR__ . '...' expression")
+        else:
+            rc, out, err = php_eval_expr(
+                "var_dump(realpath(__DIR__ . '" + m.group(1) + "'));",
+                os.path.dirname(ME_FEATURED_PHP),
+            )
+            resolved = out.strip()
+            expect = 'string(%d) "%s"' % (len(os.path.realpath(FLAG_FILE)), os.path.realpath(FLAG_FILE))
+            if rc != 0 or resolved != expect:
+                RED.append("[C4] me-featured.php's include path does not resolve to the real "
+                           "flag file (got: %s) — every PUT would silently read the flag as off, "
+                           "exactly as it did live before this was fixed" % (resolved or err)[:200])
+            else:
+                OK.append("[C4] me-featured.php's flag include resolves to the real, tracked "
+                          "flag file — a member's PUT can actually see the real enabled state")
 
 
 def section_d_no_admin_override():

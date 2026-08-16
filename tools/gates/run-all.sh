@@ -1032,6 +1032,10 @@ if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push #########
 
 echo "=== GATE 50: the work board renders EVERY item, and phase 1 cannot write ==="
 run "work-board" php "$(dirname "$0")/work-board-gate.php"
+# GATE 56 — the board committer's four fences (minted by keeper at the seat-2
+# merge; the seat named the gap itself: unnumbered, the gate protected nothing
+# on anyone else's branch). 48 assertions against a throwaway clone.
+run "board-committer" php "$(dirname "$0")/board-committer-gate.php"
 
 echo "=== GATE 51: new members arrive alive — the profile-setup step, flag OFF, and NO nudge ==="
 # Backlog 19 (Ian 8/12 from the empty-directory screenshot; ruled 8/15, Option A
@@ -1121,6 +1125,16 @@ echo "=== GATE 62: a branch that ADDS a flag must REGISTER it in docs/FLAGS.md =
 # Merged branches give an empty diff vs their own merge-base and pre-FLAGS.md
 # branches have no register: both exit 2, never 1, so neither can redden a train.
 run "flag-register" python3 "$(dirname "$0")/flag-register-gate.py"
+
+echo "=== GATE (unnumbered — pending keeper): directory location cap — backlog 20, list views never exceed City/State ==="
+# Ian 8/15, via keeper: found live via member Luke (WP 2091) — an admin
+# browsing the directory saw every member's raw street address on every row.
+# Number not yet allocated — gate numbers are ALLOCATED BY KEEPER, never
+# self-minted (the exact 36-vs-36 collision featured-member-gate hit above is
+# what that rule exists to prevent). Runs regardless: the assertions are real
+# and red-first proven against real live rows (Luke + Michael Swisher) even
+# before the banner has a final number.
+run "directory-location-cap" python3 "$(dirname "$0")/directory-location-cap-gate.py"
 
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then

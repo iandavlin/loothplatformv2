@@ -28,9 +28,39 @@ function dir_haversine_mi(float $la1, float $lo1, float $la2, float $lo2): float
  * Visibility::locationPrecision — only the coarsening math stays here. Returns
  * the display array (lat/lng/text/zoom/kind) or null when private for this viewer.
  */
+/**
+ * Backlog 20 (Ian 8/15, via keeper): list surfaces (this directory's cards
+ * AND its map pins — dir_member_display() is the shared choke point for
+ * both) must never render more than City/State, no matter what the viewer
+ * is or what the member's own precision dial says. Visibility::locationPrecision()
+ * correctly grants 'street' to the owner and to admins — appropriate for a
+ * SINGLE profile page, wrong for a list where every row gets the same
+ * treatment: an admin browsing the directory saw every member's raw street
+ * address on every row, not just one. Found live via member Luke (WP 2091,
+ * profile_app id 2131), row real, address real.
+ *
+ * OFF is the literal pre-existing behavior: precision passes through
+ * unchanged. ON downgrades a 'street' result to 'city' before it ever
+ * reaches Block::locationDisplay(), so a list row/pin tops out at
+ * "City, Region" the same way a members-precision='city' row already does —
+ * one shared code path, no new rendering branch.
+ */
+function dir_location_cap_on(): bool
+{
+    static $on = null;
+    if ($on !== null) return $on;
+    $cfg = @include __DIR__ . '/../../../platform/config/directory-location-cap.php';
+    $on  = is_array($cfg) && !empty($cfg['enabled']);
+    foreach ([getenv('LG_DIRECTORY_LOCATION_CAP'), $_SERVER['LG_DIRECTORY_LOCATION_CAP'] ?? false] as $o) {
+        if ($o !== false && $o !== '') $on = ($o === '1' || $o === 'true');
+    }
+    return $on;
+}
+
 function dir_member_display(array $r, array $vArr): ?array
 {
     $precision = Visibility::locationPrecision($vArr, $r);
+    if ($precision === 'street' && dir_location_cap_on()) $precision = 'city';
     $place = [
         'address'  => $r['location_address'],
         'postcode' => $r['location_postcode'],

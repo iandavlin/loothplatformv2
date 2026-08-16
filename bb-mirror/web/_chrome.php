@@ -897,6 +897,14 @@ if ($lg_se_on): ?>
    See platform/config/back-pill.php. */
 $lg_bp = @include __DIR__ . '/../../platform/config/back-pill.php';
 $lg_bp_on = is_array($lg_bp) && !empty($lg_bp['enabled']);
+/* Per-box override, gitignored (the compose/guitardle one-truth pattern,
+   8/15-16): dev2 runs the pill ON via back-pill.local.php while the tracked
+   default stays false, so a live pull cannot switch it on unverified. Sits
+   BEFORE the env loop so a gate forcing a state via LG_BACK_PILL still wins. */
+$lg_bp_local = @include __DIR__ . '/../../platform/config/back-pill.local.php';
+if (is_array($lg_bp_local) && array_key_exists('enabled', $lg_bp_local)) {
+    $lg_bp_on = ($lg_bp_local['enabled'] === true);
+}
 foreach ([getenv('LG_BACK_PILL'), $_SERVER['LG_BACK_PILL'] ?? false] as $lg_bp_o) {
     if ($lg_bp_o !== false && $lg_bp_o !== '') $lg_bp_on = ($lg_bp_o === '1' || $lg_bp_o === 'true');
 }

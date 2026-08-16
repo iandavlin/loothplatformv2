@@ -1,0 +1,19 @@
+# The work board's write path — transport half. Backlog 29, phase 2.
+#
+# A UNIX socket, not a loopback TCP port: a port is reachable by every user on
+# this box, a socket is reachable by the users its mode names. SocketGroup is
+# the FPM pool that serves the board, so the web user can call and nobody else
+# can. Accept=yes gives one short-lived process per connection.
+[Unit]
+Description=Work board committer (socket)
+Documentation=file:///home/ubuntu/loothplatformv2-clean/docs/BACKLOG-29-BUILD-NOTES.md
+
+[Socket]
+ListenStream=/run/board-committer.sock
+SocketUser=ubuntu
+SocketGroup=looth-dev
+SocketMode=0660
+Accept=yes
+
+[Install]
+WantedBy=sockets.target
