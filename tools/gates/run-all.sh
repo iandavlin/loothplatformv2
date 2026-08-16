@@ -1111,7 +1111,11 @@ echo "=== GATE 57: a guessed letter is a HIT or a MISS, and a resumed board PAIN
 #
 # Asserts THIS TREE's client, substituted over CDP, because dev2 serves main.
 # LG_GDLE_SERVED=1 measures the served code instead — that is the red-first
-# direction, and how this gate was proven (4 assertions red on main).
+# direction, and how this gate was proven: 24 assertions red on main, measured
+# 2026-08-16 rather than remembered. Three artifacts cited three DIFFERENT
+# numbers for this one measurement (here 4, CRAFT-STANDARD 14, the commit body
+# 19); 19 was correct for the original four-phase gate, the others never were.
+# Re-measure before quoting it -- phases 5 and 6 changed the count.
 run "guitardle-letter-state" python3 "$(dirname "$0")/guitardle-letter-state-gate.py"
 
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
