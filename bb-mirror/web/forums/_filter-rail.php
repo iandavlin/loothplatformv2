@@ -24,7 +24,7 @@ function hub_url(array $filters, string $sort = 'new'): string
     if (!empty($filters['types']))              $qs['type']   = implode(',', $filters['types']);
     if (!empty($filters['cats']))               $qs['cat']    = implode(',', $filters['cats']);
     if (!empty($filters['leaves']))             $qs['leaf']   = implode(',', $filters['leaves']);
-    if (!empty($filters['authors']))            $qs['author'] = implode(',', $filters['authors']);
+    if (!empty($filters['authors']))            $qs['author'] = hub_authors_join($filters['authors']);
     if (!empty($filters['q']))                  $qs['q']      = $filters['q'];
     if (!empty($filters['saved']))              $qs['saved']  = 1;
     if (!empty($filters['show']))               $qs['show']   = $filters['show'];
@@ -50,7 +50,7 @@ function hub_query_params(): array
     if (!empty($f['types']))   $out['type']   = implode(',', $f['types']);
     if (!empty($f['cats']))    $out['cat']    = implode(',', $f['cats']);
     if (!empty($f['leaves']))  $out['leaf']   = implode(',', $f['leaves']);
-    if (!empty($f['authors'])) $out['author'] = implode(',', $f['authors']);
+    if (!empty($f['authors'])) $out['author'] = hub_authors_join($f['authors']);
     if (!empty($f['q']))       $out['q']      = $f['q'];
     if (!empty($f['saved']))   $out['saved']  = '1';   // string: feed_sort_url() urlencode()s every value (strict_types → int fatals)
     if (!empty($f['show']))    $out['show']   = $f['show'];   // single video-type term (Shows filter)
@@ -298,7 +298,7 @@ function hub_render_toolbar_search(array $filters, string $sort = 'new'): void
         $h = '';
         if (!in_array('type', $skip, true)   && !empty($filters['types']))   $h .= '<input type="hidden" name="type" value="' . htmlspecialchars(implode(',', $filters['types'])) . '">';
         if (!in_array('cat', $skip, true)    && !empty($filters['cats']))    $h .= '<input type="hidden" name="cat" value="'  . htmlspecialchars(implode(',', $filters['cats']))  . '">';
-        if (!in_array('author', $skip, true) && !empty($filters['authors'])) $h .= '<input type="hidden" name="author" value="' . htmlspecialchars(implode(',', $filters['authors'])) . '">';
+        if (!in_array('author', $skip, true) && !empty($filters['authors'])) $h .= '<input type="hidden" name="author" value="' . htmlspecialchars(hub_authors_join($filters['authors'])) . '">';
         if (!in_array('tag', $skip, true)    && !empty($filters['tags']))    $h .= '<input type="hidden" name="tag" value="'  . htmlspecialchars(implode(',', $filters['tags']))  . '">';
         if ($sort !== 'new')                                                 $h .= '<input type="hidden" name="sort" value="' . htmlspecialchars($sort) . '">';
         return $h;

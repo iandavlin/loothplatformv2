@@ -263,6 +263,70 @@ function hub_resolve_profiles(array $wp_ids): array
     return $out;
 }
 
+/**
+ * The author facet's OWN delimiter — deliberately NOT a comma. Backlog 38's
+ * own trace turned up a real, worse defect in the same code: hub_url()
+ * joined multiple selected authors with implode(',', ...) and this parser
+ * split back on the same character, so any ONE display name that itself
+ * contains a comma (measured on live: "John Lehmann, Old Naples Guitars",
+ * "Ross Shafer Six-Nine Design, builder of Sierra Steel Guitars", 6 authors
+ * total) got sliced into nonsense fragments matching neither the real
+ * author — 2 bogus banner headers, 0 matching cards, reproduced identically
+ * on dev2 and live. Names are free text (WP display names, not a controlled
+ * vocabulary like the type/cat/leaf/tag facets, which is why only this one
+ * facet needed a fix) — no delimiter is PERFECTLY safe against arbitrary
+ * text, but ASCII Unit Separator (\x1F) is not a character a human types or
+ * a display name plausibly contains, and it round-trips exactly like any
+ * other byte through http_build_query()/$_GET's automatic urlencoding, so
+ * neither side needs its own escaping logic. hub-filters.js's addAuthor()
+ * uses the identical character.
+ *
+ * BACKWARD COMPAT, STATED: an old bookmark that multi-selected two authors
+ * via the OLD comma join (e.g. ?author=Rick,Patrick) now parses as ONE
+ * literal name "Rick,Patrick" instead of splitting into two — the
+ * multi-select feature is rarely used, and the old format was already
+ * broken for any comma-bearing name, so this is accepted rather than
+ * chased; a single-author link (the overwhelming majority of real traffic,
+ * and the one Ian's report and the icon both depend on) is unaffected
+ * either way.
+ *
+ * Flagged (platform/config/hub-author-comma-fix.php), OFF by default: OFF
+ * keeps the delimiter ',' — today's exact behaviour, byte-identical — so
+ * this ships without changing anything Ian has not looked at yet.
+ */
+if (!function_exists('hub_author_delim')) {
+    function hub_author_delim(): string
+    {
+        static $delim = null;
+        if ($delim !== null) return $delim;
+        $on = false;
+        if (getenv('LG_HUB_AUTHOR_COMMA_FIX') === '1' || (($_SERVER['LG_HUB_AUTHOR_COMMA_FIX'] ?? '') === '1')) {
+            $on = true;
+        } else {
+            $path = dirname(__DIR__, 3) . '/platform/config/hub-author-comma-fix.php';
+            if (is_readable($path)) {
+                $raw = require $path;
+                $on = is_array($raw) && ($raw['enabled'] ?? false) === true;
+            } else {
+                error_log('[lg-hub-author-comma-fix] tracked config unreadable at ' . $path . ' — OFF (fail-closed)');
+            }
+        }
+        return $delim = ($on ? "\x1F" : ',');
+    }
+}
+
+/** @param string[] $names */
+function hub_authors_join(array $names): string
+{
+    return implode(hub_author_delim(), $names);
+}
+
+/** @return string[] */
+function hub_authors_parse(string $raw): array
+{
+    return array_values(array_filter(array_map('trim', explode(hub_author_delim(), $raw)), fn($s) => $s !== ''));
+}
+
 /** Parse the active filter selection from the request. */
 function hub_filters_parse(): array
 {
@@ -276,7 +340,7 @@ function hub_filters_parse(): array
         'types'   => $csv('type'),                      // e.g. ['video','discussions']
         'cats'    => $csv('cat'),                        // parent categories (cat_key)
         'leaves'  => $csv('leaf'),                       // leaf subforums (subforum slug)
-        'authors' => $csv('author'),                     // multi-select, by name (CSV)
+        'authors' => hub_authors_parse((string)($_GET['author'] ?? '')),   // multi-select, by name
         'q'       => trim((string)($_GET['q'] ?? '')),  // unified full-text query (AND dim)
         'saved'   => !empty($_GET['saved']),             // Saved-rail view (viewer's ☆ saves)
         'show'    => hub_show_validate((string)($_GET['show'] ?? '')), // single video-type term (Shows filter)

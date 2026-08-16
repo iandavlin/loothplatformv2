@@ -956,6 +956,18 @@ if ($lg_bp_on): ?>
    undefined. */
 if (lg_hub_author_banner_swap_enabled()): ?>
 <script>window.LG_HUB_AUTHOR_BANNER_SWAP = true;</script>
+<?php endif;
+/* The comma-splitting author-filter defect (see _hub-filters.php's
+   hub_author_delim()) — hub-filters.js's addAuthor() reads this global to
+   join with the SAME delimiter the server will split on. function_exists-
+   guarded: bb_mirror_chrome_footer() is shared by every bb-mirror page, not
+   just the Hub, and _hub-filters.php is only required on Hub-shaped pages.
+
+   EMITTED ONLY WHEN ON, never as `= false`: flag off writes nothing at all,
+   so the served page is byte-for-byte unchanged and the client guard reads
+   undefined (the JS falls back to its own hardcoded ',' — see hub-filters.js). */
+if (function_exists('hub_author_delim') && hub_author_delim() !== ','): ?>
+<script>window.LG_HUB_AUTHOR_COMMA_FIX = true;</script>
 <?php endif; ?>
 <script src="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH) ?>/forums.js?v=<?= bb_mirror_asset_ver('forums.js') ?>" defer></script>
 <!-- Hub toolbar type-ahead: live search + author autocomplete (forums/_suggest.php). -->
