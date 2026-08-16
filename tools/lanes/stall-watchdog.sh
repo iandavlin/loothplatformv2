@@ -34,7 +34,12 @@ while true; do
     # No 10-minute grace — a sticky note nobody pressed Enter on is a stall
     # the moment it exists (the 8/14 class: 'draw the door pictures' sat idle).
     if lanes 2>/dev/null | grep -E "^$L " | grep -q parked; then
-      if printf '%s' "$PANE" | grep -qE "^❯ .*[[:alnum:]]"; then
+      # "Press up to edit queued messages" at the prompt means a message was
+      # SUBMITTED and is queued behind the seat's current turn — the opposite
+      # of lost. (8/16: third watchdog blindspot; it re-alarmed on a healthy
+      # delivery three times in ten minutes.)
+      if printf '%s' "$PANE" | grep -qE "^❯ .*[[:alnum:]]" \
+         && ! printf '%s' "$PANE" | grep -q "Press up to edit queued messages"; then
         echo "ALERT lost-instruction $L — parked with unsent composer text"; exit 0
       fi
     fi
