@@ -82,9 +82,39 @@ so no mintable JWT). It is shaped like an auth bypass, so the guard is **proven*
 under a non-CLI SAPI it throws. Probes are PID-keyed, repair on **entry**, and the
 gate reds if teardown leaves anything.
 
-## 5. Not done / not verified
-- **The UI has never been seen in a browser.** Both files pass `node --check` and
-  the gate asserts the guards structurally, but that is syntax and shape, not
-  rendering. It needs the flag on somewhere — after merge, on the serve.
+## 5. The UI HAS now been rendered — and it was wrong
+
+Superseding an earlier note in this file that said it never had been.
+
+**The clear-a-type button failed AA in BOTH themes**: white ink on `--lg-rust` =
+**3.84:1** light, **2.61:1** dark — on the one *destructive* control in the panel.
+
+The dark half is a trap this repo already documents: `--lg-rust` repoints
+**lighter** under dark (`#e08a72`) while the ink stayed white, exactly as
+`directory.css` records for `--lg-sage-d` on the view toggle (1.85:1). **A token
+that flips lightness with the theme cannot carry a fixed ink.**
+
+Fixed and re-measured on the rendered rules, on **both** surfaces (the phone
+sheet carried the identical rule):
+
+| | before | after |
+|---|---|---|
+| light — white on `#b35937` | 3.84 | **4.77** |
+| dark — `#1a1d20` on `#e08a72` | 2.61 | **6.49** |
+
+Chips were fine: 11.98 / 10.91 light, 13.58 / 11.06 dark.
+
+Harness: `footer-mockups/notif-chip-contrast/` — CSS extracted verbatim from
+`site-header.css`, markup emitted by the **real** `renderNotifFilter()`.
+
+**Deploy coupling checked** (the class that just bit profiles-alive): all five
+changed files resolve into `loothplatformv2-clean` — `webroot/bottom-nav.js`
+via its docroot link, `lg-shared/*` and `profile-app/*` via directory symlinks.
+A pull delivers them; no `install-symlinks` step needed.
+
+## 6. Still not done
+- **The INTEGRATED path is still unproven.** The harness renders the real CSS and
+  the real markup, but the serve runs main, so the shipped files cannot be driven
+  end-to-end until this merges. Do that first after merge.
 - **Gate is unregistered** in `run-all.sh`, awaiting a keeper number.
-- Ian's digest-floor ruling (§2).
+- Ian's digest-floor ruling (§2) — before the flag is ever flipped.
