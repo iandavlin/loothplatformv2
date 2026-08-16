@@ -708,6 +708,26 @@ old code.
 serve Mikelle the real page, and profile-api / hub / manage-subscription
 unaffected.
 
+---
+
+## LANDED AND VERIFIED ON dev2 (2026-08-16 evening)
+
+Train 4.1 is deployed and the relay is armed. **Verified on the box, not assumed:**
+
+- the board-wide same-tick refresh is **live** on dev2 (`board_state` +
+  `setInterval(poll)` both present in the served file);
+- the relay is **running** — snapshot 16 seconds old when checked;
+- **Ian's desk is auto-populating: 12 items**, including the featured-members
+  posts that previously never reached him because a hand lagged. That is the
+  whole point of desk automation, working end to end.
+- `branches` and `lanes` in the snapshot are **empty, and correctly so** —
+  nothing is attached to a card yet and no lane message has been sent. An empty
+  section here is the honest state, not a failure.
+
+**Gate 67 is minted (the relay gate) and now registered in `run-all.sh`.** Until
+this lands it protected nothing outside this branch — the gap this lane named
+about its own work and then had to keep naming.
+
 ### ⚠️ If you touch the styles, read this first
 
 - **There are TWO `<style>` blocks**: the original in the head, and a second one

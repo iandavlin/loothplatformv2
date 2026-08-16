@@ -1170,6 +1170,26 @@ run "work-board" php "$(dirname "$0")/work-board-gate.php"
 # on anyone else's branch). 48 assertions against a throwaway clone.
 run "board-committer" php "$(dirname "$0")/board-committer-gate.php"
 
+echo "=== GATE 67: the board→lane relay — a message never meets a shell, and a crash re-delivers ONCE ==="
+# Minted by keeper at the 4.1 merge. Runs against a THROWAWAY clone with a local
+# bare origin, a FAKE lane-say that records its whole argv AND the bytes of the
+# file it was handed, and a temp snapshot — it never touches the real clone, the
+# real fleet or the real board.
+#
+# The properties, each one a lesson this box already paid for: the message is
+# handed over as a FILE so backticks cannot be command-substituted on the way
+# (it has eaten a redis-cli recovery command here); every attempt is receipted so
+# a crash between lane-say and the receipt re-delivers at most ONCE and never
+# loops; failures are receipted too and capped, so one undeliverable message
+# cannot wedge the queue; and if receipts cannot be written it delivers NOTHING
+# rather than repeating forever.
+#
+# ⚠️ The fake lane-say cannot prove what the REAL one does with those bytes. That
+# last link was verified by hand on 2026-08-16 against a real tmux session —
+# backticks and $() arrived verbatim. Re-verify by hand if lane-say's delivery
+# mechanics ever change; a gate cannot spawn a real seat.
+run "board-lane-relay" php "$(dirname "$0")/board-lane-relay-gate.php"
+
 echo "=== GATE 51: new members arrive alive — the profile-setup step, flag OFF, and NO nudge ==="
 # Backlog 19 (Ian 8/12 from the empty-directory screenshot; ruled 8/15, Option A
 # with four sharpenings). One skippable screen at /profile-setup/ asking for the
