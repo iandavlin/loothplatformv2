@@ -1396,8 +1396,17 @@ function lg_fc_css(): string
    scrolling chip box is REPLACED, not restyled — it stays in the DOM as the
    submitted source of truth and is hidden here. Kept visually-hidden rather than
    display:none so a checkbox never becomes unfocusable-but-required, which is a
-   validation dead end no member could resolve. */
-.lgfc .lgfc-taxo__src{position:absolute;width:1px;height:1px;overflow:hidden;
+   validation dead end no member could resolve.
+   ⚠️ AND IT ZEROES ITS OWN PADDING AND max-height, at taxonomy-field specificity.
+   Verified against the deployed page by injection: with only the plain
+   `.lgfc .lgfc-taxo__src` selector the box still measured 20x20 — position and
+   clip applied, but a higher-specificity rule's padding held it open, so the old
+   list was still a visible smudge under the new control. The rule this file used
+   to carry is removed here, but "hidden" must not depend on that removal having
+   happened: any leftover padding anywhere would otherwise re-open it. */
+.lgfc .acf-field-taxonomy .lgfc-taxo__src,.lgfc .lgfc-taxo__src{
+  position:absolute;width:1px;height:1px;min-height:0;max-height:none;
+  margin:-1px;padding:0;border:0;overflow:hidden;
   clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
 /* the closed row — it STATES THE ANSWER, which is what the old box lost */
 .lgfc-taxo__trig{display:flex;align-items:center;gap:9px;width:100%;text-align:left;cursor:pointer;
