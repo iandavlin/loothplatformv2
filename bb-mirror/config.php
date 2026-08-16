@@ -99,7 +99,17 @@ if (!function_exists('lg_frontend_compose_enabled')) {
             return $on = false;
         }
         $raw = require $path;
-        return $on = (is_array($raw) && ($raw['enabled'] ?? false) === true);
+        $on = (is_array($raw) && ($raw['enabled'] ?? false) === true);
+        // Box-local override, the FLAGS.md shape — the WP-side reader
+        // (lg_fc_enabled) already honors frontend-compose.local.php, and this
+        // reader not doing the same is exactly how dev2 served a working
+        // /compose/ route while the hub toggle that opens it never rendered
+        // (Ian, 8/16: "Im not getting the toggle for loothprint compose").
+        // Two readers, one truth: tracked default first, the gitignored
+        // .local.php wins only on an explicit enabled === true.
+        $loc = @include dirname(__DIR__) . '/platform/config/frontend-compose.local.php';
+        if (is_array($loc) && array_key_exists('enabled', $loc)) $on = ($loc['enabled'] === true);
+        return $on;
     }
 }
 
