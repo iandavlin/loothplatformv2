@@ -511,6 +511,42 @@ runtime (`document.getElementById(...)` textContent scan across the injected
 - "Injected but outranked" and "never injected" need completely different fixes.
   Distinguish them with matched-rules, not by grepping for the value.
 
+### FINAL: the borderless-field family, all five resolved by measurement
+
+The sweep's top-ranked item — "26 invisible search fields across five surfaces" —
+resolves to **exactly ONE real defect**, now fixed. Each was tested for the thing
+that actually matters: *can the user find the box against the page?*, checking
+**both** the wrapper's border and its fill (checking only one is what produced
+two of my wrong calls).
+
+| surface | affordance | measured | verdict |
+|---|---|---|---|
+| events | `.lgev-ubar` border | `#767c76` **4.2:1** | false positive |
+| shop | `.hd__search` border | `#437a62` **3.54:1** | false positive |
+| directory desktop | `.gmaps-search` fill | `#ffffff` vs `#15171a` **17.96:1** | false positive |
+| directory mobile | `.lgdm-ubar` border | `#767c76` **4.2:1** | false positive |
+| **hub / hub-door** | `form.hub-tsearch` border | `#2c312d` **1.22:1** | **REAL — fixed to 3.79:1** |
+
+**Why four were false positives:** the probe's `field-borderless` check compares
+an input's fill to its *immediate parent*. In a composite control — icon + input
+inside a bordered bar — the **wrapper** is the affordance, so a transparent input
+matching its own wrapper is correct design, not a defect. The check is right to
+flag them for a human; it is wrong to read as a defect count.
+
+**Why hub was real:** its wrapper's border was `#2c312d` at 1.22:1 — a
+more-specific `forums.css` rule outranking the already-ON `#767c76` fix.
+
+**One thing that is NOT a contrast defect but may still matter to Ian:**
+directory *desktop* renders a **white** `.gmaps-search` panel in dark mode
+(`directory-desktop.js:90`, `background:#fff`, and that file has **zero**
+`data-lguser-theme` rules). It is findable — 17.96:1 — so it fails no bar, but a
+white slab in dark mode is exactly the kind of thing his phone catches. Logged as
+a **theming consistency gap, not an accessibility failure**, and deliberately not
+"fixed" under a contrast flag.
+
+**Net effect on the wave:** the top-ranked cluster shrinks from 26 findings to 1.
+The ranking was not wrong to surface them — it was read wrong, by me, twice.
+
 ## Next
 
 The ranked wave list (110+ remaining) is the standing charter — badness order,
