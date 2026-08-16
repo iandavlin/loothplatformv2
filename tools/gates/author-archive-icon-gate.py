@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-GATE NUMBER PENDING (keeper) — author-archive-icon-gate — backlog 27. Number
-requested 2026-08-16, apply on delivery. Reads THIS BRANCH'S TREE via the
-featured-members lane preview.
+GATE 65 — author-archive-icon-gate — backlog 27. Number from keeper,
+2026-08-16. Reads THIS BRANCH'S TREE via the featured-members lane preview.
 
 Ian looked at the mock (a 7th icon in the profile's existing social-icon
 palette, styled like its neighbours, linking to the Hub's by-author filtered
