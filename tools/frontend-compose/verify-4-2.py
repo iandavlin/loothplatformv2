@@ -114,7 +114,7 @@ class Tab:
             sh(["curl", "-s", f"{CDP}/json/close/{self.id}"])
 
 
-COMPOSE_PROBE = """(() => {
+COMPOSE_PROBE = r"""(() => {
   const vis = el => { if (!el) return {f:false,v:false,h:0};
     const c = getComputedStyle(el), r = el.getBoundingClientRect();
     return {f:true, v:c.display!=='none'&&c.visibility!=='hidden'&&r.height>4, h:Math.round(r.height)}; };
@@ -135,6 +135,20 @@ COMPOSE_PROBE = """(() => {
     hero:   !!document.querySelector('.lgfc__hero'),
     zip:    vis(zip),
     fold:   !!document.querySelector('.lgfc__fold, [data-lgfc-extras]'),
+    /* Ruling 5: the taxonomy pickers became sheets with search. Asserts the NEW
+       control exists AND that the old 184px scrolling box is no longer what you
+       see — the source list must still be in the DOM (it is what submits) but
+       must not be the visible control. */
+    taxoTrig: document.querySelectorAll('.lgfc-taxo__trig').length,
+    taxoSrcHidden: (() => {
+      const srcs = [...document.querySelectorAll('.lgfc .acf-field-taxonomy .acf-checkbox-list')];
+      if (!srcs.length) return false;
+      return srcs.every(u => { const r = u.getBoundingClientRect(); return r.height <= 2; });
+    })(),
+    taxoStates: (() => {
+      const t = document.querySelector('.lgfc-taxo__trig');
+      return t ? t.textContent.replace(/\s+/g,' ').trim().slice(0, 60) : '';
+    })(),
     tipjar:  field('loothprint_buy_me_a_coffee'),
     onshape: field('loothprint_onshape_link'),
     /* Ruling 1 is "into the MAIN BODY", so presence alone is vacuous — the field
@@ -145,11 +159,21 @@ COMPOSE_PROBE = """(() => {
   });
 })()"""
 
-LP_PROBE = """(() => {
+LP_PROBE = r"""(() => {
   const wrap = document.querySelector('[data-lg-editmenu]');
   const items = wrap ? [...wrap.querySelectorAll('.lg-editmenu__i')] : [];
+  /* ⚠️ AUTH LIVENESS. The Edit control only renders for edit_archive_poc OR the
+     author, and that identity comes from a server-side /whoami loopback which is
+     INTERMITTENT for a synthetically minted cookie — measured: the same tree gave
+     items=2 on one run and items=0 on the next. Without this, "no menu" is
+     indistinguishable from "not recognised as signed in", and the check becomes
+     the vacuous-absence trap: it would report a defect on Ian's surface whenever
+     whoami happened to blink. If the page thinks we are signed out, the menu legs
+     are SKIPPED, never failed. */
+  const signedOut = !!document.querySelector('.lg-chrome__signin, .lg-chrome__join');
   return JSON.stringify({
     live:  !!document.querySelector('.lg-standalone-main, article, main'),
+    authed: !signedOut,
     title: document.title,
     menu:  !!wrap,
     count: items.length,
@@ -193,11 +217,26 @@ def main() -> int:
                 tab.call("Emulation.setDeviceMetricsOverride", width=w, height=h,
                          deviceScaleFactor=1, mobile=mob, screenWidth=w, screenHeight=h)
 
-                theme(tab, base + "/compose/?type=loothprint", cookies, th)
-                raw = tab.js(COMPOSE_PROBE)
-                if not raw:
-                    raise CannotRun("compose page never answered")
-                d = json.loads(raw)
+                # ⚠️ RETRY BEFORE CONDEMNING A SURFACE. On the first full post-deploy
+                # run exactly one frame of eight (phone-dark) came back without a
+                # form, and re-driving that frame three times gave form=True every
+                # time — a flake under load, not a defect. A one-shot check would
+                # have reported it as a finding on Ian's own surface, which is
+                # worse than useless: gates that flake and move their symptoms are
+                # how a real red gets waved away later.
+                d = None
+                for attempt in range(3):
+                    theme(tab, base + "/compose/?type=loothprint", cookies, th)
+                    raw = tab.js(COMPOSE_PROBE)
+                    if raw:
+                        d = json.loads(raw)
+                        if d["form"]:
+                            if attempt:
+                                print(f"      (form appeared on attempt {attempt + 1} — "
+                                      f"slow frame, not a defect)")
+                            break
+                if d is None:
+                    raise CannotRun("compose page never answered after 3 attempts")
                 kb = tab.shot(os.path.join(a.out, f"compose-{tag}.png"))
                 if not d["form"]:
                     print(f"  compose {tag:<14} CANNOT TRUST — no form (flag off / refused). {kb}KB")
@@ -213,6 +252,9 @@ def main() -> int:
                     ("tip jar GONE", not d["tipjar"], ""),
                     ("Onshape GONE", not d["onshape"], ""),
                     ("video in the body", d["video"], ""),
+                    ("taxonomy pickers are sheets (2)", d["taxoTrig"] == 2, f"triggers={d['taxoTrig']}"),
+                    ("old scrolling term box not visible", d["taxoSrcHidden"], ""),
+                    ("closed row states the answer", bool(d["taxoStates"]), d["taxoStates"][:40]),
                 ):
                     print(f"      {'ok  ' if ok else 'RED '} {label} {detail}")
                     if not ok:
@@ -225,6 +267,11 @@ def main() -> int:
                 if not d2.get("live"):
                     print(f"  loothprint {tag:<11} CANNOT TRUST — page did not render. {kb}KB")
                     bad.append(f"loothprint {tag}: page did not render")
+                    continue
+                if not d2.get("authed"):
+                    # whoami did not recognise the session — see the probe note.
+                    print(f"  loothprint {tag:<11} SKIPPED — page renders us signed OUT, so the "
+                          f"Edit control is correctly absent and proves nothing. {kb}KB")
                     continue
                 print(f"  loothprint {tag:<11} live, {kb}KB")
                 menu_ok = d2.get("menu") and d2.get("count") == 2
