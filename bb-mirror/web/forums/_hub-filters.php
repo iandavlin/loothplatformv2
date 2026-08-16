@@ -192,6 +192,36 @@ function hub_viewer_saved_set(): array
     return $out;
 }
 
+/**
+ * THE ONE PREDICATE for "does this author have any Hub activity" — how many
+ * published topics + tier-visible content items carry this exact author name.
+ * Extracted from the author-banner's own count query (_feed.php) rather than
+ * reimplemented, so every caller — the banner, the archive-icon visibility
+ * check (backlog 38-adjacent, backlog 27), a future one — asks the SAME
+ * question the same way. Backlog 27's icon-visibility flag exists precisely
+ * to avoid a SECOND, independently-written count disagreeing with this one
+ * (keeper 2026-08-16: "one predicate, two consumers"). Name-keyed because
+ * that is still what hub_filter_where()'s author clause matches on today —
+ * matching id would be a MORE correct predicate but a DIFFERENT one from
+ * what ?author= actually filters by right now, which is exactly the
+ * disagreement this function exists to prevent.
+ */
+function hub_author_activity_count(PDO $db, string $authorName, array $content_tiers): int
+{
+    $atph = [];
+    foreach ($content_tiers as $i => $t) $atph[] = ':aht' . $i;
+    $atin = $atph ? implode(',', $atph) : "''";
+    $acs = $db->prepare(
+        "SELECT (SELECT count(*) FROM topic WHERE status='publish' AND LOWER(author_name) = LOWER(:an1))
+              + (SELECT count(*) FROM discovery.content_item WHERE LOWER(author_name) = LOWER(:an2) AND tier IN ($atin))"
+    );
+    $acs->bindValue(':an1', $authorName);
+    $acs->bindValue(':an2', $authorName);
+    foreach ($content_tiers as $i => $t) $acs->bindValue(':aht' . $i, $t);
+    $acs->execute();
+    return (int)$acs->fetchColumn();
+}
+
 function hub_resolve_profiles(array $wp_ids): array
 {
     $wp_ids = array_values(array_unique(array_filter(array_map('intval', $wp_ids), fn($i) => $i > 0)));
@@ -233,6 +263,70 @@ function hub_resolve_profiles(array $wp_ids): array
     return $out;
 }
 
+/**
+ * The author facet's OWN delimiter — deliberately NOT a comma. Backlog 38's
+ * own trace turned up a real, worse defect in the same code: hub_url()
+ * joined multiple selected authors with implode(',', ...) and this parser
+ * split back on the same character, so any ONE display name that itself
+ * contains a comma (measured on live: "John Lehmann, Old Naples Guitars",
+ * "Ross Shafer Six-Nine Design, builder of Sierra Steel Guitars", 6 authors
+ * total) got sliced into nonsense fragments matching neither the real
+ * author — 2 bogus banner headers, 0 matching cards, reproduced identically
+ * on dev2 and live. Names are free text (WP display names, not a controlled
+ * vocabulary like the type/cat/leaf/tag facets, which is why only this one
+ * facet needed a fix) — no delimiter is PERFECTLY safe against arbitrary
+ * text, but ASCII Unit Separator (\x1F) is not a character a human types or
+ * a display name plausibly contains, and it round-trips exactly like any
+ * other byte through http_build_query()/$_GET's automatic urlencoding, so
+ * neither side needs its own escaping logic. hub-filters.js's addAuthor()
+ * uses the identical character.
+ *
+ * BACKWARD COMPAT, STATED: an old bookmark that multi-selected two authors
+ * via the OLD comma join (e.g. ?author=Rick,Patrick) now parses as ONE
+ * literal name "Rick,Patrick" instead of splitting into two — the
+ * multi-select feature is rarely used, and the old format was already
+ * broken for any comma-bearing name, so this is accepted rather than
+ * chased; a single-author link (the overwhelming majority of real traffic,
+ * and the one Ian's report and the icon both depend on) is unaffected
+ * either way.
+ *
+ * Flagged (platform/config/hub-author-comma-fix.php), OFF by default: OFF
+ * keeps the delimiter ',' — today's exact behaviour, byte-identical — so
+ * this ships without changing anything Ian has not looked at yet.
+ */
+if (!function_exists('hub_author_delim')) {
+    function hub_author_delim(): string
+    {
+        static $delim = null;
+        if ($delim !== null) return $delim;
+        $on = false;
+        if (getenv('LG_HUB_AUTHOR_COMMA_FIX') === '1' || (($_SERVER['LG_HUB_AUTHOR_COMMA_FIX'] ?? '') === '1')) {
+            $on = true;
+        } else {
+            $path = dirname(__DIR__, 3) . '/platform/config/hub-author-comma-fix.php';
+            if (is_readable($path)) {
+                $raw = require $path;
+                $on = is_array($raw) && ($raw['enabled'] ?? false) === true;
+            } else {
+                error_log('[lg-hub-author-comma-fix] tracked config unreadable at ' . $path . ' — OFF (fail-closed)');
+            }
+        }
+        return $delim = ($on ? "\x1F" : ',');
+    }
+}
+
+/** @param string[] $names */
+function hub_authors_join(array $names): string
+{
+    return implode(hub_author_delim(), $names);
+}
+
+/** @return string[] */
+function hub_authors_parse(string $raw): array
+{
+    return array_values(array_filter(array_map('trim', explode(hub_author_delim(), $raw)), fn($s) => $s !== ''));
+}
+
 /** Parse the active filter selection from the request. */
 function hub_filters_parse(): array
 {
@@ -246,7 +340,7 @@ function hub_filters_parse(): array
         'types'   => $csv('type'),                      // e.g. ['video','discussions']
         'cats'    => $csv('cat'),                        // parent categories (cat_key)
         'leaves'  => $csv('leaf'),                       // leaf subforums (subforum slug)
-        'authors' => $csv('author'),                     // multi-select, by name (CSV)
+        'authors' => hub_authors_parse((string)($_GET['author'] ?? '')),   // multi-select, by name
         'q'       => trim((string)($_GET['q'] ?? '')),  // unified full-text query (AND dim)
         'saved'   => !empty($_GET['saved']),             // Saved-rail view (viewer's ☆ saves)
         'show'    => hub_show_validate((string)($_GET['show'] ?? '')), // single video-type term (Shows filter)

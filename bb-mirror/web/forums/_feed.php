@@ -892,13 +892,6 @@ if ($content_ids) {
 // Author headers: one per selected author (stacked when several are filtered).
 $hub_author_headers = [];
 if (!empty($GLOBALS['__bb_hub_rail']) && !empty($hub_filters['authors'])) {
-    $atph = [];
-    foreach ($content_tiers as $i => $t) $atph[] = ':aht' . $i;
-    $atin = $atph ? implode(',', $atph) : "''";
-    $acs = $db->prepare(
-        "SELECT (SELECT count(*) FROM topic WHERE status='publish' AND LOWER(author_name) = LOWER(:an1))
-              + (SELECT count(*) FROM discovery.content_item WHERE LOWER(author_name) = LOWER(:an2) AND tier IN ($atin))"
-    );
     foreach ($hub_filters['authors'] as $an) {
         $an  = (string)$an;
         $aid = 0;
@@ -911,11 +904,8 @@ if (!empty($GLOBALS['__bb_hub_rail']) && !empty($hub_filters['authors'])) {
                 break;
             }
         }
-        $acs->bindValue(':an1', $an);
-        $acs->bindValue(':an2', $an);
-        foreach ($content_tiers as $i => $t) $acs->bindValue(':aht' . $i, $t);
-        $acs->execute();
-        $hub_author_headers[] = ['name' => $an, 'profile' => $author_profiles[$aid] ?? null, 'count' => (int)$acs->fetchColumn()];
+        $count = hub_author_activity_count($db, $an, $content_tiers);
+        $hub_author_headers[] = ['name' => $an, 'profile' => $author_profiles[$aid] ?? null, 'count' => $count];
     }
 }
 

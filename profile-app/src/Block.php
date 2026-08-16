@@ -248,6 +248,16 @@ final class Block
         return self::mapHeaderLights($raw);
     }
 
+    /** Backlog 27 (archive-icon): the spine user id's bridged WP identity, or
+     *  null for an unbridged/ghost row (EraseUser.php's own vocabulary). */
+    public static function wpUserIdFor(int $userId): ?int
+    {
+        $s = Db::pg()->prepare('SELECT wp_user_id FROM wp_user_bridge WHERE user_id = :i LIMIT 1');
+        $s->execute([':i' => $userId]);
+        $wp = $s->fetchColumn();
+        return $wp !== false ? (int)$wp : null;
+    }
+
     /** Lights not yet added — drives the "+ Status" picker. Returns [key => cfg]. */
     public static function availableLights(int $userId): array
     {
