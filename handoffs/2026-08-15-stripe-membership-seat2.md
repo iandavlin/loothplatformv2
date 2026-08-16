@@ -728,6 +728,28 @@ Train 4.1 is deployed and the relay is armed. **Verified on the box, not assumed
 this lands it protected nothing outside this branch — the gap this lane named
 about its own work and then had to keep naming.
 
+---
+
+## INVITES — BUILT END TO END (Ian ruled URL token, 2026-08-16)
+
+**Ships OFF** (`lgms_stripe_invites_on` absent). Arming it is a deliberate act.
+
+| Half | Where |
+|---|---|
+| **Admission** | `membership-pages/web/_invites.php`, checked in `lg_membership_testgroup_gate_or_exit` — the ONE gate both doors delegate to, and the module is required BY that gate so no include order can leave them disagreeing. It is the LAST check, so an invite only ever widens. |
+| **Mint / spend** | `lg-patreon-stripe-poller/src/Invites.php` + a `user_register` hook. Spent when an ACCOUNT is created, matched on EMAIL. |
+| **Admin** | The cohort tab mints a link; shown once, never recoverable. |
+
+**The fences, all gated (34b, 116):** scope is the join flow only —
+`manage-subscription`, `request-refund`, `affiliate-earnings` stay shut; spent
+and expired admit nobody; every failure returns the *same* false so a prober
+learns nothing; the raw token is **never stored** (sha256 key), so a database
+read cannot be replayed; a second live invite per email is refused; and with the
+flag off the check returns before reading anything — byte-identical to today.
+
+**To arm on dev2 when Ian wants to walk a fresh join:**
+`wp option update lgms_stripe_invites_on 1` (dev2-local, no tracked file).
+
 ### ⚠️ If you touch the styles, read this first
 
 - **There are TWO `<style>` blocks**: the original in the head, and a second one

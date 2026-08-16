@@ -686,6 +686,26 @@ if ($mintSrc === '' || $pluginSrc === '') {
         '...the account it creates lands ON the Test Group list');
     is_(str_contains($mintSrc, '_lgms_invite_created'),
         '...stamped invite-created, so HOW a member got in is answerable later');
+
+    /* --- THE ADMIN SURFACE ---------------------------------------------- */
+    $adminSrc = (string) @file_get_contents($REPO . '/lg-patreon-stripe-poller/src/Admin.php');
+    is_(str_contains($adminSrc, "admin_post_lgms_invite_mint"),
+        'Ian can mint an invite himself, on the same tab as the list');
+    is_(str_contains($adminSrc, "check_admin_referer( 'lgms_invite_mint' )")
+        && str_contains($adminSrc, "current_user_can( 'manage_options' )"),
+        '...behind a nonce and manage_options, like every other write on that tab');
+
+    /**
+     * THE LINK IS SHOWN ONCE. The raw token is never stored, so an admin screen
+     * that implied it could be retrieved later would be lying — and the person
+     * reading it would discover that only when they needed it.
+     */
+    is_(str_contains($adminSrc, 'this is the only time it is shown'),
+        'the screen says the link cannot be recovered, because it genuinely cannot');
+    is_(str_contains($adminSrc, 'already has an account'),
+        'an email that already has an account is refused — that person wants the LIST, not an invite');
+    is_(str_contains($adminSrc, 'Invites are switched off on this box'),
+        'and with the feature off the screen SAYS so, rather than minting links that silently admit nobody');
     is_(str_contains($mintSrc, 'if ( (int) ( $rec[\'expires\'] ?? 0 ) > time() ) { return null; }'),
         'a second live invite for the same email is refused — two links for one single-use invite is one broken click');
 }
