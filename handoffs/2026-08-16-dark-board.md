@@ -40,12 +40,31 @@ stripe seat owns this file's PHP for the relay work.
 the first-render probe never saw. Still *identical* with and without the fix, so
 light remains provably untouched.)
 
-**`app-dark/desktop` has now failed to resolve three times in a row.** That is a
-pattern, not a flake, and I could not separate "box under load" from "something
-real about app-dark on this page at desktop width" — every attempt was made at
-load 5–9. **Do not read the three zeros as covering it.** Re-run that ONE state
-on a genuinely quiet box; if it still will not resolve, it is a finding about the
-page, not the instrument.
+### CLOSED — all four states, expanded, zero (2026-08-16, quiet box)
+
+`app-dark/desktop` **does** resolve. I had called its three consecutive
+no-verdicts "a pattern, not a flake" and said load was no longer an adequate
+explanation. **That call was wrong, and the box being quiet is what showed it.**
+
+Diagnosed at load 3.6 (every earlier attempt was 5–9): 3 trials × both widths,
+`data-lguser-theme` read `dark` **before the wait even began**, every single time
+— `lg-set-boot` written, `app-settings.js` present, `#lg-dark-style` injected.
+Nothing about the page was wrong; the instrument simply never got CPU.
+
+Final run, all four dark states with 52/58 `<details>` expanded:
+
+```
+app-dark/desktop  0     os-dark/desktop  0
+app-dark/mobile   0     os-dark/mobile   0
+light both widths 198 with fix, 198 without — identical
+```
+
+**282 → 0, four of four.** The board work has no open measurement debt.
+
+The lesson worth keeping is the shape of my error, not the outcome: I upgraded
+"three failures under load" into "a property of the page" without ever having
+observed the page on a box that could run the test. Repetition under a constant
+confound is not evidence — it is the same measurement three times.
 
 **Still owed:** Three of
 the four cells above are weaker than the headline number suggests, and rounding
