@@ -62,7 +62,25 @@ foreach ([$PAGE, $BACK] as $f) { if (!is_readable($f)) cannot("missing $f"); }
 /** Render the page in a subprocess, with the sources pointed wherever we like. */
 function render(string $page, ?string $backlog = null, ?string $sentinel = null): string
 {
-    $env = '';
+    /**
+     * EVERY RENDER IS PINNED TO A KNOWN FILE, including the ones that do not
+     * care which file it is.
+     *
+     * The page now prefers the committer's copy of the backlog when the served
+     * one is behind main — deliberately, so a drag does not look lost on the
+     * next reload. That means an unpinned render reads whatever the BOX happens
+     * to hold, and this gate then compares it against the REPO's file. It did:
+     * main carried 52 items while this branch carried 49, and four assertions
+     * went red on a page that was working correctly. A gate that does not say
+     * which file it is reading is not measuring the page, it is measuring the
+     * box.
+     */
+    global $BACK;
+    $backlog ??= $BACK;
+    // Pinned for the same reason as the backlog copy: an unpinned render reads
+    // whatever snapshot the BOX happens to hold, and then this gate is
+    // measuring the box rather than the page.
+    $env = 'LGB_MAIN_COPY=/nonexistent/main-copy.md LGB_THREADS=/nonexistent/threads.json ';
     if ($backlog !== null)  { $env .= 'LGB_BACKLOG='  . escapeshellarg($backlog)  . ' '; }
     if ($sentinel !== null) { $env .= 'LGB_SENTINEL=' . escapeshellarg($sentinel) . ' '; }
     $cmd = $env . PHP_BINARY . ' ' . escapeshellarg($page) . ' 2>/dev/null';
@@ -355,9 +373,17 @@ $tmpRepo = sys_get_temp_dir() . '/lgb-proj-' . getmypid();
 @copy($BACK, $tmpRepo . '/docs/BACKLOG.md');
 @mkdir($tmpRepo . '/webroot', 0755, true);
 @copy($PAGE, $tmpRepo . '/webroot/wip-board.php');
-$orphaned = (string) shell_exec(PHP_BINARY . ' ' . escapeshellarg($tmpRepo . '/webroot/wip-board.php') . ' 2>/dev/null');
+$orphaned = (string) shell_exec('LGB_MAIN_COPY=/nonexistent/main-copy.md ' . PHP_BINARY . ' ' . escapeshellarg($tmpRepo . '/webroot/wip-board.php') . ' 2>/dev/null');
 is_(str_contains($orphaned, 'Unsorted'), "with an EMPTY map, items surface as Unsorted — the gap is visible, not absorbed");
-$unsortedRows = preg_match('/proj--unsorted.*?<\/details>/s', $orphaned, $um) ? preg_match_all('/data-item="/', $um[0]) : 0;
+// Anchored on the ELEMENT, not the class name. `proj--unsorted` also appears in
+// the STYLESHEET, so the match started there and ran to the first `</details>`
+// anywhere after it — which was fine until a `<details>` appeared earlier in the
+// document (the lane threads), at which point this counted zero rows and blamed
+// the page. Fourth time this gate has matched a string that also lives in CSS or
+// a comment; the cure is always the same — assert the markup that can only be
+// output.
+$unsortedRows = preg_match('/<details class="proj proj--unsorted".*?<\/details>/s', $orphaned, $um)
+    ? preg_match_all('/data-item="/', $um[0]) : 0;
 is_($unsortedRows === count($ids), sprintf(
     "...and ALL %d items are in it, so nothing is silently dropped when the map is empty (%d)",
     count($ids), $unsortedRows));
@@ -401,7 +427,7 @@ if (!is_readable($DESK)) {
     @copy($ROOT . '/docs/board-projects.php', $tmpRepo . '/docs/board-projects.php');
     file_put_contents($tmpRepo . '/docs/IAN-DESK.md', "# Ian's desk\n\n*nothing here*\n");
     @copy($PAGE, $tmpRepo . '/webroot/wip-board.php');
-    $emptyDesk = (string) shell_exec(PHP_BINARY . ' ' . escapeshellarg($tmpRepo . '/webroot/wip-board.php') . ' 2>/dev/null');
+    $emptyDesk = (string) shell_exec('LGB_MAIN_COPY=/nonexistent/main-copy.md ' . PHP_BINARY . ' ' . escapeshellarg($tmpRepo . '/webroot/wip-board.php') . ' 2>/dev/null');
     is_(str_contains($emptyDesk, 'Nothing waits on you'),
         "an empty desk file renders the empty state, not a blank or a missing strip");
     is_(!preg_match('/class="desk__i/', $emptyDesk), "...and lists nothing");
@@ -434,12 +460,305 @@ is_($orphanCopy === [], sprintf(
 is_(str_contains($html, 'execCommand'), "there is a fallback, so the button cannot silently do nothing");
 is_(str_contains($html, 'e.stopPropagation()'), "copying does not also open the modal");
 
-// Still read-only: the bridge must not have smuggled in a write path.
-is_(!preg_match('/fetch\(|XMLHttpRequest|navigator\.sendBeacon/', $html),
-    "the copy bridge sends nothing anywhere — it is render-only, as specified");
+// The page WRITES now (phase 2), so "no fetch anywhere" is no longer the
+// property — and an assertion kept past the point where it was true is how a
+// gate starts blocking the merge train instead of protecting it. What must
+// still hold is that the client has exactly ONE network call, it goes to this
+// page's own path, and it carries the write header. A copy button that quietly
+// posted somewhere would break all three.
+$fetches = preg_match_all('/fetch\(/', $html);
+is_($fetches === 1, sprintf('the client makes exactly one network call (%d)', $fetches));
+is_(str_contains($html, 'fetch(location.pathname'), '...to its own path, nowhere else');
+is_(!preg_match('/XMLHttpRequest|navigator\.sendBeacon/', $html),
+    '...and no second channel was smuggled in beside it');
 
 /* ---------------------------------------------------------------------- */
-section("[6] PHASE 1 CANNOT WRITE");
+section("[5g] THE SHIPPED ARCHIVE REACHES THE BOARD");
+
+/**
+ * The same conservation law the index gets, applied to the half that was
+ * missing. This is not a display nicety: the archive was invisible because
+ * lgb_parse_details reads the first token of a heading as an item id, and
+ * "2026-08-01 — …" yields "2026" — so all 30 sections collapsed onto one key
+ * and the last one silently won. Nothing errored; they simply were not there.
+ *
+ * Counted with an INDEPENDENT parse, deliberately not the page's own, or this
+ * would assert only that a function agrees with itself.
+ */
+$archTruth = [];
+foreach (explode("\n", (string) file_get_contents($BACK)) as $l) {
+    if (str_starts_with($l, '## ')) {
+        $probe = ltrim(trim(substr($l, 3)), "✅ \t");
+        if (preg_match('/^(\d{4}-\d{2}-\d{2})\s*[—–-]\s*(.+)$/u', $probe, $m)) {
+            $archTruth[] = trim($m[2]);
+        }
+    }
+}
+is_(count($archTruth) >= 10, sprintf('the file really carries a shipped archive, so this is not vacuous (%d)', count($archTruth)));
+
+$histHtml = render($PAGE, $BACK);
+$missing = [];
+foreach ($archTruth as $t) {
+    // Compare on a distinctive slice — sliced by CHARACTER, not by byte.
+    // substr() cut straight through the middle of "🔴" and "—", producing a
+    // needle that is not valid UTF-8 and can never match the escaped render.
+    // Two headings then reported as MISSING from a board that was showing all
+    // thirty. Same family as the ✅ that halved the ticked items: a byte
+    // operation applied to text that is not bytes.
+    $needle = htmlspecialchars(mb_substr($t, 0, 40, 'UTF-8'), ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8');
+    if (!str_contains($histHtml, $needle)) { $missing[] = mb_substr($t, 0, 40, 'UTF-8'); }
+}
+is_($missing === [], sprintf('every archived item reaches the board (%d in the file, missing: %s)',
+    count($archTruth), $missing === [] ? 'none' : implode(' | ', array_slice($missing, 0, 3))));
+
+$rendered = substr_count($histHtml, 'class="hist__i"');
+is_($rendered === count($archTruth),
+    sprintf('...and the board shows exactly that many, no more (%d rendered vs %d in the file)', $rendered, count($archTruth)));
+
+// The summary count is DERIVED — a hand-typed one would drift the first time
+// anything shipped, and a stale count is worse than none.
+is_((bool) preg_match('/class="hist__c">\s*' . count($archTruth) . ' items/', $histHtml),
+    'the archive\'s own count agrees with the file');
+
+// THE TWO VIEWS MUST BE DISJOINT. A date heading must never be read as an item
+// id (that is the bug), and an item id must never fall into the archive.
+$idsNow = truth($BACK);
+$overlap = array_intersect($idsNow, ['2026', '2026-08-01']);
+is_($overlap === [], 'no date leaked into the index as an item id');
+
+// A missing archive must SAY so rather than draw a comforting zero.
+$noArch = $tmp . '-noarch.md';
+$src = (string) file_get_contents($BACK);
+$cut = strpos($src, '## ✅ SHIPPED TO LIVE');
+file_put_contents($noArch, $cut === false ? $src : substr($src, 0, $cut));
+$noArchHtml = render($PAGE, $noArch);
+// Matched on the USAGE form and the words, not the bare class name — the
+// stylesheet carries `.hist--none` on every render, so a bare-string check is
+// true on a page that has no such element at all. This gate already learned
+// that once, with `f--bad` (see the footer); the mutation that should have
+// reddened this passed silently until it was written this way.
+is_(str_contains($noArchHtml, 'class="hist hist--none"')
+    && str_contains($noArchHtml, 'No shipped archive found'),
+    'with no archive in the file, the board says so rather than drawing an empty box');
+is_(!str_contains($noArchHtml, 'class="hist__i"'), '...and invents no entries');
+@unlink($noArch);
+
+section("[6a] THE BOARD SAYS WHICH COPY IT IS SHOWING");
+
+/**
+ * The page prefers the committer's copy of the backlog when the served one is
+ * behind main, because the committer commits to main and nothing on this box
+ * pulls the serve on a timer — so without this, Ian's drag lands and then
+ * appears to vanish on his next reload. That is the failure this whole build
+ * was told to design against, so the preference is asserted in all three
+ * states rather than trusted.
+ *
+ * Note the SAME-CONTENT case matters as much as the differing one: a board that
+ * announced "showing main" on every render would train him to ignore the line.
+ */
+$mainCopy = $tmp . '-maincopy.md';
+$served   = (string) file_get_contents($BACK);
+
+// (i) main's copy differs → the board reads MAIN and says so.
+file_put_contents($mainCopy, str_replace('## PRIORITY INDEX', "## PRIORITY INDEX\n\n**PX — only in main**\n77 An item only main knows about", $served));
+$aheadHtml = (string) shell_exec(
+    'LGB_MAIN_COPY=' . escapeshellarg($mainCopy) . ' ' . PHP_BINARY . ' ' . escapeshellarg($PAGE) . ' 2>/dev/null');
+is_(str_contains($aheadHtml, 'class="ahead"'), 'when main is ahead, the board says so on the page');
+is_(str_contains($aheadHtml, 'An item only main knows about'),
+    '...and really is rendering main\'s copy, not just captioning the old one');
+
+// (ii) identical → no claim at all.
+file_put_contents($mainCopy, $served);
+$sameHtml = (string) shell_exec(
+    'LGB_MAIN_COPY=' . escapeshellarg($mainCopy) . ' ' . PHP_BINARY . ' ' . escapeshellarg($PAGE) . ' 2>/dev/null');
+is_(!str_contains($sameHtml, 'class="ahead"'),
+    'when the two agree it says nothing — a notice on every render is a notice nobody reads');
+
+// (iii) A REORDER IS THE CASE THIS EXISTS FOR, and it changes no bytes at all —
+// the same lines in a different sequence. A size comparison would be blind to
+// exactly the one operation the board offers.
+$lines = explode("\n", $served);
+$idx = [];
+foreach ($lines as $i => $l) { if (preg_match('/^[A-Z]?\d+(\.\d+)?[ .)]/', $l)) { $idx[] = $i; } }
+if (count($idx) >= 2) {
+    $swap = $lines;
+    [$swap[$idx[0]], $swap[$idx[1]]] = [$swap[$idx[1]], $swap[$idx[0]]];
+    file_put_contents($mainCopy, implode("\n", $swap));
+    is_(filesize($mainCopy) === strlen($served),
+        'a reorder in main changes NO bytes — so size cannot be the comparator');
+    $reHtml = (string) shell_exec(
+        'LGB_MAIN_COPY=' . escapeshellarg($mainCopy) . ' ' . PHP_BINARY . ' ' . escapeshellarg($PAGE) . ' 2>/dev/null');
+    is_(str_contains($reHtml, 'class="ahead"'),
+        '...and the board still notices it, because it compares content');
+} else {
+    bad('the backlog has too few items to test the reorder case');
+}
+@unlink($mainCopy);
+
+section("[6b] THE WRITE ENDPOINT, DRIVEN FOR REAL");
+
+/**
+ * Driven over HTTP, not by including the file, because the properties under
+ * test ARE the HTTP ones: a header that must be present, a status code that
+ * must not read as success, and a body the page's own JavaScript has to be able
+ * to tell apart from a save.
+ *
+ * THE PORT IS KEYED TO THIS PROCESS. One fixed port means any concurrent gate
+ * run produces false REDs on a healthy feature — five of them, once, blocking a
+ * merge train. Keyed to the pid, two gates can run at the same time.
+ *
+ * LGB_SOCKET points at a socket that does not exist ON PURPOSE. Everything
+ * asserted here happens BEFORE the committer is reached, so a refusal that
+ * arrives anyway proves the page refused it — not the service. And a request
+ * that gets as far as "not answering" proves the opposite: it passed every
+ * check the page makes and was on its way out the door.
+ */
+$port = 8000 + (getmypid() % 900);
+$deadSock = sys_get_temp_dir() . '/lgb-no-such-' . getmypid() . '.sock';
+$srvCmd = sprintf(
+    'LGB_BACKLOG=%s LGB_SOCKET=%s %s -S 127.0.0.1:%d -t %s >/dev/null 2>&1 & echo $!',
+    escapeshellarg($BACK), escapeshellarg($deadSock), escapeshellarg(PHP_BINARY),
+    $port, escapeshellarg(dirname($PAGE))
+);
+$srvPid = (int) trim((string) shell_exec($srvCmd));
+
+$up = false;
+for ($i = 0; $i < 50; $i++) {
+    $probe = @fsockopen('127.0.0.1', $port, $e, $es, 0.2);
+    if ($probe) { fclose($probe); $up = true; break; }
+    usleep(100000);
+}
+
+/** POST a JSON body and hand back the status and the decoded reply. */
+$call = function (array $body, bool $withHeader = true) use ($port): array {
+    $hdr = "Content-Type: application/json\r\n" . ($withHeader ? "X-LGB-Write: 1\r\n" : '');
+    $ctx = stream_context_create(['http' => [
+        'method' => 'POST', 'header' => $hdr, 'content' => json_encode($body),
+        'ignore_errors' => true, 'timeout' => 10,
+    ]]);
+    $raw  = @file_get_contents("http://127.0.0.1:$port/wip-board.php", false, $ctx);
+    $code = 0;
+    foreach ($http_response_header ?? [] as $h) {
+        if (preg_match('#^HTTP/\S+\s+(\d+)#', $h, $m)) { $code = (int) $m[1]; }
+    }
+    return ['code' => $code, 'json' => json_decode((string) $raw, true) ?: [], 'raw' => (string) $raw];
+};
+
+if (!$up) {
+    bad('the gate could not start a server to drive the write endpoint');
+} else {
+    $r = $call(['action' => 'note', 'id' => '27', 'text' => 'x'], false);
+    is_($r['code'] === 403, 'a write without the board\'s header is refused (403)');
+    is_(($r['json']['ok'] ?? null) === false, '...and says so in the body, not just the status');
+
+    $r = $call(['action' => 'burn_it_down']);
+    is_($r['code'] === 400, 'an action the board does not offer is refused (400)');
+
+    $r = $call(['action' => 'note', 'id' => '27', 'text' => '   ']);
+    is_($r['code'] === 400, 'an empty note is refused before it reaches the committer');
+
+    // The real ids of one project, taken from the page's own render — so this
+    // asserts against the board Ian is looking at, not against a fixture.
+    $html = render($PAGE, $BACK);
+    preg_match_all('/data-id="([^"]*)"\s+data-project="([^"]*)"\s+draggable/', $html, $m, PREG_SET_ORDER);
+    $byProj = [];
+    foreach ($m as $row) { $byProj[$row[2]][] = $row[1]; }
+    $pick = null;
+    foreach ($byProj as $k => $ids) { if (count($ids) >= 2) { $pick = [$k, $ids]; break; } }
+
+    if ($pick === null) {
+        bad('no project on the board has two draggable rows — nothing to reorder');
+    } else {
+        [$projKey, $ids] = $pick;
+        $swapped = $ids; [$swapped[0], $swapped[1]] = [$swapped[1], $swapped[0]];
+
+        $r = $call(['action' => 'reorder', 'project' => $projKey, 'order' => $swapped]);
+        is_(str_contains(strtolower((string) ($r['json']['error'] ?? '')), 'not answering'),
+            'a VALID drag passes every check the page makes and reaches the committer');
+
+        // A drag that drops an item must die on the page, without the committer
+        // ever being asked — the committer would refuse it too, but a board that
+        // forwards obvious nonsense is a board that has stopped checking.
+        $short = $swapped; array_pop($short);
+        $r = $call(['action' => 'reorder', 'project' => $projKey, 'order' => $short]);
+        is_($r['code'] === 409, 'a drag that DROPS an item is refused by the page (409)');
+        is_(!str_contains(strtolower((string) ($r['json']['error'] ?? '')), 'not answering'),
+            '...before the committer is ever contacted');
+
+        // And one that reaches outside its own project — the property that keeps
+        // a drag in Membership from disturbing Guitardle.
+        $foreign = null;
+        foreach ($byProj as $k => $other) { if ($k !== $projKey && $other !== []) { $foreign = $other[0]; break; } }
+        if ($foreign === null) { bad('only one project on the board — cannot test cross-project smuggling'); }
+        else {
+            $smuggled = $swapped; $smuggled[0] = $foreign;
+            $r = $call(['action' => 'reorder', 'project' => $projKey, 'order' => $smuggled]);
+            is_($r['code'] === 409, 'a drag carrying another project\'s item is refused (409)');
+        }
+    }
+
+    /* Ian's lane threads share this server — driven here rather than in their
+     * own section because [6b] kills the port on its way out, and a section
+     * that calls a dead port reports the page as broken when it is not. */
+    $r = $call(['action' => 'lane_message', 'lane' => 'keeper', 'text' => '   ']);
+    is_($r['code'] === 400, 'an empty lane message is refused before the committer');
+
+    // The page must not be the only thing checking the name — but it must also
+    // not forward an obviously hostile one. Either way this must never come
+    // back ok, because that name becomes a filename AND a tmux session.
+    $r = $call(['action' => 'lane_message', 'lane' => '../../etc/cron.d/x', 'text' => 'x']);
+    is_(($r['json']['ok'] ?? null) !== true, 'a path-traversal lane name never comes back ok');
+    is_(str_contains((string) ($r['json']['why'] ?? $r['json']['error'] ?? ''), 'not a lane name')
+        || str_contains(strtolower((string) ($r['json']['error'] ?? '')), 'not answering'),
+        '...and is refused by the NAME fence, not by luck downstream');
+}
+if ($srvPid > 0) { shell_exec('kill ' . $srvPid . ' 2>/dev/null'); }
+
+section("[6d] TALKING TO A LANE FROM THE BOARD");
+
+/**
+ * Ian, 2026-08-16: "I would like to be able to interact with the lanes through
+ * the workboard." His half is committed; the lanes' replies come from a relay
+ * snapshot. The properties that matter are not that it renders — it is that a
+ * message he could not get delivered NEVER reads as sent, and that an absent
+ * relay reads as absent rather than as a quiet lane.
+ */
+$thr = $tmp . '-threads.json';
+file_put_contents($thr, json_encode(['lanes' => [
+    'stripe-membership' => ['replies' => [['when' => '2026-08-16 11:20', 'text' => 'RELAY FIXTURE REPLY']],
+                            'delivery' => ['ok' => true, 'why' => 'delivered', 'when' => '2026-08-16 11:20']],
+    'guitardle-fairness' => ['replies' => [],
+                            'delivery' => ['ok' => false, 'why' => 'lane not running — no tmux session', 'when' => '2026-08-16 11:21']],
+]]));
+$thrHtml = (string) shell_exec('LGB_MAIN_COPY=/nonexistent/main-copy.md LGB_THREADS=' . escapeshellarg($thr)
+    . ' LGB_BACKLOG=' . escapeshellarg($BACK) . ' ' . PHP_BINARY . ' ' . escapeshellarg($PAGE) . ' 2>/dev/null');
+
+$boxes = substr_count($thrHtml, 'class="thrbox"');
+is_($boxes > 0, sprintf('every named seat carries a thread (%d)', $boxes));
+is_(str_contains($thrHtml, 'RELAY FIXTURE REPLY'), 'a lane\'s reply reaches the thread from the relay snapshot');
+
+// THE ONE THAT MATTERS. lane-say exiting non-zero means a lane did not hear
+// him; if that renders as anything other than a failure, the board is lying
+// about the only thing it was built to tell him.
+// Matched on the ELEMENT plus the reason, not on the words. The page's own
+// JavaScript comment contains the phrase "NOT DELIVERED", so a bare-string
+// check was true on a render with no such banner — the third time tonight this
+// gate has caught itself matching prose instead of markup (see `f--bad` in the
+// footer, and `hist--none`). If a string can appear in a comment, assert the
+// class that can only appear in the output.
+is_(str_contains($thrHtml, 'class="thrbox__bad">NOT DELIVERED — lane not running'),
+    'a delivery the relay could NOT make is shown as NOT DELIVERED, with the reason');
+
+// An absent relay must read as absent, not as a lane with nothing to say.
+$noThrHtml = render($PAGE, $BACK);
+is_(str_contains($noThrHtml, 'the relay has not written a snapshot yet'),
+    'with no snapshot the board says so, rather than implying a quiet lane');
+is_(!str_contains($noThrHtml, 'class="thrbox__bad"'), '...and invents no failures either');
+@unlink($thr);
+
+
+
+section("[6] THE PAGE WRITES ONLY THROUGH THE COMMITTER");
 
 // Read-only is the property that lets this ship without a flag, so it is
 // asserted against the SOURCE rather than trusted. Comments are stripped first
@@ -460,24 +779,60 @@ $code = (string) preg_replace_callback(
     $code
 );
 
-$writes = [];
+/**
+ * PHASE 2 CHANGED WHAT MUST BE TRUE HERE, so this asserts the new property
+ * rather than the old one. The page is no longer read-only — it takes a drag, a
+ * note and a decision. What makes that safe is not that it writes nothing, but
+ * that it writes NOTHING ITSELF: it cannot touch a file, cannot run a command,
+ * cannot reach git, and has exactly one way out — the committer's socket.
+ */
+$fileWrites = [];
 foreach ([
-    'file_put_contents(', 'fopen(', 'fwrite(', 'unlink(', 'rename(', 'mkdir(',
-    'touch(', 'copy(', 'shell_exec(', 'exec(', 'system(', 'proc_open(', 'passthru(',
+    'file_put_contents(', 'unlink(', 'rename(', 'mkdir(', 'touch(', 'copy(',
 ] as $needle) {
-    if (str_contains($code, $needle)) { $writes[] = rtrim($needle, '('); }
+    if (str_contains($code, $needle)) { $fileWrites[] = rtrim($needle, '('); }
 }
-is_($writes === [], sprintf("the page makes no write or shell call (%s)", $writes === [] ? 'clean' : 'FOUND: ' . implode(', ', $writes)));
-is_(!preg_match('/\$_POST|\$_REQUEST|\$_FILES/', $code), "it reads no POST, request or upload input");
-is_(!preg_match('/\$_GET/', $code), "it takes no query input at all — nothing to fuzz in phase 1");
-is_(!preg_match('/fetch\(|XMLHttpRequest|sendBeacon/', $src),
-    "and the CLIENT side posts nothing either — the stripped-out JS is checked separately, not excused");
+is_($fileWrites === [], sprintf('the page writes no file itself (%s)',
+    $fileWrites === [] ? 'clean' : 'FOUND: ' . implode(', ', $fileWrites)));
+
+$shells = [];
+foreach (['shell_exec(', 'exec(', 'system(', 'proc_open(', 'passthru(', 'popen('] as $needle) {
+    if (str_contains($code, $needle)) { $shells[] = rtrim($needle, '('); }
+}
+is_($shells === [], sprintf('...and runs no command — so it can never reach git (%s)',
+    $shells === [] ? 'clean' : 'FOUND: ' . implode(', ', $shells)));
+
+// The one door out, named explicitly. A second transport (an HTTP client, a
+// second socket) would be a second thing to fence, and nobody would be looking.
+is_(substr_count($code, 'stream_socket_client(') === 1,
+    'it has exactly one way out — the committer socket');
+is_(!preg_match('/curl_exec|curl_init|file_get_contents\s*\(\s*[\'"]https?:/', $code),
+    '...and no HTTP client beside it');
+
+// FENCE 2 IS ONLY REAL IF THE ACTOR CANNOT BE POSTED. An actor the page accepts
+// from the request is not an identity, it is a text field — and the committer
+// would stamp a forged name into the commit and believe it.
+is_(str_contains($code, "const LGB_ACTOR"), 'the actor is a server-side constant');
+is_(!preg_match('/\$req\[\s*[\'"]actor[\'"]\s*\]/', $code),
+    '...and is never read from the request, so it cannot be forged');
+
+is_(!preg_match('/\$_GET/', $code), "it still takes no query input at all — nothing to fuzz");
+is_(str_contains($code, 'HTTP_X_LGB_WRITE'), 'a write must carry the board\'s own header');
+// The client DOES post now. What must still hold is that it can only post to
+// this page — the JS is checked against the raw source here (not the
+// comment-stripped copy) so a second endpoint cannot hide in the part §6
+// deliberately strips out.
+is_(substr_count($src, 'fetch(') === 1 && str_contains($src, 'fetch(location.pathname'),
+    "the client posts to this page and nowhere else — checked against the raw source, not the stripped copy");
+is_(!preg_match('/XMLHttpRequest|sendBeacon/', $src),
+    "...with no second channel hidden in the JS the write check strips");
 
 /* ---------------------------------------------------------------------- */
 echo "\n$pass passed, $fail failed\n";
 if ($fail > 0) { echo "RED — the work board is not holding.\n"; exit(1); }
 echo "GREEN — nothing dropped, letter ids survive, a dead sentinel degrades honestly, "
-   . "thresholds are conditional, and phase 1 cannot write.\n";
+   . "thresholds are conditional, the shipped archive reaches the board, it says which copy "
+   . "it is showing, and every write leaves this page through the committer and nowhere else.\n";
 exit(0);
 
 /* ======================================================================= *

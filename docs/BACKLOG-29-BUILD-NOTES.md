@@ -54,7 +54,46 @@ A second, separate loss was caught the same way: the parser matched only numeric
 ids, dropping `E1`–`E5` and `S1`–`S3` — including a security item marked
 awaiting Ian.
 
-**Phase 2 is unchanged** and still carries everything below.
+### 0a. STATUS UPDATE — PHASE 2's WRITE LAYER IS BUILT AND DEPLOYED (2026-08-15, later)
+
+The committer service has a caller, and it is running: a systemd
+socket-activated unit (`deploy/board-committer/`) as `ubuntu`, reached over a
+**UNIX socket** rather than the loopback port §1 recommended — a port is
+reachable by every user on this box, a socket by exactly the users its mode
+names. Proven both ways: the `looth-dev` pool can call it, `buck` cannot.
+
+**Landed:** drag-to-rank inside a project · notes on an item · decision buttons
+where a question was actually asked · **the shipped archive** (§below) · **a
+message thread per team row** (Ian, 8/16: *"I would like to be able to interact
+with the lanes through the workboard"*).
+**Still to build:** the relay that carries those messages to the seats (designed,
+keeper's to review and run), the general keeper chat's own surface, and images in
+the thread.
+
+> **§1b said the chat bridges to keeper over `msg`. It does — but only one way.**
+> His messages are committed and relayed; the lanes' replies are **snapshotted,
+> never committed**, because committing both directions would put hundreds of
+> commits a day on main. Delivery is `lane-say -f` **from a file** — a board
+> message that reaches a shell gets command-substituted, which has already eaten
+> a recovery command on this box once.
+
+**§2's failure mode is handled as §2 asked** — the drag is optimistic, a refusal
+**snaps the row back**, and the page reports the committer's own answer (a commit
+sha, or its refusal text) rather than its own hope. Asserted on the store.
+
+**One thing §1 did not anticipate.** "The serve picks it up on the next pull" is
+true, but *nothing on this box pulls the serve on a timer* — so a drag would land
+and then appear to **vanish** on the next reload, which is §2's failure wearing a
+different hat. The board now reads **main's** copy when the served one is behind
+and says so on the page. Compared by content hash: a reorder changes **no bytes
+at all**, so a size check would be blind to the one operation the board offers.
+
+**The archive was invisible, and here is why** — `lgb_parse_details` reads the
+first token of a heading as an item id, and `"2026-08-01 — …"` yields `2026`, so
+all **30** date-headed sections collapsed onto one key and the last one won. A
+separate date-keyed parser now renders them, grouped by day, newest first.
+
+**Phase 2's remaining items are unchanged** and still carry everything below.
 
 ---
 

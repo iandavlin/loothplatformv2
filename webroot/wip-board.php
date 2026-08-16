@@ -6,11 +6,16 @@
  * building though. We can work through the issues as they come up." So this
  * ships the half that is safe to ship — the board renders, nothing writes.
  *
- * WHAT PHASE 1 IS
+ * PHASE 2 LANDED (2026-08-15, later): drag-to-rank inside a project, notes on
+ *   an item, and decision buttons where a question was actually asked. All three
+ *   write, and NONE of them writes here — see "THE WRITE LAYER" below. The page
+ *   still boots no WordPress and still holds no credentials of any kind.
+ *
+ * WHAT PHASE 1 WAS
  *   docs/BACKLOG.md rendered as the ranked list it already claims to be, with
  *   derived badges, a light per lane and a server capacity strip. Read-only:
- *   no drag, no commits, no chat. Those are phase 2 and every one of them
- *   writes, so they get the fences a write deserves.
+ *   no drag, no commits, no chat. Those were phase 2, and every one of them
+ *   writes, so they got the fences a write deserves. The chat is still to come.
  *
  * WHY IT NEEDS NO FLAG
  *   This is a DEV-FACING surface behind nginx's dev-gate cookie. It renders no
@@ -50,6 +55,35 @@ $REPO     = dirname(__DIR__);
  * whoever can set the process environment — a web request cannot.
  */
 $BACKLOG  = getenv('LGB_BACKLOG') ?: $REPO . '/docs/BACKLOG.md';
+
+/**
+ * WHICH COPY OF THE BACKLOG THIS PAGE SHOWS — and why it is not always the
+ * serving checkout's.
+ *
+ * The committer commits and pushes to main. The serving checkout only ever
+ * PULLS, and nothing on this box pulls it on a timer — checked, there is no
+ * such unit. So between Ian's drag and the next deploy, main and the serve
+ * disagree, and a page that reads only the serve would show his drag land, then
+ * show it GONE on the next reload. That is exactly the failure this build was
+ * told to design against: the screen said done and the store disagreed.
+ *
+ * So when the committer's clone is readable and its copy DIFFERS, the board
+ * reads the clone — which is main, the truth the committer writes to — and says
+ * so on the page. It is not a second source of truth: the clone is reset hard
+ * to origin/main at the start of every write, so it is main or it is nothing.
+ * The serving checkout stays the fallback, and the gate's fixture override
+ * (LGB_BACKLOG) still outranks both, so a test never silently reads the box.
+ */
+$LGB_MAIN_COPY = getenv('LGB_MAIN_COPY') ?: '/home/ubuntu/board-committer-clone/docs/BACKLOG.md';
+$LGB_AHEAD     = false;
+// Compared by CONTENT HASH, not by size. A reorder rewrites the same lines in a
+// different sequence — identical byte count, different file — so a size check
+// would be blind to the single case this exists for.
+if (getenv('LGB_BACKLOG') === false && is_readable($LGB_MAIN_COPY) && is_readable($BACKLOG)
+    && @md5_file($LGB_MAIN_COPY) !== @md5_file($BACKLOG)) {
+    $LGB_AHEAD = true;
+    $BACKLOG   = $LGB_MAIN_COPY;
+}
 
 /**
  * The sentinel stamp. Keeper is widening the old text stamp
@@ -203,6 +237,59 @@ function lgb_parse_details(string $path): array
     return $out;
 }
 
+/**
+ * THE SHIPPED ARCHIVE — the half of BACKLOG.md the board could not see.
+ *
+ * The census found it: below `## ✅ SHIPPED TO LIVE` the file carries 30
+ * date-headed sections, and none of them reached the board. Not dropped by
+ * accident either — `lgb_parse_details` takes the first token of a heading as
+ * the item id, and "2026-08-01 — …" yields "2026", so every archived section
+ * collapsed onto that one key and the last one silently won. No item has id
+ * 2026, so the whole lot was unreachable.
+ *
+ * That is the real content of Ian's "the board doesn't have all of the backlog":
+ * the board showed what is LEFT and nothing of what was DONE.
+ *
+ * Kept deliberately separate from lgb_parse_details rather than folded into it.
+ * The two answer different questions — "what is this item?" versus "what
+ * happened, and when?" — and the archive is keyed by DATE, which is not an id
+ * and must not be made to look like one.
+ *
+ * @return array<int,array{date:string,title:string,body:string}> newest first
+ */
+function lgb_parse_history(string $path): array
+{
+    if (!is_readable($path)) { return []; }
+    $raw   = str_replace([ "\r\n", "\r" ], "\n", (string) file_get_contents($path));
+    // Split on newlines EXPLICITLY, never \R — see lgb_parse_backlog.
+    $lines = explode("\n", $raw);
+
+    $out = []; $cur = null; $buf = [];
+    $flush = static function () use (&$out, &$cur, &$buf): void {
+        if ($cur !== null) { $cur['body'] = trim(implode("\n", $buf)); $out[] = $cur; }
+    };
+    foreach ($lines as $line) {
+        if (str_starts_with($line, '## ')) {
+            $flush(); $cur = null; $buf = [];
+            $head = trim(substr($line, 3));
+            $probe = ltrim($head, "✅ \t");
+            // A DATE heading, and only a date heading. An item id like "4.2"
+            // cannot match this, and a date cannot match the id parser — so a
+            // section belongs to exactly one of the two views, never both.
+            if (preg_match('/^(\d{4}-\d{2}-\d{2})\s*[—–-]\s*(.+)$/u', $probe, $m)) {
+                $cur = ['date' => $m[1], 'title' => trim($m[2]), 'body' => ''];
+            }
+            continue;
+        }
+        if ($cur !== null) { $buf[] = $line; }
+    }
+    $flush();
+
+    // Newest first — the question this view answers is "what happened lately".
+    usort($out, static fn (array $a, array $b): int => strcmp($b['date'], $a['date']));
+    return $out;
+}
+
 /* ---------------------------------------------------------------------- *
  * Ian's desk — the top strip
  *
@@ -316,7 +403,360 @@ const LGB_DISK_RED_PCT  = 90;
 
 function lgb_h(string $s): string { return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8'); }
 
+/* ---------------------------------------------------------------------- *
+ * PHASE 2 — THE WRITE LAYER
+ *
+ * Ian's board points 2/3/4: drag to rank, notes, and decision buttons on the
+ * items that need him. All three WRITE, and none of them writes here.
+ *
+ * THE PAGE NEVER TOUCHES GIT. Not "should not" — cannot: this runs as the
+ * looth-dev pool, the serving checkout is ubuntu-owned with no write bit for
+ * others, and the git credentials live with ubuntu. Every write is handed to
+ * the committer service over its socket, and the committer's four fences decide
+ * what happens. This file's job is to turn a gesture into an INTENT and to
+ * report honestly what came back.
+ *
+ * WHY A POST BRANCH RATHER THAN A SECOND WEBROOT FILE. A new file in webroot/
+ * needs its own symlink into the docroot, and that symlink set is not in the
+ * repo — it is one of the two couplings a deploy pull does NOT handle, and a
+ * missed one leaves a dangling link. wip-board.php is already symlinked and
+ * already behind the dev gate, so the write path inherits both.
+ *
+ * CSRF: the dev gate is the real fence — nobody reaches this page without the
+ * gate cookie. On top of that, every write must carry the X-LGB-Write header,
+ * which a cross-site form post cannot set without a CORS preflight this
+ * endpoint never answers. Stated rather than assumed: this is not a member
+ * surface and carries no member data.
+ * ---------------------------------------------------------------------- */
+
+/** The committer's socket. Env-overridable for the gate, like LGB_BACKLOG. */
+$LGB_SOCKET = getenv('LGB_SOCKET') ?: '/run/board-committer.sock';
+
+/**
+ * THE ACTOR IS DERIVED HERE, NEVER SENT BY THE CLIENT.
+ *
+ * Fence 2 refuses a write that does not name its actor, and an actor the page
+ * accepts from the request is not an identity — it is a text field. The board
+ * is behind the dev gate and the person on the other side of it is Ian, so the
+ * actor is a server-side constant and a forged one is not possible.
+ */
+const LGB_ACTOR = 'ian-via-board';
+
+/** Talk to the committer. Returns its own JSON answer, refusals included. */
+function lgb_commit(array $intent, string $sock): array
+{
+    $fp = @stream_socket_client('unix://' . $sock, $errno, $err, 30);
+    if (!$fp) {
+        return ['ok' => false, 'error' => 'the committer service is not answering (' . ($err ?: 'no socket') . ')',
+                'transport' => true];
+    }
+    stream_set_timeout($fp, 60);
+    fwrite($fp, json_encode($intent, JSON_UNESCAPED_SLASHES));
+    stream_socket_shutdown($fp, STREAM_SHUT_WR);
+    $raw = stream_get_contents($fp);
+    fclose($fp);
+
+    $res = json_decode((string) $raw, true);
+    if (!is_array($res)) {
+        return ['ok' => false, 'error' => 'the committer gave an answer this page could not read', 'transport' => true];
+    }
+    return $res;
+}
+
+/**
+ * The file's PRIORITY INDEX as a flat list, IN FILE ORDER, each entry carrying
+ * its project and whether the board considers it done.
+ *
+ * Parsed with the PAGE's own parser — the same one that renders the rows — so
+ * the order a drag is computed against is the order Ian is looking at. A second
+ * parser here would be a second truth, and the two would drift the way the row
+ * key and the payload key drifted before they were derived once.
+ *
+ * KEYED BY POSITION, NEVER BY ID. Ids in this file are not unique — the index
+ * really did carry "9" twice — and an id-keyed map silently collapses the pair,
+ * which is how the modal once opened the wrong item's text. A list indexed by
+ * where the line actually sits cannot do that.
+ *
+ * @return array<int,array{id:string,proj:?string,done:bool}>
+ */
+function lgb_index_map(string $backlogPath, string $repo): array
+{
+    $parsed = lgb_parse_backlog($backlogPath);
+    $cfg    = lgb_projects($repo);
+    $out = [];
+    foreach ($parsed['bands'] as $band) {
+        foreach ($band['items'] as $it) {
+            $out[] = ['id'   => (string) $it['id'],
+                      'proj' => lgb_project_for($it, $cfg),
+                      'done' => (bool) $it['done']];
+        }
+    }
+    return $out;
+}
+
+/**
+ * A drag INSIDE one project → a whole-file order the committer will accept.
+ *
+ * The committer demands a PERMUTATION of every id in the index, and Ian only
+ * ever reorders within one project. So: the project's items keep the exact
+ * SLOTS they already occupy in the file, and only which id sits in which of
+ * those slots changes. Every other line stays where it was.
+ *
+ * That is what makes this safe to hand a strict fence — the result cannot fail
+ * the permutation rule by construction, because it is the same multiset with
+ * some positions swapped. It also means a drag inside "Membership" can never
+ * disturb the order of "Guitardle", which is the property Ian would notice.
+ *
+ * @return array{ok:bool,order?:string[],why?:string}
+ */
+function lgb_project_reorder(array $map, ?string $project, array $submitted): array
+{
+    /**
+     * DONE ITEMS ARE NOT IN THE DRAG, so they must not be in the comparison.
+     *
+     * The board renders completed items inside a collapsed "done" box and does
+     * not make them draggable — so what comes back from a drag is the project's
+     * OPEN rows. Comparing that against the project's whole membership refused
+     * every drag in any project that had ever finished anything, with a message
+     * blaming a stale board. Caught by the gate driving a real project; the
+     * hand test before it had happened to pick the one project with nothing
+     * done in it.
+     *
+     * Done items keep their slots untouched, which is also the behaviour you
+     * would want: finishing something does not move it in the ranking.
+     */
+    $slots = [];   // positions in the global list this drag may rewrite
+    foreach ($map as $i => $row) {
+        if ($row['proj'] === $project && !$row['done']) { $slots[] = $i; }
+    }
+    if ($slots === []) { return ['ok' => false, 'why' => 'that project has no open items to rank']; }
+
+    $have = array_map(static fn (int $i): string => $map[$i]['id'], $slots);
+    $want = array_map('strval', $submitted);
+    $h = $have; $w = $want; sort($h); sort($w);
+    if ($h !== $w) {
+        // The board's copy of the file and the committer's can differ — the
+        // serve lags main until the next pull. Say which, rather than a generic
+        // failure: "your board is stale" and "that drag was malformed" need
+        // different actions from Ian.
+        return ['ok' => false, 'why' => 'the dragged list does not match the items this board is showing — its copy of the backlog may be behind main'];
+    }
+
+    $order = array_map(static fn (array $r): string => $r['id'], $map);
+    foreach ($slots as $n => $pos) { $order[$pos] = $want[$n]; }
+    return ['ok' => true, 'order' => array_values($order)];
+}
+
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+    header('Content-Type: application/json');
+    header('Cache-Control: no-store');
+
+    $reply = static function (array $p, int $code = 200): void {
+        http_response_code($code);
+        echo json_encode($p, JSON_UNESCAPED_SLASHES);
+        exit;
+    };
+
+    if (($_SERVER['HTTP_X_LGB_WRITE'] ?? '') === '') {
+        $reply(['ok' => false, 'error' => 'this endpoint only answers the board itself'], 403);
+    }
+    $req = json_decode((string) file_get_contents('php://input'), true);
+    if (!is_array($req)) { $reply(['ok' => false, 'error' => 'body is not JSON'], 400); }
+
+    $action = (string) ($req['action'] ?? '');
+    $dry    = !empty($req['dry_run']);
+    $map    = lgb_index_map($BACKLOG, $REPO);
+
+    switch ($action) {
+        case 'reorder':
+            $submitted = $req['order'] ?? null;
+            if (!is_array($submitted) || $submitted === []) {
+                $reply(['ok' => false, 'error' => 'a reorder needs an order'], 400);
+            }
+            // '' is a real value here: it is the UNSORTED group, which is a
+            // visible state on this board and must be draggable like any other.
+            $project = array_key_exists('project', $req) && $req['project'] !== ''
+                ? (string) $req['project'] : null;
+            $built = lgb_project_reorder($map, $project, $submitted);
+            if (!$built['ok']) { $reply(['ok' => false, 'error' => $built['why']], 409); }
+            $res = lgb_commit(['intent' => 'reorder', 'actor' => LGB_ACTOR,
+                               'order' => $built['order'], 'dry_run' => $dry], $LGB_SOCKET);
+            break;
+
+        /**
+         * A message to a lane. The lane name is NOT trusted from the request
+         * beyond a shape check here — the committer re-validates it, because
+         * downstream it becomes a tmux session name and a filename, and a fence
+         * that only exists on the page is a fence a curl walks around.
+         */
+        case 'lane_message':
+            $lane = (string) ($req['lane'] ?? '');
+            $text = trim((string) ($req['text'] ?? ''));
+            if ($text === '') { $reply(['ok' => false, 'error' => 'an empty message is not a message'], 400); }
+            $res = lgb_commit(['intent' => 'lane_message', 'actor' => LGB_ACTOR,
+                               'lane' => $lane, 'text' => $text, 'dry_run' => $dry], $LGB_SOCKET);
+            break;
+
+        case 'note':
+            $id   = (string) ($req['id'] ?? '');
+            $text = trim((string) ($req['text'] ?? ''));
+            if ($text === '') { $reply(['ok' => false, 'error' => 'an empty note is not a note'], 400); }
+            $res = lgb_commit(['intent' => 'note_append', 'actor' => LGB_ACTOR,
+                               'id' => $id, 'text' => $text, 'dry_run' => $dry], $LGB_SOCKET);
+            break;
+
+        /**
+         * A DECISION IS A NOTE, deliberately — not a fourth intent.
+         *
+         * The build notes settled it: "a ruling made in the thread and one made
+         * on the Decisions tab must be the same event, or the two views will
+         * disagree about what was decided". Making the decision buttons write
+         * the SAME store as the thread is how that is guaranteed rather than
+         * maintained. It also keeps the committer's allowlist at three shapes;
+         * a fourth verb would be a fourth thing to fence.
+         *
+         * "Other…" is a first-class answer, per Ian's round-4 correction: what
+         * he types is recorded as HIS words, not as a footnote to a button he
+         * did not press.
+         */
+        case 'decision':
+            $id     = (string) ($req['id'] ?? '');
+            $option = trim((string) ($req['option'] ?? ''));
+            $words  = trim((string) ($req['text'] ?? ''));
+            if ($option === '' && $words === '') {
+                $reply(['ok' => false, 'error' => 'a decision needs an answer'], 400);
+            }
+            $text = $option !== '' && $option !== 'Other'
+                ? 'DECISION: ' . $option . ($words !== '' ? "\n" . $words : '')
+                : 'DECISION (his own words): ' . $words;
+            $res = lgb_commit(['intent' => 'note_append', 'actor' => LGB_ACTOR,
+                               'id' => $id, 'text' => $text, 'dry_run' => $dry], $LGB_SOCKET);
+            break;
+
+        default:
+            $reply(['ok' => false, 'error' => 'unknown action'], 400);
+    }
+
+    // The committer's own answer, passed through. A refusal is NOT reshaped into
+    // a success with a warning — the UI has to be able to tell them apart, which
+    // is the whole lesson of "a refused save reads as preserved everything".
+    $reply($res, !empty($res['ok']) ? 200 : 409);
+}
+
+/**
+ * The per-item THREAD and its decision options.
+ *
+ * Both live beside the backlog the board is showing — so if this page is
+ * reading main's copy because the serve is behind (see above), it reads main's
+ * notes too. A board showing today's order beside yesterday's thread would be
+ * the same lie in a smaller place.
+ *
+ * DECISION OPTIONS ARE READ, NEVER INVENTED. The mock draws item-specific
+ * buttons ("Retract to free", "Give him a grace period") and BACKLOG.md cannot
+ * derive those — they are a question somebody asked. So a lane poses one by
+ * committing docs/board-decisions/<id>.md, one option per "- " line, and the
+ * board renders exactly those. Where no file exists there is no invented
+ * question: the item gets the plain note box and nothing that pretends to be a
+ * decision. That is the derived-never-typed rule applied to the one surface
+ * where guessing would put words in Ian's mouth.
+ */
+function lgb_board_dir(string $backlogPath, string $what): string
+{
+    return dirname($backlogPath) . '/' . $what;
+}
+
+/** @return array{thread:string,options:string[]} */
+function lgb_item_extras(string $backlogPath, string $id): array
+{
+    $thread = '';
+    $nf = lgb_board_dir($backlogPath, 'board-notes') . '/' . $id . '.md';
+    if (preg_match('/^[A-Z]?\d+(\.\d+)?$/', $id) && is_readable($nf)) {
+        $thread = (string) file_get_contents($nf);
+    }
+    $options = [];
+    $df = lgb_board_dir($backlogPath, 'board-decisions') . '/' . $id . '.md';
+    if (preg_match('/^[A-Z]?\d+(\.\d+)?$/', $id) && is_readable($df)) {
+        foreach (explode("\n", (string) file_get_contents($df)) as $line) {
+            if (str_starts_with(trim($line), '- ')) { $options[] = trim(substr(trim($line), 2)); }
+        }
+    }
+    return ['thread' => $thread, 'options' => $options];
+}
+
+/**
+ * A LANE'S THREAD — Ian's half, and the lanes' half, from two different places.
+ *
+ * Ian, 2026-08-16: "I would like to be able to interact with the lanes through
+ * the workboard."
+ *
+ * HIS messages are committed (docs/board-lanes/<lane>.md) because they are
+ * instructions and belong in git, permanently and actor-stamped. THEIR replies
+ * are NOT: the lanes already post to the devmsg store, and committing that side
+ * too would put hundreds of commits a day on main. The relay snapshots them to
+ * a JSON file the way keeper already snapshots lane states for the light rail —
+ * an established pattern on this box, not a new one.
+ *
+ * The web user cannot read the devmsg database itself (it is `devmsg`-group,
+ * and that group has WRITE — putting the whole WordPress stack in it would let
+ * any PHP on the site send messages as ubuntu). So the board reads the
+ * snapshot, and where there is no snapshot it says so rather than implying a
+ * quiet lane.
+ */
+$LGB_THREADS = getenv('LGB_THREADS') ?: '/home/ubuntu/.board-threads.json';
+
+/** @return array{sent:array<int,array{when:string,who:string,text:string}>} */
+function lgb_lane_sent(string $backlogPath, string $lane): array
+{
+    $f = lgb_board_dir($backlogPath, 'board-lanes') . '/' . $lane . '.md';
+    if (!preg_match('/^[a-z][a-z0-9-]{1,30}$/', $lane) || !is_readable($f)) { return ['sent' => []]; }
+
+    $out = []; $cur = null; $buf = [];
+    $flush = static function () use (&$out, &$cur, &$buf): void {
+        if ($cur !== null) {
+            $cur['text'] = trim(implode("\n", array_map(
+                static fn (string $l): string => ltrim($l, '> '), $buf)));
+            $out[] = $cur;
+        }
+    };
+    foreach (explode("\n", (string) file_get_contents($f)) as $line) {
+        if (str_starts_with($line, '### ')) {
+            $flush(); $cur = null; $buf = [];
+            $head = trim(substr($line, 4));
+            if (preg_match('/^(\S+ \S+)\s*—\s*(.+)$/u', $head, $m)) {
+                $cur = ['when' => $m[1], 'who' => trim($m[2]), 'text' => ''];
+            }
+            continue;
+        }
+        if ($cur !== null && str_starts_with($line, '>')) { $buf[] = $line; }
+    }
+    $flush();
+    return ['sent' => $out];
+}
+
+/**
+ * @return array{ok:bool,why:?string,replies:array<int,array{when:string,text:string}>,
+ *               delivery:?array{ok:bool,why:string,when:string}}
+ */
+function lgb_lane_replies(string $path, string $lane): array
+{
+    if (!is_readable($path)) {
+        return ['ok' => false, 'why' => 'the relay has not written a snapshot yet', 'replies' => [], 'delivery' => null];
+    }
+    $raw = json_decode((string) file_get_contents($path), true);
+    if (!is_array($raw)) {
+        return ['ok' => false, 'why' => 'the thread snapshot is not valid JSON', 'replies' => [], 'delivery' => null];
+    }
+    $l = $raw['lanes'][$lane] ?? null;
+    return ['ok' => true, 'why' => null,
+            'replies'  => is_array($l['replies'] ?? null) ? $l['replies'] : [],
+            // A FAILED DELIVERY MUST BE VISIBLE. lane-say exiting non-zero means
+            // a lane did not hear him; a thread that looked sent anyway would be
+            // the worst lie this page could tell.
+            'delivery' => is_array($l['delivery'] ?? null) ? $l['delivery'] : null];
+}
+
 $backlog  = lgb_parse_backlog($BACKLOG);
+$history  = lgb_parse_history($BACKLOG);
 $GLOBALS['LGB_ROW'] = 0;   // row keys; see the payload note below
 $details  = lgb_parse_details($BACKLOG);
 $projCfg  = lgb_projects($REPO);
@@ -522,10 +962,17 @@ header('X-Robots-Tag: noindex, nofollow');
   <div class="app__t">Work board</div>
   <div class="app__r">
     <?= (int) $totalItems ?> items ·
-    <?= (int) $needsYou ?> want you ·
-    read-only (phase 1)
+    <?= (int) $needsYou ?> want you
   </div>
 </div>
+<?php if ($LGB_AHEAD): ?>
+  <!-- Said out loud rather than smoothed over: the board is showing main
+       because the serving copy has not caught up yet. A page that quietly
+       reads a different file than it claims to is how a stale board gets
+       trusted. -->
+  <div class="ahead">Showing the latest board from <b>main</b> — the copy this
+    site serves is behind and catches up on the next deploy.</div>
+<?php endif; ?>
 
 <div class="wrap">
 
@@ -543,18 +990,50 @@ header('X-Robots-Tag: noindex, nofollow');
         <?php foreach ((array) $sentinel['data']['lanes'] as $lane):
               $st = (string) ($lane['state'] ?? 'parked');
               $cls = in_array($st, ['working', 'parked', 'waiting'], true) ? $st : 'parked'; ?>
-          <div class="lane">
-            <span class="lane__d d--<?= lgb_h($cls) ?>"></span>
-            <span class="lane__n"><?= lgb_h((string) ($lane['name'] ?? '?')) ?></span>
-            <span class="lane__s"><?= lgb_h($st) ?></span>
-            <?php // Watch-only live terminal (Ian ruled watch-only 8/15) —
-                  // /lane-view/ is ttyd behind the same dev gate; ?arg= is
-                  // allowlist-checked server-side against the fleet manifest.
-                  $ln = (string) ($lane['name'] ?? ''); if ($ln !== ''): ?>
-              <a class="lane__watch" target="_blank" rel="noopener"
-                 href="/lane-view/?arg=<?= lgb_h(rawurlencode($ln)) ?>">watch</a>
-            <?php endif; ?>
-          </div>
+          <?php
+            $lname = (string) ($lane['name'] ?? '?');
+            $ok    = (bool) preg_match('/^[a-z][a-z0-9-]{1,30}$/', $lname);
+            $sent  = $ok ? lgb_lane_sent($BACKLOG, $lname)['sent'] : [];
+            $rep   = $ok ? lgb_lane_replies($LGB_THREADS, $lname) : ['ok' => false, 'why' => 'unnamed seat', 'replies' => [], 'delivery' => null];
+            $nmsg  = count($sent) + count($rep['replies']);
+          ?>
+          <details class="lane lane--thr">
+            <summary class="lane__s2">
+              <span class="lane__d d--<?= lgb_h($cls) ?>"></span>
+              <span class="lane__n"><?= lgb_h($lname) ?></span>
+              <span class="lane__s"><?= lgb_h($st) ?></span>
+              <?php if ($nmsg > 0): ?><span class="lane__b"><?= (int) $nmsg ?></span><?php endif; ?>
+            </summary>
+            <div class="thrbox" data-lane="<?= lgb_h($lname) ?>">
+              <?php if ($ok): ?>
+                <a class="lane__watch" target="_blank" rel="noopener"
+                   href="/lane-view/?arg=<?= lgb_h(rawurlencode($lname)) ?>">watch this seat's terminal (read-only)</a>
+              <?php endif; ?>
+              <?php if (!$ok): ?>
+                <div class="thrbox__no">This seat has no usable name, so there is nothing to address.</div>
+              <?php else: ?>
+                <?php if ($rep['delivery'] !== null && empty($rep['delivery']['ok'])): ?>
+                  <!-- lane-say exiting non-zero means a lane did not hear him.
+                       Never let that read as sent. -->
+                  <div class="thrbox__bad">NOT DELIVERED — <?= lgb_h((string) ($rep['delivery']['why'] ?? 'no reason given')) ?></div>
+                <?php endif; ?>
+                <div class="thrbox__log">
+                  <?php foreach ($sent as $m): ?>
+                    <div class="msg msg--out"><span class="msg__w"><?= lgb_h($m['when']) ?></span><?= lgb_h($m['text']) ?></div>
+                  <?php endforeach; ?>
+                  <?php foreach ($rep['replies'] as $m): ?>
+                    <div class="msg msg--in"><span class="msg__w"><?= lgb_h((string) ($m['when'] ?? '')) ?></span><?= lgb_h((string) ($m['text'] ?? '')) ?></div>
+                  <?php endforeach; ?>
+                  <?php if ($sent === [] && $rep['replies'] === []): ?>
+                    <div class="thrbox__no"><?= $rep['ok'] ? 'Nothing yet.' : lgb_h((string) $rep['why']) . '.' ?></div>
+                  <?php endif; ?>
+                </div>
+                <textarea class="thrbox__in" rows="2" placeholder="Message <?= lgb_h($lname) ?>…"></textarea>
+                <button class="thrbox__go">Send</button>
+                <div class="thrbox__say" hidden></div>
+              <?php endif; ?>
+            </div>
+          </details>
         <?php endforeach; ?>
       <?php else: ?>
         <div class="absent"><?= lgb_h($sentinel['why'] ?? 'no lane data') ?>.<br>
@@ -684,6 +1163,10 @@ header('X-Robots-Tag: noindex, nofollow');
             // having: re-syncing two counters would just be the same bug
             // waiting for the next sort order to change.
             $it['_key'] = 'r' . (++$GLOBALS['LGB_ROW']);
+            // The project key travels with the item for the SAME reason the row
+            // key does: a drag has to tell the server which group it reordered,
+            // and re-deriving that at render time is how two walks drift apart.
+            $it['_proj'] = ($k === '_unsorted') ? '' : $k;
             if ($it['done']) { $groups[$k]['done'][] = $it; }
             else {
                 $groups[$k]['open'][] = $it;
@@ -704,7 +1187,12 @@ header('X-Robots-Tag: noindex, nofollow');
     $renderRow = function (array $it): void {
         $rowKey = (string) ($it['_key'] ?? ''); ?>
         <div class="row row--open<?= $it['done'] ? ' row--done' : '' ?> w<?= (int) ($it['_w'] ?? 9) ?>"
-             data-item="<?= lgb_h($rowKey) ?>" tabindex="0" role="button" title="Open this item">
+             data-item="<?= lgb_h($rowKey) ?>"
+             data-id="<?= lgb_h((string) $it['id']) ?>"
+             data-project="<?= lgb_h((string) ($it['_proj'] ?? '')) ?>"
+             <?= $it['done'] ? '' : 'draggable="true"' ?>
+             tabindex="0" role="button" title="Open this item">
+          <?php if (!$it['done']): ?><span class="grip" aria-hidden="true" title="Drag to rank">⠿</span><?php endif; ?>
           <span class="row__t"><?= lgb_h($it['title']) ?></span>
           <span class="row__b">
             <?php if (!$it['done'] && $it['needsIan']): ?><span class="bdg bdg--decide">needs you</span><?php endif; ?>
@@ -751,17 +1239,61 @@ header('X-Robots-Tag: noindex, nofollow');
     </details>
   <?php endforeach; ?>
 
+  <?php
+  /**
+   * WHAT SHIPPED — the archive, finally on the board.
+   *
+   * Ian: "the board doesn't have all of the backlog." This is the half that was
+   * missing. It is not a nice-to-have: a board that shows only what is LEFT
+   * makes a month of finished work look like nothing happened, and the question
+   * it answers — "what have you actually done for me lately" — is one he asks.
+   *
+   * Grouped by date, newest first, collapsed by default so it never competes
+   * with the open work above it. Counts are counted, never typed.
+   */
+  $byDate = [];
+  foreach ($history as $h) { $byDate[$h['date']][] = $h; }
+  ?>
+  <?php if ($history !== []): ?>
+    <details class="hist">
+      <summary class="hist__h">
+        <span class="hist__t">What shipped</span>
+        <span class="hist__c"><?= count($history) ?> items · <?= count($byDate) ?> days</span>
+      </summary>
+      <?php foreach ($byDate as $date => $items): ?>
+        <div class="hist__d">
+          <div class="hist__dh"><?= lgb_h($date) ?><span class="hist__dc"><?= count($items) ?></span></div>
+          <?php foreach ($items as $h): ?>
+            <details class="hist__i">
+              <summary><?= lgb_h($h['title']) ?></summary>
+              <pre class="hist__b"><?= lgb_h($h['body']) ?></pre>
+            </details>
+          <?php endforeach; ?>
+        </div>
+      <?php endforeach; ?>
+    </details>
+  <?php else: ?>
+    <!-- Said rather than drawn as an empty box: a missing source must never
+         render as a comforting zero. -->
+    <div class="hist hist--none">No shipped archive found in docs/BACKLOG.md.</div>
+  <?php endif; ?>
+
   <div class="foot">
-    <b>Phase 1 — read-only.</b> Everything here is read from
+    <b>Reading is derived; writing is fenced.</b> Everything here is read from
     <code>docs/BACKLOG.md</code> and the sentinel stamp at render time. Nothing on
     this page is typed or kept in sync by hand: the order is the file's own
     PRIORITY INDEX, and the badges are derived from each item's text
     (<b>needs you</b> = the entry says it is awaiting you; <b>look</b> = a mock
     exists; <b>blocking</b>, <b>unowned</b>, <b>done</b> = the file's own markers).
     Deliberately no invented counts — the index does not enumerate questions, so
-    a number here would be typing dressed as deriving. Phase 2 adds the drag-to-rank,
-    the per-item work modal with its thread, and the keeper chat; all of those
-    write, and get fenced as writes.
+    a number here would be typing dressed as deriving.
+    <b>Drag a row</b> to rank it inside its project, and open an item to add a
+    note or record a decision. This page cannot write to the site it is served
+    from — every change is handed to the committer service, which alone holds
+    the keys, and it will only ever touch the priority order, an item's notes,
+    and an item's media list. If it refuses, the row snaps back and this page
+    says so; nothing here reports a save the file did not take. Still to come:
+    the keeper chat and images in the thread.
   </div>
 
   <!-- The work modal. READ-ONLY in phase 1: it shows what an item IS. The
@@ -786,8 +1318,30 @@ header('X-Robots-Tag: noindex, nofollow');
           </div>
           <pre id="lgb-copytext"></pre>
         </div>
-        <div class="phase2">Read-only for now. Answering decisions, the per-item
-          thread, images and drag-to-rank all write, so they come with phase 2.</div>
+        <!-- PHASE 2 — the write surfaces. Every one of these ends at the
+             committer service; none of them touches git from this page. -->
+        <div class="w2" id="lgb-decbox" hidden>
+          <div class="w2__h">Your decision</div>
+          <div class="w2__opts" id="lgb-decopts"></div>
+          <!-- "Something else…" is a FIRST-CLASS ANSWER, not an escape hatch:
+               Ian caught its absence on round 4, and what he types is recorded
+               as his ruling in his own words rather than as a note on whichever
+               button was nearest. -->
+          <textarea id="lgb-decother" rows="2" placeholder="Something else… (your own words)"></textarea>
+          <button class="w2__go" id="lgb-decsend">Record my decision</button>
+        </div>
+
+        <div class="w2">
+          <div class="w2__h">Thread <span class="w2__c" id="lgb-threadc"></span></div>
+          <pre class="w2__thread" id="lgb-thread"></pre>
+          <textarea id="lgb-note" rows="2" placeholder="Add a note to this item…"></textarea>
+          <button class="w2__go" id="lgb-notesend">Add note</button>
+        </div>
+
+        <!-- The write layer's only voice. It says what the STORE did, never
+             what the page hoped: a commit sha on success, the committer's own
+             refusal text on failure. -->
+        <div class="w2__say" id="lgb-say" hidden></div>
       </div>
     </div>
   </div>
@@ -795,6 +1349,60 @@ header('X-Robots-Tag: noindex, nofollow');
   <!-- Detail bodies, embedded rather than fetched: it keeps the page free of
        query input (which the gate asserts, and which is a real property for a
        surface with no auth of its own beyond the dev gate). -->
+  <style>
+    .grip{cursor:grab;opacity:.35;font-size:13px;letter-spacing:-2px;padding-right:2px}
+    .row[draggable="true"]:hover .grip{opacity:.8}
+    .row.drag{opacity:.4}
+    .row.over{box-shadow:inset 0 2px 0 var(--acc,#4a9eff)}
+    .row.pending{opacity:.6}
+    .w2{margin-top:14px;padding-top:12px;border-top:1px solid rgba(128,128,128,.25)}
+    .w2__h{font-weight:600;font-size:13px;margin-bottom:6px}
+    .w2__c{font-weight:400;opacity:.6}
+    .w2__thread{white-space:pre-wrap;max-height:210px;overflow:auto;font-size:12px;
+                background:rgba(128,128,128,.08);padding:8px;border-radius:6px;margin:0 0 8px}
+    .w2 textarea{width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:6px;
+                 border-radius:6px;border:1px solid rgba(128,128,128,.35);background:transparent;color:inherit}
+    .w2__opts{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+    .w2__opt{font:inherit;font-size:12px;padding:5px 10px;border-radius:999px;cursor:pointer;
+             border:1px solid rgba(128,128,128,.45);background:transparent;color:inherit}
+    .w2__opt[aria-pressed="true"]{background:rgba(74,158,255,.18);border-color:#4a9eff}
+    .w2__go{margin-top:8px;font:inherit;font-size:12px;padding:6px 12px;border-radius:6px;cursor:pointer;
+            border:1px solid rgba(128,128,128,.45);background:transparent;color:inherit}
+    .w2__go[disabled]{opacity:.5;cursor:default}
+    .w2__say{margin-top:10px;font-size:12px;padding:8px;border-radius:6px}
+    .w2__say--ok{background:rgba(60,160,90,.15)}
+    .w2__say--no{background:rgba(200,70,70,.16)}
+    .ahead{font-size:12px;padding:6px 10px;border-radius:6px;margin:8px 0;
+           background:rgba(74,158,255,.14)}
+    .hist{margin:18px 0 0;border-top:1px solid rgba(128,128,128,.25);padding-top:10px}
+    .hist__h{cursor:pointer;display:flex;gap:10px;align-items:baseline;font-weight:600;font-size:13px}
+    .hist__c{font-weight:400;opacity:.6;font-size:12px}
+    .hist__d{margin:10px 0 0 4px}
+    .hist__dh{font-size:12px;font-weight:600;opacity:.75;display:flex;gap:8px;align-items:baseline}
+    .hist__dc{font-weight:400;opacity:.6}
+    .hist__i{margin:3px 0 3px 10px;font-size:13px}
+    .hist__i summary{cursor:pointer;padding:2px 0}
+    .hist__b{white-space:pre-wrap;font-size:12px;margin:4px 0 8px;padding:8px;border-radius:6px;
+             background:rgba(128,128,128,.08);max-height:340px;overflow:auto}
+    .hist--none{font-size:12px;opacity:.7}
+    .lane--thr>summary{list-style:none;cursor:pointer}
+    .lane--thr>summary::-webkit-details-marker{display:none}
+    .lane__s2{display:flex;gap:8px;align-items:center}
+    .lane__b{margin-left:auto;font-size:11px;padding:1px 6px;border-radius:999px;background:rgba(74,158,255,.22)}
+    .thrbox{margin:6px 0 10px 16px;font-size:12px}
+    .thrbox__log{max-height:200px;overflow:auto;margin-bottom:6px}
+    .msg{padding:4px 6px;border-radius:6px;margin:3px 0;white-space:pre-wrap}
+    .msg--out{background:rgba(74,158,255,.16)}
+    .msg--in{background:rgba(128,128,128,.12)}
+    .msg__w{display:block;font-size:10px;opacity:.55}
+    .thrbox__in{width:100%;box-sizing:border-box;font:inherit;font-size:12px;padding:5px;border-radius:6px;
+                border:1px solid rgba(128,128,128,.35);background:transparent;color:inherit}
+    .thrbox__go{margin-top:5px;font:inherit;font-size:11px;padding:4px 10px;border-radius:6px;cursor:pointer;
+                border:1px solid rgba(128,128,128,.45);background:transparent;color:inherit}
+    .thrbox__no{opacity:.6}
+    .thrbox__bad{background:rgba(200,70,70,.18);padding:5px 7px;border-radius:6px;margin-bottom:5px}
+    .thrbox__say{margin-top:5px;padding:5px 7px;border-radius:6px}
+  </style>
   <script type="application/json" id="lgb-details"><?php
     // ONE ENTRY PER ITEM, always. Only 7 of the file's 39 detail sections are
     // id-headed — the other 30 are the date-headed shipped archive — so keying
@@ -813,6 +1421,7 @@ header('X-Robots-Tag: noindex, nofollow');
         foreach ([ $g['open'], $g['done'] ] as $bucket) {
             foreach ($bucket as $it) {
                 $d = $details[$it['id']] ?? null;
+                $extras = lgb_item_extras($BACKLOG, (string) $it['id']);
                 $payload[(string) $it['_key']] = [
                     'heading' => $it['id'] . ' · ' . $it['title'],
                     'line'    => $it['raw'],
@@ -820,6 +1429,13 @@ header('X-Robots-Tag: noindex, nofollow');
                     'owner'   => $it['owner'],
                     'detail'  => $d['body']    ?? '',
                     'dhead'   => $d['heading'] ?? '',
+                    // Phase 2: what a write needs. The id is carried explicitly
+                    // rather than parsed back out of the heading.
+                    'id'      => (string) $it['id'],
+                    'proj'    => (string) ($it['_proj'] ?? ''),
+                    'needs'   => (bool) (!$it['done'] && $it['needsIan']),
+                    'thread'  => $extras['thread'],
+                    'options' => $extras['options'],
                 ];
             }
         }
@@ -849,6 +1465,7 @@ header('X-Robots-Tag: noindex, nofollow');
       document.getElementById('lgb-copytext').textContent = blockFor(id);
       meta.innerHTML = '';
       row.querySelectorAll('.bdg').forEach(function (b) { meta.appendChild(b.cloneNode(true)); });
+      fillWrite(d);
       scrim.classList.add('on');
       document.getElementById('lgb-close').focus();
     }
@@ -910,6 +1527,220 @@ header('X-Robots-Tag: noindex, nofollow');
     document.getElementById('lgb-copy').addEventListener('click', function () {
       copy(document.getElementById('lgb-copytext').textContent, this);
     });
+    /* ------------------------------------------------------------------ *
+     * PHASE 2 — the write layer, page side.
+     *
+     * ONE RULE RUNS THROUGH ALL OF IT: nothing here reports success on its own
+     * authority. Every message the user sees comes from what the committer
+     * ANSWERED — a commit sha, or its own refusal text. The screen is not
+     * allowed to agree with the gesture; it may only agree with the store.
+     * ------------------------------------------------------------------ */
+    var cur = null;                 // the item the modal is showing
+    var say = document.getElementById('lgb-say');
+
+    function tell(ok, text) {
+      say.hidden = false;
+      say.className = 'w2__say ' + (ok ? 'w2__say--ok' : 'w2__say--no');
+      say.textContent = text;
+    }
+
+    function post(payload) {
+      return fetch(location.pathname, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-LGB-Write': '1' },
+        body: JSON.stringify(payload)
+      }).then(function (r) { return r.json().catch(function () { return { ok: false, error: 'the board could not read the reply' }; }); })
+        .catch(function () { return { ok: false, error: 'the board could not reach the write service' }; });
+    }
+
+    /** The committer's answer, in Ian's language, success or refusal alike. */
+    function landed(res) {
+      if (res && res.ok && res.commit) { return 'Saved — commit ' + res.commit + '.'; }
+      if (res && res.ok)               { return 'Saved.'; }
+      var why = (res && (res.why || res.error)) || 'it did not say why';
+      return 'NOT saved — ' + why;
+    }
+
+    function fillWrite(d) {
+      cur = d;
+      say.hidden = true;
+      var thread = document.getElementById('lgb-thread'),
+          cnt    = document.getElementById('lgb-threadc');
+      thread.textContent = d.thread || '';
+      thread.style.display = d.thread ? '' : 'none';
+      cnt.textContent = d.thread ? '' : '— nothing yet';
+      document.getElementById('lgb-note').value = '';
+
+      // Decisions appear ONLY where a question was actually asked. No file, no
+      // buttons — the board never invents an option for him to press.
+      var box = document.getElementById('lgb-decbox'),
+          opts = document.getElementById('lgb-decopts');
+      opts.innerHTML = '';
+      document.getElementById('lgb-decother').value = '';
+      if (d.options && d.options.length) {
+        box.hidden = false;
+        d.options.forEach(function (o) {
+          var b = document.createElement('button');
+          b.className = 'w2__opt'; b.type = 'button';
+          b.textContent = o; b.setAttribute('aria-pressed', 'false');
+          b.addEventListener('click', function () {
+            opts.querySelectorAll('.w2__opt').forEach(function (x) { x.setAttribute('aria-pressed', 'false'); });
+            b.setAttribute('aria-pressed', 'true');
+          });
+          opts.appendChild(b);
+        });
+      } else { box.hidden = true; }
+    }
+
+    function busy(btn, on) { btn.disabled = on; btn.textContent = on ? 'Saving…' : btn.dataset.was; }
+
+    document.getElementById('lgb-notesend').dataset.was = 'Add note';
+    document.getElementById('lgb-notesend').addEventListener('click', function () {
+      var t = document.getElementById('lgb-note').value.trim();
+      if (!cur || !t) { return; }
+      var btn = this; busy(btn, true);
+      post({ action: 'note', id: cur.id, text: t }).then(function (res) {
+        busy(btn, false);
+        tell(!!(res && res.ok), landed(res));
+        if (res && res.ok) {
+          // Show it in the thread immediately — but only AFTER the store said
+          // yes, which is the whole difference between this and an optimistic
+          // update that survives a refusal.
+          var th = document.getElementById('lgb-thread');
+          th.style.display = '';
+          th.textContent = (th.textContent || '') + '\n### just now — you\n\n> ' + t + '\n';
+          document.getElementById('lgb-note').value = '';
+        }
+      });
+    });
+
+    document.getElementById('lgb-decsend').dataset.was = 'Record my decision';
+    document.getElementById('lgb-decsend').addEventListener('click', function () {
+      if (!cur) { return; }
+      var picked = document.querySelector('#lgb-decopts .w2__opt[aria-pressed="true"]'),
+          words  = document.getElementById('lgb-decother').value.trim();
+      if (!picked && !words) { tell(false, 'Pick an option, or write what you want instead.'); return; }
+      var btn = this; busy(btn, true);
+      post({ action: 'decision', id: cur.id,
+             option: picked ? picked.textContent : 'Other', text: words }).then(function (res) {
+        busy(btn, false);
+        tell(!!(res && res.ok), landed(res));
+      });
+    });
+
+    /* ---- DRAG TO RANK, within one project ---------------------------------
+     *
+     * The snap-back is the point. The card moves under his finger before the
+     * commit lands, so if the commit is refused and the card SITS there looking
+     * applied, the page has told him something the file does not say. So the
+     * order is photographed before the drag, and a refusal puts it back exactly
+     * — and says so.
+     */
+    var dragging = null, before = null;
+
+    function rowsIn(box) { return Array.prototype.filter.call(box.children, function (n) {
+      return n.classList && n.classList.contains('row'); }); }
+
+    document.querySelectorAll('.proj__b').forEach(function (box) {
+      box.addEventListener('dragstart', function (e) {
+        var row = e.target.closest ? e.target.closest('.row[draggable="true"]') : null;
+        if (!row || !box.contains(row)) { return; }
+        dragging = row;
+        before = rowsIn(box).slice();          // the photograph
+        row.classList.add('drag');
+        try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', row.dataset.id); } catch (x) {}
+      });
+
+      box.addEventListener('dragover', function (e) {
+        if (!dragging || !box.contains(dragging)) { return; }
+        var over = e.target.closest ? e.target.closest('.row') : null;
+        if (!over || over === dragging || !box.contains(over)) { return; }
+        // Same project only — a drag must never silently re-file an item.
+        if (over.dataset.project !== dragging.dataset.project) { return; }
+        e.preventDefault();
+        var rs = rowsIn(box);
+        box.insertBefore(dragging, rs.indexOf(over) > rs.indexOf(dragging) ? over.nextSibling : over);
+      });
+
+      box.addEventListener('drop', function (e) { e.preventDefault(); });
+
+      box.addEventListener('dragend', function () {
+        if (!dragging || !box.contains(dragging)) { dragging = null; return; }
+        var row = dragging, snapshot = before;
+        dragging = null; before = null;
+        row.classList.remove('drag');
+
+        var now = rowsIn(box);
+        if (snapshot && now.length === snapshot.length && now.every(function (n, i) { return n === snapshot[i]; })) {
+          return;                              // put back where it started
+        }
+        var order = now.map(function (n) { return n.dataset.id; });
+        row.classList.add('pending');
+        post({ action: 'reorder', project: row.dataset.project || '', order: order }).then(function (res) {
+          row.classList.remove('pending');
+          if (res && res.ok) {
+            flash(box, true, landed(res));
+          } else {
+            snapshot.forEach(function (n) { box.appendChild(n); });   // SNAP BACK
+            flash(box, false, landed(res));
+          }
+        });
+      });
+    });
+
+    /** The board's own voice for a drag — the modal is not open during one. */
+    function flash(box, ok, text) {
+      var n = box.querySelector('.w2__say--drag');
+      if (!n) {
+        n = document.createElement('div');
+        n.className = 'w2__say w2__say--drag';
+        box.insertBefore(n, box.firstChild);
+      }
+      n.className = 'w2__say w2__say--drag ' + (ok ? 'w2__say--ok' : 'w2__say--no');
+      n.textContent = text;
+      if (ok) { setTimeout(function () { if (n.parentNode) { n.parentNode.removeChild(n); } }, 4000); }
+    }
+
+    /* ---- MESSAGE A LANE ---------------------------------------------------
+     *
+     * Same rule as every other write on this page: the message is reported as
+     * sent only when the STORE says so. And "committed" is not "delivered" —
+     * the commit is the relay's inbox, not the lane's ear — so the wording says
+     * queued, and the thread shows NOT DELIVERED if the relay comes back unable
+     * to reach the seat. A board that said "sent" when a lane was down would be
+     * the same lie as a refused save reading as preserved.
+     */
+    document.querySelectorAll('.thrbox').forEach(function (box) {
+      var btn = box.querySelector('.thrbox__go'),
+          ta  = box.querySelector('.thrbox__in'),
+          out = box.querySelector('.thrbox__say');
+      if (!btn || !ta) { return; }
+      btn.addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation();     // must not toggle the row
+        var text = ta.value.trim();
+        if (!text) { return; }
+        btn.disabled = true; btn.textContent = 'Sending…';
+        post({ action: 'lane_message', lane: box.dataset.lane, text: text }).then(function (res) {
+          btn.disabled = false; btn.textContent = 'Send';
+          out.hidden = false;
+          if (res && res.ok) {
+            out.className = 'thrbox__say w2__say--ok';
+            out.textContent = 'Queued for ' + box.dataset.lane + ' — commit ' + (res.commit || '?')
+                            + '. It reaches the seat on the relay\'s next pass.';
+            var log = box.querySelector('.thrbox__log'), d = document.createElement('div');
+            d.className = 'msg msg--out'; d.textContent = text;
+            log.appendChild(d); log.scrollTop = log.scrollHeight;
+            ta.value = '';
+          } else {
+            out.className = 'thrbox__say w2__say--no';
+            out.textContent = 'NOT queued — ' + ((res && (res.why || res.error)) || 'it did not say why');
+          }
+        });
+      });
+      // Typing in the box must not collapse the row.
+      ta.addEventListener('click', function (e) { e.stopPropagation(); });
+    });
+
     document.getElementById('lgb-close').addEventListener('click', close);
     scrim.addEventListener('click', function (e) { if (e.target === scrim) close(); });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });

@@ -1027,6 +1027,10 @@ if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push #########
 
 echo "=== GATE 50: the work board renders EVERY item, and phase 1 cannot write ==="
 run "work-board" php "$(dirname "$0")/work-board-gate.php"
+# GATE 56 — the board committer's four fences (minted by keeper at the seat-2
+# merge; the seat named the gap itself: unnumbered, the gate protected nothing
+# on anyone else's branch). 48 assertions against a throwaway clone.
+run "board-committer" php "$(dirname "$0")/board-committer-gate.php"
 
 echo "=== GATE 51: new members arrive alive — the profile-setup step, flag OFF, and NO nudge ==="
 # Backlog 19 (Ian 8/12 from the empty-directory screenshot; ruled 8/15, Option A
