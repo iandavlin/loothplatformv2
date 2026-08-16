@@ -637,6 +637,23 @@ is_(substr_count($openBox, '<button class="w2__opt"') === 2,
 $pageSrc = (string) file_get_contents($PAGE);
 is_(str_contains($pageSrc, "action: 'chat_read'"),
     'after a send the chat REFETCHES the committed store');
+
+/**
+ * NEAR-LIVE (parity phase 4). Ian used this chat for the first time on
+ * 2026-08-16 and keeper answered in place; without polling he would have to
+ * guess when to refresh, which is the difference between a chat and a form.
+ *
+ * The two properties that keep it honest and cheap: it polls the SAME committed
+ * read (so polling cannot introduce a message the store does not hold), and it
+ * PAUSES WHEN THE TAB IS HIDDEN — two cores and a fleet on this box, and a
+ * background tab polling forever shows up later as unexplained load.
+ */
+is_((bool) preg_match('/setInterval\(\s*poll/', $pageSrc),
+    'the chat polls for keeper\'s replies rather than waiting for a refresh');
+is_((bool) preg_match('/if \(polling \|\| document\.hidden\)/', $pageSrc),
+    '...and stops while the tab is hidden, so it cannot become background load');
+is_((bool) preg_match('/messages\.length !== lastSeen/', $pageSrc),
+    '...repainting only on CHANGE, so it cannot fight his cursor mid-sentence');
 is_(!preg_match('/chat_send[\s\S]{0,900}?innerHTML\s*\+=/', $pageSrc),
     '...and never appends a message it made up from the typed text');
 is_(str_contains($openBox, 'Something else'),

@@ -2344,6 +2344,33 @@ header('X-Robots-Tag: noindex, nofollow');
         log.scrollTop = log.scrollHeight;
       }
 
+      /**
+       * NEAR-LIVE: poll for keeper's replies. Ian used this chat for the first
+       * time on 2026-08-16 and keeper answered in place — without polling he
+       * would have had to guess when to refresh, which is the difference
+       * between a chat and a form.
+       *
+       * ONLY COMMITTED MESSAGES, still: this calls the same read the panel is
+       * built from, so polling cannot introduce a message the store does not
+       * hold. And it PAUSES WHEN THE TAB IS HIDDEN — this box has two cores and
+       * a fleet on it, and a background tab quietly polling forever is exactly
+       * the kind of thing that shows up later as unexplained load.
+       */
+      var lastSeen = log ? log.children.length : 0, polling = false;
+      function poll() {
+        if (polling || document.hidden) { return; }
+        polling = true;
+        post({ action: 'chat_read' }).then(function (r) {
+          polling = false;
+          if (!r || !r.ok || !r.messages) { return; }
+          // Repaint only on CHANGE — repainting every few seconds would fight
+          // his cursor if he were mid-sentence in the box below.
+          if (r.messages.length !== lastSeen) { lastSeen = r.messages.length; paint(r.messages); }
+        });
+      }
+      setInterval(poll, 8000);
+      document.addEventListener('visibilitychange', function () { if (!document.hidden) { poll(); } });
+
       btn.addEventListener('click', function () {
         var t = ta.value.replace(/\s+$/, '');
         if (!t.trim()) { return; }
@@ -2357,7 +2384,9 @@ header('X-Robots-Tag: noindex, nofollow');
             ta.value = '';
             // REFETCH, never fabricate: the panel may only show what the store
             // holds, and this is what makes that rule survivable as a chat.
-            post({ action: 'chat_read' }).then(function (r) { if (r && r.ok) { paint(r.messages); } });
+            post({ action: 'chat_read' }).then(function (r) {
+              if (r && r.ok) { lastSeen = r.messages.length; paint(r.messages); }
+            });
           }
         });
       });
