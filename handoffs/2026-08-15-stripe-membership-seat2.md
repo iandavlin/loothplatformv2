@@ -145,8 +145,18 @@ forged name into the commit and believe it.
 
 | Gate | Was | Now | |
 |---|---|---|---|
-| committer (**number still owed**) | 33 | **37** | + the ambiguous index |
-| 50 — work board | 59 | **80** | + the endpoint driven over real HTTP, + the source-of-truth preference in three states |
+| committer (**number still owed**) | 33 | **48** | + the ambiguous index, + the `lane_message` shape and its name fence |
+| 50 — work board | 59 | **95** | + the endpoint driven over real HTTP, + the source-of-truth preference in three states, + the shipped archive, + the lane threads |
+
+**FULL SUITE: ALL GATES GREEN, exit 0, 51 gates**, run on the rebased branch
+(`fd70b5d`) *after* the reboot — the pre-reboot run was killed mid-flight and is
+not quoted as a result.
+
+> ⚠️ **One honest gap behind that "all green".** The **committer gate is not in
+> `run-all.sh`**, because it has no number yet. The suite did not run it; I ran it
+> standalone (48/48). Until keeper mints a number it protects nothing on anybody
+> else's branch, and a future edit to the committer would sail past the merge
+> train. That is the concrete cost of the missing number.
 
 Gate 50's *"phase 1 cannot write"* section is now *"the page writes only through
 the committer"* — an assertion kept past the point where it was true is how a
