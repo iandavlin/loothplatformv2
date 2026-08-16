@@ -652,8 +652,30 @@ is_((bool) preg_match('/setInterval\(\s*poll/', $pageSrc),
     'the chat polls for keeper\'s replies rather than waiting for a refresh');
 is_((bool) preg_match('/if \(polling \|\| document\.hidden\)/', $pageSrc),
     '...and stops while the tab is hidden, so it cannot become background load');
-is_((bool) preg_match('/messages\.length !== lastSeen/', $pageSrc),
+is_((bool) preg_match('/chat\.length !== lastSeen/', $pageSrc),
     '...repainting only on CHANGE, so it cannot fight his cursor mid-sentence');
+
+/**
+ * THE WHOLE BOARD REFRESHES ON THE SAME TICK — Ian's ruling, 2026-08-16:
+ * "It doesn't seem like that keeper chat on there is live."
+ *
+ * ONE request per tick, not four: on a two-core box four polls every eight
+ * seconds is four times the work for the same answer. And the live update must
+ * be the SAME HTML as the first paint, or the empty and absent states — the ones
+ * carrying the honesty — are the first thing to drift.
+ */
+is_(str_contains($pageSrc, "action: 'board_state'"),
+    'the tick refreshes the whole board, not only the chat');
+is_(substr_count($pageSrc, 'setInterval(poll') === 1,
+    '...on ONE timer, so the regions cannot drift out of step with each other');
+is_(str_contains($pageSrc, 'lgb_render_desk_items') && str_contains($pageSrc, 'lgb_render_questions'),
+    '...serving the SAME renderers the first paint uses, so live and initial cannot drift');
+is_(str_contains($pageSrc, 'el.contains(document.activeElement)'),
+    '...and never repainting a region he is typing in');
+
+// The ranked accordions must NOT be in the refresh: they are what he DRAGS.
+is_(!preg_match("/swapIfChanged\('lgb-(proj|rank)/", $pageSrc),
+    'the ranked list is deliberately NOT live-repainted — it would fight the drag');
 is_(!preg_match('/chat_send[\s\S]{0,900}?innerHTML\s*\+=/', $pageSrc),
     '...and never appends a message it made up from the typed text');
 is_(str_contains($openBox, 'Something else'),

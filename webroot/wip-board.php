@@ -433,6 +433,15 @@ function lgb_h(string $s): string { return htmlspecialchars($s, ENT_QUOTES | ENT
 $LGB_SOCKET = getenv('LGB_SOCKET') ?: '/run/board-committer.sock';
 
 /**
+ * Defined HERE, above the write layer, because the live-state action reads it.
+ * It used to sit with the thread readers further down — after the POST branch
+ * that needs it — so board_state fataled on an undefined variable. Third time
+ * this session a thing has been used above where it was defined; PHP hoists
+ * FUNCTIONS, not variables, and a POST branch runs before most of the file.
+ */
+$LGB_THREADS = getenv('LGB_THREADS') ?: '/home/ubuntu/.board-threads.json';
+
+/**
  * THE ACTOR IS DERIVED HERE, NEVER SENT BY THE CLIENT.
  *
  * Fence 2 refuses a write that does not name its actor, and an actor the page
@@ -640,6 +649,30 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
          * keeper's rule, satisfied without making a chat that swallows what he
          * just typed until a reload.
          */
+        /**
+         * THE BOARD'S LIVE DATA, one call per tick.
+         *
+         * Ian's ruling: the whole board refreshes on the same tick, not just the
+         * chat. It returns the SAME HTML the page paints — see the region
+         * renderers — so a live update cannot drift from a first paint. The
+         * regions it does NOT return are deliberate: the ranked project
+         * accordions are what he DRAGS, and repainting those under his hand
+         * would fight the one interaction the board exists for.
+         */
+        case 'board_state':
+            $reply([
+                'ok'        => true,
+                'chat'      => lgb_chat($BACKLOG),
+                'deskHtml'  => lgb_render_desk_items((function () use ($LGB_THREADS) {
+                    if (!is_readable($LGB_THREADS)) { return []; }
+                    $r = json_decode((string) file_get_contents($LGB_THREADS), true);
+                    return is_array($r) && is_array($r['desk'] ?? null) ? $r['desk'] : [];
+                })()),
+                'questionsHtml' => lgb_render_questions(lgb_questions($BACKLOG)),
+                'branches'  => lgb_branch_states($LGB_THREADS),
+            ]);
+            break;
+
         case 'chat_read':
             $reply(['ok' => true, 'messages' => lgb_chat($BACKLOG)]);
             break;
@@ -779,7 +812,6 @@ function lgb_item_extras(string $backlogPath, string $id): array
  * snapshot, and where there is no snapshot it says so rather than implying a
  * quiet lane.
  */
-$LGB_THREADS = getenv('LGB_THREADS') ?: '/home/ubuntu/.board-threads.json';
 
 /** @return array{sent:array<int,array{when:string,who:string,text:string}>} */
 function lgb_lane_sent(string $backlogPath, string $lane): array
@@ -1028,6 +1060,50 @@ function lgb_branch_states(string $path): array
     if (!is_readable($path)) { return []; }
     $raw = json_decode((string) file_get_contents($path), true);
     return is_array($raw) && is_array($raw['branches'] ?? null) ? $raw['branches'] : [];
+}
+
+/**
+ * REGION RENDERERS — used by the first paint AND by the live tick.
+ *
+ * The board refreshes its data every few seconds now (Ian: "It doesn't seem like
+ * that keeper chat on there is live"). The tempting shape is a JSON endpoint plus
+ * a JavaScript rebuild — which is TWO renderers for one region, and the first
+ * thing to drift would be the empty and absent states, which are the ones that
+ * carry the honesty. So the live tick asks the server for the SAME HTML this
+ * page paints, produced by these functions.
+ */
+function lgb_render_desk_items(array $items): string
+{
+    $out = '';
+    foreach (array_reverse($items) as $d) {
+        $out .= '<div class="desk__i"><span class="desk__b"></span><span class="desk__x">'
+              . '<b>' . lgb_h((string) ($d['who'] ?? '?')) . '</b> '
+              . '<span>' . lgb_linkify((string) ($d['text'] ?? '')) . '</span> '
+              . '<span class="q__w">' . lgb_h((string) ($d['when'] ?? '')) . '</span>'
+              . '</span></div>';
+    }
+    return $out;
+}
+
+function lgb_render_questions(array $qq): string
+{
+    $out = '';
+    foreach ($qq['open'] as $q) {
+        $out .= '<div class="q q--open"><span class="q__tag">open</span>'
+              . '<div class="q__t">' . lgb_h($q['text']) . '</div>'
+              . '<div class="q__w">' . lgb_h($q['when'] . ' · ' . $q['who']) . '</div></div>';
+    }
+    if ($qq['open'] === []) { $out .= '<div class="thrbox__no">Nothing open.</div>'; }
+    if ($qq['answered'] !== []) {
+        $out .= '<details class="qdrawer"><summary>answered (' . count($qq['answered']) . ')</summary>';
+        foreach ($qq['answered'] as $q) {
+            $out .= '<div class="q"><div class="q__t">' . lgb_h($q['text']) . '</div>'
+                  . '<div class="q__a">' . lgb_h($q['answer']['text']) . '</div>'
+                  . '<div class="q__w">' . lgb_h($q['answer']['when'] . ' · ' . $q['answer']['who']) . '</div></div>';
+        }
+        $out .= '</details>';
+    }
+    return $out;
 }
 
 $backlog  = lgb_parse_backlog($BACKLOG);
@@ -1342,26 +1418,7 @@ header('X-Robots-Tag: noindex, nofollow');
         <textarea class="thrbox__in" id="lgb-qin" rows="2" placeholder="Ask something before it slips…"></textarea>
         <button class="thrbox__go" id="lgb-qgo">Ask</button>
         <div class="thrbox__say" id="lgb-qsay" hidden></div>
-        <?php foreach ($qq['open'] as $q): ?>
-          <div class="q q--open">
-            <span class="q__tag">open</span>
-            <div class="q__t"><?= lgb_h($q['text']) ?></div>
-            <div class="q__w"><?= lgb_h($q['when'] . ' · ' . $q['who']) ?></div>
-          </div>
-        <?php endforeach; ?>
-        <?php if ($qq['open'] === []): ?><div class="thrbox__no">Nothing open.</div><?php endif; ?>
-        <?php if ($qq['answered'] !== []): ?>
-          <details class="qdrawer">
-            <summary>answered (<?= count($qq['answered']) ?>)</summary>
-            <?php foreach ($qq['answered'] as $q): ?>
-              <div class="q">
-                <div class="q__t"><?= lgb_h($q['text']) ?></div>
-                <div class="q__a"><?= lgb_h($q['answer']['text']) ?></div>
-                <div class="q__w"><?= lgb_h($q['answer']['when'] . ' · ' . $q['answer']['who']) ?></div>
-              </div>
-            <?php endforeach; ?>
-          </details>
-        <?php endif; ?>
+        <div id="lgb-qlist"><?= lgb_render_questions($qq) ?></div>
       </div>
     </div>
 
@@ -1458,16 +1515,7 @@ header('X-Robots-Tag: noindex, nofollow');
             $snapRaw = json_decode((string) file_get_contents($LGB_THREADS), true);
             if (is_array($snapRaw) && is_array($snapRaw['desk'] ?? null)) { $deskAuto = $snapRaw['desk']; }
         }
-        foreach (array_reverse($deskAuto) as $d): ?>
-          <div class="desk__i">
-            <span class="desk__b"></span>
-            <span class="desk__x">
-              <b><?= lgb_h((string) ($d['who'] ?? '?')) ?></b>
-              <span><?= lgb_linkify((string) ($d['text'] ?? '')) ?></span>
-              <span class="q__w"><?= lgb_h((string) ($d['when'] ?? '')) ?></span>
-            </span>
-          </div>
-        <?php endforeach; ?>
+        echo '<div id="lgb-desklist">' . lgb_render_desk_items($deskAuto) . '</div>'; ?>
 
         <?php
         /**
@@ -2357,15 +2405,41 @@ header('X-Robots-Tag: noindex, nofollow');
        * the kind of thing that shows up later as unexplained load.
        */
       var lastSeen = log ? log.children.length : 0, polling = false;
+
+      /**
+       * ONE TICK REFRESHES THE WHOLE BOARD'S DATA, not just the chat — Ian's
+       * ruling. One request per tick, not four: on a two-core box, four polls
+       * every eight seconds is four times the work for the same answer.
+       *
+       * WHAT IT DELIBERATELY DOES NOT TOUCH: the ranked project accordions. They
+       * are what he DRAGS, and repainting them under his hand would fight the
+       * one interaction this board exists for. A rank change still needs a
+       * reload, and that is the right trade.
+       *
+       * It also never repaints a region he is TYPING IN, and only repaints at
+       * all when the HTML actually differs — a repaint that changes nothing is
+       * still a repaint that loses a text selection.
+       */
+      function swapIfChanged(id, html) {
+        var el = document.getElementById(id);
+        if (!el || typeof html !== 'string') { return; }
+        if (el.contains(document.activeElement)) { return; }   // he is in this region
+        if (el.innerHTML === html) { return; }                 // nothing moved
+        el.innerHTML = html;
+      }
+
       function poll() {
         if (polling || document.hidden) { return; }
         polling = true;
-        post({ action: 'chat_read' }).then(function (r) {
+        post({ action: 'board_state' }).then(function (r) {
           polling = false;
-          if (!r || !r.ok || !r.messages) { return; }
-          // Repaint only on CHANGE — repainting every few seconds would fight
-          // his cursor if he were mid-sentence in the box below.
-          if (r.messages.length !== lastSeen) { lastSeen = r.messages.length; paint(r.messages); }
+          if (!r || !r.ok) { return; }
+          if (r.chat && r.chat.length !== lastSeen) { lastSeen = r.chat.length; paint(r.chat); }
+          swapIfChanged('lgb-desklist', r.deskHtml);
+          swapIfChanged('lgb-qlist',    r.questionsHtml);
+          // Branch badges are read from this object when a modal opens, so a
+          // card opened after a tick shows the fresh state without a reload.
+          if (r.branches && typeof r.branches === 'object') { BRSTATE = r.branches; }
         });
       }
       setInterval(poll, 8000);
