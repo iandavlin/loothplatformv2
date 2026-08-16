@@ -320,6 +320,43 @@ look on both themes.
 and wants its own flag + per-state proof, same discipline as
 `LG_DARK_ONBOARD_SUBTEXT_FIX`.
 
+#### Refinement (2026-08-16, from source): the global dark input rule already exists
+
+`webroot/app-settings.js:270` already ships, for every input under dark:
+
+```
+html[data-lguser-theme="dark"] input, … { background:#222629!important;
+                                          color:#e5e7e1!important; … }
+```
+
+and `:259` does the same for the `.lgdm-ubar` / `.lgev-ubar` search bars
+(`#1e2124` fill, `#e5e7e1` ink). **So the platform's dark treatment for fields is
+correct and already present.** These five sites are invisible because each one
+overrides it with a MORE SPECIFIC `!important` of its own —
+`html.lgdd .gmaps-search #dir-loc{background:transparent!important;color:#1a1d1a!important}`
+and siblings. An id-bearing selector outranks `html[data-lguser-theme="dark"] input`,
+so the site's transparent background AND its light-theme ink both win.
+
+That makes the fix smaller than the diagnosis implied: **no new mechanism, no new
+palette.** Each site needs a dark-scoped ink at specificity ≥ its own override,
+reusing the value that file (or app-settings) already uses. Pre-computed, all
+clearing AA on the measured wrappers:
+
+| site | wrapper | ink | ratio |
+|---|---|---|---|
+| hub / hub-door `.hub-tsearch__in` | `#262b30` | `#e5e7e1` (forums.css's own) | 11.46:1 |
+| events `.lgev-input` | `#1e2124` | `#e5e7e1` | 12.98:1 |
+| directory-mobile `.lgdm-loc-input` | `#1e2124` | `#cdd0ca` (that file's own) | 10.38:1 |
+| shop `input#q` | `#0b2528` | `#e5e7e1` | 12.87:1 |
+
+**`directory-desktop.js` is the odd one and is NOT yet solved.** That file contains
+**zero** `data-lguser-theme` rules — no dark handling at all — and it already sets
+`color:#1a1d1a!important`, yet the sweep measured `#ffffff` on `#ffffff`. Neither
+its own value nor app-settings' `#e5e7e1` is white, so a third rule is winning
+that I have not identified. Re-setting `#1a1d1a` would be a no-op "fix".
+**Do not patch that site until a matched-rules probe names the winning rule** —
+and note the white *wrapper* under dark may be the real bug rather than the ink.
+
 ## Next
 
 The ranked wave list (110+ remaining) is the standing charter — badness order,
