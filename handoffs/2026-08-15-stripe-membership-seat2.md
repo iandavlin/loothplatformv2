@@ -12,6 +12,7 @@ Branch `stripe-membership`, rebased on `origin/main`.
 
 | Job | Outcome |
 |---|---|
+| **Charter extension (8/16): talk to lanes from the board** | **BOARD HALF DONE**, relay half designed and posted for keeper's review, not built. |
 | **1. Wire the board's write layer** | **DONE AND DEPLOYED.** Drag-rank, notes, decisions — all three land through the committer. |
 | *(the charter's fallback)* **The board history view** | **DONE** — I was never blocked, so it became the next item rather than the substitute. |
 | **2. Rotate the leaked sandbox key** | **CANCELLED BY IAN** mid-session: *"keep sandbox keys. not worth rotating."* I touched no key. |
@@ -210,9 +211,77 @@ already, with `f--bad`.
 
 ---
 
+## CHARTER EXTENSION (Ian, 2026-08-16): talking to the lanes from the board
+
+His words: *"I would like to be able to interact with the lanes through the
+workboard."* **The board half is BUILT, gated and committed. The relay half is
+DESIGNED AND POSTED, deliberately not built** — keeper asked to review the loop
+first, and it is theirs to run.
+
+### The loop
+
+**Outbound (Ian → lane):** thread on the team row → the page's existing write
+layer → committer, new fenced shape **`lane_message`** → `docs/board-lanes/<lane>.md`
+on main → keeper's relay picks it up → delivers with **`lane-say -f`** → records
+the outcome.
+
+**Inbound (lane → board): NOT COMMITTED.** The lanes already post to the devmsg
+sqlite; the relay snapshots replies to a JSON file the board reads.
+
+### Why the asymmetry — this is the design, not a shortcut
+
+His messages are **instructions**: they belong in git, actor-stamped and
+permanent, findable from the item months later. Lane chatter is high-volume — I
+posted a dozen messages to keeper in one session — and committing it would put
+hundreds of commits a day on main and make `git log` useless for everything
+else. The snapshot is the pattern the **lane lights and capacity strip already
+use**, so it is not a new trust model. It also **kills the feedback loop for
+free**: a reply that is never committed can never trigger a delivery.
+
+The web user **cannot** read `/var/lib/devmsg/messages.db` (it is `devmsg`-group)
+and I deliberately did **not** propose adding it — that group has **write**, so
+it would let any PHP on the WordPress site send messages as `ubuntu`.
+
+### The three traps this is designed against, by name
+
+1. **Backticks get executed.** A board message through a shell is
+   command-substituted — it has bitten twice here, once eating a `redis-cli`
+   recovery command. Ian will paste commands into these threads, so it is the
+   normal case, not an edge case. `lane-say -f` takes the message **from a
+   file**, so it never becomes argv. **That is the only delivery form to build.**
+   The committer stores backticks **verbatim** and the gate asserts it.
+2. **A watermark that advances only on success wedges forever** (11 days /
+   3,084 runs on bb-mirror-reconcile). The relay's watermark must advance
+   **past** an undeliverable message with the failure recorded.
+3. **Do not arm the timer before the code exists** — the mirror outbox timer did
+   that and reddened `systemctl --failed` forever, killing the alert channel.
+   Timer goes in **last**, after the script is merged and hand-run clean once.
+
+### What is already true on the board
+
+`lane_message` writes only to `docs/board-lanes/<lane>.md`. **The lane name is
+fenced in the committer, not just the page** — it becomes a filename *and* a tmux
+session name. Traversal, shell metacharacters, spaces/capitals: all refused, and
+the gate asserts the **reason**, because with the fence removed two of those
+still refused *by accident downstream* and looked green.
+
+**A commit is the relay's inbox, not the lane's ear.** So the page says
+**queued**, never "sent"; a failed delivery renders as **NOT DELIVERED** with the
+reason; and an absent relay renders as **absent**, not as a quiet lane. All three
+gated, each broken to prove it bites.
+
+### Left for keeper
+- **Confirm the relay runs as `ubuntu`** (it must — devmsg group) and pick a
+  cadence. I suggested **30s**: person-paced for a chat, cheap.
+- Then the relay script (`tools/keeper/board-lane-relay.php` — I proposed writing
+  it into the repo so it is reviewable and gated rather than hand-authored on the
+  box), and the timer **last**.
+
+---
+
 ## The exact next action
 
-**The two phase-2 surfaces still unbuilt:** the **keeper chat** (general +
+**The relay half, once keeper answers.** Then **the two phase-2 surfaces still unbuilt:** the **keeper chat** (general +
 per-item, both bridging over `msg`) and **images in the item thread**. Both are
 specced in `docs/BACKLOG-29-BUILD-NOTES.md` §1b, both write, and the write path
 they need now exists and is fenced.
