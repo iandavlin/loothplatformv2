@@ -26,7 +26,28 @@ stripe seat owns this file's PHP for the relay work.
 | app-dark / desktop | **NO VERDICT** — theme never resolved under load |
 | light, both widths | 192 with fix, 192 without — **identical** |
 
-**OWED: a full four-state EXPANDED run on a quiet box.** Do this first. Three of
+### The owed expanded run — DONE, 3 of 4 (2026-08-16)
+
+| state | expanded | result |
+|---|---|---|
+| os-dark / desktop | 52/58 | **0** |
+| os-dark / mobile | 52/58 | **0** |
+| app-dark / mobile | 52/58 | **0** |
+| app-dark / desktop | — | **NO VERDICT**, third time running |
+| light, both widths | 52/58 | 198 with fix, 198 without — identical |
+
+(Light rises 192 → 198 with expansion for the same reason dark did: six findings
+the first-render probe never saw. Still *identical* with and without the fix, so
+light remains provably untouched.)
+
+**`app-dark/desktop` has now failed to resolve three times in a row.** That is a
+pattern, not a flake, and I could not separate "box under load" from "something
+real about app-dark on this page at desktop width" — every attempt was made at
+load 5–9. **Do not read the three zeros as covering it.** Re-run that ONE state
+on a genuinely quiet box; if it still will not resolve, it is a finding about the
+page, not the instrument.
+
+**Still owed:** Three of
 the four cells above are weaker than the headline number suggests, and rounding
 that up is exactly what produced my first (wrong) "276 → 0".
 
