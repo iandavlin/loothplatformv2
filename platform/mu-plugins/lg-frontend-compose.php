@@ -314,6 +314,10 @@ function lg_fc_types(): array
                 // name                          label                    hint                                                             (unused) acf_label
                 ['_post_title',                  "What’s it called?",     '',                                                              false, 'Title of your Loothprint'],
                 ['loothprint_more_images',       'Show it off',           'One or more photos of your print — finished, or better still in use.', false, 'Add one or more image(s) of your print in action'],
+                /* EDIT RULING (Ian, 2026-08-16 via keeper): REPLACING the ZIP is
+                   ALLOWED — an edit may swap the file, not merely add to it. Ruled
+                   after the question was raised that replacing changes what people
+                   have already downloaded; it is settled, not provisional. */
                 ['loothprint_3d_file',           'The print files',       'A ZIP with your STLs — and the editable source too, if you’re happy to share it.', false, '3D File Upload ZIP File'],
                 ['_post_content',                'Tell people about it',  'What it does, what it’s for, anything worth knowing before they print it.', false, 'Summary'],
                 ['loothprint_category',          'What kind of print is it?', '',                                                          false, 'Type of Loothprint'],
@@ -324,13 +328,16 @@ function lg_fc_types(): array
             /* REMOVED FROM THE FORM 2026-08-16, Ian testing live: "remove tip jar
                and onshape". loothprint_onshape_link and loothprint_buy_me_a_coffee
                are gone from the field list only.
-               ⚠️ THE DATA IS UNTOUCHED AND STILL RENDERS. lg-layout-v2 Plugin.php
-               (~530-564) synthesises both into page callouts, and on dev2 today 7
-               published loothprints carry an Onshape link and 14 carry a tip jar,
-               out of 168. So those keep showing on the page while no author can now
-               edit or clear them. That is a RENDER/DATA question, raised to keeper
-               rather than answered here — deleting members' links is not a
-               form-side decision. */
+               ⚠️ THE DATA IS UNTOUCHED AND STILL RENDERS, AND IAN RULED THAT IS
+               CORRECT (2026-08-16, via keeper): LEAVE AS-IS. lg-layout-v2
+               Plugin.php (~530-564) synthesises both into page callouts, and on
+               dev2 today 7 published loothprints carry an Onshape link and 14 carry
+               a tip jar, out of 168. Those keep rendering. The fields are dead FOR
+               NEW POSTS ONLY and there is NO DATA MIGRATION — nothing deletes a
+               member's link, and the ~21 posts that have one keep showing it even
+               though the author can no longer edit or clear it from this form.
+               Recorded here rather than left as an open question, because the
+               numbers are the reason the ruling went the way it did. */
             // Rendered by us, not by ACF — see lg_fc_comment_status().
             'comments' => ['label' => 'Let people comment', 'acf_label' => 'Commenting'],
             // The mock drops the featured_image control and promises the footer
@@ -1365,6 +1372,38 @@ function lg_fc_css(): string
   outline:2px solid var(--lg-sage,#87986a);outline-offset:1px;border-color:var(--lg-sage,#87986a)}
 .lgfc .acf-input input::placeholder,.lgfc .acf-input textarea::placeholder{color:var(--lg-mute,#6b6f6b);opacity:.62}
 
+/* ---- the video oEmbed ---- */
+/* ⚠️ THIS FIELD HAD NEVER BEEN STYLED HERE, and that only became visible tonight.
+   It lived inside the "Add extras" fold, so it rendered collapsed and the dark
+   sweep never reached it. Ian's ruling 1 pulled it into the main body, and gate 47
+   immediately went red on TWO BRIGHT SURFACES in dark mode — measured #ffffff at
+   716x293 (div.acf-oembed) and #f9f9f9 at 714x250 (its inner div.canvas). Zero
+   contrast failures, because neither box holds text; they are luminance slabs, and
+   only the surface half of that gate could see them.
+
+   The lesson worth keeping: MOVING A CONTROL INTO VIEW IS A THEME CHANGE. Nothing
+   about this field changed except that it is now visible, and it arrived carrying
+   ACF's admin-white defaults into a dark page.
+
+   Styled with the SAME tokens as the text inputs above rather than with hardcoded
+   dark values, so light stays coherent and dark follows automatically —
+   --lg-paper is already re-pointed to #20241f for .lgfc in dark, which is why
+   there is no separate dark rule here. Hardcoding #20241f would have fixed the
+   gate and left light mode painted with a dark-mode colour. */
+.lgfc .acf-oembed{border:1px solid var(--lg-line,#e3ddd0);border-radius:9px;
+  background:var(--lg-paper,#fdfdfa);overflow:hidden}
+.lgfc .acf-oembed .title{padding:0;border-bottom:1px solid var(--lg-line,#e3ddd0)}
+.lgfc .acf-oembed .title .input-search{border:0;border-radius:0;background:none}
+.lgfc .acf-oembed .canvas{background:var(--lg-paper,#fdfdfa);min-height:0;
+  color:var(--lg-mute,#6b6f6b)}
+/* The empty preview is a 250px void until a URL is pasted. Give it a real height
+   only once it has something to show; empty, it is a slim hint rather than a slab. */
+.lgfc .acf-oembed .canvas:not(:has(iframe)):not(:has(img)){min-height:64px;
+  display:flex;align-items:center;justify-content:center}
+.lgfc .acf-oembed .canvas-media{width:100%}
+.lgfc .acf-oembed .canvas-media iframe,.lgfc .acf-oembed .canvas-media img{
+  display:block;width:100%;border:0}
+
 /* ---- chips: taxonomy checkbox lists and the licence radio ---- */
 .lgfc .acf-checkbox-list,.lgfc .acf-radio-list{list-style:none;margin:0;padding:0;
   display:flex;gap:6px;flex-wrap:wrap}
@@ -1385,9 +1424,70 @@ function lg_fc_css(): string
    not exist in either taxonomy, so the real ones are shown and given a bounded,
    scrollable box rather than being invented to fit the drawing. */
 .lgfc .acf-field-taxonomy .acf-input>ul,
-.lgfc .acf-taxonomy-field .acf-checkbox-list{max-height:184px;overflow-y:auto;
-  border:1px solid var(--lg-line,#e3ddd0);border-radius:10px;padding:9px;
-  background:var(--lg-paper,#fdfdfa);align-content:flex-start}
+/* THE TAXONOMY PICKER (Ian: "make modal or something slick"). The old 184px
+   scrolling chip box is REPLACED, not restyled — it stays in the DOM as the
+   submitted source of truth and is hidden here. Kept visually-hidden rather than
+   display:none so a checkbox never becomes unfocusable-but-required, which is a
+   validation dead end no member could resolve.
+   ⚠️ AND IT ZEROES ITS OWN PADDING AND max-height, at taxonomy-field specificity.
+   Verified against the deployed page by injection: with only the plain
+   `.lgfc .lgfc-taxo__src` selector the box still measured 20x20 — position and
+   clip applied, but a higher-specificity rule's padding held it open, so the old
+   list was still a visible smudge under the new control. The rule this file used
+   to carry is removed here, but "hidden" must not depend on that removal having
+   happened: any leftover padding anywhere would otherwise re-open it. */
+.lgfc .acf-field-taxonomy .lgfc-taxo__src,.lgfc .lgfc-taxo__src{
+  position:absolute;width:1px;height:1px;min-height:0;max-height:none;
+  margin:-1px;padding:0;border:0;overflow:hidden;
+  clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
+/* the closed row — it STATES THE ANSWER, which is what the old box lost */
+.lgfc-taxo__trig{display:flex;align-items:center;gap:9px;width:100%;text-align:left;cursor:pointer;
+  border:1px solid var(--lg-line,#e3ddd0);border-radius:11px;background:var(--lg-paper,#fdfdfa);
+  padding:12px 13px;font:600 13.5px/1.25 var(--lg-font-sans,system-ui,sans-serif);
+  color:var(--lg-ink,#323532)}
+.lgfc-taxo__trig:hover{border-color:var(--lg-sage,#87986a)}
+.lgfc-taxo__lab{flex:0 0 auto}
+.lgfc-taxo__val{font-weight:400;color:var(--lg-ink,#323532);min-width:0;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.lgfc-taxo__val.is-empty{color:var(--lg-mute,#6b6f6b)}
+.lgfc-taxo__car{margin-left:auto;color:var(--lg-mute,#6b6f6b);font-size:17px;line-height:1}
+/* the sheet: a panel under the row on desktop, full-width on a phone */
+.lgfc-taxo__sheet{margin-top:8px;border:1px solid var(--lg-line,#e3ddd0);border-radius:13px;
+  background:var(--lg-card-bg,#fff);box-shadow:0 18px 40px -20px rgba(26,29,26,.35);
+  display:flex;flex-direction:column;max-height:340px;overflow:hidden}
+.lgfc-taxo__sheet[hidden]{display:none}
+.lgfc-taxo__h{display:flex;align-items:center;gap:9px;padding:11px 13px;
+  border-bottom:1px solid var(--lg-line,#e3ddd0)}
+.lgfc-taxo__t{margin:0;font:700 13.5px/1 var(--lg-font-sans,system-ui,sans-serif);
+  color:var(--lg-ink,#323532)}
+.lgfc-taxo__x{margin-left:auto;border:0;background:none;color:var(--lg-mute,#6b6f6b);
+  font-size:15px;line-height:1;cursor:pointer;padding:4px}
+.lgfc-taxo__search{padding:10px 13px 8px}
+.lgfc-taxo__search input{width:100%;border:1px solid var(--lg-line,#e3ddd0);border-radius:9px;
+  background:var(--lg-paper,#fdfdfa);padding:9px 11px;
+  font:400 13px/1.3 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#323532)}
+.lgfc-taxo__b{overflow-y:auto;padding:0 13px 12px;display:flex;flex-wrap:wrap;gap:6px;
+  align-content:flex-start}
+.lgfc-taxo__opt{font:600 12.3px/1 var(--lg-font-sans,system-ui,sans-serif);
+  border:1px solid var(--lg-line,#e3ddd0);border-radius:999px;padding:8px 12px;
+  color:var(--lg-mute,#6b6f6b);background:var(--lg-paper,#fdfdfa);cursor:pointer}
+.lgfc-taxo__opt:hover{border-color:var(--lg-sage,#87986a)}
+.lgfc-taxo__opt.is-on{background:var(--lg-sage-d,#6b7c52);border-color:var(--lg-sage-d,#6b7c52);color:#fff}
+.lgfc-taxo__none{margin:2px 0 0;font:400 12.5px/1.5 var(--lg-font-sans,system-ui,sans-serif);
+  color:var(--lg-mute,#6b6f6b)}
+.lgfc-taxo__f{margin-top:auto;border-top:1px solid var(--lg-line,#e3ddd0);padding:10px 13px;
+  display:flex;gap:8px}
+.lgfc-taxo__clear,.lgfc-taxo__done{font:700 12.5px/1 var(--lg-font-sans,system-ui,sans-serif);
+  border-radius:9px;padding:10px 14px;cursor:pointer;
+  border:1px solid var(--lg-line,#e3ddd0);background:var(--lg-card-bg,#fff);color:var(--lg-ink,#323532)}
+.lgfc-taxo__done{margin-left:auto;background:var(--lg-sage-d,#6b7c52);
+  border-color:var(--lg-sage-d,#6b7c52);color:#fff}
+/* DARK — the selected chip and the primary button take the SAME darkened fill as
+   the licence chips, for the reason recorded there: --lg-sage-d flips LIGHTER in
+   dark, so white ink on it measures 1.85:1. */
+html[data-lguser-theme="dark"] .lgfc-taxo__opt.is-on,
+html[data-lguser-theme="dark"] .lgfc-taxo__done{
+  background:#3d5233;border-color:#3d5233;color:#fff}
 .lgfc .acf-checkbox-list ul{display:flex;flex-wrap:wrap;gap:6px;list-style:none;
   margin:6px 0 0 12px;padding:0;flex-basis:100%}
 
@@ -1587,6 +1687,150 @@ CSS;
 function lg_fc_js(): string
 {
     return <<<'JS'
+/* THE TAXONOMY PICKER — Ian, 2026-08-16: "The taxo pickers are wierd. Make modal
+   or something slick please", and he picked the sheet-with-search shape from the
+   mock.
+
+   MEASURED FIRST: "what kind of print is it?" holds 18 terms and "area of work"
+   holds 36, both hierarchical, both poured into a 184px scrolling box. The
+   complaint has a second half he did not have to name — WHAT YOU ALREADY PICKED
+   CAN SCROLL OUT OF SIGHT, so the box showed neither the options nor your answer.
+   The closed row here always states the answer; that part is the actual defect
+   rather than a matter of taste.
+
+   ⚠️ IT DRIVES ACF'S OWN INPUTS AND NEVER REPLACES THEM. The original checkboxes
+   stay in the DOM as the single source of truth — hidden, still named, still
+   submitted — and every tap in the sheet toggles the real input and fires change.
+   So the form posts exactly what it always did, ACF's own save path is untouched,
+   and NO SERVER CHANGE IS NEEDED for any of this. Rebuilding the field would have
+   meant owning its serialisation forever.
+
+   Terms are FLATTENED deliberately: at 18 and 36 a search box finds a term faster
+   than a tree does, and the hierarchy here is one level and mostly cosmetic. If a
+   deeper taxonomy ever uses this, the nesting is still in the DOM to read. */
+(function () {
+  var fields = document.querySelectorAll('.lgfc .acf-field-taxonomy');
+  if (!fields.length) return;
+
+  fields.forEach(function (field) {
+    var list = field.querySelector('.acf-checkbox-list, .acf-radio-list');
+    if (!list) return;
+    var inputs = Array.prototype.slice.call(list.querySelectorAll('input[type=checkbox], input[type=radio]'));
+    if (inputs.length < 6) return;      /* short lists were never the problem */
+
+    var labelEl = field.querySelector('.acf-label label');
+    var title   = labelEl ? labelEl.textContent.replace(/\*/g, '').trim() : 'Choose';
+    var multi   = inputs[0].type === 'checkbox';
+
+    var terms = inputs.map(function (inp) {
+      var li = inp.closest('li');
+      var t  = li ? li.textContent.trim() : inp.value;
+      return { input: inp, text: t };
+    });
+
+    field.classList.add('lgfc-taxo');
+    list.classList.add('lgfc-taxo__src');          /* hidden, still submitted */
+
+    var trig = document.createElement('button');
+    trig.type = 'button';
+    trig.className = 'lgfc-taxo__trig';
+    trig.setAttribute('aria-haspopup', 'dialog');
+    trig.setAttribute('aria-expanded', 'false');
+
+    var sheet = document.createElement('div');
+    sheet.className = 'lgfc-taxo__sheet';
+    sheet.hidden = true;
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-label', title);
+    sheet.innerHTML =
+      '<div class="lgfc-taxo__h"><p class="lgfc-taxo__t"></p>' +
+      '<button type="button" class="lgfc-taxo__x" aria-label="Close">&#10005;</button></div>' +
+      '<div class="lgfc-taxo__search"><input type="search" autocomplete="off" ' +
+      'placeholder="Type to narrow\u2026" aria-label="Search ' + title.replace(/"/g, '') + '"></div>' +
+      '<div class="lgfc-taxo__b"></div>' +
+      '<div class="lgfc-taxo__f"><button type="button" class="lgfc-taxo__clear">Clear</button>' +
+      '<button type="button" class="lgfc-taxo__done">Done</button></div>';
+
+    sheet.querySelector('.lgfc-taxo__t').textContent = title;
+    var body   = sheet.querySelector('.lgfc-taxo__b');
+    var search = sheet.querySelector('.lgfc-taxo__search input');
+
+    field.querySelector('.acf-input').appendChild(trig);
+    field.querySelector('.acf-input').appendChild(sheet);
+
+    function chosen() {
+      return terms.filter(function (t) { return t.input.checked; });
+    }
+    function paintTrigger() {
+      var c = chosen();
+      trig.innerHTML = '';
+      var strong = document.createElement('span');
+      strong.className = 'lgfc-taxo__lab';
+      strong.textContent = title;
+      var val = document.createElement('span');
+      val.className = 'lgfc-taxo__val';
+      /* The closed row STATES THE ANSWER — the thing the old box lost. */
+      val.textContent = c.length ? c.map(function (t) { return t.text; }).join(', ')
+                                 : 'Choose\u2026';
+      if (!c.length) val.classList.add('is-empty');
+      var car = document.createElement('span');
+      car.className = 'lgfc-taxo__car'; car.textContent = '\u203A';
+      trig.appendChild(strong); trig.appendChild(val); trig.appendChild(car);
+    }
+    function paintBody() {
+      var q = (search.value || '').trim().toLowerCase();
+      body.innerHTML = '';
+      var shown = 0;
+      terms.forEach(function (t) {
+        if (q && t.text.toLowerCase().indexOf(q) === -1) return;
+        shown++;
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'lgfc-taxo__opt' + (t.input.checked ? ' is-on' : '');
+        b.setAttribute('aria-pressed', t.input.checked ? 'true' : 'false');
+        b.textContent = t.text;
+        b.addEventListener('click', function () {
+          if (!multi) { terms.forEach(function (o) { o.input.checked = false; }); }
+          t.input.checked = multi ? !t.input.checked : true;
+          t.input.dispatchEvent(new Event('change', { bubbles: true }));
+          paintBody(); paintTrigger();
+          if (!multi) close();
+        });
+        body.appendChild(b);
+      });
+      if (!shown) {
+        var none = document.createElement('p');
+        none.className = 'lgfc-taxo__none';
+        none.textContent = 'Nothing matches \u201C' + search.value + '\u201D';
+        body.appendChild(none);
+      }
+    }
+    function open()  { sheet.hidden = false; trig.setAttribute('aria-expanded', 'true');
+                       paintBody(); setTimeout(function () { search.focus(); }, 30); }
+    function close() { sheet.hidden = true;  trig.setAttribute('aria-expanded', 'false');
+                       search.value = ''; trig.focus(); }
+
+    trig.addEventListener('click', function () { sheet.hidden ? open() : close(); });
+    sheet.querySelector('.lgfc-taxo__x').addEventListener('click', close);
+    sheet.querySelector('.lgfc-taxo__done').addEventListener('click', close);
+    sheet.querySelector('.lgfc-taxo__clear').addEventListener('click', function () {
+      terms.forEach(function (t) {
+        if (t.input.checked) {
+          t.input.checked = false;
+          t.input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
+      paintBody(); paintTrigger();
+    });
+    search.addEventListener('input', paintBody);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !sheet.hidden) close();
+    });
+
+    paintTrigger();
+  });
+})();
+
 /* THE HERO PICKER — mirrors ACF's gallery, live.
    The gallery builds and rebuilds its own DOM (add, remove, reorder), so the strip
    is rebuilt from it on every mutation rather than rendered once. It hides itself
