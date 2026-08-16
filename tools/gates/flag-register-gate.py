@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-flag-register-gate.py — a branch that ADDS a flag must register it in docs/FLAGS.md.
+flag-register-gate.py — GATE 62 — a branch that ADDS a flag must register it
+in docs/FLAGS.md.  (Number minted by keeper 2026-08-16; lanes never self-mint.)
 
 WHY THIS EXISTS. docs/FLAGS.md states the rule in its own header: "any merge that
 adds, flips, or retires a flag updates this file IN THE SAME COMMIT — keeper
@@ -32,7 +33,12 @@ import re, subprocess, sys, os
 
 BASE = os.environ.get("LG_FLAGREG_BASE", "origin/main")
 REF  = os.environ.get("LG_FLAGREG_REF", "HEAD")
-REPO = os.environ.get("LG_FLAGREG_REPO", ".")
+# Resolve the repo from THIS FILE, never from the caller's cwd: run-all.sh is
+# invoked from wherever the lane happens to be standing, and a repo root one
+# dirname short is a recorded way to turn a working gate into a no-verdict.
+# tools/gates/<this file>  ->  ../..
+REPO = os.environ.get("LG_FLAGREG_REPO") or os.path.abspath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
 def git(*a):
     r = subprocess.run(["git", "-C", REPO, *a], capture_output=True, text=True)

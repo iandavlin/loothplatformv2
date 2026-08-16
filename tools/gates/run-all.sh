@@ -802,6 +802,11 @@ run "compose" python3 "$(dirname "$0")/compose-gate.py" \
 # THE GATE-NUMBER LEDGER (single source of truth; keeper mints, lanes never):
 #   34 stripe (34a webhook + 34b pages + 34c price + 34d sweep) · 35 compose/v2 · 36 dark-anon · 37 guitardle claim · 38 insert
 #   path · 39 featured-members · 40 guitardle score-integrity — NEXT FREE: 45. (43 offline-shell, 44 directory-location; cd0a2ed stays unmerged - superseded by 88c0fac.)
+#   ⚠️ THAT 'NEXT FREE: 45' IS STALE — 45, 48, 49, 50, 51, 53 and 56 are all
+#   registered above it. Minting from it duplicates; ask keeper, who mints.
+#   62 flag-register (keeper, 2026-08-16). 46 compose-media + 47 compose-dark
+#   were self-minted by a lane and keeper BLESSED them as-is on 8/16 —
+#   they predate enforcement and renumbering working gates is churn.
 # Gate 38 runs on the real stored-layout corpus via direct mysql; needs
 # neither Redis nor a WP bootstrap.
 echo "=== GATE 38: v2 insert path — OFF is identity, an insert only SURFACES declared meta ==="
@@ -1079,6 +1084,43 @@ echo "=== GATE 52: tap a notification, get a reply modal — and OFF is UNREACHA
 #                           visibility gate being walked around)
 #   off --force-flag-on:    22 pass / 2 fail, exit 1  ← the counter-proof
 run "notif-quickreply" python3 "$(dirname "$0")/notif-quickreply-gate.py" --expect-off
+
+echo "=== GATE 62: a branch that ADDS a flag must REGISTER it in docs/FLAGS.md ==="
+# docs/FLAGS.md has stated since 2026-08-09, in its own header, that "any merge
+# that adds, flips, or retires a flag updates this file IN THE SAME COMMIT —
+# keeper refuses the merge otherwise." NOTHING ENFORCED IT, and a rule with no
+# gate decays: on 2026-08-16 a single sweep found SIX unregistered flags across
+# FIVE branches, including two of my own. When six lanes break the same rule
+# independently, the rule was unenforced rather than disobeyed.
+#
+# CRAFT-STANDARD's law is why this exists rather than a reminder: a defect class
+# discovered TWICE must be encoded as a gate. This class turned up four times in
+# one lane in one session.
+#
+# ⚠️ IT CATCHES PROSE THAT IS *MISSING*, NEVER PROSE THAT IS *WRONG*. A docblock
+# naming a mechanism that has been deleted sails straight past this — that is how
+# the compose flag came to teach the dead pool-env mechanism for a whole day.
+# Stated here so nobody reads a green as "the flag docs are correct".
+#
+# WHAT COUNTS AS A FLAG is deliberately narrow: read from getenv()/$_SERVER,
+# define()d to a BOOLEAN expression, or a brand-new tracked platform/config/*.php
+# carrying an 'enabled' key. The first draft treated any new LG_* symbol as a flag
+# and RED-ed on LG_FC_DRAFT_META (a post-meta key) and LG_FC_DRAFT_TTL_DAYS (an
+# integer) — a gate that reds on non-defects blocks every lane, which is the exact
+# harm this one exists to prevent. A missed flag is a defect this gate FAILED to
+# catch; a false RED is a defect it CAUSES.
+#
+# RED-FIRST FROM REAL HISTORY rather than a mutation, which is stronger because the
+# red is a defect that actually shipped:
+#   notif-quickreply-v2 @ 8b988b5  RED  exit 1, naming both symbols
+#   notif-quickreply-v2 @ 51cb578  GREEN exit 0, after the row was added
+# and it stays green on branches that introduce no flag (seo-canonical-hub) and on
+# branches whose new LG_* symbols are constants (compose-draft-first).
+#
+# Reads only git — no browser, no network, no DB, so it cannot flake under load.
+# Merged branches give an empty diff vs their own merge-base and pre-FLAGS.md
+# branches have no register: both exit 2, never 1, so neither can redden a train.
+run "flag-register" python3 "$(dirname "$0")/flag-register-gate.py"
 
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
