@@ -38,7 +38,15 @@ final class Flags
         if (!is_file($path)) return self::$cache[$name] = [];
 
         $cfg = require $path;
-        return self::$cache[$name] = is_array($cfg) ? $cfg : [];
+        $cfg = is_array($cfg) ? $cfg : [];
+        // Box-local override, the FLAGS.md shape — the FOURTH reader found
+        // missing it on 8/16, and this one is shared, so the fix covers every
+        // profile-app flag at once. Tracked default first; a gitignored
+        // .local.php beside it wins per-key. bool()'s strictly-true semantics
+        // still gate the result, so malformed local values read as OFF.
+        $loc = @include __DIR__ . '/../config/' . $name . '.local.php';
+        if (is_array($loc)) $cfg = array_replace($cfg, $loc);
+        return self::$cache[$name] = $cfg;
     }
 
     /** Strictly-true boolean read. Anything else — absent, null, 0, "false" — is OFF. */

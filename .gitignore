@@ -68,6 +68,7 @@ archive-poc/api/v0/_flags.local.php
 # the file just becomes committable. Verified against the REAL filenames with
 # git check-ignore rather than assumed to match.
 platform/config/*.local.php
+profile-app/config/*.local.php
 platform/config/frontend-compose.local.php
 platform/config/back-pill.local.php
 platform/config/weekly-front.local.php
