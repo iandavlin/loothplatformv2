@@ -444,6 +444,55 @@ could go out ahead of the relay.
 
 Then the **lane relay resumes**.
 
+---
+
+## NEXT CHARTER (keeper, 2026-08-16): invite links — Ian found a real hole
+
+**The whitelist takes only EXISTING wp users**, so the most important
+pre-cutover rehearsal — a fresh recruit going from nothing to a paid membership
+— is currently **untestable**: a fresh person cannot even see the join page,
+because it only reveals itself to logged-in listed members.
+
+**This reverses `STRIPE-LANE-BRIEF.md` §6 "No tokened invite links"**, and the
+reversal is recorded there rather than left as two documents disagreeing. The
+old reasoning was wrong in one place: it assumed everyone we test with already
+has an account.
+
+### The design, four fences
+1. **Scope**: a token admits the **join flow and nothing else** — an explicit
+   page allowlist (join, regional-pricing, welcome). `manage-subscription` and
+   `request-refund` stay shut: an invitee has no subscription to manage, and a
+   token opening those is a bypass in an invite costume.
+2. **Single-use means ONE ACCOUNT, not one page view.** Burning it on first open
+   dies on a refresh or a back button — a support ticket, not a fence. It is
+   consumed when the account is created on email match.
+3. **Expiry** stamped at mint, checked every hit, so an old link in an inbox is
+   dead even if nobody revoked it.
+4. **Audit**: the account is stamped `invite-created` and auto-listed on email
+   match, so *how* a member got in is answerable later rather than inferred.
+
+**Dual rail intact**: the step/welcome handoff a fresh account gets must be the
+**rail-agnostic** one — a fresh Stripe joiner must not receive Patreon-shaped
+onboarding.
+
+### ⚠️ THE THING THAT WILL BREAK IT
+**These pages are gated TWICE.** The router decides who may reach a page, then
+every page file re-checks on its own authority — that is exactly why the soft
+launch looked broken on 8/15 when only the router was changed. The invite check
+belongs in **`lg_membership_testgroup_gate_or_exit`**, the shared rule both
+doors already delegate to. Put it in the router alone and a fresh invitee
+reaches the join page and is thrown out by the page, which reads as a broken
+token when the token is fine.
+
+### Gates (keeper's list, plus one)
+- an unused invite admits exactly the join flow and nothing else;
+- a used or expired invite admits nothing;
+- a fresh account from an invite lands listed;
+- **and with the invite feature switched OFF the whole thing is byte-identical
+  to today** — the assertion that lets it merge safely before cutover.
+
+Sandbox only until Ian's cutover, as ever.
+
 ### The whitespace bug that phase 3 would have hit
 `ltrim($l, '> ')` strips a character **class** — every leading `>` *and* every
 leading space — so quoted terminal output came back with its indentation
