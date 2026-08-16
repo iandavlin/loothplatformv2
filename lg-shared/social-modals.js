@@ -369,22 +369,83 @@ function updateClearAllBtn(show) {
   var b = document.querySelector('[data-lg-notif-clearall]');
   if (b) b.hidden = !show;
 }
+/* BACKLOG 11.6 — filter by type, and clear one type.
+   Human labels for the chips: the wire types are ours, not the member's.
+   A type missing from here still gets a chip, title-cased from the wire name,
+   so a type added server-side is never invisible — an unlabelled chip is a
+   cosmetic problem, an unclearable class of rows is not. */
+var NOTIF_TYPE_LABELS = {
+  'connection_request':    'Connection requests',
+  'connection_accept':     'Accepted your request',
+  'forum.reply_to_topic':  'Replies to your posts',
+  'forum.reply_to_reply':  'Replies to you',
+  'forum.mention':         'Mentions',
+  'forum.followed_topic':  'Discussions you follow',
+  'reaction.on_post':      'Reactions'
+};
+function notifTypeLabel(t) {
+  return NOTIF_TYPE_LABELS[t] || String(t).replace(/^.*\./, '').replace(/_/g, ' ');
+}
+/* The type currently filtered to, or null for "all". Module-scoped so a reload
+   after a bulk clear keeps the member where they were. */
+var notifFilterType = null;
+
+/* Chips + the clear-this-type control. Rendered ONLY when the server sent
+   `counts`, which it does only while the flag is on — so a box with the flag
+   off renders exactly what it rendered before, with no client flag of its own.
+   Same feature-detection convention as `read_policy` above. */
+function renderNotifFilter(counts, total) {
+  if (!counts) return '';
+  var types = Object.keys(counts).filter(function (t) { return t !== 'message' && counts[t] > 0; });
+  if (!types.length) return '';
+  var chips = ['<button type="button" class="lg-notif-chip' + (notifFilterType === null ? ' is-on' : '') +
+               '" data-notif-type="">All <span class="lg-notif-chip__n">' + total + '</span></button>'];
+  types.forEach(function (t) {
+    chips.push('<button type="button" class="lg-notif-chip' + (notifFilterType === t ? ' is-on' : '') +
+      '" data-notif-type="' + esc(t) + '">' + esc(notifTypeLabel(t)) +
+      ' <span class="lg-notif-chip__n">' + counts[t] + '</span></button>');
+  });
+  var out = '<div class="lg-notif-chips">' + chips.join('') + '</div>';
+  if (notifFilterType && counts[notifFilterType]) {
+    /* The warning is not decoration. The weekly digest is built from these rows
+       and an emptied store means no digest at all, so the member is told what
+       they are about to lose BEFORE the tap, not after. */
+    out += '<div class="lg-notif-bulk">' +
+      '<p class="lg-notif-bulk__warn">This removes all ' + counts[notifFilterType] +
+      ' permanently. Anything here you have not read yet will not appear in your weekly email.</p>' +
+      '<button type="button" class="lg-notif-bulk__b" data-notif-clear-type="' + esc(notifFilterType) +
+      '">Clear all ' + counts[notifFilterType] + ' &ldquo;' + esc(notifTypeLabel(notifFilterType)) + '&rdquo;</button>' +
+      '</div>';
+  }
+  return out;
+}
+
 function loadNotifications() {
   var list = document.getElementById('lg-notif-list');
   if (!list) return;
   list.innerHTML = '<p class="lg-sm__status">Loading...</p>';
-  fetch(API + '/me/notifications/', { credentials: 'include' })
+  fetch(API + '/me/notifications/' + (notifFilterType ? '?type=' + encodeURIComponent(notifFilterType) : ''),
+        { credentials: 'include' })
     .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
     .then(function (d) {
       /* Bell shows CONNECTION events only — skip message-type defensively
          (the social lane is removing message notifications backend-side). */
       var items = ((d && d.items) || []).filter(function (n) { return n.type !== 'message'; });
+      var counts = d && d.counts;
+      var total  = 0;
+      if (counts) Object.keys(counts).forEach(function (t) { if (t !== 'message') total += counts[t]; });
+      var filterHtml = renderNotifFilter(counts, total);
       if (!items.length) {
-        list.innerHTML = '<p class="lg-sm__empty">No notifications yet.</p>';
+        /* An empty FILTERED list is not an empty bell — say which, and keep the
+           chips on screen so the member can get back out of the filter. */
+        list.innerHTML = filterHtml + '<p class="lg-sm__empty">' +
+          (notifFilterType ? 'Nothing of that kind left.' : 'No notifications yet.') + '</p>';
+        wireNotifFilter(list);
         updateClearAllBtn(false);
         return;
       }
-      list.innerHTML = items.map(renderNotifItem).join('');
+      list.innerHTML = filterHtml + items.map(renderNotifItem).join('');
+      wireNotifFilter(list);
       /* NO auto-mark-read — the user controls it (per-item × delete, or click-through
          marks the one read). Clear-all is offered whenever the list is non-empty. */
       updateClearAllBtn(items.length > 0);
@@ -408,6 +469,37 @@ function loadNotifications() {
       list.innerHTML = '<p class="lg-sm__error">Could not load notifications.</p>';
     });
 }
+/* BACKLOG 11.6 — chip + bulk wiring. Kept out of loadNotifications so both the
+   empty and non-empty branches wire the same controls the same way. */
+function wireNotifFilter(list) {
+  list.querySelectorAll('[data-notif-type]').forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      var t = chip.getAttribute('data-notif-type');
+      notifFilterType = t || null;
+      loadNotifications();
+    });
+  });
+  var clr = list.querySelector('[data-notif-clear-type]');
+  if (clr) {
+    clr.addEventListener('click', function () {
+      var t = clr.getAttribute('data-notif-clear-type');
+      if (!t) return;
+      clr.disabled = true;
+      fetch(API + '/me/notifications/?type=' + encodeURIComponent(t),
+            { method: 'DELETE', credentials: 'include' })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+        .then(function () {
+          /* Back to "All" after a clear: leaving the member inside a filter that
+             is now provably empty reads as a broken screen. */
+          notifFilterType = null;
+          loadNotifications();
+          if (typeof refreshNotifBadge === 'function') refreshNotifBadge();
+        })
+        .catch(function () { clr.disabled = false; });
+    });
+  }
+}
+
 /* Per-item × = REAL delete (v2): the row is removed here AND server-side via an
    owner-scoped DELETE, so it's gone on every device. A 404 (someone else's id /
    already gone) leaves the row untouched — never a silent success. Replaces the
