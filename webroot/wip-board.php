@@ -1024,6 +1024,13 @@ html[data-lguser-theme="dark"] .thrbox__in::placeholder{color:#9aa097}
    shape as .grip: .6 of a muted ink reads 3.4:1 on the dark panel. Raised in
    dark only; light keeps its .6 and already passes there. */
 html[data-lguser-theme="dark"] .thrbox__no{opacity:.85}
+/* Card border 2c312d on the page 15171a measures 1.35:1 — under the 3:1 non-text
+   bar (WCAG 1.4.11, "how you find the box"). Found by the paired-token swatch
+   sheet, NOT by any page sweep: the contrast probe flags borders on FORM FIELDS,
+   not on cards, so no amount of re-running gate 36 or the sweep would have
+   produced it. Repointed to the same #767c76 the search-wrapper family already
+   uses — 3.79:1 on the panel, an established value rather than a new one. */
+html[data-lguser-theme="dark"]{--line:#767c76}
 </style>
 </head>
 <body>

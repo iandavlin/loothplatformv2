@@ -596,6 +596,31 @@ def main():
                                "An absence assertion is vacuous without it.")
                 slotlist = ", ".join(f"{s['label'] or s['el']}" for s in comp["slots"])
 
+                # ---- ANON TRAY LABEL (Ian's pick, 2026-08-16) ----------------
+                # The person slot must read "Account" to a logged-out visitor,
+                # never "You" — "You" is wrong for someone with no account, and
+                # the tray behind it offers Sign in / Join / Connect Patreon /
+                # Reset password, of which reset and Connect Patreon are ACCOUNT
+                # jobs. Asserted in BOTH flag states on purpose: this label is
+                # independent of LG_ANON_DASH_SIGNIN, so it must hold whether or
+                # not the centre slot has become Sign in.
+                #
+                # Asserted as the ABSENCE of "You" AND the presence of "Account",
+                # not just one of them: absence alone passes on a bar that failed
+                # to render at all, and this gate already carries a liveness
+                # assertion above for exactly that reason.
+                labels = [(sl.get("label") or "").strip() for sl in comp["slots"]]
+                if not check(f"{w}px: the person slot reads 'Account' to an anon visitor",
+                             "Account" in labels,
+                             f"anon bar labels are {labels!r} — expected one to be 'Account' "
+                             f"(Ian's pick; members keep 'You')"):
+                    dash_lies.append(w)
+                if not check(f"{w}px: no slot says 'You' to an anon visitor",
+                             "You" not in labels,
+                             f"anon bar still says 'You' — labels {labels!r}; 'You' is the "
+                             f"MEMBER label and is wrong for a visitor with no account"):
+                    dash_lies.append(w)
+
                 if flag_on:
                     # The fix is live by default: nothing may claim "post".
                     if not check(f"{w}px: the dash offers an anonymous visitor NO way to 'post'",
