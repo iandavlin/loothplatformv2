@@ -454,6 +454,85 @@ $mNoCaps = menuFor($REPO, []);
 
 is_($mPlain !== '' && $mTester !== '', "the header renders at all, so these checks are not vacuous");
 
+/**
+ * ⚠️ THE CAPABILITY MUST SURVIVE THE JOURNEY, not just be honoured on arrival.
+ *
+ * Everything below drives menuFor() with a SYNTHETIC `stripe_testgroup` cap —
+ * which asserts the header HONOURS the capability, and can say nothing at all
+ * about whether the real page ever RECEIVES it. On 2026-08-16 it did not: the
+ * poller computed it correctly, and profile-app's capabilitiesFor() rebuilt the
+ * caps array from a named allowlist that did not include it, so the capability
+ * was received and dropped on the floor. Ian tested as a correctly-listed member
+ * and saw nothing; this gate was green throughout.
+ *
+ * So this asserts the OTHER half of the chain, against the real source rather
+ * than a fixture: does the central computation PASS the capability through?
+ * In-process on this tree deliberately — an HTTP leg would measure whichever
+ * copy is deployed, which is a different question and cannot red-first a fix
+ * that has not shipped yet.
+ *
+ * THE TRAP IS THE ALLOWLIST ITSELF: it silently discards every capability nobody
+ * remembered to name, and the discard is indistinguishable from the capability
+ * being false. Anything the header learns to key on must be added there too.
+ */
+$whoamiSrc = (string) @file_get_contents($REPO . '/profile-app/src/Whoami.php');
+if ($whoamiSrc === '') {
+    bad('cannot read profile-app/src/Whoami.php — the capability source is unreachable');
+} elseif (!preg_match('/private static function capabilitiesFor.*?
+    }/s', $whoamiSrc, $cm)) {
+    bad('capabilitiesFor() not found in profile-app/src/Whoami.php — it was renamed or moved');
+} else {
+    // Executed, not grepped: a mention of the string in a comment is not the
+    // capability surviving, and this gate has been fooled by prose before.
+    // Replace the WHOLE signature: swapping only "private static function" left
+    // the original name behind it and produced `function lgb_capsfor
+    // capabilitiesFor(...)`, a parse error inside eval that aborted the gate
+    // mid-run — which is the shape that looks like the gate ran.
+    eval(str_replace('private static function capabilitiesFor', 'function lgb_capsfor', $cm[0]));
+    $listed   = lgb_capsfor(1953, 'looth3', ['manage_options' => false, 'stripe_testgroup' => true]);
+    $unlisted = lgb_capsfor(999,  'looth3', ['manage_options' => false, 'stripe_testgroup' => false]);
+
+    is_(array_key_exists('stripe_testgroup', $listed),
+        'the central computation PASSES stripe_testgroup through — the menu can never see it otherwise');
+    is_(($listed['stripe_testgroup'] ?? null) === true,
+        '...true for a listed member');
+    is_(($unlisted['stripe_testgroup'] ?? null) === false,
+        '...and false for an unlisted one, not merely absent');
+
+    /**
+     * THE STRUCTURAL VERSION OF THE SAME BUG — keeper, 2026-08-16: make the
+     * silent discard impossible rather than merely fixed once.
+     *
+     * EVERY capability the header keys on must survive profile-app's
+     * pass-through. The allowlist names what it forwards, so a capability
+     * nobody remembered to name is dropped — and a dropped capability is
+     * INDISTINGUISHABLE from one that is false. That is why the failure looked
+     * like a gate refusing a listed member rather than a key going missing.
+     *
+     * This is a static cross-check between the two files, so it fails the day
+     * someone teaches the header a NEW capability and forgets the other end —
+     * which is the next instance of this bug, not a hypothetical one.
+     */
+    $headerSrc = (string) @file_get_contents($REPO . '/lg-shared/site-header.php');
+    preg_match_all("/caps\['([a-z_]+)'\]/", $headerSrc, $hm);
+    $keyedOn = array_values(array_unique($hm[1] ?? []));
+
+    // What the central computation actually forwards: the explicit keys it
+    // builds, plus the names in its pass-through loop.
+    preg_match_all("/'([a-z_]+)'\s*=>/", $cm[0], $em);
+    $explicit = $em[1] ?? [];
+    preg_match('/foreach \(\[(.*?)\] as/s', $cm[0], $fm);
+    preg_match_all("/'([a-z_]+)'/", $fm[1] ?? '', $pm);
+    $forwarded = array_values(array_unique(array_merge($explicit, $pm[1] ?? [])));
+
+    is_($keyedOn !== [], sprintf('the header keys on capabilities at all, so this is not vacuous (%s)', implode(', ', $keyedOn)));
+    $dropped = array_values(array_diff($keyedOn, $forwarded));
+    $LGB_CROSSCHECK_DONE = true;
+    is_($dropped === [], sprintf(
+        'EVERY capability the header keys on survives profile-app\'s pass-through (dropped: %s)',
+        $dropped === [] ? 'none' : implode(', ', $dropped)));
+}
+
 $leak = array_values(array_filter($STRIPE_LINKS, static fn (string $l): bool => str_contains($mPlain, $l)));
 is_($leak === [], sprintf(
     "a NON-listed member sees NO stripe menu entries (leaked: %s)",
@@ -493,6 +572,81 @@ is_(str_contains($icr, "\$caps['stripe_testgroup']"),
     "the capability is computed centrally beside manage_options, so every surface gets the same answer");
 
 /* ---------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------- */
+section("[10] THE REAL PAGE, AS A REAL MEMBER — driven over HTTP");
+
+/**
+ * Keeper, 2026-08-16, after Ian's visibility test failed while this gate was
+ * green: every other leg here drives menuFor() with SYNTHETIC caps, which can
+ * only prove the header honours a capability it is handed. This drives the
+ * actual page over HTTP as a minted session, which is the only way to see what
+ * a real member's browser gets.
+ *
+ * PROBES, chosen by keeper: 854 GerryHayesTest is LISTED and has NO
+ * manage_options — it must not be an admin, or it passes the admin branch and
+ * proves nothing about the list. 2455 viz-test-nobody is listed nowhere.
+ *
+ * ⚠️ IT READS THE DEPLOYED STATE RATHER THAN HARDCODING IT. This leg measures
+ * whichever copy of profile-app is DEPLOYED, not this branch. Until the
+ * pass-through fix reaches the serve, the deployed copy still drops
+ * `stripe_testgroup` — so a leg asserting "entries render" would go RED on main
+ * and block every lane for a fix that is merely not shipped yet. It asks whoami
+ * what the deployed tree actually does, then asserts the matching state.
+ */
+$mintCookie = static function (int $uid): ?string {
+    $ck = shell_exec('sudo -u looth-dev -H wp --path=/var/www/dev eval '
+        . escapeshellarg('echo wp_generate_auth_cookie(' . $uid . ', time()+3600, "logged_in");') . ' 2>/dev/null');
+    $ck = trim((string) $ck);
+    return $ck !== '' ? $ck : null;
+};
+$hash = trim((string) shell_exec('sudo -u looth-dev -H wp --path=/var/www/dev eval '
+    . escapeshellarg('echo COOKIEHASH;') . ' 2>/dev/null'));
+
+$fetchAs = static function (int $uid, string $path) use ($mintCookie, $hash): array {
+    $ck = $mintCookie($uid);
+    if ($ck === null || $hash === '') { return ['code' => 0, 'body' => '']; }
+    $cmd = sprintf('curl -sk -o /dev/stdout -w "\n%%{http_code}" -H %s -H %s %s 2>/dev/null',
+        escapeshellarg('Host: dev2.loothgroup.com'),
+        escapeshellarg('Cookie: wordpress_logged_in_' . $hash . '=' . $ck),
+        escapeshellarg('https://127.0.0.1' . $path));
+    $out = (string) shell_exec($cmd);
+    $nl  = strrpos($out, "\n");
+    return ['code' => (int) substr($out, $nl + 1), 'body' => substr($out, 0, $nl === false ? 0 : $nl)];
+};
+
+if ($hash === '') {
+    echo "  .. cannot mint sessions here (no wp) — real-page leg skipped\n";
+} else {
+    $listedPage = $fetchAs(854, '/manage-subscription/');
+    is_($listedPage['code'] === 200,
+        sprintf('a LISTED non-admin member reaches the real page (854 → %d)', $listedPage['code']));
+    is_(!str_contains($listedPage['body'], 'not available'),
+        '...and gets the page itself, not the pre-launch stub');
+
+    // What does the DEPLOYED tree actually hand the page?
+    $who = $fetchAs(854, '/wp-json/looth/v1/whoami');
+    $payload = json_decode($who['body'], true);
+    $deployedCarries = is_array($payload) && array_key_exists('stripe_testgroup', (array) ($payload['capabilities'] ?? []));
+
+    if (!$deployedCarries) {
+        // Not a failure of this branch: the fix simply is not on the serve yet.
+        echo "  .. the DEPLOYED profile-app still drops stripe_testgroup — menu half\n";
+        echo "     awaits merge+pull of the pass-through fix. Reachability asserted above.\n";
+        is_(true, 'deployed state read and reported rather than asserted against blindly');
+    } else {
+        $entries = 0;
+        foreach ($STRIPE_LINKS as $l) { if (str_contains($listedPage['body'], $l)) { $entries++; } }
+        is_($entries === count($STRIPE_LINKS), sprintf(
+            'a LISTED member SEES the stripe entries on the real page (%d of %d)', $entries, count($STRIPE_LINKS)));
+
+        $plainPage = $fetchAs(2455, '/manage-subscription/');
+        $leaked = array_values(array_filter($STRIPE_LINKS,
+            static fn (string $l): bool => str_contains($plainPage['body'], $l)));
+        is_($leaked === [], sprintf('an UNLISTED member sees none of them (leaked: %s)',
+            $leaked === [] ? 'none' : implode(', ', $leaked)));
+    }
+}
+
 echo "\n$pass passed, $fail failed\n";
 if ($fail > 0) {
     echo "RED — the Stripe Test Group page gate is not holding.\n";

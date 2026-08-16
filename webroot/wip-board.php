@@ -597,6 +597,74 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                                'lane' => $lane, 'text' => $text, 'dry_run' => $dry], $LGB_SOCKET);
             break;
 
+        /**
+         * ADD AN ITEM, or a sub-item under one. Ian: "Could I add things. Add
+         * headers and sub items."
+         *
+         * The page sends only a title and an optional parent. IT DOES NOT SEND
+         * A NUMBER — the next free one is minted from the file inside the
+         * committer, where the read and the write are the same operation. A
+         * number chosen here would be computed from whatever copy of the
+         * backlog this page happens to be showing, which is exactly how two
+         * people adding at once would collide on one id.
+         */
+        case 'item_add':
+            $title = trim((string) ($req['title'] ?? ''));
+            if ($title === '') { $reply(['ok' => false, 'error' => 'an item needs a title'], 400); }
+            $res = lgb_commit(['intent' => 'item_add', 'actor' => LGB_ACTOR,
+                               'parent' => (string) ($req['parent'] ?? ''),
+                               'title' => $title, 'dry_run' => $dry], $LGB_SOCKET);
+            break;
+
+        /** Promote a sub-item to its own item. Ian: "promote sub items to headers." */
+        case 'item_promote':
+            $res = lgb_commit(['intent' => 'item_promote', 'actor' => LGB_ACTOR,
+                               'id' => (string) ($req['id'] ?? ''), 'dry_run' => $dry], $LGB_SOCKET);
+            break;
+
+        /**
+         * THE GENERAL CHAT. No delivery step exists — the commit IS the
+         * delivery — so this action does exactly one thing and then the panel
+         * refetches from the store. Nothing is drawn from what the client hoped.
+         */
+        case 'chat_send':
+            $text = rtrim((string) ($req['text'] ?? ''));
+            if (trim($text) === '') { $reply(['ok' => false, 'error' => 'an empty message is not a message'], 400); }
+            $res = lgb_commit(['intent' => 'keeper_message', 'actor' => LGB_ACTOR,
+                               'text' => $text, 'dry_run' => $dry], $LGB_SOCKET);
+            break;
+
+        /**
+         * READ-BACK. The panel refetches after a send rather than fabricating a
+         * DOM node, so every message on screen came from the committed store —
+         * keeper's rule, satisfied without making a chat that swallows what he
+         * just typed until a reload.
+         */
+        case 'chat_read':
+            $reply(['ok' => true, 'messages' => lgb_chat($BACKLOG)]);
+            break;
+
+        case 'question_ask':
+            $text = rtrim((string) ($req['text'] ?? ''));
+            if (trim($text) === '') { $reply(['ok' => false, 'error' => 'an empty question is not a question'], 400); }
+            $res = lgb_commit(['intent' => 'question_ask', 'actor' => LGB_ACTOR,
+                               'text' => $text, 'dry_run' => $dry], $LGB_SOCKET);
+            break;
+
+        /**
+         * A DECISION ANSWERED FROM THE DESK DOOR. The page does not check
+         * whether it is already answered — the committer does, and it is the
+         * only thing that should, or the two doors would each hold their own
+         * idea of "already ruled".
+         */
+        case 'decision_answer':
+            $choice = rtrim((string) ($req['choice'] ?? ''));
+            if (trim($choice) === '') { $reply(['ok' => false, 'error' => 'a decision needs an answer'], 400); }
+            $res = lgb_commit(['intent' => 'decision_answer', 'actor' => LGB_ACTOR,
+                               'id' => (string) ($req['id'] ?? ''), 'choice' => $choice,
+                               'door' => 'desk', 'dry_run' => $dry], $LGB_SOCKET);
+            break;
+
         case 'note':
             $id   = (string) ($req['id'] ?? '');
             $text = trim((string) ($req['text'] ?? ''));
@@ -713,8 +781,17 @@ function lgb_lane_sent(string $backlogPath, string $lane): array
     $out = []; $cur = null; $buf = [];
     $flush = static function () use (&$out, &$cur, &$buf): void {
         if ($cur !== null) {
-            $cur['text'] = trim(implode("\n", array_map(
-                static fn (string $l): string => ltrim($l, '> '), $buf)));
+            // STRIP EXACTLY ONE "> ", never a character CLASS.
+            //
+            // ltrim($l, '> ') removes every leading '>' AND every leading space,
+            // so quoted terminal output came back with its indentation deleted:
+            //   "> ~~~~Active: failed"  ->  "Active: failed"
+            // Ian's paste-back is explicitly "multi-line terminal output, do not
+            // mangle whitespace", and stack traces, systemctl output and diffs
+            // are all indentation. Measured before fixing: 4- and 6-space
+            // indents both vanished.
+            $cur['text'] = rtrim(implode("\n", array_map(
+                static fn (string $l): string => (string) preg_replace('/^>\s?/', '', $l), $buf)));
             $out[] = $cur;
         }
     };
@@ -753,6 +830,164 @@ function lgb_lane_replies(string $path, string $lane): array
             // a lane did not hear him; a thread that looked sent anyway would be
             // the worst lie this page could tell.
             'delivery' => is_array($l['delivery'] ?? null) ? $l['delivery'] : null];
+}
+
+/**
+ * ONE THREAD RENDERER, used by the per-lane threads AND by the general keeper
+ * chat.
+ *
+ * Ian asked for two chats — "a general chat on the page for overview and then
+ * sub chats on each board item/project" — and keeper's extension settled that
+ * the general one is *the same mechanism aimed at keeper*. So it must be the
+ * same CODE as well as the same store: two renderers would drift, and the first
+ * thing to drift would be the failure states, which are the whole point. A
+ * message he sends from the general chat and one he sends from a lane row are
+ * the same event, written the same way, shown the same way.
+ *
+ * @param array<int,array{when:string,who:string,text:string}> $sent
+ */
+function lgb_thread_box(string $lane, bool $ok, array $sent, array $rep, string $placeholder = ''): void
+{
+    $ph = $placeholder !== '' ? $placeholder : 'Message ' . $lane . '…';
+    ?>
+    <div class="thrbox" data-lane="<?= lgb_h($lane) ?>">
+      <?php if (!$ok): ?>
+        <div class="thrbox__no">This seat has no usable name, so there is nothing to address.</div>
+      <?php else: ?>
+        <?php if ($rep['delivery'] !== null && empty($rep['delivery']['ok'])): ?>
+          <!-- lane-say exiting non-zero means a lane did not hear him. Never let
+               that read as sent. -->
+          <div class="thrbox__bad">NOT DELIVERED — <?= lgb_h((string) ($rep['delivery']['why'] ?? 'no reason given')) ?></div>
+        <?php endif; ?>
+        <div class="thrbox__log">
+          <?php foreach ($sent as $m): ?>
+            <div class="msg msg--out"><span class="msg__w"><?= lgb_h($m['when']) ?></span><?= lgb_h($m['text']) ?></div>
+          <?php endforeach; ?>
+          <?php foreach ($rep['replies'] as $m): ?>
+            <div class="msg msg--in"><span class="msg__w"><?= lgb_h((string) ($m['when'] ?? '')) ?></span><?= lgb_h((string) ($m['text'] ?? '')) ?></div>
+          <?php endforeach; ?>
+          <?php if ($sent === [] && $rep['replies'] === []): ?>
+            <div class="thrbox__no"><?= $rep['ok'] ? 'Nothing yet.' : lgb_h((string) $rep['why']) . '.' ?></div>
+          <?php endif; ?>
+        </div>
+        <textarea class="thrbox__in" rows="2" placeholder="<?= lgb_h($ph) ?>"></textarea>
+        <button class="thrbox__go">Send</button>
+        <div class="thrbox__say" hidden></div>
+      <?php endif; ?>
+    </div>
+    <?php
+}
+
+/**
+ * ONE PARSER for every quoted-block store on this board — the chat, the
+ * questions rail, the lane threads, the decisions.
+ *
+ * They all share the same shape on disk: a "### " or "#### " head line, then the
+ * body quoted one "> " deep. Writing a reader per store would mean four copies
+ * of the unquoting rule, and the FIRST thing to drift would be whitespace
+ * handling — which is the one thing Ian's paste-back requires be exact.
+ *
+ * Strips exactly one "> ", never a character class: `ltrim($l, '> ')` eats every
+ * leading '>' AND every leading space, which deletes the indentation in a stack
+ * trace or a systemctl dump.
+ *
+ * @return array<int,array{head:string,depth:int,text:string}>
+ */
+function lgb_blocks(string $file): array
+{
+    if (!is_readable($file)) { return []; }
+    $out = []; $cur = null; $buf = [];
+    $flush = static function () use (&$out, &$cur, &$buf): void {
+        if ($cur === null) { return; }
+        $cur['text'] = rtrim(implode("\n", array_map(
+            static fn (string $l): string => (string) preg_replace('/^>\s?/', '', $l), $buf)));
+        $out[] = $cur;
+    };
+    foreach (explode("\n", str_replace(["\r\n", "\r"], "\n", (string) file_get_contents($file))) as $line) {
+        if (preg_match('/^(#{3,4})\s+(.*)$/', $line, $m)) {
+            $flush(); $buf = [];
+            $cur = ['head' => trim($m[2]), 'depth' => strlen($m[1]), 'text' => ''];
+            continue;
+        }
+        if ($cur !== null && str_starts_with($line, '>')) { $buf[] = $line; }
+    }
+    $flush();
+    return $out;
+}
+
+/**
+ * The general chat. Every entry is a committed message; there is no other
+ * source, which is what keeper's "renders ONLY committed messages" means in
+ * practice — the panel cannot show something the repository does not hold.
+ *
+ * @return array<int,array{when:string,who:string,text:string,mine:bool}>
+ */
+function lgb_chat(string $backlogPath): array
+{
+    $out = [];
+    foreach (lgb_blocks(lgb_board_dir($backlogPath, 'board-chat') . '/keeper.md') as $b) {
+        if (!preg_match('/^(\S+ \S+)\s*—\s*(.+)$/u', $b['head'], $m)) { continue; }
+        $who = trim($m[2]);
+        $out[] = ['when' => $m[1], 'who' => $who, 'text' => $b['text'],
+                  'mine' => $who !== 'keeper'];
+    }
+    return $out;
+}
+
+/**
+ * The questions rail. An entry is OPEN until an answer block names it — a
+ * question is never removed, only answered, so "open" is derived from the
+ * absence of an answer rather than from any status anyone maintains.
+ *
+ * @return array{open:array<int,array>,answered:array<int,array>}
+ */
+function lgb_questions(string $backlogPath): array
+{
+    $qs = []; $answers = [];
+    foreach (lgb_blocks(lgb_board_dir($backlogPath, 'board-questions') . '/questions.md') as $b) {
+        if (preg_match('/^(q\d+)\s+(\S+ \S+)\s*—\s*(.+)$/u', $b['head'], $m)) {
+            $qs[$m[1]] = ['id' => $m[1], 'when' => $m[2], 'who' => trim($m[3]), 'text' => $b['text'], 'answer' => null];
+        } elseif (preg_match('/^answer to (q\d+)\s*—\s*(\S+ \S+)\s*—\s*(.+)$/u', $b['head'], $m)) {
+            $answers[$m[1]] = ['when' => $m[2], 'who' => trim($m[3]), 'text' => $b['text']];
+        }
+    }
+    foreach ($answers as $qid => $a) { if (isset($qs[$qid])) { $qs[$qid]['answer'] = $a; } }
+    $open = []; $done = [];
+    foreach ($qs as $q) { $q['answer'] === null ? $open[] = $q : $done[] = $q; }
+    return ['open' => array_reverse($open), 'answered' => array_reverse($done)];
+}
+
+/**
+ * Decisions posed by keeper and awaiting Ian. ONE STORE, TWO DOORS: the desk box
+ * and his VS box read the same files, so an answer through either shows here as
+ * answered with the choice — no second status to keep in step.
+ *
+ * @return array<int,array{id:string,question:string,options:string[],answer:?array}>
+ */
+function lgb_decisions(string $backlogPath): array
+{
+    $dir = lgb_board_dir($backlogPath, 'board-decisions');
+    if (!is_dir($dir)) { return []; }
+    $out = [];
+    foreach ((array) glob($dir . '/*.md') as $f) {
+        $id = basename((string) $f, '.md');
+        $raw = (string) file_get_contents((string) $f);
+        $opts = [];
+        foreach (explode("\n", $raw) as $l) {
+            if (str_starts_with($l, '- ')) { $opts[] = trim(substr($l, 2)); }
+        }
+        $question = ''; $answer = null;
+        foreach (lgb_blocks((string) $f) as $b) {
+            if ($b['depth'] === 4 && preg_match('/^answered (\S+ \S+)\s*—\s*(.+?)\s*—\s*via (\w+)$/u', $b['head'], $m)) {
+                $answer = ['when' => $m[1], 'who' => trim($m[2]), 'door' => $m[3], 'choice' => $b['text']];
+            }
+        }
+        // The question is the file's own first quoted line, above the options.
+        if (preg_match('/^>\s?(.+)$/m', $raw, $qm)) { $question = trim($qm[1]); }
+        if ($question === '' && $opts === []) { continue; }
+        $out[] = ['id' => $id, 'question' => $question, 'options' => $opts, 'answer' => $answer];
+    }
+    return $out;
 }
 
 $backlog  = lgb_parse_backlog($BACKLOG);
@@ -1074,41 +1309,90 @@ html[data-lguser-theme="dark"] .thrbox__no{opacity:.85}
               <span class="lane__s"><?= lgb_h($st) ?></span>
               <?php if ($nmsg > 0): ?><span class="lane__b"><?= (int) $nmsg ?></span><?php endif; ?>
             </summary>
-            <div class="thrbox" data-lane="<?= lgb_h($lname) ?>">
-              <?php if ($ok): ?>
-                <a class="lane__watch" target="_blank" rel="noopener"
-                   href="/lane-view/?arg=<?= lgb_h(rawurlencode($lname)) ?>">watch this seat's terminal (read-only)</a>
-              <?php endif; ?>
-              <?php if (!$ok): ?>
-                <div class="thrbox__no">This seat has no usable name, so there is nothing to address.</div>
-              <?php else: ?>
-                <?php if ($rep['delivery'] !== null && empty($rep['delivery']['ok'])): ?>
-                  <!-- lane-say exiting non-zero means a lane did not hear him.
-                       Never let that read as sent. -->
-                  <div class="thrbox__bad">NOT DELIVERED — <?= lgb_h((string) ($rep['delivery']['why'] ?? 'no reason given')) ?></div>
-                <?php endif; ?>
-                <div class="thrbox__log">
-                  <?php foreach ($sent as $m): ?>
-                    <div class="msg msg--out"><span class="msg__w"><?= lgb_h($m['when']) ?></span><?= lgb_h($m['text']) ?></div>
-                  <?php endforeach; ?>
-                  <?php foreach ($rep['replies'] as $m): ?>
-                    <div class="msg msg--in"><span class="msg__w"><?= lgb_h((string) ($m['when'] ?? '')) ?></span><?= lgb_h((string) ($m['text'] ?? '')) ?></div>
-                  <?php endforeach; ?>
-                  <?php if ($sent === [] && $rep['replies'] === []): ?>
-                    <div class="thrbox__no"><?= $rep['ok'] ? 'Nothing yet.' : lgb_h((string) $rep['why']) . '.' ?></div>
-                  <?php endif; ?>
-                </div>
-                <textarea class="thrbox__in" rows="2" placeholder="Message <?= lgb_h($lname) ?>…"></textarea>
-                <button class="thrbox__go">Send</button>
-                <div class="thrbox__say" hidden></div>
-              <?php endif; ?>
-            </div>
+            <?php if ($ok): ?>
+              <!-- KEPT FROM main: Ian ruled the live terminals WATCH-ONLY, and
+                   that ruling is unaffected by this lane's work — interaction
+                   happens through the thread below, never through keystrokes. -->
+              <a class="lane__watch" target="_blank" rel="noopener"
+                 href="/lane-view/?arg=<?= lgb_h(rawurlencode($lname)) ?>">watch this seat's terminal (read-only)</a>
+            <?php endif; ?>
+            <?php lgb_thread_box($lname, $ok, $sent, $rep); ?>
           </details>
         <?php endforeach; ?>
       <?php else: ?>
         <div class="absent"><?= lgb_h($sentinel['why'] ?? 'no lane data') ?>.<br>
           Showing nothing rather than a comforting zero.</div>
       <?php endif; ?>
+    </div>
+
+    <!-- ASK KEEPER — the GENERAL chat.
+         Ian, on round 4: the general chat is "a full surface on the page, not a
+         demoted control", because "how's it all going?" is the question he asks
+         most and it belongs to no single item. Keeper's extension settled the
+         mechanism: it is the same thread, aimed at `keeper`.
+         It needs its own rail because KEEPER IS NOT A LANE — it does not appear
+         in the sentinel's seat list, so without this there is no way to reach it
+         from the board at all. -->
+    <div class="rail">
+      <?php $chat = lgb_chat($BACKLOG); ?>
+      <div class="rail__h"><span>Ask keeper</span><span><?= $chat !== [] ? count($chat) . ' messages' : 'anything, any time' ?></span></div>
+      <div class="askk">
+        <!-- REPOINTED at the commit-only store. This panel used to route through
+             the lane-thread shape, which means terminal delivery; Ian ruled the
+             general chat ships FIRST and without any of that, so a message here
+             is a commit and nothing else. One chat, not two — the old mechanism
+             was replaced rather than joined. -->
+        <div class="askk__w">For anything that belongs to no single item — how is
+          it all going, what should you look at first, why is something stuck.
+          Every message here is committed; keeper's replies land the same way.</div>
+        <div class="thrbox" data-chat="1">
+          <div class="thrbox__log" id="lgb-chatlog">
+            <?php foreach ($chat as $m): ?>
+              <div class="msg <?= $m['mine'] ? 'msg--out' : 'msg--in' ?>"><span class="msg__w"><?= lgb_h($m['when'] . ' · ' . $m['who']) ?></span><?= lgb_h($m['text']) ?></div>
+            <?php endforeach; ?>
+            <?php if ($chat === []): ?><div class="thrbox__no">Nothing yet.</div><?php endif; ?>
+          </div>
+          <textarea class="thrbox__in" id="lgb-chatin" rows="2" placeholder="Ask keeper anything…"></textarea>
+          <button class="thrbox__go" id="lgb-chatgo">Send</button>
+          <div class="thrbox__say" id="lgb-chatsay" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OPEN QUESTIONS. Ian: "I feel like I ask questions stream of consciousness
+         on here and they wind up getting lost." A question here cannot be lost:
+         the store has no verb that removes one, and OPEN is derived from having
+         no answer rather than from a status anyone maintains. -->
+    <div class="rail">
+      <?php $qq = lgb_questions($BACKLOG); ?>
+      <div class="rail__h"><span>Open questions</span><span>
+        <?= count($qq['open']) ?> open<?= $qq['answered'] !== [] ? ' · ' . count($qq['answered']) . ' answered' : '' ?>
+      </span></div>
+      <div class="qbox">
+        <textarea class="thrbox__in" id="lgb-qin" rows="2" placeholder="Ask something before it slips…"></textarea>
+        <button class="thrbox__go" id="lgb-qgo">Ask</button>
+        <div class="thrbox__say" id="lgb-qsay" hidden></div>
+        <?php foreach ($qq['open'] as $q): ?>
+          <div class="q q--open">
+            <span class="q__tag">open</span>
+            <div class="q__t"><?= lgb_h($q['text']) ?></div>
+            <div class="q__w"><?= lgb_h($q['when'] . ' · ' . $q['who']) ?></div>
+          </div>
+        <?php endforeach; ?>
+        <?php if ($qq['open'] === []): ?><div class="thrbox__no">Nothing open.</div><?php endif; ?>
+        <?php if ($qq['answered'] !== []): ?>
+          <details class="qdrawer">
+            <summary>answered (<?= count($qq['answered']) ?>)</summary>
+            <?php foreach ($qq['answered'] as $q): ?>
+              <div class="q">
+                <div class="q__t"><?= lgb_h($q['text']) ?></div>
+                <div class="q__a"><?= lgb_h($q['answer']['text']) ?></div>
+                <div class="q__w"><?= lgb_h($q['answer']['when'] . ' · ' . $q['answer']['who']) ?></div>
+              </div>
+            <?php endforeach; ?>
+          </details>
+        <?php endif; ?>
+      </div>
     </div>
 
     <!-- capacity -->
@@ -1187,6 +1471,70 @@ html[data-lguser-theme="dark"] .thrbox__no{opacity:.85}
             $opt = count($desk['items']) - $needed;
             if ($opt > 0) { echo ' · ' . (int) $opt . ' optional'; } ?></span>
         </div>
+        <?php
+        /**
+         * DERIVED DESK ITEMS — Ian: "are you hand populating my desk? Is there a
+         * way to do it mechanically?"
+         *
+         * A lane's "-> Ian" post IS a desk item; nobody copies it across. Two of
+         * featured-members' went missing on 8/16 purely because a hand lagged.
+         * They arrive through the relay snapshot because the board cannot read
+         * the message store itself — that store is `devmsg`-group, and putting
+         * the web user in it would hand every PHP file on the site the ability
+         * to send messages as ubuntu.
+         */
+        $deskAuto = [];
+        if (is_readable($LGB_THREADS)) {
+            $snapRaw = json_decode((string) file_get_contents($LGB_THREADS), true);
+            if (is_array($snapRaw) && is_array($snapRaw['desk'] ?? null)) { $deskAuto = $snapRaw['desk']; }
+        }
+        foreach (array_reverse($deskAuto) as $d): ?>
+          <div class="desk__i">
+            <span class="desk__b"></span>
+            <span class="desk__x">
+              <b><?= lgb_h((string) ($d['who'] ?? '?')) ?></b>
+              <span><?= lgb_linkify((string) ($d['text'] ?? '')) ?></span>
+              <span class="q__w"><?= lgb_h((string) ($d['when'] ?? '')) ?></span>
+            </span>
+          </div>
+        <?php endforeach; ?>
+
+        <?php
+        /**
+         * DECISION BOXES — real controls, right where he already looks.
+         *
+         * Ian's stated purpose, 2026-08-16: *"That way you can keep working
+         * here."* The desk absorbs the blocking, so keeper never idles waiting
+         * on an open box.
+         *
+         * ONE STORE, TWO DOORS. These read the same files his VS box does, so an
+         * answer given there shows here as ANSWERED with the choice — there is no
+         * second status to keep in step, because there is no second store. The
+         * page does not decide whether something is already answered; the
+         * committer does, and it refuses the second door.
+         */
+        foreach (lgb_decisions($BACKLOG) as $dec): ?>
+          <div class="dbox" data-dec="<?= lgb_h($dec['id']) ?>">
+            <div class="dbox__q"><?= lgb_h($dec['question']) ?></div>
+            <?php if ($dec['answer'] !== null): ?>
+              <div class="dbox__a">Answered — <?= lgb_h($dec['answer']['choice']) ?>
+                <span class="q__w">(<?= lgb_h($dec['answer']['when'] . ' · via ' . $dec['answer']['door']) ?>)</span></div>
+            <?php else: ?>
+              <div class="w2__opts">
+                <?php foreach ($dec['options'] as $o): ?>
+                  <button class="w2__opt" type="button" aria-pressed="false"><?= lgb_h($o) ?></button>
+                <?php endforeach; ?>
+              </div>
+              <!-- "Something else…" is a first-class answer, not an escape
+                   hatch: two buttons quietly assert those are the only two
+                   answers, and often they are not. -->
+              <textarea class="thrbox__in dbox__other" rows="2" placeholder="Something else… (your own words)"></textarea>
+              <button class="thrbox__go dbox__go">Record my decision</button>
+              <div class="thrbox__say dbox__say" hidden></div>
+            <?php endif; ?>
+          </div>
+        <?php endforeach; ?>
+
         <?php foreach ($desk['items'] as $d): ?>
           <div class="desk__i<?= $d['optional'] ? ' desk__i--opt' : '' ?>">
             <span class="desk__b"></span>
@@ -1280,6 +1628,15 @@ html[data-lguser-theme="dark"] .thrbox__no{opacity:.85}
         </div>
       <?php };
   ?>
+
+  <!-- A NEW ITEM starts at the BOTTOM of the ranking, deliberately: position is
+       rank, and nothing new outranks existing work until Ian drags it up. Its
+       number is minted by the committer from the file, never guessed here. -->
+  <div class="newitem">
+    <textarea class="newitem__t" id="lgb-newtitle" rows="1" placeholder="Add an item to the board…"></textarea>
+    <button class="w2__go" id="lgb-newadd">Add</button>
+    <div class="w2__say" id="lgb-newsay" hidden></div>
+  </div>
 
   <?php foreach ($groups as $g):
         $needs = 0; foreach ($g['open'] as $o) { if ($o['needsIan'] || $o['look']) { $needs++; } }
@@ -1401,6 +1758,23 @@ html[data-lguser-theme="dark"] .thrbox__no{opacity:.85}
           <button class="w2__go" id="lgb-decsend">Record my decision</button>
         </div>
 
+        <!-- ADD / PROMOTE. Shown only where they MEAN something: a sub-item can
+             be promoted, a top-level item can take sub-items, and neither
+             control appears where it would be a no-op. -->
+        <div class="w2" id="lgb-structbox" hidden>
+          <div class="w2__h">Structure</div>
+          <div id="lgb-subwrap" hidden>
+            <textarea id="lgb-subtitle" rows="2" placeholder="Add a sub-item under this one…"></textarea>
+            <button class="w2__go" id="lgb-subadd">Add sub-item</button>
+          </div>
+          <div id="lgb-promwrap" hidden>
+            <div class="w2__c">This is a sub-item. Promoting it gives it its own
+              number and leaves a pointer behind, so nothing that refers to the
+              old number stops working.</div>
+            <button class="w2__go" id="lgb-promote">Promote to its own item</button>
+          </div>
+        </div>
+
         <div class="w2">
           <div class="w2__h">Thread <span class="w2__c" id="lgb-threadc"></span></div>
           <pre class="w2__thread" id="lgb-thread"></pre>
@@ -1472,6 +1846,24 @@ html[data-lguser-theme="dark"] .thrbox__no{opacity:.85}
     .thrbox__no{opacity:.6}
     .thrbox__bad{background:rgba(200,70,70,.18);padding:5px 7px;border-radius:6px;margin-bottom:5px}
     .thrbox__say{margin-top:5px;padding:5px 7px;border-radius:6px}
+    .askk__w{font-size:12px;opacity:.7;margin:4px 0 8px}
+    .askk .thrbox{margin-left:0}
+    .newitem{display:flex;gap:6px;align-items:flex-start;margin:10px 0}
+    .newitem__t{flex:1;font:inherit;font-size:13px;padding:6px;border-radius:6px;resize:vertical;
+                border:1px solid rgba(128,128,128,.35);background:transparent;color:inherit}
+    .newitem .w2__say{flex-basis:100%}
+    .qbox{font-size:12px}
+    .q{padding:6px 8px;border-radius:6px;background:rgba(128,128,128,.10);margin:5px 0}
+    .q--open{border-left:3px solid #4a9eff}
+    .q__tag{font-size:10px;text-transform:uppercase;letter-spacing:.05em;opacity:.7}
+    .q__t{white-space:pre-wrap;margin:2px 0}
+    .q__a{white-space:pre-wrap;margin-top:4px;padding-left:8px;border-left:2px solid rgba(128,128,128,.4)}
+    .q__w{font-size:10px;opacity:.55;margin-top:3px}
+    .qdrawer{margin-top:6px}
+    .qdrawer summary{cursor:pointer;opacity:.7}
+    .dbox{margin:6px 0;padding:7px 9px;border-radius:7px;background:rgba(74,158,255,.10)}
+    .dbox__q{font-weight:600;margin-bottom:5px}
+    .dbox__a{background:rgba(60,160,90,.14);padding:5px 7px;border-radius:6px}
   </style>
   <script type="application/json" id="lgb-details"><?php
     // ONE ENTRY PER ITEM, always. Only 7 of the file's 39 detail sections are
@@ -1536,6 +1928,7 @@ html[data-lguser-theme="dark"] .thrbox__no{opacity:.85}
       meta.innerHTML = '';
       row.querySelectorAll('.bdg').forEach(function (b) { meta.appendChild(b.cloneNode(true)); });
       fillWrite(d);
+      structFor(d);
       scrim.classList.add('on');
       document.getElementById('lgb-close').focus();
     }
@@ -1809,6 +2202,177 @@ html[data-lguser-theme="dark"] .thrbox__no{opacity:.85}
       });
       // Typing in the box must not collapse the row.
       ta.addEventListener('click', function (e) { e.stopPropagation(); });
+    });
+
+    /* ---- ADD AND PROMOTE ---------------------------------------------------
+     *
+     * THE NUMBER IS NEVER GUESSED HERE. The page sends a title; the committer
+     * mints the id from the file and hands it back, and only then does the page
+     * tell Ian what his item is called. A number computed on this side would be
+     * derived from whatever copy of the backlog this page is showing.
+     *
+     * And a new item does not appear in the list until the page is reloaded
+     * against the file — the same honesty as the drag: the screen may not claim
+     * something the store has not confirmed.
+     */
+    function structFor(d) {
+      var box = document.getElementById('lgb-structbox'),
+          sub = document.getElementById('lgb-subwrap'),
+          pro = document.getElementById('lgb-promwrap');
+      var id = (d && d.id) || '';
+      var isSub = /^\d+\.\d+$/.test(id), isTop = /^\d+$/.test(id);
+      sub.hidden = !isTop; pro.hidden = !isSub;
+      box.hidden = !(isTop || isSub);          // letter ids get neither, correctly
+      document.getElementById('lgb-subtitle').value = '';
+    }
+
+    document.getElementById('lgb-subadd').dataset.was = 'Add sub-item';
+    document.getElementById('lgb-subadd').addEventListener('click', function () {
+      var t = document.getElementById('lgb-subtitle').value.trim();
+      if (!cur || !t) { return; }
+      var btn = this; busy(btn, true);
+      post({ action: 'item_add', parent: cur.id, title: t }).then(function (res) {
+        busy(btn, false);
+        tell(!!(res && res.ok), res && res.ok
+          ? 'Added as item ' + res.id + ' — reload to see it in the list.'
+          : landed(res));
+        if (res && res.ok) { document.getElementById('lgb-subtitle').value = ''; }
+      });
+    });
+
+    document.getElementById('lgb-promote').dataset.was = 'Promote to its own item';
+    document.getElementById('lgb-promote').addEventListener('click', function () {
+      if (!cur) { return; }
+      var btn = this; busy(btn, true);
+      post({ action: 'item_promote', id: cur.id }).then(function (res) {
+        busy(btn, false);
+        tell(!!(res && res.ok), res && res.ok
+          ? 'Promoted to item ' + res.id + ' — ' + cur.id + ' now points at it. Reload to see it.'
+          : landed(res));
+      });
+    });
+
+    (function () {
+      var btn = document.getElementById('lgb-newadd'),
+          ta  = document.getElementById('lgb-newtitle'),
+          out = document.getElementById('lgb-newsay');
+      btn.dataset.was = 'Add';
+      btn.addEventListener('click', function () {
+        var t = ta.value.trim();
+        if (!t) { return; }
+        busy(btn, true);
+        post({ action: 'item_add', title: t }).then(function (res) {
+          busy(btn, false);
+          out.hidden = false;
+          out.className = 'w2__say ' + (res && res.ok ? 'w2__say--ok' : 'w2__say--no');
+          out.textContent = res && res.ok
+            ? 'Added as item ' + res.id + ', at the bottom of the ranking — drag it where it belongs. Reload to see it.'
+            : landed(res);
+          if (res && res.ok) { ta.value = ''; }
+        });
+      });
+    })();
+
+    /* ---- THE GENERAL CHAT, THE QUESTIONS RAIL, THE DESK BOXES -------------
+     *
+     * All three write through the committer and all three REFETCH rather than
+     * fabricate. Nothing on these surfaces is drawn from what the client hoped —
+     * every line came out of the committed store, which is keeper's rule and
+     * also the only way the two decision doors can agree.
+     */
+    function esc2(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+    (function () {
+      var log = document.getElementById('lgb-chatlog'),
+          ta  = document.getElementById('lgb-chatin'),
+          btn = document.getElementById('lgb-chatgo'),
+          out = document.getElementById('lgb-chatsay');
+      if (!btn) { return; }
+      btn.dataset.was = 'Send';
+
+      function paint(msgs) {
+        if (!msgs || !msgs.length) { return; }
+        log.innerHTML = msgs.map(function (m) {
+          return '<div class="msg ' + (m.mine ? 'msg--out' : 'msg--in') + '">'
+               + '<span class="msg__w">' + esc2(m.when + ' · ' + m.who) + '</span>'
+               + esc2(m.text) + '</div>';
+        }).join('');
+        log.scrollTop = log.scrollHeight;
+      }
+
+      btn.addEventListener('click', function () {
+        var t = ta.value.replace(/\s+$/, '');
+        if (!t.trim()) { return; }
+        busy(btn, true);
+        post({ action: 'chat_send', text: t }).then(function (res) {
+          busy(btn, false);
+          out.hidden = false;
+          out.className = 'thrbox__say ' + (res && res.ok ? 'w2__say--ok' : 'w2__say--no');
+          out.textContent = res && res.ok ? 'Sent — commit ' + (res.commit || '?') + '.' : landed(res);
+          if (res && res.ok) {
+            ta.value = '';
+            // REFETCH, never fabricate: the panel may only show what the store
+            // holds, and this is what makes that rule survivable as a chat.
+            post({ action: 'chat_read' }).then(function (r) { if (r && r.ok) { paint(r.messages); } });
+          }
+        });
+      });
+    })();
+
+    (function () {
+      var ta = document.getElementById('lgb-qin'), btn = document.getElementById('lgb-qgo'),
+          out = document.getElementById('lgb-qsay');
+      if (!btn) { return; }
+      btn.dataset.was = 'Ask';
+      btn.addEventListener('click', function () {
+        var t = ta.value.replace(/\s+$/, '');
+        if (!t.trim()) { return; }
+        busy(btn, true);
+        post({ action: 'question_ask', text: t }).then(function (res) {
+          busy(btn, false);
+          out.hidden = false;
+          out.className = 'thrbox__say ' + (res && res.ok ? 'w2__say--ok' : 'w2__say--no');
+          out.textContent = res && res.ok
+            ? 'Filed as ' + (res.id || 'a question') + ' — it stays open until it is answered.'
+            : landed(res);
+          if (res && res.ok) { ta.value = ''; }
+        });
+      });
+    })();
+
+    document.querySelectorAll('.dbox[data-dec]').forEach(function (box) {
+      var go = box.querySelector('.dbox__go');
+      if (!go) { return; }                       // already answered: nothing to press
+      go.dataset.was = 'Record my decision';
+      box.querySelectorAll('.w2__opt').forEach(function (b) {
+        b.addEventListener('click', function () {
+          box.querySelectorAll('.w2__opt').forEach(function (x) { x.setAttribute('aria-pressed', 'false'); });
+          b.setAttribute('aria-pressed', 'true');
+        });
+      });
+      go.addEventListener('click', function () {
+        var picked = box.querySelector('.w2__opt[aria-pressed="true"]'),
+            words  = box.querySelector('.dbox__other').value.replace(/\s+$/, ''),
+            out    = box.querySelector('.dbox__say');
+        var choice = words.trim() !== '' ? words : (picked ? picked.textContent : '');
+        if (!choice.trim()) {
+          out.hidden = false; out.className = 'thrbox__say w2__say--no';
+          out.textContent = 'Pick an option, or write what you want instead.';
+          return;
+        }
+        busy(go, true);
+        post({ action: 'decision_answer', id: box.dataset.dec, choice: choice }).then(function (res) {
+          busy(go, false);
+          out.hidden = false;
+          out.className = 'thrbox__say ' + (res && res.ok ? 'w2__say--ok' : 'w2__say--no');
+          // A refusal here is usually the OTHER DOOR having got there first,
+          // which is not an error — it is the rule working. Say what happened
+          // rather than colouring it as a failure of his.
+          out.textContent = res && res.ok
+            ? 'Recorded — commit ' + (res.commit || '?') + '. Keeper is woken by it.'
+            : landed(res);
+        });
+      });
     });
 
     document.getElementById('lgb-close').addEventListener('click', close);

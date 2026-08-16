@@ -182,7 +182,19 @@ final class Whoami
         // Pass through any additional WP-side caps the poller reports
         // (edit_posts, moderate_forums, etc) — useful for strangler
         // consumers but not authoritative on profile-app's side.
-        foreach (['edit_posts', 'moderate_forums'] as $k) {
+        // `stripe_testgroup` is in this list because the MENU keys the Stripe
+        // entries on it (lg-shared/site-header.php) and the POLLER is what
+        // computes it (InternalRestController: manage_options OR inCohort).
+        // Without it here, this allowlist received the capability from the
+        // poller and dropped it on the floor — so a correctly-listed member
+        // reached the pages fine and saw no way IN to them. Ian hit exactly
+        // that as Mikelle (1953) on 2026-08-16.
+        //
+        // The trap this list IS: a named pass-through silently discards every
+        // capability nobody remembered to name, and the discard looks identical
+        // to the capability being false. Anything the header learns to key on
+        // must be added here too.
+        foreach (['edit_posts', 'moderate_forums', 'stripe_testgroup'] as $k) {
             if (array_key_exists($k, $pollerCaps)) $caps[$k] = (bool)$pollerCaps[$k];
         }
         return $caps;

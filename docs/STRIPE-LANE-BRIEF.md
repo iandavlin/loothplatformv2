@@ -229,9 +229,27 @@ Everything below is a decision, not a task. Nothing here is blocked on code.
   decision of his, and grandfathering is the default until he says otherwise.
 - **No `payment_source` writes** — the dual-holder guards await his ruling, and
   writing that meta early would arm them wrongly against members paying both.
-- **No tokened invite links.** Login plus the list is enough for the test, and a
-  token that bypassed the list would defeat it. Revisit only if he wants
-  pre-login invites.
+- ~~**No tokened invite links.**~~ **REVERSED BY IAN, 2026-08-16 — and the
+  reasoning below was wrong in exactly one place.** It said login plus the list
+  was enough; that assumed *everyone we test with already has an account*. The
+  most important pre-cutover rehearsal is a **fresh recruit's complete join**,
+  and a fresh person cannot even see the join page — it only reveals itself to
+  logged-in listed members. So the whitelist takes existing wp users only, and
+  the one flow that most needs proving is untestable.
+  **Now chartered: email pre-authorisation + one-use invite links**, scoped to
+  the join flow, expiring, single-use, auto-listing the account they create on
+  email match and stamping it `invite-created`. **Not a general bypass.**
+  *Original reasoning, for the record:* Login plus the list is enough for the
+  test, and a token that bypassed the list would defeat it.
+
+  > **The one thing that will break it if forgotten:** these pages are gated
+  > **twice** — the router decides who may reach a page, then every page file
+  > re-checks on its own authority. On 8/15 the soft launch looked broken
+  > because only the router was changed. The invite check belongs in
+  > `lg_membership_testgroup_gate_or_exit`, the shared rule **both** doors
+  > already delegate to. Put it in the router and a fresh invitee reaches the
+  > join page and is thrown out by the page itself — which will read as a broken
+  > token when the token is fine.
 
 ## 6b. The dress rehearsal (2026-08-15) — and what it caught
 

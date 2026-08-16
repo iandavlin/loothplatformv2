@@ -12,7 +12,7 @@ Branch `stripe-membership`, rebased on `origin/main`.
 
 | Job | Outcome |
 |---|---|
-| **Charter extension (8/16): talk to lanes from the board** | **BOARD HALF DONE**, relay half designed and posted for keeper's review, not built. |
+| **Charter extension (8/16): talk to lanes from the board** | **DONE, BOTH HALVES.** Board half built+gated; relay built+gated after keeper approved the design. Timer NOT armed — keeper's, and last. |
 | **1. Wire the board's write layer** | **DONE AND DEPLOYED.** Drag-rank, notes, decisions — all three land through the committer. |
 | *(the charter's fallback)* **The board history view** | **DONE** — I was never blocked, so it became the next item rather than the substitute. |
 | **2. Rotate the leaked sandbox key** | **CANCELLED BY IAN** mid-session: *"keep sandbox keys. not worth rotating."* I touched no key. |
@@ -145,7 +145,10 @@ forged name into the commit and believe it.
 
 | Gate | Was | Now | |
 |---|---|---|---|
-| committer (**number still owed**) | 33 | **48** | + the ambiguous index, + the `lane_message` shape and its name fence |
+| committer (**now gate 56**, keeper minted it) | 33 | **56** | + the ambiguous index, + `lane_message` and its name fence, + `lane_receipt` and the forged-row fence |
+| 56 committer (**now also: chat, questions, decisions, doorbell**) | 33 | **104** | |
+| relay (**number not minted — asked**) | — | **24** | the shell property, idempotency, the attempt cap, the visible failure |
+| 50 — work board (after the general chat) | 59 | **99** | + the general chat, and that it is not a second implementation |
 | 50 — work board | 59 | **95** | + the endpoint driven over real HTTP, + the source-of-truth preference in three states, + the shipped archive, + the lane threads |
 
 **FULL SUITE: ALL GATES GREEN, exit 0, 51 gates**, run on the rebased branch
@@ -280,12 +283,420 @@ still refused *by accident downstream* and looked green.
 reason; and an absent relay renders as **absent**, not as a quiet lane. All three
 gated, each broken to prove it bites.
 
+### The relay — BUILT (keeper approved the design 8/16, with one addition)
+
+`tools/keeper/board-lane-relay.php` + `tools/gates/board-lane-relay-gate.php`
+(20 assertions, **number not minted — asked keeper**).
+
+**Keeper's addition is the spine: idempotent across a crash.** Every attempt is
+receipted through the committer (`lane_receipt`), and a receipted message is
+never sent again. **The receipt is committed AFTER `lane-say` returns, and that
+order is deliberate** — die in between and the next pass re-delivers *once*,
+never loops. The other order risks a message recorded as delivered that never
+arrived, which is the failure nobody can see. It is committed rather than kept
+in relay state so it outlives the process and its disk.
+
+- **Failures are receipted too**, counted, abandoned after 3. Receipting only
+  successes retries an undeliverable message forever — the wedge shape.
+  Gated: a message *behind* a stuck one still goes out.
+- **The message never meets a shell**, proven not claimed: the gate's fake
+  `lane-say` records its whole argv *and* the bytes of the file, and asserts the
+  text is in the FILE verbatim (backticks, `$()`) and **nowhere** on the command
+  line.
+- **Its own clone** (`/home/ubuntu/board-lane-relay-clone`), separate from the
+  committer's — the committer `reset --hard`s before every write and a shared
+  reader would occasionally parse mid-reset.
+- **Fails safe pre-merge**: exit 3, "the committer is not deployed at …". It
+  cannot run for real until this merges and the serve pulls.
+
+**Two bugs the gates caught that nothing else would have:**
+1. PHP's array union keeps the **left** key, so a parsed message inherited an
+   empty `text` from its own initialiser — the relay delivered **empty
+   messages** while every count and log line said they had gone out.
+2. A multi-line failure reason could **forge a second receipt row** — mutation
+   measured: 3 rows where 2 were expected. A forged `delivered` row would
+   silently suppress a real message. Reasons are flattened to one line.
+
+### The general chat — a hole I nearly shipped
+
+I built the per-seat threads and was ready to call the extension done. Then I
+checked whether the general chat *worked*: **keeper is not a lane.** It is absent
+from the sentinel's seat list, so a chat rendered by the per-seat loop has **no
+surface for keeper at all** — Ian had no way to reach keeper from the board, which
+is the half he asks for most ("how's it all going?"). It now has its own rail, and
+the gate asserts keeper is **absent** from the seat list so this cannot quietly
+become a lane-loop artifact again.
+
+**One renderer, not two.** Both surfaces go through `lgb_thread_box()`. Two would
+drift, and the first thing to drift would be the failure states. The mutation that
+proves it: give the general chat its own markup that forgets the NOT DELIVERED
+banner, and exactly that assertion reddens.
+
+> What caught it was asking *can Ian actually do the thing he asked for*, not
+> *does my code render*. Same question that found the empty-message bug.
+
+### ⚠️ The general chat's REPLY path is a convention, not code
+
+Measured over the last 400 board messages: every lane prefixes its posts with its
+own name, so **per-lane threads are healthy**. But only **4 of 400** start with
+`keeper ->` — keeper answers lanes through `lane-say` into a terminal, which never
+touches the devmsg store and therefore can never appear in Ian's general chat.
+**So Ian can ask and see no reply even when keeper acted.** The fix is keeper
+adopting the convention of answering *on the board* when the question came from
+Ian. Raised; keeper's to settle before Ian uses it.
+
+(Also measured: the 62 unattributed messages are all `mirror-sync-watch` alerts —
+robot noise. Leaving unattributed messages out of the threads drops nothing Ian
+needs. That validated the design rather than changing it.)
+
+### Write shapes v2 — `item_add` and `item_promote` (Ian, 8/16, keeper-queued after the relay)
+
+His words: *"Could I add things. Add headers and sub items. Or promote sub items
+to headers."* Keeper's design note is the invariant: **position is rank, number
+is a permanent name** — an add or a promotion must never renumber anything.
+
+- **Additive by construction**: `item_add` inserts one line and touches nothing
+  else. A new item lands at the **bottom** — nobody but Ian decides what
+  outranks existing work — and he drags it up through the reorder shape.
+- **The number is `max+1`, never a gap-fill.** Reusing a retired number makes an
+  old reference silently point at new work. A parent counts as taken even when no
+  item holds it (the real file has children of `11` and `4` with no item 11 or 4).
+- **IDS ARE DOTTED INTEGERS, NOT DECIMALS.** The file carries `3.10`, and
+  `(float)"3.10" === (float)"3.1"` — any numeric handling merges them, and
+  "next child + 0.1" hands out a number that already exists. Gated against the
+  real 3.9/3.10 pair.
+- **Promotion leaves a pointer**: content moves verbatim to the new number, the
+  old line becomes `4.2. → promoted to 36`. No name is ever retired.
+- **The page never mints a number** — it sends a title and an optional parent;
+  the committer mints from the file inside the same read-and-write. Gated, and
+  proven to bite by making the page send one.
+
+Gate 56: 56 → **75**. Gate 50: 99 → **105**.
+
+### The dark-mode pass — measured, and it does NOT need redoing for this lane
+
+dark-anon-sweep took the board's contrast (276 findings → 0) on branch
+`dark-board`, cut from main. **My first train was already on main**, so their pass
+covered nearly all of this lane's surfaces — both opacity cases they found
+(`.grip`, `.hist__dc`) are this lane's classes.
+
+**Exactly four classes are branch-only**: `.askk`, `.askk__w`, `.newitem`,
+`.newitem__t`. Three are layout-only. The fourth uses their flagged
+opacity-on-inherited-ink pattern — but at `.7`, not `.35`, which over their new
+rail background `#202426` composites to `#aaaca9` = **6.84:1**, clearing the bar.
+(Their `.35` cases measured 2.78:1; the difference is entirely the opacity value.)
+
+**So nothing here should reopen their zero** — but that figure is my arithmetic,
+not their instrument, so **re-run their probe once after this merges**. Our diffs
+touch the same file in different regions (theirs ~line 965 in the head block,
+mine in the second block at ~1404): it should auto-merge, and a clean auto-merge
+is precisely the case where a new class arrives without a dark rule.
+
+---
+
+## IAN'S COCKPIT — the first cut (2026-08-16, ruled mid-session, ships before the relay)
+
+Ian flipped the priority: **the general chat ships first, the lane relay
+second**, because this half touches **no terminal at all**. A message is a
+commit; being committed **is** being delivered. That is the whole reason it
+could go out ahead of the relay.
+
+**Five new fenced shapes** (`keeper_message`, `question_ask`, `question_answer`,
+`decision_pose`, `decision_answer`) and four surfaces:
+
+| Surface | What it is |
+|---|---|
+| **Chat panel** | Ian ↔ keeper, both directions committed, both actor-stamped. The old Ask-keeper panel was **repointed**, not duplicated — it used to route through the lane-thread shape, which means terminal delivery. |
+| **Open questions rail** | Ian: *"I ask questions stream of consciousness and they wind up getting lost."* OPEN is derived from having no answer. Answered ones move to a drawer still showing question **and** answer. |
+| **Desk decision boxes** | Real buttons + an always-present "Something else…", inside Your Desk. |
+| **Doorbell** (`tools/keeper/board-doorbell.php`) | Keeper runs it as a background task; **its exit is the bell**, stall-watchdog pattern, relaunch order on every exit line. |
+
+### The rules that carry the weight
+
+- **An open question cannot be removed except by gaining an answer** — not a rule
+  anyone remembers, but **the absence of any verb that removes one**. Gated:
+  the question text is still present after being answered.
+- **First answer wins, enforced in the COMMITTER**, not in either door. If each
+  door checked "already answered" for itself there would be two implementations,
+  and the first time they drifted a ruling would exist twice with different
+  words. The answer records **which door** — months later "he pressed it on the
+  board" and "he typed it in chat" are different evidence.
+- **An answered desk box offers nothing to press.** Otherwise he presses it, the
+  committer refuses under first-answer-wins, and the board looks broken while
+  working exactly as designed.
+- **The chat refetches, it never fabricates** — gated against the *client
+  source*, because otherwise the rule holds only until someone "improves" the UX
+  with an optimistic append.
+- **The doorbell rings once per item then goes quiet**, and **keeper's own writes
+  never ring keeper**. Its memory sits beside keeper, not in the repo: losing it
+  costs one duplicate ring, the harmless direction.
+
+### Still to build (Ian's parity roadmap, in order)
+1. **Image paste** → dev-gated upload, outside the WP media library *and* outside
+   git, committed as the existing `media_ref` shape; keeper reads from disk.
+   (A WP upload gets an attachment post with a public URL — a board screenshot of
+   an admin screen would become member-reachable.)
+2. **Decision posing generalised to the chat** — mostly built; the mechanism
+   already reads options from a committed file and never invents them.
+3. **Paste-back** — the box itself. *The whitespace half is already done and
+   gated* (see below).
+4. **Near-live feel** — poll for new committed replies.
+
+Then the **lane relay resumes**.
+
+---
+
+## NEXT CHARTER (keeper, 2026-08-16): invite links — Ian found a real hole
+
+**The whitelist takes only EXISTING wp users**, so the most important
+pre-cutover rehearsal — a fresh recruit going from nothing to a paid membership
+— is currently **untestable**: a fresh person cannot even see the join page,
+because it only reveals itself to logged-in listed members.
+
+**This reverses `STRIPE-LANE-BRIEF.md` §6 "No tokened invite links"**, and the
+reversal is recorded there rather than left as two documents disagreeing. The
+old reasoning was wrong in one place: it assumed everyone we test with already
+has an account.
+
+### The design, four fences
+1. **Scope**: a token admits the **join flow and nothing else** — an explicit
+   page allowlist (join, regional-pricing, welcome). `manage-subscription` and
+   `request-refund` stay shut: an invitee has no subscription to manage, and a
+   token opening those is a bypass in an invite costume.
+2. **Single-use means ONE ACCOUNT, not one page view.** Burning it on first open
+   dies on a refresh or a back button — a support ticket, not a fence. It is
+   consumed when the account is created on email match.
+3. **Expiry** stamped at mint, checked every hit, so an old link in an inbox is
+   dead even if nobody revoked it.
+4. **Audit**: the account is stamped `invite-created` and auto-listed on email
+   match, so *how* a member got in is answerable later rather than inferred.
+
+**Dual rail intact**: the step/welcome handoff a fresh account gets must be the
+**rail-agnostic** one — a fresh Stripe joiner must not receive Patreon-shaped
+onboarding.
+
+### ⚠️ THE THING THAT WILL BREAK IT
+**These pages are gated TWICE.** The router decides who may reach a page, then
+every page file re-checks on its own authority — that is exactly why the soft
+launch looked broken on 8/15 when only the router was changed. The invite check
+belongs in **`lg_membership_testgroup_gate_or_exit`**, the shared rule both
+doors already delegate to. Put it in the router alone and a fresh invitee
+reaches the join page and is thrown out by the page, which reads as a broken
+token when the token is fine.
+
+### Gates (keeper's list, plus one)
+- an unused invite admits exactly the join flow and nothing else;
+- a used or expired invite admits nothing;
+- a fresh account from an invite lands listed;
+- **and with the invite feature switched OFF the whole thing is byte-identical
+  to today** — the assertion that lets it merge safely before cutover.
+
+Sandbox only until Ian's cutover, as ever.
+
+### One design unknown I resolved for you, and one I did not
+
+**Resolved:** `$ctx` does **not** carry the requested slug (checked
+`membership-pages/lib/whoami.php` — it has `authenticated`, `wp_user_id`,
+`capabilities`, no slug). So the scope fence cannot read the page from `$ctx`.
+Do **not** solve that by adding a slug argument to
+`lg_membership_prelaunch_gate_or_exit($ctx)` — every page file calls it and you
+would be changing a signature in ~6 places, which is how one page gets missed
+and silently keeps the old rule. Put a slug resolver **inside the invite
+module**, mirroring the router's own resolution, so both doors get the same
+answer without any call site changing. That is the same principle that fixed the
+two-door bug in the first place.
+
+**Not resolved, and it is yours to decide:** whether the token lives in the URL
+query (`/join?lginv=…`) or is exchanged once for a short-lived cookie on first
+hit. The query form is simpler and is what "invite URL" implies, but it means the
+token sits in browser history, in any referrer, and in Ian's inbox forever — and
+it is a gate bypass, however scoped. The cookie exchange costs one redirect and
+keeps the bypass out of history. **I did not pick one**, because it is a
+security posture call above my pay grade on a live-money path, and because
+picking it silently in code is exactly how such a choice stops being visible.
+
+### ⚠️ WHY I STOPPED HERE RATHER THAN STARTING IT
+
+The design above is complete and the fences are specified — but this feature is a
+**scoped gate bypass on the payment path**, and I was near the end of a very long
+session. A half-wired bypass is the single worst thing to leave in a tree: it
+either fails closed and looks broken, or fails open and nobody notices. Every
+other piece this session was safe to leave mid-flight; this one is not. So it is
+captured to be **executed cleanly from the top**, not resumed from the middle.
+
+### The whitespace bug that phase 3 would have hit
+`ltrim($l, '> ')` strips a character **class** — every leading `>` *and* every
+leading space — so quoted terminal output came back with its indentation
+deleted. Stack traces, `systemctl` output and diffs are all indentation. Now
+strips exactly one `> `, proven with an exact round trip and gated both ways.
+
+---
+
+## Where the merge conflict actually was (I got this wrong twice)
+
+I warned that dark-board and this branch would collide on `wip-board.php`. **They
+did not.** Main does not carry dark-board's rules yet. The real collision was
+with `9efd372`, the **watch-only live terminals** lane, which added a watch link
+to the same team-row markup this lane had refactored into a shared renderer.
+
+**Resolved by keeping BOTH** — their watch link and this lane's renderer are
+different features that happened to share a region. Ian's watch-only ruling is
+untouched, with a comment at the site saying so. Branch is rebased onto main,
+zero behind, all gates green.
+
+## Two self-corrections worth inheriting
+
+1. **Never background a `git rebase` in a worktree you are still editing.** I
+   did; it stopped on the conflict, left me on a **detached HEAD** mid-replay,
+   and the suite chained behind it ran against a half-rebased tree. I caught it
+   only because a gate count dropped 75 → 56 and I chased the number instead of
+   shrugging. Nothing was lost (everything was pushed), but the suite result
+   would have been meaningless had I trusted it.
+2. **Do not gate a suite run on "load < 4".** A suite *with Chrome* is itself
+   above 4 on 2 cores, so that condition can essentially never fire while any
+   lane is running one — I starved my own suite four times while every other
+   lane got theirs through. **The flock mutex is already the box-wide
+   serialiser** for suites specifically. The load rule remains right for phases
+   that add load on top of what is there; it is wrong for the one heavy phase
+   that carries its own serialiser.
+
+## The assertion bug this session produced SEVEN times
+
+An assertion matching a **string that also lives in prose** — a CSS rule, a code
+comment, a container class, or a neighbouring `case`. Every one was green for a
+reason unrelated to the property it named, and one blamed a *working* page:
+
+`hist--none` (stylesheet) · `NOT DELIVERED` (JS comment) · `proj--unsorted`
+(stylesheet, pre-existing) · lane-name refusals (refused downstream by accident)
+· `item_add … 'id' =>` with `/s` (crossed into `item_promote`) · `w2__opts`
+contains `w2__opt` · the doorbell's own docblock saying "no checkout, no reset".
+
+**The cure is always the same**: strip comments before asserting about code,
+assert the markup that can only be *output* (`class="x">text`), and check a red
+is red **for the reason it claims**. Worth a line in CRAFT-STANDARD.
+
+---
+
+## IAN'S VISIBILITY BUG (2026-08-16) — FIXED, and the reported cause was wrong
+
+He tested as **Mikelle (1953)**, correctly listed, and saw no Stripe entries.
+The trace handed to me said membership whoami never fetches capabilities. **It
+does.** Measured rather than read:
+
+- a minted session for 1953 returns a payload carrying `manage_options`,
+  `edit_posts`, `moderate_forums` and more — caps are fetched and cached fine;
+- `/manage-subscription/` as Mikelle returns **200, 57KB of real page**, not the
+  stub — the page gate is fine too.
+
+**The bug was one line.** The menu keys the Stripe entries on the
+`stripe_testgroup` capability (`lg-shared/site-header.php:110`); the **poller**
+computes it (`InternalRestController` — `manage_options` OR `inCohort`); but
+`profile-app/src/Whoami.php::capabilitiesFor()` rebuilds the caps array from an
+**explicit allowlist** — three named keys plus a hardcoded pass-through of
+exactly two extras — and `stripe_testgroup` was in neither. profile-app received
+the capability and **dropped it on the floor**, so a correctly-listed member
+could reach the pages while seeing no way in to them.
+
+> **The trap that list IS, and it will bite again:** a named pass-through
+> silently discards every capability nobody remembered to name, and the discard
+> is **indistinguishable from the capability being false**. Anything the header
+> learns to key on must be added there too, and nothing enforces that.
+
+Fixed and unit-checked both directions (listed → `true`, unlisted → `false`;
+before, **missing for both**, which is why it read as false everywhere).
+
+### ⚠️ STILL OWED ON THIS: the real-page gate leg (keeper specified it, I did not build it)
+
+Gate 34b's menu leg drives `menuFor()` with a **synthetic** `stripe_testgroup`
+cap, so it could never notice that the real caps array never contains that key —
+the harness-must-run-as-the-real-user failure, one layer further out than the
+8/15 soft-launch bug.
+
+**Build it as keeper specified**, with the probes keeper named on 8/16: **854
+`GerryHayesTest`** as the listed probe (plain subscriber, **no**
+`manage_options`, on the list — it sidesteps the admin-branch trap) and **2455
+`viz-test-nobody`** as the unlisted probe. Drive `/manage-subscription/` **over
+HTTP as a minted session** for each and assert the five entries render / are
+absent.
+
+> **It must READ the deployed state, not hardcode it.** The HTTP leg measures
+> whichever copy of profile-app is *deployed*. Until `145a2c3` merges and the
+> serve pulls, the deployed copy still drops `stripe_testgroup` — so a leg that
+> hardcodes "entries render" goes RED on main and blocks every lane. Probe
+> whoami for the capability first and assert per-state, the same rule as
+> [[feedback-gate-reads-the-flag-not-a-hardcoded-state]].
+
+**The static half is already built** (34b, 79 assertions): the central
+computation passes the capability through, and **every capability the header
+keys on survives profile-app's allowlist** — a cross-check that fails the day
+someone teaches the header a new capability and forgets the other end. **Red-first against the
+pre-fix state** — revert the one-line pass-through and it must go red.
+
+The session-minting recipe is proven and is what I used for the trace:
+`wp eval 'echo wp_generate_auth_cookie($uid, time()+3600, "logged_in");'` plus
+`COOKIEHASH`, then `curl -k -H "Host: dev2.loothgroup.com" -H "Cookie:
+wordpress_logged_in_<HASH>=<COOKIE>" https://127.0.0.1/manage-subscription/`.
+**Use a listed NON-ADMIN member** — 1953 has `manage_options`, so she passes the
+admin branch and proves nothing about the list.
+
+**Ian can re-test as Mikelle only after this merges and the serve pulls** — the
+serve reads `loothplatformv2-clean`, so the fix is not live on dev2 yet.
+
+---
+
+## NEXT CHARTER: DESK AUTOMATION (Ian, 2026-08-16) — and the dependency that will bite
+
+Ian: *"are you hand populating my desk? Is there a way to do it mechanically?"*
+The desk becomes **derived**: (1) lane board posts addressed `-> Ian` render as
+desk items; (2) decisions render as the desk boxes; (3) keeper items go through
+the committer. `docs/IAN-DESK.md` retires to a fallback. Gate: a lane's `-> Ian`
+post appears on the desk within one refresh.
+
+**Item 2 IS ALREADY DONE** — the decisions store is committed and the desk boxes
+render from it on this branch today. Item 3 is the committer, already built.
+
+### ⚠️ ITEM 1 HAS A HARD DEPENDENCY — re-verified, not assumed
+
+**The board cannot read the msg store.** The page runs as the `looth-dev` pool
+and `/var/lib/devmsg/messages.db` is `devmsg`-group; tested as that exact user,
+it **cannot open it**. So lane posts cannot be read by the page directly, however
+the render is written.
+
+**Do NOT solve it by adding `looth-dev` to `devmsg`.** That group has **write**
+on the database — it would let any PHP on the WordPress site send messages as
+`ubuntu`. A far larger door than the one being opened, opened to fix a rendering
+problem.
+
+**The answer already exists**: the relay writes a **world-readable snapshot** for
+exactly this airlock reason, and the desk should take its lane items from that,
+the same way the lane threads already do. So item 1 depends on the snapshot
+writer — the relay half, built and gated (24) but **not yet armed**. Either wait
+for the relay, or extend the snapshot with a small separate writer that carries
+`-> Ian` posts.
+
+### ⚠️ If you touch the styles, read this first
+
+- **There are TWO `<style>` blocks**: the original in the head, and a second one
+  carrying all **38** classes this lane added (threads, messages, the NOT
+  DELIVERED banner, the archive, the write-layer confirmations, the ahead chip).
+  A pass that edits only the head block leaves every new surface untouched.
+- **The head block uses theme tokens** (`var(--accent)`, `var(--bg)`, …); the
+  second block **hardcodes** colours, including two literal `#4a9eff` where
+  `var(--accent)` exists. Most of it is translucent overlay + `color: inherit`
+  and so adapts by construction, but the hardcoded accent is a real token
+  violation and is **this lane's to fix**.
+- **dark-anon-sweep is taking a dark-mode contrast pass on the board** (keeper,
+  8/16). Their diff stays in the style block, this lane's stays in PHP. I posted
+  the above to them and am staying out of the style block until they answer —
+  and warned that a pass run against **main** would measure a board missing all
+  38 classes, because this branch is not merged.
+
 ### Left for keeper
-- **Confirm the relay runs as `ubuntu`** (it must — devmsg group) and pick a
-  cadence. I suggested **30s**: person-paced for a chat, cheap.
-- Then the relay script (`tools/keeper/board-lane-relay.php` — I proposed writing
-  it into the repo so it is reviewable and gated rather than hand-authored on the
-  box), and the timer **last**.
+- **A gate number** for the relay gate (committer got 56).
+- **The timer, LAST**: merge → serve pull → hand-run the relay once clean →
+  *then* arm. Armed ahead of its code, it reddens `systemctl --failed` forever
+  and kills the alert channel — the mirror outbox timer did exactly that.
+- Cadence: I suggested **30s** (person-paced for a chat, cheap).
 
 ---
 
