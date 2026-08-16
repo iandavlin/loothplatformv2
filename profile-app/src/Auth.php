@@ -61,6 +61,29 @@ final class Auth
     }
 
     /**
+     * TEST SEAM — pin the resolved viewer, so a gate can drive an endpoint AS a
+     * per-run probe member that has no WP bridge row and therefore no mintable JWT.
+     *
+     * ⚠️ CLI-ONLY, ENFORCED RATHER THAN DOCUMENTED, and the enforcement is the
+     * whole point: this function's entire job is to say "you are logged in as this
+     * person", so an HTTP-reachable version of it would be an authentication
+     * bypass, not a convenience. Same discipline as Flags::forTest() and
+     * Notifications::pinSchemaForTest() — refusing under any web SAPI means it
+     * cannot become a request-time switch by accident.
+     *
+     * Pass null to clear.
+     */
+    public static function pinUserForTest(?array $user): void
+    {
+        if (PHP_SAPI !== 'cli') {
+            throw new \LogicException('Auth::pinUserForTest is CLI-only');
+        }
+        self::$cachedUser = $user ?? null;
+        self::$cacheBuilt = true;
+        self::$lastClaims = $user ? ['sub' => $user['uuid'] ?? null] : null;
+    }
+
+    /**
      * Endpoints an administrator may drive ON BEHALF OF another member via
      * ?as=<uuid> (front-end admin profile editing, Ian 6/12). PROFILE CONTENT
      * only — social actions (connections, messages, notifications, mutes),
