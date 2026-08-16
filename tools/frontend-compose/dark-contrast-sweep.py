@@ -199,24 +199,26 @@ def main() -> int:
         theme = ev("document.documentElement.getAttribute('data-lguser-theme')")
         if theme != "dark":
             print(f"CANNOT RUN: theme is {theme!r}, not dark — measuring the wrong thing")
-            return 3
+            return 2
 
-        ev("(() => {const b=[...document.querySelectorAll('#ntm-typetoggle .ntm-typetoggle__opt')]"
-           ".find(x=>x.getAttribute('data-ntm-type')==='loothprint'); b&&b.click(); return 1;})()")
-        for _ in range(80):
-            time.sleep(0.5)
-            if ev("!!document.querySelector('#lpm-body .acf-field')"):
-                break
+        # NO TOGGLE CLICK, NO #lpm-body WAIT — both went with the modal, and this
+        # phase was left behind when the collector above was repointed. It drove
+        # the hub composer's #ntm-typetoggle and then waited for the injected
+        # #lpm-body form; neither selector exists on main any more, so the click
+        # matched nothing and the loop then burned its full 40s waiting for an
+        # element that can never appear — at BOTH widths, every suite. The
+        # standalone URL serves the form directly, and the .lgfc__card wait above
+        # is what proves it rendered, so there is nothing left to wait for.
         time.sleep(4)
 
         res = ev(COLLECT)
         if not res or res.get("error"):
             print(f"CANNOT RUN: {(res or {}).get('error', 'collector returned nothing')}")
-            return 3
+            return 2
         items, seen = res["items"], res.get("seen", 0)
         if not seen:
-            print("CANNOT RUN: no text found in the modal — a pass here would be vacuous")
-            return 3
+            print("CANNOT RUN: no text found in the form — a pass here would be vacuous")
+            return 2
 
         surfaces = res.get("surfaces", [])
         fails = []

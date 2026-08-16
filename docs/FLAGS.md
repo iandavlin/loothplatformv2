@@ -23,6 +23,38 @@ as-verified on 2026-08-09; live = commit `021ff38` unless noted.
 | `LG_AUTHOR_SOCIALS_ALL_MEMBERS` | bb-mirror/config.php define | **true** | ON | ON | The original flag-pattern exemplar; GA |
 | `LG_BB_MIRROR_FOLLOW` | FPM pool env (platform/fpm/) | dev2 "1" | ON | per live pool | Thread-follow surface; ⚠️ deploy-tooling branch documents a restore sequence that silently zeroed it — see that branch's register before touching pools |
 | `LG_THREAD_FOLLOW_ENABLED` | bb-mirror/config.php | see file | — | — | Same family; two-source pattern (getenv/$_SERVER) |
+| frontend-compose `enabled` | platform/config/frontend-compose.php (+ **box-local** frontend-compose.local.php — see below) | **false** | **ON** (via the .local.php, verified on the serve 8/16: `lg_fc_enabled()` true, route serves 184,627B to an allowed member) | OFF (no .local.php there) | Front-end compose/edit. Ian's item-5 'Do it' 8/15, light + dark. Gates 19 (OFF is a byte-identical no-op) + 35. ⚠️ ON for **all members** once flipped — the allow-list was deleted, so the flag is the only thing narrowing it |
+
+### ⚠️ The `*.local.php` BOX-LOCAL override — a second way these flip, added 8/15
+
+The table above says "flip by commit + pull". That is no longer the whole truth.
+Two of these flags are ON on dev2 without any commit, via an **untracked,
+gitignored** per-box file next to the tracked one:
+
+| Flag | Tracked default | Box-local file (dev2 only) | Reader |
+|---|---|---|---|
+| frontend-compose | `false` | `platform/config/frontend-compose.local.php` | `lg_fc_enabled()` in the mu-plugin |
+| back-pill | `false` | `platform/config/back-pill.local.php` | `bb-mirror/web/_chrome.php` |
+
+**The shape**, and copy it rather than inventing a third: the reader loads the
+tracked config first, then `@include`s `<name>.local.php` and lets it win only on
+`array_key_exists('enabled')` + `=== true`. Unreadable or malformed → the tracked
+value stands. `.gitignore` carries the glob `platform/config/*.local.php`.
+
+**Why it exists:** an FPM pool env reaches FPM *only*, so wp-cli, WP-cron and the
+gates read the opposite state from the serve — that split is what reddened gate 35
+on a healthy box. It also writes a *tracked* file inside the serving checkout via
+the pool symlinks, which dirties the one checkout that must only ever pull.
+
+**LIVE IS PROTECTED BY ABSENCE, not by a check.** No code asks which box it is on;
+live simply has no `.local.php`, so it takes the tracked default. That is exactly
+why these files must never be committed — one commit would switch a member-facing
+surface on for everyone.
+
+**⚠️ ORDER, learned the hard way:** the READER merges and the serve pulls BEFORE
+the `.local.php` is placed. Reversed on 8/15 — the file was created while nothing
+read it, the pool env was removed in the same change, and compose went dark
+(`/compose/` 404 to an allowed admin) until the reader landed.
 
 ## Runtime WP-option flags (flip by wp option update — PER BOX, no deploy)
 

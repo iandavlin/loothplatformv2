@@ -50,10 +50,26 @@ return array(
 	 * /compose/ recorded BEFORE the feature existed — not against the weaker
 	 * "nothing was rendered".
 	 */
-	// Tracked default FALSE. dev2 runs compose ON via env[LG_FC_PREVIEW]=1 in
-	// the looth-dev FPM pool (Ian's item-5 'Do it' 8/15, light + dark passes) —
-	// kept out of this tracked file because ~1,820 live members hold the
-	// edit_posts+upload_files pair, so a live pull of a tracked true IS a
-	// member launch. The live flip is an explicit paste line, Ian's to run.
+	// Tracked default FALSE, and it stays false: ~1,820 live members hold the
+	// edit_posts+upload_files pair, so a live pull of a tracked true IS a member
+	// launch. The live flip is an explicit paste line, Ian's to run.
+	//
+	// ⚠️ HOW dev2 IS ACTUALLY ON, corrected 2026-08-16 — this comment named the
+	// wrong mechanism and the wrong one is the one that broke. dev2 runs compose
+	// ON via platform/config/frontend-compose.local.php: an UNTRACKED, gitignored
+	// per-box file read by lg_fc_enabled() AFTER this tracked default (Ian's
+	// item-5 'Do it' 8/15, light + dark passes).
+	//
+	// It is NOT env[LG_FC_PREVIEW]=1 in the looth-dev FPM pool, which is what this
+	// comment used to say. That mechanism was removed on 8/15 and is the direct
+	// cause of the outage that followed: a pool env reaches FPM ONLY, so wp-cli,
+	// WP-cron and the gates read the opposite state from the serve — which is why
+	// gate 35 went red on a healthy box — and when FPM reloaded on the next reboot
+	// without the env line, /compose/ answered 404 to an allowed admin.
+	// LG_FC_PREVIEW still exists, but ONLY as the lane-preview override described
+	// in the header above; it is not how this box is switched on.
+	//
+	// LIVE IS PROTECTED BY ABSENCE: live's checkout has no .local.php, so it takes
+	// this tracked default. Nothing in the code checks which box it is on.
 	'enabled' => false,
 );
