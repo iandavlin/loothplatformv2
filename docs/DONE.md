@@ -8,3 +8,5 @@ forensic depth; this is the record a person reads.
 
 - **39** · WIP BOARD · `f5fa394` · landed 2026-08-16
 - **41** · DESK LIFECYCLE + MODAL COMPACTION · `f5fa394` · landed 2026-08-16
+
+- **40** · SEARCH CONSOLE COVERAGE TRIAGE · `84cab9e` · landed 2026-08-16
