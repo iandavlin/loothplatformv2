@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""WORK BOARD dark contrast — Ian's primary interface. UNREGISTERED, no number yet.
+"""GATE 61 — WORK BOARD dark contrast. Ian's primary interface.
 
-NOT IN run-all.sh ON PURPOSE, and it must not be added until this lane's fix is
-MERGED AND DEPLOYED. It measures the SERVE, which runs main, so it reads RED
+Number 61 MINTED BY KEEPER 2026-08-16. Still UNREGISTERED in run-all.sh, and that
+is not an oversight — see below.
+
+NOT IN run-all.sh ON PURPOSE, and it must not be added until the board palette is
+MERGED **AND DEPLOYED TO THE SERVE**. Merged is not enough. It measures the SERVE, which runs main, so it reads RED
 until then — and a red gate in run-all.sh blocks every lane on the box. Keeper
 mints the number and registers it; the registration line is at the bottom.
 
@@ -175,8 +178,8 @@ def main():
 if __name__ == "__main__":
     sys.exit(main())
 
-# REGISTRATION LINE for run-all.sh, once keeper mints a number and this lane's
-# fix is deployed (it reads the serve, so it is RED until then):
+# REGISTRATION LINE for run-all.sh. The number is minted; the only remaining
+# precondition is the DEPLOY (it reads the serve, so it is RED until then):
 #
-#   echo "=== GATE NN: the work board clears AA in dark (Ian's primary interface) ==="
+#   echo "=== GATE 61: the work board clears AA in dark (Ian's primary interface) ==="
 #   run "board-dark-contrast" python3 "$(dirname "$0")/board-dark-contrast-gate.py"
