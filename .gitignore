@@ -58,5 +58,13 @@ tools/dupe-merge/journal/
 __pycache__/
 *.pyc
 archive-poc/api/v0/_flags.local.php
-platform/config/frontend-compose.local.php
-platform/config/back-pill.local.php
+# Box-local feature-flag overrides. UNTRACKED ON PURPOSE: live's checkout must
+# not have one, because its ABSENCE is what keeps a member-facing surface off
+# there — no code checks which box it is on. A committed *.local.php is one merge
+# away from switching a feature on for every member on live.
+#
+# A GLOB, not a list of filenames (8/16): the list already had two entries and a
+# third flag is in flight, and the failure mode of forgetting a line is silent —
+# the file just becomes committable. Verified against the REAL filenames with
+# git check-ignore rather than assumed to match.
+platform/config/*.local.php

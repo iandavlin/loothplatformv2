@@ -240,6 +240,12 @@ function lg_fc_enabled(): bool
 
 const LG_FC_PATH = 'compose';
 
+/* The reaper's handle on a compose draft, and how long a never-returned one
+   survives. MARKING the row rather than inferring from status means the sweep
+   can never mistake an auto-draft made elsewhere — by wp-admin, say — for ours. */
+const LG_FC_DRAFT_META     = '_lg_fc_draft';
+const LG_FC_DRAFT_TTL_DAYS = 30;
+
 /* ──────────────────────────────────────────────── the per-type registry ───── */
 
 /**
@@ -464,6 +470,189 @@ function lg_fc_comment_status(): string
 
 add_action('template_redirect', 'lg_fc_route', -10);
 
+/**
+ * The member's WORKING DRAFT for this type — found, or created.
+ *
+ * Ian, 2026-08-15, on the media model: "Do what you recommend" — a hidden draft
+ * exists from compose-open, every upload parents to it FROM BIRTH, the picker
+ * queries by post_parent so each post literally has its own library, an
+ * abandoned compose leaves a resumable invisible draft, and a generous reaper
+ * clears the never-returned ones.
+ *
+ * ── WHY A REAL ROW HAS TO EXIST FIRST ───────────────────────────────────────
+ * Measured before this changed: with post_id => 'new_post' the post does not
+ * exist while the member fills the form, so an upload has nothing to parent to.
+ * It lands as post_parent = 0 and STAYS there — I uploaded through the real
+ * picker, abandoned, and the row survived with the file on disk and nothing
+ * referencing it. Neither our build nor WordPress core sweeps unattached media.
+ * A row that exists from the start is what makes both halves of the ruling
+ * possible at once: uploads have a parent, and "this post's library" is a real
+ * query rather than a wish.
+ *
+ * STATUS IS 'auto-draft' ON PURPOSE. It is excluded from the front end, from
+ * archives and from search, so a half-filled loothprint cannot surface. The
+ * status becomes the real one only on submit (lg_fc_promote_draft).
+ *
+ * REUSED, NOT RE-CREATED: a member who opens compose five times must not leave
+ * five drafts. Their newest un-promoted draft of this type is handed back.
+ */
+function lg_fc_working_draft(string $type, int $user_id): int
+{
+    if ($user_id <= 0) return 0;
+
+    $existing = get_posts([
+        'post_type'        => $type,
+        'post_status'      => 'auto-draft',
+        'author'           => $user_id,
+        'numberposts'      => 1,
+        'orderby'          => 'ID',
+        'order'            => 'DESC',
+        'fields'           => 'ids',
+        'meta_key'         => LG_FC_DRAFT_META,
+        'suppress_filters' => false,
+    ]);
+    if (!empty($existing[0])) return (int) $existing[0];
+
+    /* TITLE MUST NOT BE EMPTY. wp_insert_post() REFUSES a post with no title,
+       content and excerpt — wp_insert_post_empty_content — and returns an error
+       rather than a row. Measured: with post_title '' the draft was never
+       created, lg_fc_working_draft returned 0, and the form silently fell back
+       to 'new_post', i.e. straight back to the orphan behaviour this replaces.
+       'Auto Draft' is WordPress's own placeholder for exactly this row
+       (get_default_post_to_edit), and the member's real title overwrites it on
+       submit. */
+    $id = wp_insert_post([
+        'post_type'      => $type,
+        'post_status'    => 'auto-draft',
+        'post_author'    => $user_id,
+        'post_title'     => 'Auto Draft',
+        'comment_status' => lg_fc_comment_status(),
+    ], true);
+    if (is_wp_error($id) || !$id) {
+        /* Say WHY in the log rather than falling back mutely: the fallback is
+           the OLD unparented behaviour, so a silent one hides a regression that
+           looks exactly like nothing happening. */
+        error_log('lg-fc: could not create working draft for ' . $type . ': '
+            . (is_wp_error($id) ? $id->get_error_message() : 'insert returned 0'));
+        return 0;
+    }
+
+    /* The reaper's handle. Marking the row rather than inferring from status
+       means the sweep can never mistake somebody else's auto-draft — one made
+       by wp-admin, say — for ours. */
+    update_post_meta($id, LG_FC_DRAFT_META, time());
+    return (int) $id;
+}
+
+/**
+ * Promote the working draft to a real post on submit.
+ *
+ * acf_form()'s `new_post` argument only applies when post_id === 'new_post';
+ * we hand it a numeric id, so the status transition is ours to make. Doing it
+ * here rather than in `new_post` is what keeps the row invisible for the whole
+ * time the member is typing.
+ */
+function lg_fc_promote_draft($post_id): void
+{
+    $post_id = (int) $post_id;
+    if ($post_id <= 0) return;
+    if (!get_post_meta($post_id, LG_FC_DRAFT_META, true)) return;   // not ours
+
+    $post = get_post($post_id);
+    if (!$post || $post->post_status !== 'auto-draft') return;
+
+    wp_update_post([
+        'ID'             => $post_id,
+        'post_status'    => lg_fc_post_status($post->post_type, (int) $post->post_author),
+        'comment_status' => lg_fc_comment_status(),
+    ]);
+    delete_post_meta($post_id, LG_FC_DRAFT_META);   // no longer the reaper's business
+}
+add_action('acf/save_post', 'lg_fc_promote_draft', 25);   // after the fields are written
+
+/**
+ * EACH POST HAS ITS OWN LIBRARY (Ian). Both media fields are scoped to the post
+ * being composed, so the picker lists that post's uploads and nothing else.
+ *
+ * Forced HERE rather than in the ACF field config because the config is data in
+ * the database: an admin editing the field group could silently widen it back to
+ * the whole site, and nothing would fail. Measured before this: the photos field
+ * was already `uploadedTo`, but the PRINT FILES field was `all`.
+ */
+function lg_fc_scope_library(array $field): array
+{
+    $field['library'] = 'uploadedTo';
+    return $field;
+}
+add_filter('acf/load_field/name=loothprint_more_images', 'lg_fc_scope_library');
+add_filter('acf/load_field/name=loothprint_3d_file',     'lg_fc_scope_library');
+add_filter('acf/load_field/name=loothcut_cnc_file',      'lg_fc_scope_library');
+
+/**
+ * THE REAPER. A never-returned draft and everything uploaded into it, cleared
+ * after LG_FC_DRAFT_TTL_DAYS.
+ *
+ * Generous on purpose (Ian: "approx 30 days"): an abandoned compose is usually
+ * an interrupted one, and the draft is resumable until this runs.
+ *
+ * ⚠️ CHILDREN ARE DELETED EXPLICITLY. WordPress's own wp_delete_auto_drafts()
+ * removes the POST and leaves its attachments behind — which is the exact
+ * orphan this whole change exists to stop, and it would have failed silently
+ * had we assumed core handled it.
+ */
+function lg_fc_reap_drafts(): int
+{
+    $cut = time() - (LG_FC_DRAFT_TTL_DAYS * DAY_IN_SECONDS);
+    $ids = get_posts([
+        'post_type'        => array_keys(lg_fc_types()),
+        'post_status'      => 'auto-draft',
+        'numberposts'      => 200,
+        'fields'           => 'ids',
+        'meta_key'         => LG_FC_DRAFT_META,
+        'suppress_filters' => false,
+    ]);
+    $gone = 0;
+    foreach ($ids as $id) {
+        if ((int) get_post_meta($id, LG_FC_DRAFT_META, true) > $cut) continue;
+        foreach (get_children(['post_parent' => $id, 'post_type' => 'attachment', 'numberposts' => -1, 'fields' => 'ids']) as $att) {
+            wp_delete_attachment($att, true);
+        }
+        wp_delete_post($id, true);
+        $gone++;
+    }
+    return $gone;
+}
+add_action('lg_fc_reap_drafts_event', 'lg_fc_reap_drafts');
+
+/**
+ * Schedule the reaper — ONLY while the feature is on.
+ *
+ * With the flag off nothing is scheduled at all, so "flag OFF ⇒ no cron event"
+ * is a real assertion rather than a hopeful one. Unscheduling on the way down
+ * matters just as much: an event left armed after the feature is switched off
+ * would keep deleting rows for a feature nobody can reach, and it would do it
+ * from WP-cron, which carries no environment to explain itself.
+ */
+function lg_fc_sync_reaper_schedule(): void
+{
+    $on = lg_fc_enabled();
+    $next = wp_next_scheduled('lg_fc_reap_drafts_event');
+    if ($on && !$next) {
+        wp_schedule_event(time() + HOUR_IN_SECONDS, 'daily', 'lg_fc_reap_drafts_event');
+    } elseif (!$on && $next) {
+        /* CLEAR THE HOOK, NOT "THE NEXT ONE". wp_unschedule_event() removes a
+           SINGLE timestamped occurrence, so if the cron array ever holds two
+           entries for this hook the flag going off leaves one of them armed —
+           and an armed reaper deletes drafts and their attachments daily for a
+           feature nobody can reach. Measured: with two entries planted, the old
+           line healed one and left the other, and gate 46's assertion 7 went
+           red on exactly that. wp_clear_scheduled_hook() takes them all, so one
+           WP load with the flag off is enough to disarm however many exist. */
+        wp_clear_scheduled_hook('lg_fc_reap_drafts_event');
+    }
+}
+add_action('init', 'lg_fc_sync_reaper_schedule');
+
 function lg_fc_route(): void
 {
     // Flag OFF: not merely "renders nothing" but "returns before anything is
@@ -480,6 +669,9 @@ function lg_fc_route(): void
 
     $types = lg_fc_types();
     $edit  = isset($_GET['id']) ? absint($_GET['id']) : 0;
+    /* Set for a NEW compose once type and permission are settled: the member's
+       hidden working draft, so uploads have a parent from birth. */
+    $draft = 0;
     // EMBED: the same form, without the page furniture, for the hub composer's
     // type toggle (Ian, 2026-08-09). See lg_fc_page_open() for why this is still
     // a complete document rather than a fragment.
@@ -526,6 +718,10 @@ function lg_fc_route(): void
             lg_fc_refuse($types[$type]['title'] ?? 'This form');
             exit;
         }
+
+        /* AFTER the permission gate, never before: creating the draft is a
+           WRITE, and a refused visitor must not be able to make rows. */
+        $draft = lg_fc_working_draft($type, get_current_user_id());
     }
 
     // Registered so the settings never travel with the POST. Built here, on THIS
@@ -540,8 +736,15 @@ function lg_fc_route(): void
     // set either way, because the control is on screen either way.
     acf_register_form([
         'id'                 => 'lg-fc-' . $type,
-        'post_id'            => $edit ?: 'new_post',
-        'new_post'           => $edit ? [] : [
+        /* DRAFT-FIRST. A hidden auto-draft exists before the member types, so an
+           upload has a parent FROM BIRTH and `uploadedTo` scoping has something
+           real to scope to. Measured before this changed: with 'new_post' the
+           post does not exist yet, so an upload lands post_parent = 0 and STAYS
+           there — neither this build nor WordPress core sweeps unattached media.
+           'new_post' is kept as the fallback for the case where the draft could
+           not be created, which is the old behaviour rather than a hard failure. */
+        'post_id'            => $edit ?: ($draft ?: 'new_post'),
+        'new_post'           => ($edit || $draft) ? [] : [
             'post_type'      => $type,
             'post_status'    => lg_fc_post_status($type, $uid),
             'post_author'    => $uid,
@@ -1149,6 +1352,36 @@ function lg_fc_css(): string
    palette, so they are restated rather than left to a fallback that would stay
    cream on a dark card. */
 html[data-lguser-theme="dark"] .lgfc{--lg-paper:#20241f;--lg-rust-tint:#3a2320}
+/* SELECTED CHIPS IN DARK — Ian 2026-08-15: "compose works well. Needs some dark
+   mode love." Gate 47 caught this on its first real run; measured, 1.85:1.
+
+   THE CAUSE IS A TOKEN THAT FLIPS LIGHTNESS WHILE ITS INK DOES NOT. The selected
+   rules pair `background:var(--lg-sage-d,#6b7c52)` with a hardcoded `color:#fff`.
+   That is right for the FALLBACK — white on #6b7c52 is 4.54:1 — but --lg-sage-d
+   resolves to #b0c693 in dark (archive.css re-points it to --lguser-accent-d), and
+   white on #b0c693 is 1.85:1. Illegible, and a light slab in a dark page.
+
+   ⚠️ WHY NOT JUST RE-POINT --lg-sage-d FOR .lgfc, which was my first instinct:
+   this route uses that ONE token BOTH ways — as a FILL behind white ink (here and
+   the chip), and as INK on a dark surface (lines ~1265, ~1281, ~1299), where the
+   light value is exactly right. Re-pointing it would fix these two and turn those
+   three dark-on-dark. So the fill sites are named explicitly instead.
+
+   ⚠️ AND WHY NOT DARK INK ON THE LIGHT SAGE (#15171a on #b0c693 = 9.70:1, the
+   pairing pwa.js already documents): it clears the contrast bar and still leaves a
+   luminance-0.52 slab, which is the "bright surface in dark mode" half of the same
+   gate finding. Darkening the FILL clears both.
+
+   #ffffff on #3d5233 = 8.56:1, fill luminance 0.073. Keeps the light-mode idiom —
+   light ink on a sage fill — rather than inventing a new dark treatment.
+
+   THE GATE SAW ONE OF THESE; THERE WERE THREE. Only the default-selected licence
+   renders selected on load, so the type-list label and the .lgfc__chip carry the
+   identical defect and appear the moment a member picks anything. One cause, so
+   one fix — but the shade is Ian's to adjust, not load-bearing. */
+html[data-lguser-theme="dark"] .lgfc li:has(input:checked)>label,
+html[data-lguser-theme="dark"] .lgfc__chip:has(input:checked){
+  background:#3d5233;border-color:#3d5233;color:#fff}
 html[data-lguser-theme="dark"] .lgfc__card{box-shadow:0 10px 34px rgba(0,0,0,.28)}
 CSS;
 }

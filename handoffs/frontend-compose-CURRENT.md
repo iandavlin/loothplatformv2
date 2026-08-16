@@ -1,356 +1,159 @@
-# HANDOFF — lane `frontend-compose`, **the layout-v2 lane** — CURRENT
+# HANDOFF — lane `frontend-compose` — CURRENT
 
-*Lives in `handoffs/` per the 2026-08-15 convention change: SESSION-HANDOFF.md is
-retired as shared state, per-lane handoffs live here. Supersede by rotating this
-to `handoffs/YYYY-MM-DD-<suffix>.md` and writing a fresh CURRENT.*
+*Lives in `handoffs/` per the 2026-08-15 convention. Supersede by rotating this to
+`handoffs/YYYY-MM-DD-<suffix>.md` and writing a fresh CURRENT.*
 
-**Written 2026-08-14. Assume you are a fresh lane with zero context: this is your
-charter. Everything below was measured on this box — where something is unproven
-it says so — see OPEN CHECK.**
-
-| | |
-|---|---|
-| Branch | `frontend-compose`, pushed, tip **`e2c19e4`** |
-| Base | rebased onto main earlier this session; **re-check, main moves fast** |
-| State | **38 commits, NOTHING MERGED.** Working tree clean |
-| Flags | `lg-layout-v2/config/{license,download,taxonomy}-block.php` — all three `'enabled' => false` |
-| Merge | **NOT merge-ready.** One browser check is open (below) |
-| Box | ⚠️ **root disk 100% full, Redis wedged** — see BOX FAULT below |
-| Prior | `handoffs/2026-08-14-layout-v2-charter.md` — the audit that started this |
-
----
-
-## CHARTER (Ian, 8/14: *"Yes — build all four"*)
-
-1. **LICENCE block** — ✅ built. Four CC choices as choices.
-2. **PRINT FILES** via the download block + file picker — ✅ built, and **smaller
-   than the charter thought** (see the correction below).
-3. **ITEMS EDITOR** for `callout` (CAD link + tip jar) — ✅ **ALREADY EXISTED.
-   Nothing was built, and nothing needed to be.** See the correction below.
-4. **WORK-TYPE taxonomy block** (Type of Loothprint + Content Topic) — ✅ built.
-   The only one of the four that was genuinely missing.
-
-All flags are OFF-default. Nothing member-facing has moved.
-
-### Block 3 was already built — do not rebuild it
-
-`lg-fe-editor.js` `doEdit()` has a hardcoded `type === 'callout'` branch: for
-list variants (links/files/people/data) it opens `openItemsModal()`, a full
-add/remove/reorder repeater over `items[]` that saves via REST. `callout`'s
-render.php emits `<script data-lg-callout-state>` in editor mode to seed it, and
-`MetaBox` has a matching `array_of_objects` repeater. **So the CAD link and the
-tip jar have been editable in v2 all along.**
-
-The audit called them gaps because it read `manifest.editor.inline_editable_props`
-— and its own methodology note said *"read it there; do not infer from the
-renderer."* **That instruction was the trap.** The manifest is not the whole
-truth: `lg-fe-editor.js` carries per-type branches that no manifest declares. To
-know whether a prop is editable you must check BOTH the manifest AND the
-editor's per-type branches.
-
----
-
-## ⚠️ THE CORRECTION THAT MATTERS MOST
-
-**The previous handoff's premise for block 2 was wrong, and it was wrong in a way
-that flattered the plan.** It came from `LIKE '%"type":"download"%'` against
-`_lg_layout_v2`, which is **PHP-serialized, not JSON** — so the query matched
-almost nothing and "the page does not use the download block" was an artifact of
-the measurement. Re-measured with `wp eval`:
+**Written 2026-08-16 by a fresh seat that was told to trust nothing remembered —
+and was right not to. The previous CURRENT was two days stale and described a
+DIFFERENT LANE (layout-v2, branch `frontend-compose` @ `e2c19e4`, "root disk
+100% full"). That is why this file leads with what is TRUE NOW.**
 
 | | |
 |---|---|
-| loothprints total | **172** |
-| with a STORED layout | **168** |
-| no layout → SYNTHESIZED | **4** |
-| stored layouts using `download` + `file_id` | **168 (all of them)** |
-| stored layouts baking a download URL | **0** |
-| file_ids that still match the form's current file | **168 — zero drift** |
-
-**Consequences, both of which reshaped the work:**
-
-* **The stale-ZIP defect is LATENT, not active.** It bites only when a member
-  uploads a *new* file (new attachment id) while the stored layout keeps the old
-  one. Nobody has yet. Fixed structurally anyway — see block 2 below.
-* **Anything that only changes the SYNTHESIZER reaches 4 posts.** That was true
-  of the whole licence block as first built. Fixed by the read-path upgrade below.
-
-**Rule for the next lane: `_lg_layout_v2` is serialized. Read it with `wp eval`
-and `get_post_meta`, never with a SQL `LIKE` for JSON.**
+| Branch | **`compose-draft-first`**, pushed, 0 behind main, merges CLEAN. Tip is *this handoff commit*; the last CODE commit is `d7049e0` — stated this way on purpose, because a handoff naming its own branch tip is stale the instant it lands |
+| Worktree | ⚠️ **TWO.** `~/worktrees/compose-draft-first` is the live one. `~/worktrees/frontend-compose` is still parked on the SUPERSEDED `compose-loothprint-modal` |
+| Flags | `platform/config/frontend-compose.php` → `'enabled' => false` (tracked). dev2 is ON via the untracked `.local.php` — see below |
+| Merge | Waiting on keeper. **Suite RAN: 53 gate blocks, all green except gate 47** — see below |
+| Also mine | `notif-quickreply-v2` @ `deae6f0` (merges clean, gate 52 free) · `seo-canonical-hub` @ `a9251ae` (**MERGE READY, proven by execution**) |
 
 ---
 
-## WHAT IS BUILT
+## THE THREE BRANCHES THIS LANE OWNS, and which are dead
 
-### Block 1 — `license` (commits `7057bbb`, `3afd0d7`, `580cd03`)
+- **`compose-draft-first`** — LIVE. Draft-first media model + gates 46/47.
+- **`seo-canonical-hub`** @ `a9251ae` — **MERGE READY**, verified 8/16. Bare hub
+  declares its own canonical + gate 20 covers the static sitemap.
+- **`notif-quickreply-v2`** @ `deae6f0` — merges clean, gate 52 free on main. Carries
+  the FLAGS.md row it was missing, and the new (unnumbered) flag-register gate.
+- **`compose-loothprint-modal`** — ⚠️ **DEAD, DO NOT REVIVE.** Superseded: main
+  deleted the modal it was built around. Its subtitle trim (`b457cd3`) keys on
+  `#lpm-body`, which is **zero** on main. See below.
 
-* `lg-layout-v2/blocks/license/` + `src/Licenses.php` (the model: 4 codes, their
-  clauses, deed URLs, the ACF-choice recogniser) + CC glyphs in `src/Icons.php`.
-* **`code: ""` means FOLLOW THE POST** — resolves `loothprint_creative_commons`
-  live at render, the same pattern `post-header` uses for title/hero. So the form
-  and the page cannot disagree. An explicit code deliberately pins it instead.
-* **A post with no licence gets NO default invented.** Renders nothing.
-* Real framework picker `license-choice` (`EditorPickers` + `lg-fe-editor.js`),
-  choices shipped from `Licenses::picker_choices()` so the editor cannot offer a
-  licence the renderer cannot draw. The licence is **deliberately not**
-  inline-editable — retyping prose is the failure the block exists to end.
-* **Read-path upgrade (`580cd03`) is what makes it reach anyone.** 164 stored
-  loothprint layouts (+7 loothcuts) hold the licence as a prose `callout:note`.
-  `Plugin::upgrade_license_callouts()` swaps those for the block **on read,
-  writing nothing** — flag off or an unrecognised body returns the layout
-  untouched. No migration to reverse, no half-migrated corpus.
-* The recogniser is **strict**: the body must be an EXACT ACF choice string
-  (`Licenses::from_exact_prose`). Verified against the WHOLE corpus — 707 stored
-  layouts, 346 `callout:note` blocks, 171 replaced, 175 left alone, and nothing
-  left alone is a licence **except one**: post **71142** has a hand-written CC
-  sentence and keeps its prose on purpose. Widening the rule means matching by
-  resemblance, which is how an author's surrounding paragraph gets deleted.
-* All 164 stored bodies already agree with the form's current answer, so turning
-  the flag on changes how the licence **looks**, never which licence a page states.
-* ⚠️ **THREE POSTS PUBLISH A LICENCE NO READER CAN SEE.** 72155, 72146 and 71927
-  have a licence set in the form and **no licence block of any kind** in their
-  stored layout — the newest, hand-authored-in-v2 ones. The read-path swap
-  cannot help them: there is nothing to swap. They need the block INSERTED,
-  which is the same "insert vs swap" decision the taxonomy block is waiting on.
-  (A fourth, 71142, does show a licence — hand-written prose the strict
-  recogniser deliberately leaves alone.) **Ian's call, reported not taken.**
+## IAN'S 8/15 "REDUNDANT TEXT" ITEM IS CLOSED — and nothing of ours fixed it
 
-### Block 4 — `taxonomy` (commit `067f62b`)
+He approved the dark compose modal with one fix: *"there is redundant text in the
+beginning"*. The trim WAS built, and it must NOT ship: Ian's own later ruling
+(`4dbb192`, *the form LEAVES the modal*) deleted the surface the defect lived on.
+The duplication only ever happened in the modal, because `loadForm()` copies
+`<link>` and `<script>` but not `<style>`, so the route's inline CSS never arrived.
+On the standalone page that CSS is in the same document as the markup.
 
-* `blocks/taxonomy/` — Loothprint Type + Content Topic as chips linking to their
-  term archives. **`lint-block: clean`, the only clean block in the tree.**
-* Reads terms LIVE. **No term picker on purpose** — the form owns the details,
-  and a second editor for one value is how they end up disagreeing.
-* Measured before building: of 168 published loothprints, **125 carry both
-  taxonomies, 29 type only, 3 topic only, 11 neither**. The 11 render nothing.
-* ⚠️ **`config/taxonomy-block.php` reaches FOUR POSTS** — the synthesizer only.
-  The 168 stored layouts would need the block INSERTED. The licence work could
-  *swap* a block already present; this would *add* content to 157 pages that has
-  never appeared on any of them. **Where the chips belong on the page is Ian's
-  design call, with a picture** — deliberately not taken by this lane.
+**MEASURED on the serve 8/16, not reasoned** — real Chrome, allowed member,
+liveness asserted first (a locked-out browser renders a styled 403 that is
+identical at every width and would score a clean "1 subtitle"):
 
-### Block 2 — print files (commit `e4fb146`)
+```
+desktop 1280  visible subtitles = 1   narrow computed display:none
+phone    390  visible subtitles = 1   wide   computed display:none
+page HTTP 200, 184,627 B, title "Share a Loothprint", form present at both widths
+```
 
-* **`blocks/download/render.php`: empty `file_id` now means FOLLOW THE POST**
-  (`loothprint_3d_file` / `loothcut_cnc_file`, resolved at render). This is the
-  real fix and it is **not flagged**, because it is invisible until a file is
-  replaced. Safe because `media_resolver` is `WpMedia::resolve`, a **live**
-  callable — checked, not assumed.
-* **The `file` picker** (any mime). `download` previously had empty
-  `inline_editable_props` and a null picker, so "swap the print file" was
-  unreachable from the page. Clearing the file is a real choice — empty =
-  follow the post — and the UI says so. Setting a file clears any baked `url`,
-  which would otherwise outrank `file_id` and make the swap look like a no-op.
-* **Synthesizer switch behind `config/download-block.php`** — governs **4 posts**.
-  A separate flag from the licence one on purpose, so Ian can accept one and not
-  the other.
+Header reads title → ONE sentence → first field. Probe kept at
+`tools/frontend-compose/` pattern; it reads **computed style, not class names**,
+because the recorded trap is that a class-name assertion passes on the very defect.
 
----
+## THE FLAG — read this before touching how compose is switched on
 
-## ✅ IAN RULED: V2 MAY INSERT (ruling 7, 2026-08-15)
+`lg_fc_enabled()` reads, in order: `LG_FC_PREVIEW` (getenv **and** `$_SERVER` — a
+fastcgi_param lands only in the latter), then the tracked config, then the
+**box-local `platform/config/frontend-compose.local.php`**, which wins.
 
-*"V2 MAY INSERT a missing block into a stored page … Scope guard: inserts only
-SURFACE what the author already declared in the form, never invent content.
-Red-first gate on the insert path."* — **implemented, commit `d7ac5db`.**
+- dev2 is ON **only** via that `.local.php`. Verified: `lg_fc_enabled()` true.
+- **Live is protected by ABSENCE.** No code asks which box it is on.
+- ⚠️ **ORDER:** the READER merges and the serve pulls BEFORE the `.local.php` is
+  placed. Reversed on 8/15 and compose went dark — the file existed, nothing read
+  it, the pool env was removed in the same change, and `/compose/` answered 404 to
+  an allowed admin. `.gitignore` now globs `platform/config/*.local.php`.
+- The pool-env mechanism is **dead**. Anything still naming `env[LG_FC_PREVIEW]`
+  as how dev2 is on is stale — it survives ONLY as the lane-preview override.
 
-* `lg-layout-v2/src/LayoutUpgrade.php` — the read-path rules as PURE functions.
-  Not in `Plugin` on purpose: Plugin.php cannot be required twice inside a WP
-  process that already booted v2 (class redeclaration), so a gate for it could
-  only ever have run inside a maintenance window with the branch symlinked over
-  the serve. Pure + separate ⇒ **the gate runs any time, with main serving.**
-  Copy this shape for the next rule anyone wants gated.
-* **The strict/loose asymmetry is the safety.** Replacing demands certainty (an
-  exact ACF choice); NOT inserting demands only suspicion
-  (`Licenses::looks_like_licence`). Post 71142's hand-written CC prose must
-  suppress the insert or that page states its licence twice.
-* **Gate: `tools/gates/license-insert-gate.py`** — 7 assertions over all 721
-  stored layouts. OFF identity; LIVENESS (ON changes 648, so OFF is not
-  vacuous); never invent; never duplicate; surface only; position before
-  post-footer; idempotent. **GREEN**, and all five substantive rules were
-  RED-FIRSTED (broken one at a time, each confirmed to turn it red, source
-  snapshotted and restored byte-identical).
-* ⚠️ **NO NUMBER YET — not registered in `run-all.sh`.** 35 is this lane's
-  compose gate. Keeper mints the next one; never mint your own.
+## WHAT I FOUND IN THE SALVAGE (and the lesson)
 
----
+The 13:05 salvage reported fixing the exit-3 trap in gate 46. **Gate 47 —
+registered eleven lines away, the other half of the same pair — still returned 3
+on all three CANNOT RUN paths.** `run-all.sh` reads anything but 0/2 as RED, so it
+would have reddened the suite **for every lane**. Fixed in `074a656`, proven both
+directions through run-all's own case statement:
 
-## ✅ ALL CHECKS CLOSED
+```
+exit 3 -> RED (exit 3)          red=1 dead=0   <- blocks the train
+exit 2 -> NO VERDICT (exit 2)   red=0 dead=1
+```
 
-**The picker has now been CLICKED** (commit `c59318c`), and it needed no
-maintenance window. `tools/frontend-compose/picker-test.py` builds a harness
-from the REAL artefacts — the renderer's own editor-mode output (block +
-`<lg-edit>` marker), the real `lg-fe-editor.js`/`.css`, the real
-`Licenses::picker_choices()` — and drives it with CDP, stubbing only the REST
-call so the SAVE PAYLOAD is observable. 6 assertions GREEN, including a real
-click saving exactly `{"code": ""}` to `blocks/update`.
+Same file also still DROVE the deleted modal (clicked `#ntm-typetoggle`, waited for
+`#lpm-body .acf-field`) — both zero on main, so 40s of dead wait per run at both
+widths. Excised.
 
-⚠️ **Four traps are encoded in that file and every one gave a WRONG ANSWER
-FIRST** — read its docstring before touching it. The worst: reverting the CSS
-fix left the test GREEN, which looked like a decorative assertion and was
-actually **Chrome caching the harness stylesheet by URL**. `Network.setCacheDisabled`
-is load-bearing; without it the harness silently re-tests stale assets.
+**THE LESSON, which is the reusable part: a commit message saying a file was
+repointed is not evidence that it was finished. Read the file.**
 
-### (historical) the check that was open, and why it took a window to learn
+⚠️ And on my own process: my first assertion (`no lpm-body anywhere`) FAILED
+because it matched the explanatory comment that exists to tell the next reader why
+the selector changed. That is the assert-matches-prose trap. Assertions now target
+the live QUERY, and one asserts the COMMENT SURVIVES.
 
-Both exist for the same reason: **the branch is not on the dev2 serve**, because
-`/var/www/dev/wp-content/plugins/lg-layout-v2` symlinks into
-`~/loothplatformv2-clean` (main). A branch's v2 behaviour is invisible on dev2.
+## THE SUITE RESULT, and the real defect it found
 
-1. **The pickers CLICKED.** Licence popover and file picker are drawn with the
-   real editor CSS but have never been tapped. Ian's phone has beaten a green
-   suite six times; markup is not a control.
-2. ~~**The licence read-path swap RENDERING.**~~ ✅ **CLOSED.** Post 70937's
-   REAL stored layout was pulled from the DB, run through the same recogniser,
-   and rendered: exactly ONE block swapped, `lg-callout--note` gone, the licence
-   rendered as `Attribution–NonCommercial–ShareAlike 4.0` with its three clause
-   chips, and gallery / wysiwyg / download / post-header / post-footer all
-   survived untouched. Verified through the real render pipeline — **not** in a
-   browser, which is what check 1 still covers.
+53 gate blocks on `303a1b8`. Everything green except three lines:
 
-To do either you must point the plugin symlink at this worktree (and **restore
-it** — the serving checkout only ever pulls), or use the lane preview.
+- `directory-location-cap` NO VERDICT (exit 2) — another lane removed the mechanism
+- `compose-media` (46) NO VERDICT (exit 2) — **by design**, `lg_fc_working_draft()`
+  is not in the docroot (which symlinks to main). Green on merge + pull.
+- `compose-dark` 1280 + 390 (47) **RED — a real defect**, now fixed in `d7049e0`.
 
----
+⚠️ **Gate 46 exiting 2 rather than 3 is what made this run readable.** Under the
+pre-`074a656` code it would have exited 3, which `run-all.sh` reads as RED —
+indistinguishable in the banner from gate 47's genuine finding. The trap would have
+fired on this very run.
 
-## WHAT IAN HAS BEEN SHOWN, AND THE ONE THING HE OWES AN ANSWER ON
+### The defect: a token that flips lightness while its ink does not
 
-**Page:** `https://dev2.loothgroup.com/footer-mockups/frontend-compose-build/licence.html`
-(also committed under `footer-mockups/` so it survives a box rebuild). Samples on
-it are **real renderer output**, not drawn markup.
+`background:var(--lg-sage-d,#6b7c52)` + hardcoded `color:#fff`. Right for the
+fallback (4.54:1); `--lg-sage-d` re-points to `#b0c693` in dark, so it renders
+**1.85:1** — illegible — and trips the bright-surface bar at luminance 0.52.
 
-**Open question (non-blocking):** the ACF choice
-`BY ND NC (Credit given to creator, No Derivatives, Adaptations shared with same terms)`
-**contradicts itself** — ND forbids the adaptations SA would govern. 3 posts.
-The block draws the licence its code names (BY-NC-ND) and drops the impossible
-share-alike clause. **The stored wording is untouched** pending his yes/no on
-fixing the form. Either way those 3 posts keep the same licence.
+**The gate saw ONE; there were THREE.** Only the default-selected licence renders
+selected on load. Driving the form found the same 1.85:1 on the type-list label and
+`.lgfc__chip`. The submit button matches the shape and is **fine** (12.23:1,
+overridden) — measured, not assumed.
 
----
+Two rejected fixes, both measured: re-pointing the token (it is used as *ink* in 3
+other places — would turn those dark-on-dark), and dark ink on the light sage
+(9.70:1 but still a luminance-0.52 slab). Darkening the fill clears both bars:
+`#ffffff` on `#3d5233` = 8.56:1 @ lum 0.073. Light mode measured **unchanged** at
+4.54:1 — a thin 0.04 margin worth knowing about.
 
-## FINDINGS ON MAIN THAT ARE NOT THIS LANE'S — someone should own them
+⚠️ Gate 47 stays RED until this merges and the serve pulls — it measures the served
+route. Same ordering as gates 20 and 46.
 
-1. **The v2 snapshot harness was UNRUNNABLE, not red** (fixed, `b1b6065`).
-   `render-test.php` diffs 4 artifacts per fixture; the monorepo root
-   `.gitignore`'s blanket `*.log` silently excluded every
-   `tests/expected/<fixture>/validation.log`, so `file_get_contents` returned
-   false into `strlen()` and `--all` **fataled on the first fixture**. With it
-   running, **main is 0 passed / 10 failed**: `bundle.css` stale in all ten (it
-   is a GLOBAL artifact copied into every fixture; `whos-talking`'s CSS landed
-   after the last capture), plus real `rendered.html` drift in `embed-minimal`,
-   `simple-article` and `loothprint-sample`. **Deliberately NOT mass-updated** —
-   `--update-snapshots` rewrites all ten and buries the drift. Someone should
-   decide what those three are.
-2. **`bin/lint-block.php` was wrong about a SHIPPING block.** It knew a
-   `gallery-items` picker nothing implements while rejecting the `gallery` that
-   `blocks/gallery` declares and `lg-fe-editor.js` runs. M7 now derives from
-   `EditorPickers::KNOWN`; M8 now lists what the editor actually renders.
-3. **7 blocks declare pill buttons that do not exist** — brand-gallery,
-   brand-hero, contact-form, event-header, featured-products, recent-posts,
-   whos-talking declare `move-up`/`move-down`, which `lg-fe-editor.js` does not
-   implement, so they draw the literal string "move-up". Pre-existing; reported
-   not fixed, to keep this diff inside the charter.
-4. **`gallery` and `embed-url` pickers are FRONT-END-EDITOR ONLY** — no
-   `render()`/`sanitize()` arm in `EditorPickers`, so the admin metabox cannot
-   edit those props. Recorded in that file.
+## ALSO BUILT TODAY (both need a keeper decision)
 
----
+- `tools/gates/flag-register-gate.py` on `notif-quickreply-v2` — **UNREGISTERED, no
+  number minted.** A branch that adds a flag must register it in `FLAGS.md`, which
+  the register's own header makes a merge condition and which nothing enforced.
+  Red-first from real history. **Its first full-fleet run found 6 unregistered flags
+  across 5 branches**, zero false positives after narrowing what counts as a flag.
+- `/home/ubuntu/projects/docs/DARK-SAGE-FILL-CANDIDATES-2026-08-16.md` — 44
+  candidate sites for the flipping-token class, handed to dark-anon-sweep.
+  Explicitly CANDIDATES: the compose submit proves a static match can be healthy.
 
-## HOW TO WORK HERE
+## OPEN — who unblocks what
 
-* **Build in the monorepo.** v2 is tracked (`lg-layout-v2/`, 232 files) and the
-  docroot symlinks to `~/loothplatformv2-clean`. ⚠️ `~/projects/lg-layout-v2`
-  also exists, differs in 68 files, has no `.git`, and is a **stale leftover** —
-  editing it changes nothing while looking exactly like it should.
-* **New block = the 7 steps in `lg-layout-v2/docs/BLOCK-ONBOARDING.md`.** Design
-  doc first (`bin/block-new.php` refuses without one), then manifest, then CSS,
-  then render.
-* **Do NOT chase a clean `lint-block`.** No block in the tree is clean —
-  `license` is 4, `callout` 15, `post-footer` 83. The shared conventions
-  (`--lg-tags-border`, `@media` at-rules, bare root font-size) are tree-wide.
-  Fix what is yours; do not reformat the tree.
-* **Inert-addition testing, since the committed baselines are stale:** capture
-  `tests/output/` to a scratch dir BEFORE your change, then diff `rendered.html`
-  + `variables-resolved.json` after. `bundle.css` legitimately changes for every
-  fixture (it is global), so it cannot be part of that check.
-* **Gate numbers come from keeper. Never mint one.** 35 is this lane's. A gate
-  for the licence/print-file assertions (OFF byte-identical / ON substitutes /
-  absence paired with liveness) is still **owed a number** — ask.
-* **Pictures for Ian:** `tools/frontend-compose/shots.py` already handles the
-  five screenshot traps on this box. Publish under
-  `~/projects/footer-mockups/…` (symlinked to `/var/www/dev/footer-mockups`) and
-  give him a URL, never a path. Copy it into `footer-mockups/` in the repo too.
-* **Reporting:** `SendMessage` to the keeper session (plain `ubuntu`, newest) for
-  questions; `msg send ubuntu` for durable reports. Questions for Ian route
-  THROUGH keeper. Report and keep working — do not park.
+| Item | Who |
+|---|---|
+| Merge `compose-draft-first` @ `074a656`, `seo-canonical-hub` @ `a9251ae`, `notif-quickreply-v2` @ `8b988b5` | keeper |
+| Ruling on gates **46/47 self-minted** by the predecessor (they do not collide: main uses 1–32, 34–45, 48–51, 53) | keeper |
+| **Serving checkout is DIRTY** — `loothplatformv2-clean` has a modified `platform/fpm/dev2/looth-dev.conf`. Latent, not blocking (incoming main does not touch it) | keeper |
+| `FLAGS.md` **back-pill row says dev2 OFF; it is ON** via `back-pill.local.php`. Not mine to rewrite | keeper |
+| Gate 46 reports CANNOT RUN until merge + serve pull — by design, the docroot symlinks to the serving checkout | — |
 
----
+## BOX TRAPS THAT COST ME TIME TODAY
 
-## TRAPS THIS LANE HAS PAID FOR — do not re-learn them
-
-1. **`_lg_layout_v2` is SERIALIZED.** A SQL `LIKE` for JSON silently measures
-   nothing and produces a confident wrong number. This cost the charter a block.
-2. **Assert on the value, not the document.** Grepping a page for a title matched
-   the `<title>` tag while the input was empty — hiding that a rendered-but-empty
-   field **saves empty** and blanks the member's post.
-3. **Counting CSS text is not counting a control**, and `querySelector` returns
-   the FIRST match, not the right one.
-4. **Hit-test before clicking** (`elementFromPoint`).
-5. **A flex item with a set height still gets shrunk** (`flex: 0 0 auto`).
-6. **WP's clock here runs 4h behind server local** — compare against
-   `current_time()`, never `date`.
-7. **Never name a script `enum.py`** — it shadows the stdlib.
-8. **Restore the box every time.** 40 mu-plugins, none of them yours.
-9. **An assertion that has never failed is not evidence.** Break it first. Both
-   the licence parser test and the screenshot overflow detector were red-firsted
-   in this session, and the overflow one only proved itself when a block was
-   forced to 900px.
-
----
-
-## ⚠️ BOX FAULT, NOT THIS LANE'S — read before trusting anything on dev2
-
-**Root is 100% full** (29G, ~20MB free as of 2026-08-15 00:2x). Redis cannot
-write its RDB snapshot, so it is in **MISCONF and refusing all writes**, and
-dev2 has an `object-cache.php` drop-in — so **every `wp eval` dies** with
-"Error establishing a Redis connection" and the WP object cache is broken.
-
-**This explains the failed window.** With the branch symlinked over the serve,
-the served HTML stayed BYTE-IDENTICAL through render-cache deletion, `wp cache
-flush`, an FPM reload AND a full FPM restart with workers recycled — while
-WP-CLI proved the branch's code was loaded and `load_layout(70937)` returned the
-licence block. A Redis that refuses writes and returns stale reads produces
-exactly that. My earlier guess ("something serves static HTML ahead of PHP") was
-wrong about the mechanism.
-
-⚠️ **So "verified on the dev2 serve" is unreliable for any check made while
-Redis was wedged.** Re-verify anything recent.
-
-Reported to keeper. Recommended one-line unblock (NOT run — shared service,
-keeper's call):
-
-    redis-cli config set stop-writes-on-bgsave-error no
-
-It restores writes immediately and reverses by setting it back to `yes`, but it
-MASKS the full disk, which still needs reclaiming. Top consumers: `/home` 13G
-(worktrees 5.8G, dev1-import 1.3G, dev26-archive 700M, backups 681M), `/var`
-7.9G.
-
-### Three ways a gate goes VACUOUSLY GREEN here — all hit while writing gate 7
-
-1. **`wp db query` swallows the result set** of some SELECTs and prints
-   "Success: Query succeeded. Rows affected: -1" instead of rows. Read as an
-   empty corpus, every assertion passes having measured nothing. Use straight
-   `mysql -N -B`.
-2. **`sudo` strips the environment.** SQL passed as an exported var arrives
-   empty, mysql runs nothing, zero rows, green-by-emptiness. Pass it as a
-   POSITIONAL ARG.
-3. **`wp eval` is dead** while Redis is wedged — a gate built on it reports a
-   BOX fault as if its own subject were unrunnable.
-
-### Board messages: single quotes, NO backticks
-
-`msg send ubuntu "…"` goes through bash, so backticked text is
-command-substituted away before `msg` sees it. It cost this lane a gutted report
-(a `redis-cli` recovery command was replaced by the literal word "OK") and cost
-the hub-picker lane one on 7/08. Verify with `msg inbox` — note `msg thread`
-returns the OLDEST ~100 messages, so tailing it looks like nothing arrived.
+1. **`2>&1 | wc -l` counts the warning.** A missing file "found 1 occurrence".
+2. **`git diff main..branch` on a branch behind main** shows main's newer work as
+   deletions — `seo-canonical-hub` looked like −6,811 lines. Diff from the
+   **merge-base**, and test the real merge.
+3. **`wp` needs `--path=/var/www/dev`** and a user who can read
+   `/etc/looth/live-wp-keys.php` (`looth-dev`, not `www-data`).
+4. **A gate resolves `gate-env.sh` beside itself** — copying one gate to a
+   scratchpad makes it CANNOT RUN. Use a worktree.
