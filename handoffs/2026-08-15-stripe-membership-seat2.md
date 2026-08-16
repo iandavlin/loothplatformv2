@@ -575,6 +575,58 @@ contains `w2__opt` · the doorbell's own docblock saying "no checkout, no reset"
 assert the markup that can only be *output* (`class="x">text`), and check a red
 is red **for the reason it claims**. Worth a line in CRAFT-STANDARD.
 
+---
+
+## IAN'S VISIBILITY BUG (2026-08-16) — FIXED, and the reported cause was wrong
+
+He tested as **Mikelle (1953)**, correctly listed, and saw no Stripe entries.
+The trace handed to me said membership whoami never fetches capabilities. **It
+does.** Measured rather than read:
+
+- a minted session for 1953 returns a payload carrying `manage_options`,
+  `edit_posts`, `moderate_forums` and more — caps are fetched and cached fine;
+- `/manage-subscription/` as Mikelle returns **200, 57KB of real page**, not the
+  stub — the page gate is fine too.
+
+**The bug was one line.** The menu keys the Stripe entries on the
+`stripe_testgroup` capability (`lg-shared/site-header.php:110`); the **poller**
+computes it (`InternalRestController` — `manage_options` OR `inCohort`); but
+`profile-app/src/Whoami.php::capabilitiesFor()` rebuilds the caps array from an
+**explicit allowlist** — three named keys plus a hardcoded pass-through of
+exactly two extras — and `stripe_testgroup` was in neither. profile-app received
+the capability and **dropped it on the floor**, so a correctly-listed member
+could reach the pages while seeing no way in to them.
+
+> **The trap that list IS, and it will bite again:** a named pass-through
+> silently discards every capability nobody remembered to name, and the discard
+> is **indistinguishable from the capability being false**. Anything the header
+> learns to key on must be added there too, and nothing enforces that.
+
+Fixed and unit-checked both directions (listed → `true`, unlisted → `false`;
+before, **missing for both**, which is why it read as false everywhere).
+
+### ⚠️ STILL OWED ON THIS: the real-page gate leg (keeper specified it, I did not build it)
+
+Gate 34b's menu leg drives `menuFor()` with a **synthetic** `stripe_testgroup`
+cap, so it could never notice that the real caps array never contains that key —
+the harness-must-run-as-the-real-user failure, one layer further out than the
+8/15 soft-launch bug.
+
+**Build it as keeper specified:** drive `/manage-subscription/` **over HTTP as a
+minted session** for a listed non-admin member and assert the five entries
+render; as a non-listed member, assert absent. **Red-first against the
+pre-fix state** — revert the one-line pass-through and it must go red.
+
+The session-minting recipe is proven and is what I used for the trace:
+`wp eval 'echo wp_generate_auth_cookie($uid, time()+3600, "logged_in");'` plus
+`COOKIEHASH`, then `curl -k -H "Host: dev2.loothgroup.com" -H "Cookie:
+wordpress_logged_in_<HASH>=<COOKIE>" https://127.0.0.1/manage-subscription/`.
+**Use a listed NON-ADMIN member** — 1953 has `manage_options`, so she passes the
+admin branch and proves nothing about the list.
+
+**Ian can re-test as Mikelle only after this merges and the serve pulls** — the
+serve reads `loothplatformv2-clean`, so the fix is not live on dev2 yet.
+
 ### ⚠️ If you touch the styles, read this first
 
 - **There are TWO `<style>` blocks**: the original in the head, and a second one
