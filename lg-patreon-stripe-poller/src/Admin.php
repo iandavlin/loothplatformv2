@@ -25,6 +25,7 @@ final class Admin
         add_action( 'admin_post_lgms_cohort_lookup', [ self::class, 'handleCohortLookup' ] );
         add_action( 'admin_post_lgms_cohort_add',    [ self::class, 'handleCohortAdd' ] );
         add_action( 'admin_post_lgms_cohort_remove', [ self::class, 'handleCohortRemove' ] );
+        add_action( 'admin_post_lgms_invite_mint',   [ self::class, 'handleInviteMint' ] );
         add_action( 'admin_post_lgms_price_set', [ self::class, 'handlePriceSet' ] );
     }
 
@@ -205,6 +206,52 @@ final class Admin
         self::cohortRedirect( [ 'lgms_cohort_ok' => rawurlencode( sprintf(
             '#%d %s is already in the test group — nothing changed.', $uid, $u->user_login
         ) ) ] );
+    }
+
+    /**
+     * MINT AN INVITE for an email that has no account yet.
+     *
+     * Ian, 2026-08-16: the test group took only EXISTING wp users, so the
+     * rehearsal that matters most before cutover — a fresh recruit's whole join
+     * — could not be run at all. This is where he generates the link.
+     *
+     * THE LINK IS SHOWN EXACTLY ONCE, because the raw token is never stored: the
+     * option holds only a hash of it, so nobody can look a lost link up and
+     * nobody reading the database can replay one. Losing it means minting
+     * another, which is cheap and is the safe direction.
+     */
+    public static function handleInviteMint(): void
+    {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( 'Insufficient permissions.', 403 );
+        }
+        check_admin_referer( 'lgms_invite_mint' );
+
+        $email = strtolower( trim( (string) ( $_POST['invite_email'] ?? '' ) ) );
+        if ( $email === '' || ! is_email( $email ) ) {
+            self::cohortRedirect( [ 'lgms_cohort_err' => rawurlencode( 'That is not an email address — nothing minted.' ) ] );
+        }
+
+        // An address that ALREADY has an account does not need an invite, and
+        // handing one over would be misleading: the list is what admits them,
+        // and adding them to it is one click below.
+        if ( ( $existing = get_user_by( 'email', $email ) ) instanceof \WP_User ) {
+            self::cohortRedirect( [ 'lgms_cohort_err' => rawurlencode( sprintf(
+                '%s already has an account (#%d %s) — add them to the test group directly instead of inviting them.',
+                $email, $existing->ID, $existing->user_login
+            ) ) ] );
+        }
+
+        $inv = Invites::mint( $email );
+        if ( $inv === null ) {
+            self::cohortRedirect( [ 'lgms_cohort_err' => rawurlencode( sprintf(
+                '%s already has a live invite that has not been used — send them that link rather than a second one.', $email
+            ) ) ] );
+        }
+
+        self::cohortRedirect( [ 'lgms_invite_link' => rawurlencode( $inv['url'] ),
+                                'lgms_invite_for'  => rawurlencode( $email ),
+                                'lgms_invite_exp'  => (string) $inv['expires'] ] );
     }
 
     public static function handleCohortRemove(): void
@@ -406,6 +453,49 @@ final class Admin
         $ok  = isset( $_GET['lgms_cohort_ok'] )  ? rawurldecode( (string) $_GET['lgms_cohort_ok'] )  : '';
         $err = isset( $_GET['lgms_cohort_err'] ) ? rawurldecode( (string) $_GET['lgms_cohort_err'] ) : '';
         $confirmId = (int) ( $_GET['lgms_cohort_confirm'] ?? 0 );
+
+        /**
+         * THE INVITE PANEL. Shown with the list because it answers the same
+         * question from the other end: the list admits people who HAVE an
+         * account, this admits one who does not have one yet.
+         */
+        $inviteLink = isset( $_GET['lgms_invite_link'] ) ? (string) $_GET['lgms_invite_link'] : '';
+        $inviteFor  = isset( $_GET['lgms_invite_for'] )  ? (string) $_GET['lgms_invite_for']  : '';
+        $inviteExp  = isset( $_GET['lgms_invite_exp'] )  ? (int) $_GET['lgms_invite_exp']     : 0;
+        $invitesOn  = ( get_option( Invites::FLAG, '' ) === '1' );
+        ?>
+        <h2>Invite someone who has no account yet</h2>
+        <p class="description">
+            The test group only takes people who already have an account. This mints a
+            one-time link for an email address, so a fresh recruit can walk the whole
+            join. The link opens the join flow <strong>only</strong>, expires, and is spent
+            by the account it creates — which is then added to the list automatically.
+        </p>
+        <?php if ( ! $invitesOn ) : ?>
+            <p><strong>Invites are switched off on this box.</strong> A minted link will not
+            admit anyone until <code>lgms_stripe_invites_on</code> is set. Minting one now is
+            harmless — it simply will not work yet.</p>
+        <?php endif; ?>
+        <?php if ( $inviteLink !== '' ) : ?>
+            <div class="notice notice-success"><p>
+                <strong>Invite for <?php echo esc_html( $inviteFor ); ?></strong> —
+                expires <?php echo esc_html( gmdate( 'Y-m-d', $inviteExp ) ); ?>.<br>
+                <input type="text" readonly style="width:100%;font-family:monospace"
+                       value="<?php echo esc_attr( $inviteLink ); ?>"
+                       onclick="this.select()"><br>
+                <em>Copy it now — this is the only time it is shown. The link is not stored
+                anywhere, only a hash of it, so it cannot be looked up later. If it is lost,
+                mint another.</em>
+            </p></div>
+        <?php endif; ?>
+        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+            <input type="hidden" name="action" value="lgms_invite_mint">
+            <?php wp_nonce_field( 'lgms_invite_mint' ); ?>
+            <input type="email" name="invite_email" required style="min-width:22em"
+                   placeholder="someone@example.com">
+            <button class="button button-primary">Mint an invite link</button>
+        </form>
+        <?php
 
         $ids         = CohortAllowlist::ids();
         $lifecycleOn = StripeLifecycle::flagOn();

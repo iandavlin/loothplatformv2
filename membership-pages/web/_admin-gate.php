@@ -18,6 +18,17 @@
  *   lg_membership_admin_gate_or_exit($ctx);   // non-admins get a stub page + exit
  */
 declare(strict_types=1);
+/**
+ * The invite module travels WITH this gate, deliberately.
+ *
+ * Both doors — the router and every page file — include this gate; if the
+ * invite check lived only where the router loads it, one door would know about
+ * invites and the other would not, which is precisely the two-door split that
+ * made the soft launch look broken on 8/15. Requiring it here means there is no
+ * arrangement of includes in which the two can disagree.
+ */
+if (is_readable(__DIR__ . '/_invites.php')) { require_once __DIR__ . '/_invites.php'; }
+
 
 if (!function_exists('lg_membership_admin_gate_or_exit')) {
 function lg_membership_admin_gate_or_exit(array $ctx): void
@@ -94,6 +105,28 @@ function lg_membership_testgroup_gate_or_exit(array $ctx): void
         && function_exists('lg_membership_in_stripe_test_group')
         && lg_membership_in_stripe_test_group((int) ($ctx['wp_user_id'] ?? 0))) {
         return; // a listed member, signed in — the whole point of the soft launch
+    }
+
+    /**
+     * A PRE-AUTHORISED VISITOR HOLDING A LIVE INVITE — Ian, 2026-08-16.
+     *
+     * THIS CHECK LIVES HERE, in the ONE gate both doors delegate to, and that
+     * placement is the whole difference between working and looking broken. The
+     * router decides who may REACH a page and then every page file re-checks on
+     * its own authority; on 8/15 the soft launch appeared broken because only
+     * the router was changed, and a member the router had admitted was thrown
+     * out by their own page. Put the invite in the router alone and a fresh
+     * recruit reaches the join page and is refused by it — which reads as a
+     * broken token when the token is fine.
+     *
+     * It is the LAST check deliberately: an admin and a listed member are
+     * already through above, so an invite only ever WIDENS, never decides for
+     * someone who had another way in. With the flag off it returns false before
+     * reading anything, so this whole block is a no-op and the page is
+     * byte-identical to today.
+     */
+    if (function_exists('lg_membership_invite_admits') && lg_membership_invite_admits()) {
+        return;
     }
     lg_membership_admin_gate_or_exit($ctx); // everyone else: today's stub, verbatim
 }
