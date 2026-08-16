@@ -56,9 +56,10 @@ const ALLOWED_PATHS = [
     'docs/board-questions/',  // Ian's open questions and their answers — APPEND ONLY
     'docs/board-decisions/',  // posed decisions and their ONE answer
     'docs/board-branches/',   // which branch is doing the work on which card
+    'docs/board-desk/',       // desk items Ian has explicitly dismissed
 ];
 
-const INTENTS = [ 'reorder', 'note_append', 'media_ref', 'lane_message', 'lane_receipt', 'item_add', 'item_promote', 'keeper_message', 'question_ask', 'question_answer', 'decision_pose', 'decision_answer', 'item_branch' ];
+const INTENTS = [ 'reorder', 'note_append', 'media_ref', 'lane_message', 'lane_receipt', 'item_add', 'item_promote', 'keeper_message', 'question_ask', 'question_answer', 'decision_pose', 'decision_answer', 'item_branch', 'desk_dismiss' ];
 
 /* ---------------------------------------------------------------------- */
 
@@ -546,6 +547,41 @@ function applyItemBranch( string $repo, string $id, string $branch, string $acto
 }
 
 /**
+ * DISMISS A DESK ITEM. Backlog 41(b), Ian: *"completed work still listed on my
+ * desk."*
+ *
+ * Most retirement is MECHANICAL — an item goes when its decision is answered or
+ * when the work behind it lands. This is the third door, for the case no rule
+ * can see: he has read it and it is finished with. It is COMMITTED rather than
+ * hand-removed from a file, so a dismissal is a fact with an author and a time,
+ * and keeper never edits the desk by hand.
+ *
+ * The key is a hash of the item, not its text: the same post must dismiss the
+ * same row on every later pass, and a stored copy of his message would be a
+ * second place for it to drift.
+ */
+function applyDeskDismiss( string $repo, string $key, string $actor ): array
+{
+    if ( ! preg_match( '/^[a-f0-9]{8,64}$/', $key ) ) { refuse( 'that is not a desk key: ' . $key ); }
+
+    $rel = 'docs/board-desk/dismissed.md';
+    if ( ! pathAllowed( $rel ) ) { refuse( 'path outside the fence: ' . $rel ); }
+
+    $dir = $repo . '/docs/board-desk';
+    if ( ! is_dir( $dir ) && ! @mkdir( $dir, 0755, true ) ) { fail( 'could not create the desk directory' ); }
+    if ( ! is_file( $repo . '/' . $rel ) ) {
+        file_put_contents( $repo . '/' . $rel, "# Dismissed desk items\n" );
+    }
+
+    $existing = (string) file_get_contents( $repo . '/' . $rel );
+    if ( str_contains( $existing, '- ' . $key . ' ' ) ) { refuse( 'that item is already dismissed' ); }
+
+    file_put_contents( $repo . '/' . $rel,
+        sprintf( "- %s %s %s\n", $key, gmdate( 'Y-m-d H:i' ), $actor ), FILE_APPEND );
+    return [ $rel ];
+}
+
+/**
  * Read the PRIORITY INDEX as (line number → id), in file order.
  *
  * IDS ARE DOTTED INTEGER PAIRS, NOT DECIMALS, and that is the whole reason this
@@ -807,6 +843,10 @@ switch ( $intent ) {
     case 'lane_message':
         $touched = applyLaneMessage( CLONE_DIR, (string) ( $req['lane'] ?? '' ), (string) ( $req['text'] ?? '' ), $actor );
         $summary = 'message to ' . (string) ( $req['lane'] ?? '?' );
+        break;
+    case 'desk_dismiss':
+        $touched = applyDeskDismiss( CLONE_DIR, (string) ( $req['key'] ?? '' ), $actor );
+        $summary = 'dismissed a desk item';
         break;
     case 'item_branch':
         $touched = applyItemBranch( CLONE_DIR, (string) ( $req['id'] ?? '' ), (string) ( $req['branch'] ?? '' ), $actor );

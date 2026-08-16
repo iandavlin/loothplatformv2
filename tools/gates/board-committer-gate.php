@@ -367,6 +367,82 @@ $r = svc($SVC, $clone, ['actor' => 'keeper', 'intent' => 'decision_pose', 'id' =
                         'question' => 'asking again', 'options' => ['x']]);
 is_(($r['json']['refused'] ?? false) === true, 're-posing an answered decision is refused — it would erase a ruling');
 
+section("[15] THE DONE-LEDGER — nothing waits for somebody to notice");
+
+/**
+ * Ian, 2026-08-16: "do we have a file to move completed work to as a history or
+ * are we relying on git as a record" — it was git only, and git is forensic
+ * depth rather than a record anyone reads.
+ *
+ * THE TEST CASE IS REAL: backlog 18 sat a full day as UNOWNED after Ian had
+ * personally used the finished feature, because the only thing that could have
+ * moved it was somebody noticing. Every assertion here is about removing the
+ * noticing.
+ */
+$led = $ROOT . '/tools/keeper/board-done-ledger.php';
+if (!is_readable($led)) {
+    bad('the done-ledger is missing at ' . $led);
+} else {
+    $lt = $tmp . '/ledger';
+    @mkdir($lt . '/docs', 0755, true);
+    file_put_contents($lt . '/docs/BACKLOG.md',
+        "## PRIORITY INDEX\n\n**P0 — now**\n18. THE THING HE ALREADY USED — shipped, sat UNOWNED\n41. STILL IN FLIGHT\n---\n");
+    sh('git init -q . && git add -A && git -c user.name=t -c user.email=t@t commit -q -m base', $lt);
+    $old = trim(sh('git rev-parse HEAD', $lt)['out']);
+    file_put_contents($lt . '/f.txt', 'x');
+    sh('git add -A && git -c user.name=t -c user.email=t@t commit -q -m "ship it' . "\n\n" . 'Closes-Backlog: 18"', $lt);
+    $new = trim(sh('git rev-parse HEAD', $lt)['out']);
+
+    $env = 'LGB_LEDGER_REPO=' . escapeshellarg($lt) . ' ';
+    $dry = sh($env . PHP_BINARY . ' ' . escapeshellarg($led) . ' --range ' . $old . '..' . $new . ' --dry-run', $ROOT);
+    is_(str_contains($dry['out'], '[dry run]') && !is_file($lt . '/docs/DONE.md'),
+        'a dry run says what it would do and writes NOTHING');
+
+    $realRun = sh($env . PHP_BINARY . ' ' . escapeshellarg($led) . ' --range ' . $old . '..' . $new, $ROOT);
+    $done = (string) @file_get_contents($lt . '/docs/DONE.md');
+    $bl   = (string) @file_get_contents($lt . '/docs/BACKLOG.md');
+
+    is_(str_contains($done, '**18**'), 'a Closes-Backlog trailer moves the item to the ledger — no human step');
+    is_(str_contains($done, 'THE THING HE ALREADY USED'), '...carrying its title, so the record reads as work rather than numbers');
+    is_((bool) preg_match('/`[0-9a-f]{7}`/', $done), '...and the landing sha, so git stays reachable from it');
+    is_(!preg_match('/^18[.)]/m', $bl), 'and it LEAVES the backlog index — the backlog stays a list of what is left');
+    is_((bool) preg_match('/^41[.)]/m', $bl), '...while everything still in flight stays put');
+
+    /**
+     * THE ORDER MATTERS MORE THAN EITHER STEP. A ledger that removed the index
+     * line first and then failed to write would DELETE work. The tool writes the
+     * ledger line and only then drops the index line, so the worst case is a
+     * duplicate record rather than a lost item.
+     */
+    $ledSrc = (string) file_get_contents($led);
+    $posWrite = strpos($ledSrc, "file_put_contents(\$donePath");
+    $posDrop  = strpos($ledSrc, 'foreach ($lines as $n => $line) { if (!isset($drop[$n]))');
+    is_($posWrite !== false && $posDrop !== false && $posWrite < $posDrop,
+        'the ledger line is written BEFORE the backlog line is removed — the worst case is a duplicate, never a loss');
+
+    /**
+     * IT RUNS IN A GIT WORKTREE. Written with is_dir('.git') it refused to run
+     * anywhere a lane actually works — in a worktree `.git` is a FILE pointing
+     * at the real gitdir. Found by running the tool against a real worktree
+     * rather than only against the fixture it was built with.
+     */
+    $wt = $tmp . '/wt';
+    sh('git worktree add -q --detach ' . escapeshellarg($wt) . ' HEAD 2>/dev/null', $lt);
+    if (is_dir($wt)) {
+        $wtRun = sh('LGB_LEDGER_REPO=' . escapeshellarg($wt) . ' ' . PHP_BINARY . ' '
+                  . escapeshellarg($led) . ' --range ' . $old . '..' . $new . ' --dry-run', $ROOT);
+        is_(!str_contains($wtRun['out'], 'no repo at'),
+            'the ledger runs inside a git WORKTREE, where .git is a file — not only in a clone');
+    } else {
+        echo "  .. could not create a worktree here; skipping that leg\n";
+    }
+
+    /* A range with no trailers must do nothing at all. */
+    $none = sh($env . PHP_BINARY . ' ' . escapeshellarg($led) . ' --range ' . $old . '..' . $old, $ROOT);
+    is_(str_contains($none['out'], 'nothing to record'),
+        'a train that closed nothing records nothing — silence, not an empty entry');
+}
+
 section("[14] THE DOORBELL — it rings once, and never for keeper's own hand");
 
 /**

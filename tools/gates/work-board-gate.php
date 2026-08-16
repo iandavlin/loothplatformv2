@@ -528,6 +528,30 @@ $idsNow = truth($BACK);
 $overlap = array_intersect($idsNow, ['2026', '2026-08-01']);
 is_($overlap === [], 'no date leaked into the index as an item id');
 
+/**
+ * THE DONE-LEDGER RENDERS ON THE BOARD (41d). Ian asked whether there was a file
+ * to move completed work to; this is that answer arriving where he looks.
+ */
+$dnFx = $tmp . '-done';
+@mkdir($dnFx, 0755, true);
+copy($BACK, $dnFx . '/BACKLOG.md');
+file_put_contents($dnFx . '/DONE.md',
+    "# Done\n\n- **18** · THE THING HE ALREADY USED · `fb83a6b` · landed 2026-08-16\n");
+$dnHtml = (string) shell_exec('LGB_MAIN_COPY=/nonexistent/m.md LGB_THREADS=/nonexistent/t.json LGB_BACKLOG='
+    . escapeshellarg($dnFx . '/BACKLOG.md') . ' ' . PHP_BINARY . ' ' . escapeshellarg($PAGE) . ' 2>/dev/null');
+is_(str_contains($dnHtml, 'THE THING HE ALREADY USED') && str_contains($dnHtml, 'fb83a6b'),
+    'the done-ledger renders on the board, carrying the landing sha');
+is_(str_contains($dnHtml, '1 landed'), '...counted, not described');
+
+// ABSENT IS A REAL STATE. An empty "Done" heading would read as "nothing has
+// shipped", which of this programme would be a lie.
+$noDnHtml = render($PAGE, $BACK);
+is_(str_contains($noDnHtml, 'No done-ledger yet'),
+    'with no ledger the board says so, and names what will write it');
+is_(!str_contains($noDnHtml, 'Done — the ledger'),
+    '...rather than drawing an empty Done heading');
+sh2('rm -rf ' . escapeshellarg($dnFx));
+
 // A missing archive must SAY so rather than draw a comforting zero.
 $noArch = $tmp . '-noarch.md';
 $src = (string) file_get_contents($BACK);
@@ -581,6 +605,52 @@ $deskHtml = (string) shell_exec('LGB_MAIN_COPY=/nonexistent/m.md LGB_THREADS=' .
 is_(str_contains($deskHtml, 'one ruling needed on the digest floor'),
     "a lane's post to Ian reaches his desk without anyone copying it across");
 is_(str_contains($deskHtml, 'featured-members'), '...naming the lane that is waiting on him');
+
+/**
+ * COMPACT DESK ROWS — Ian, 2026-08-16 night: "My desk is now really verbose…
+ * should go to modals."
+ *
+ * One line each; the body one click away. A desk that answers "and here is
+ * everything about it" stops being scannable, which is how a desk gets skimmed
+ * and then ignored.
+ */
+is_(str_contains($deskHtml, 'desk__i--compact'), 'desk rows are compact, one line each');
+is_(str_contains($deskHtml, 'id="lgb-deskbodies"'),
+    '...with the full bodies carried for the modal — the verbosity MOVED, it was not deleted');
+is_(str_contains($deskHtml, 'desk__age'), '...showing how long it has waited, in words rather than a timestamp');
+
+// THE TYPE IS DERIVED FROM EVIDENCE, never guessed from prose. An item with an
+// open decision box reads "decision"; a question mark reads "question";
+// everything else is "update" rather than a cleverer classification nobody can
+// justify.
+is_(str_contains($deskHtml, 'desk__type--update') || str_contains($deskHtml, 'desk__type--question'),
+    '...and carries a type derived from evidence, not guessed from prose');
+
+/**
+ * DISMISS — the third retirement door (41b). Most retirement is mechanical; this
+ * is for the case no rule can see. It COMMITS rather than hand-removing, so a
+ * dismissal has an author and a time.
+ */
+$dkey = $tmp . '-deskkey.json';
+file_put_contents($dkey, json_encode(['ts' => 1, 'lanes' => [], 'desk' => [
+    ['when' => '2026-08-16 19:00', 'who' => 'featured-members', 'text' => 'a thing', 'key' => 'abc123def456'],
+]]));
+$dkHtml = (string) shell_exec('LGB_MAIN_COPY=/nonexistent/m.md LGB_THREADS=' . escapeshellarg($dkey)
+    . ' LGB_BACKLOG=' . escapeshellarg($BACK) . ' ' . PHP_BINARY . ' ' . escapeshellarg($PAGE) . ' 2>/dev/null');
+is_(str_contains($dkHtml, 'data-dismiss="abc123def456"'),
+    'a desk row carries a dismiss control keyed to the RELAY\'s own key');
+is_(str_contains($dkHtml, "action: 'desk_dismiss'"), '...which commits the dismissal rather than hand-removing it');
+
+// A row with NO key (no relay yet) must not draw a button that cannot work.
+$noKey = $tmp . '-nokey.json';
+file_put_contents($noKey, json_encode(['ts' => 1, 'lanes' => [], 'desk' => [
+    ['when' => '2026-08-16 19:00', 'who' => 'featured-members', 'text' => 'a thing'],
+]]));
+$nkHtml = (string) shell_exec('LGB_MAIN_COPY=/nonexistent/m.md LGB_THREADS=' . escapeshellarg($noKey)
+    . ' LGB_BACKLOG=' . escapeshellarg($BACK) . ' ' . PHP_BINARY . ' ' . escapeshellarg($PAGE) . ' 2>/dev/null');
+is_(!str_contains($nkHtml, 'data-dismiss='),
+    '...and an item with no key draws NO button — one that cannot work is worse than none');
+@unlink($dkey); @unlink($noKey);
 $noDeskHtml = render($PAGE, $BACK);
 is_(!str_contains($noDeskHtml, 'one ruling needed on the digest floor'),
     '...and with no snapshot the desk invents nothing');

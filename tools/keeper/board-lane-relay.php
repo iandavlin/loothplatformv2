@@ -350,6 +350,87 @@ foreach ($lanes as $lane) {
 }
 
 /**
+ * DESK RETIREMENT, MECHANICAL — backlog 41(b), Ian: *"completed work still
+ * listed on my desk."*
+ *
+ * An item leaves the desk when one of three things is TRUE, never when somebody
+ * remembers to remove it:
+ *
+ *   1. its seat's DECISION HAS BEEN ANSWERED after the post was made — the ask
+ *      was "decide this" and it is decided;
+ *   2. the seat's BRANCH HAS MERGED after the post — the work behind the ask has
+ *      landed in a train;
+ *   3. it was explicitly DISMISSED (committed, so it is a fact with an author).
+ *
+ * Each is a fact already in a store. Nothing here reads a status somebody typed,
+ * which is the whole point: backlog 18 sat a day as UNOWNED because the only
+ * thing that could move it was a person noticing.
+ *
+ * A RETIRED ITEM IS NOT DELETED — it is marked, and the snapshot carries it so
+ * the history view can show what has been dealt with. Deleting would make the
+ * desk a place where things vanish, which is how a person stops trusting it.
+ *
+ * @return array{live:array,retired:array}
+ */
+function retireDeskItems(array $items): array
+{
+    /* (3) dismissed, from the committed store */
+    $dismissed = [];
+    $df = CLONE_DIR . '/docs/board-desk/dismissed.md';
+    if (is_readable($df)) {
+        foreach (explode("\n", (string) file_get_contents($df)) as $l) {
+            if (preg_match('/^- ([a-f0-9]{8,64}) /', $l, $m)) { $dismissed[$m[1]] = true; }
+        }
+    }
+
+    /* (1) answered decisions, with WHEN they were answered */
+    $answered = [];
+    $dd = CLONE_DIR . '/docs/board-decisions';
+    foreach ((array) glob($dd . '/*.md') as $f) {
+        $raw = (string) file_get_contents((string) $f);
+        if (preg_match('/^#### answered (\S+ \S+)/m', $raw, $m)) {
+            $answered[basename((string) $f, '.md')] = strtotime($m[1] . ' UTC') ?: 0;
+        }
+    }
+
+    /* (2) merged branches, with the merge time */
+    $merged = [];
+    $bd = CLONE_DIR . '/docs/board-branches';
+    foreach ((array) glob($bd . '/*.md') as $f) {
+        foreach (explode("\n", (string) file_get_contents((string) $f)) as $l) {
+            if (!preg_match('/^- (\S+) — /u', $l, $m)) { continue; }
+            $b = $m[1];
+            if (!preg_match('#^[A-Za-z0-9][A-Za-z0-9._/-]{0,80}$#', $b) || str_contains($b, '..')) { continue; }
+            $ref = 'origin/' . $b;
+            if (run('git merge-base --is-ancestor ' . escapeshellarg($ref) . ' origin/main', CLONE_DIR)['rc'] !== 0) { continue; }
+            $when = (int) trim(run('git log -1 --format=%ct ' . escapeshellarg($ref), CLONE_DIR)['out']);
+            $merged[$b] = $when;
+        }
+    }
+
+    $live = []; $retired = [];
+    foreach ($items as $d) {
+        $key  = substr(hash('sha256', ($d['who'] ?? '') . '|' . ($d['when'] ?? '') . '|' . ($d['text'] ?? '')), 0, 16);
+        $d['key'] = $key;
+        $posted = strtotime(((string) ($d['when'] ?? '')) . ' UTC') ?: 0;
+        $why = null;
+
+        if (isset($dismissed[$key])) { $why = 'dismissed'; }
+        elseif (isset($answered[$d['who'] ?? '']) && $answered[$d['who']] >= $posted) { $why = 'decision answered'; }
+        else {
+            foreach ($merged as $b => $when) {
+                // The branch must belong to this seat AND have landed after the
+                // ask, or an old merge would retire a fresh question.
+                if (str_contains($b, (string) ($d['who'] ?? '~none~')) && $when >= $posted) { $why = 'work landed (' . $b . ')'; break; }
+            }
+        }
+
+        if ($why === null) { $live[] = $d; } else { $d['retired'] = $why; $retired[] = $d; }
+    }
+    return ['live' => $live, 'retired' => $retired];
+}
+
+/**
  * IAN'S DESK, DERIVED — Ian, 2026-08-16: *"are you hand populating my desk? Is
  * there a way to do it mechanically?"*
  *
@@ -447,10 +528,16 @@ foreach ($lanes as $lane) {
     $snapshotLanes[$lane] = ['replies' => $reps[$lane] ?? [],
                              'delivery' => $delivery[$lane] ?? null];
 }
+// Computed ONCE. Written as retireDeskItems(deskItems()) in both slots it ran
+// the whole thing twice — including the git calls behind the merged-branch
+// check — every pass, on a two-core box with a fleet on it.
+$deskSplit = retireDeskItems(deskItems());
+
 if (!$dry) {
     $tmp = SNAPSHOT . '.tmp';
     file_put_contents($tmp, json_encode(['ts' => time(), 'lanes' => $snapshotLanes,
-                                         'desk' => deskItems(),
+                                         'desk' => $deskSplit['live'],
+                                         'deskRetired' => $deskSplit['retired'],
                                          'branches' => branchStates(attachedBranches())], JSON_UNESCAPED_SLASHES));
     // World-readable ON PURPOSE: the board is served by a pool user that is not
     // in the devmsg group and must never be — that group has WRITE, and it
