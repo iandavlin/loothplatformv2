@@ -168,7 +168,15 @@ def php_harness(fixture, cap_on):
     php += "require_once LG_PROFILE_APP_APP_ROOT . '/src/Db.php';\n"
     php += "require_once LG_PROFILE_APP_APP_ROOT . '/src/Visibility.php';\n"
     php += "require_once LG_PROFILE_APP_APP_ROOT . '/src/Block.php';\n"
-    php += "use Looth\\ProfileApp\\Visibility;\nuse Looth\\ProfileApp\\Block;\n"
+    # Flags is required AND imported. The extracted dir_member_display() body calls
+    # Flags::bool() UNQUALIFIED, and this harness re-hosts that body outside the
+    # endpoint's own `use` block — so without the import PHP resolves it to a global
+    # \Flags and fatals "Class 'Flags' not found", which no-verdicts the whole gate.
+    # The require is belt-and-braces (config.php already loads it); the USE is the
+    # actual fix. Any future class the endpoint imports must be added here too — a
+    # harness that re-hosts a function body inherits none of its imports.
+    php += "require_once LG_PROFILE_APP_APP_ROOT . '/src/Flags.php';\n"
+    php += "use Looth\\ProfileApp\\Visibility;\nuse Looth\\ProfileApp\\Block;\nuse Looth\\ProfileApp\\Flags;\n"
     if cap_on:
         php += "putenv('LG_DIRECTORY_LOCATION_CAP=1');\n"
     php += m1.group(0) + "\n" + m2.group(0) + "\n"
@@ -252,7 +260,7 @@ def check_fixture(label, fixture, needle, expected_leak):
 
 
 def main():
-    print("=== GATE (unnumbered — pending keeper): directory-location-cap, backlog 20 ===")
+    print("=== GATE 55: directory-location-cap, backlog 20 ===")
 
     flag_src = read(FLAG_FILE)
     if flag_src is None:
