@@ -54,7 +54,7 @@ const ALLOWED_PATHS = [
     'docs/board-lanes/',      // Ian's messages TO a lane (the replies are never committed)
 ];
 
-const INTENTS = [ 'reorder', 'note_append', 'media_ref', 'lane_message', 'lane_receipt' ];
+const INTENTS = [ 'reorder', 'note_append', 'media_ref', 'lane_message', 'lane_receipt', 'item_add', 'item_promote' ];
 
 /* ---------------------------------------------------------------------- */
 
@@ -304,6 +304,169 @@ function applyLaneMessage( string $repo, string $lane, string $text, string $act
 }
 
 /**
+ * Read the PRIORITY INDEX as (line number → id), in file order.
+ *
+ * IDS ARE DOTTED INTEGER PAIRS, NOT DECIMALS, and that is the whole reason this
+ * returns strings and does its arithmetic on the parts. The file really carries
+ * `3.10`, and `(float) "3.10" === (float) "3.1"` — so any numeric handling of an
+ * id silently merges 3.1 with 3.10, and minting "the next child" by adding 0.1
+ * would hand out a number that already exists. Parent and child are parsed and
+ * incremented as separate integers, always.
+ *
+ * @return array{lines:string[],slots:array<int,string>,end:?int}
+ */
+function readIndex( string $repo ): array
+{
+    $path = $repo . '/docs/BACKLOG.md';
+    if ( ! is_readable( $path ) ) { fail( 'BACKLOG.md unreadable in the clone' ); }
+    $lines = explode( "\n", str_replace( [ "\r\n", "\r" ], "\n", (string) file_get_contents( $path ) ) );
+
+    $inIndex = false; $band = null; $slots = []; $end = null;
+    foreach ( $lines as $i => $l ) {
+        if ( ! $inIndex ) { if ( str_starts_with( $l, '## PRIORITY INDEX' ) ) { $inIndex = true; } continue; }
+        if ( str_starts_with( $l, '---' ) || ( str_starts_with( $l, '## ' ) && ! str_starts_with( $l, '## PRIORITY' ) ) ) { break; }
+        if ( preg_match( '/^\*\*(.+?)\*\*\s*$/u', $l ) ) { $band = $i; continue; }
+        if ( $band !== null && preg_match( '/^([A-Z]?\d+(?:\.\d+)?)\s*[.)]?\s+/u', $l, $m ) ) {
+            $slots[ $i ] = $m[1];
+            $end = $i;
+        }
+    }
+    if ( $slots === [] ) { fail( 'no PRIORITY INDEX rows found — refusing to write a file I cannot read' ); }
+    return [ 'lines' => $lines, 'slots' => $slots, 'end' => $end ];
+}
+
+/**
+ * The next free TOP-LEVEL number, taken from the file itself.
+ *
+ * Ian's rule, via keeper: POSITION IS RANK, NUMBER IS A PERMANENT NAME. So a new
+ * item takes a number nobody has ever had — max + 1, never a gap-fill. Reusing a
+ * retired number would make an old reference silently point at new work, which
+ * is the one thing a permanent name must never do.
+ */
+function nextTopNumber( array $slots ): int
+{
+    $max = 0;
+    foreach ( $slots as $id ) {
+        if ( preg_match( '/^(\d+)$/', $id, $m ) ) { $max = max( $max, (int) $m[1] ); }
+        // A child's parent counts too: 11.6 means the name "11" is taken even
+        // when no item 11 exists, and the file really is like that today.
+        if ( preg_match( '/^(\d+)\.\d+$/', $id, $m ) ) { $max = max( $max, (int) $m[1] ); }
+    }
+    return $max + 1;
+}
+
+/** The next free child of a parent — integer arithmetic on the part after the dot. */
+function nextChildNumber( array $slots, string $parent ): int
+{
+    $max = -1;
+    foreach ( $slots as $id ) {
+        if ( preg_match( '/^' . preg_quote( $parent, '/' ) . '\.(\d+)$/', $id, $m ) ) {
+            $max = max( $max, (int) $m[1] );
+        }
+    }
+    return $max + 1;
+}
+
+/** One line of Ian's own words, safe to sit in the index. */
+function cleanTitle( string $t ): string
+{
+    // Flattened to ONE line: a title with a newline in it would create a second
+    // index row that no id owns, and the board would render half a sentence as
+    // an item. Bold markers are stripped from the start because a line that
+    // begins **like this** is how the file marks a BAND, and a title must never
+    // be able to forge one.
+    $t = trim( (string) preg_replace( '/\s+/u', ' ', $t ) );
+    $t = ltrim( $t, "*# \t" );
+    return trim( $t );
+}
+
+/**
+ * ADD AN ITEM. Ian: "Could I add things. Add headers and sub items."
+ *
+ * ADDITIVE ONLY, and that is enforced by construction rather than by care: this
+ * function INSERTS a line and touches nothing else. No existing line is edited,
+ * moved or renumbered — which is the invariant keeper named, and the one the
+ * gate checks by comparing the whole id list before and after.
+ *
+ * A new item lands at the BOTTOM of the index, because position is rank and
+ * nobody but Ian may decide that something outranks existing work. He drags it
+ * up, through the reorder shape that already exists.
+ */
+function applyItemAdd( string $repo, ?string $parent, string $title, string $actor ): array
+{
+    $title = cleanTitle( $title );
+    if ( $title === '' ) { refuse( 'an item needs a title' ); }
+    if ( mb_strlen( $title ) > 300 ) { refuse( 'that title is too long for one index line' ); }
+
+    $idx   = readIndex( $repo );
+    $lines = $idx['lines'];
+
+    if ( $parent !== null && $parent !== '' ) {
+        if ( ! preg_match( '/^\d+$/', $parent ) ) { refuse( 'a sub-item\'s parent is a plain number, not: ' . $parent ); }
+        $id = $parent . '.' . nextChildNumber( $idx['slots'], $parent );
+        // Sit with its siblings if it has any, so the file reads the way the
+        // numbering claims. Otherwise fall to the bottom like any new item.
+        $at = null;
+        foreach ( $idx['slots'] as $line => $sid ) {
+            if ( preg_match( '/^' . preg_quote( $parent, '/' ) . '\.\d+$/', $sid ) ) { $at = $line; }
+        }
+        $at ??= $idx['end'];
+    } else {
+        $id = (string) nextTopNumber( $idx['slots'] );
+        $at = $idx['end'];
+    }
+
+    if ( in_array( $id, $idx['slots'], true ) ) {
+        // Cannot happen with max+1, and is checked anyway: handing out a number
+        // that is already in use is the one failure this must never have.
+        fail( 'refusing to mint ' . $id . ' — the file already has it' );
+    }
+
+    array_splice( $lines, (int) $at + 1, 0, [ $id . '. ' . $title ] );
+    file_put_contents( $repo . '/docs/BACKLOG.md', implode( "\n", $lines ) );
+    $GLOBALS['MINTED'] = $id;
+    return [ 'docs/BACKLOG.md' ];
+}
+
+/**
+ * PROMOTE A SUB-ITEM to a top-level item. Ian: "Or promote sub items to headers."
+ *
+ * The content moves VERBATIM to a newly minted number, and the old line becomes
+ * a POINTER rather than disappearing. Nothing is renumbered and no name is
+ * retired: 4.2 still resolves, and now says where it went. A reference written
+ * three months ago still lands somewhere true, which is what makes a number a
+ * permanent name rather than a slot.
+ */
+function applyItemPromote( string $repo, string $id, string $actor ): array
+{
+    if ( ! preg_match( '/^\d+\.\d+$/', $id ) ) {
+        refuse( 'only a sub-item can be promoted, and that is not one: ' . $id );
+    }
+    $idx   = readIndex( $repo );
+    $lines = $idx['lines'];
+
+    $at = null;
+    foreach ( $idx['slots'] as $line => $sid ) { if ( $sid === $id ) { $at = $line; break; } }
+    if ( $at === null ) { refuse( 'no such sub-item in the index: ' . $id ); }
+
+    // Everything after the id and its separator is HIS words, and travels as-is.
+    if ( ! preg_match( '/^' . preg_quote( $id, '/' ) . '\s*[.)]?\s+(.*)$/u', $lines[ $at ], $m ) ) {
+        fail( 'could not read the body of ' . $id );
+    }
+    $body = rtrim( $m[1] );
+    if ( str_contains( $body, 'promoted to ' ) ) { refuse( $id . ' has already been promoted' ); }
+
+    $new = (string) nextTopNumber( $idx['slots'] );
+
+    $lines[ $at ] = $id . '. → promoted to ' . $new;
+    array_splice( $lines, (int) $idx['end'] + 1, 0, [ $new . '. ' . $body ] );
+
+    file_put_contents( $repo . '/docs/BACKLOG.md', implode( "\n", $lines ) );
+    $GLOBALS['MINTED'] = $new;
+    return [ 'docs/BACKLOG.md' ];
+}
+
+/**
  * A DELIVERY RECEIPT — what makes the relay idempotent across a crash.
  *
  * Keeper's ruling, 2026-08-16: a delivered message gets a committed receipt in
@@ -403,6 +566,15 @@ switch ( $intent ) {
         $touched = applyLaneMessage( CLONE_DIR, (string) ( $req['lane'] ?? '' ), (string) ( $req['text'] ?? '' ), $actor );
         $summary = 'message to ' . (string) ( $req['lane'] ?? '?' );
         break;
+    case 'item_add':
+        $touched = applyItemAdd( CLONE_DIR, isset( $req['parent'] ) ? (string) $req['parent'] : null,
+                                 (string) ( $req['title'] ?? '' ), $actor );
+        $summary = 'added item ' . (string) ( $GLOBALS['MINTED'] ?? '?' );
+        break;
+    case 'item_promote':
+        $touched = applyItemPromote( CLONE_DIR, (string) ( $req['id'] ?? '' ), $actor );
+        $summary = 'promoted ' . (string) ( $req['id'] ?? '?' ) . ' to ' . (string) ( $GLOBALS['MINTED'] ?? '?' );
+        break;
     case 'lane_receipt':
         $touched = applyLaneReceipt( CLONE_DIR, (string) ( $req['lane'] ?? '' ), (string) ( $req['id'] ?? '' ),
                                      (string) ( $req['outcome'] ?? '' ), (string) ( $req['why'] ?? '' ), $actor );
@@ -486,4 +658,9 @@ if ( $r['rc'] !== 0 ) {
 }
 
 audit( $actor, $intent, 'ok ' . $sha . ' ' . implode( ',', $changed ) );
-out( [ 'ok' => true, 'commit' => $sha, 'changed' => $changed, 'summary' => $summary ] );
+$reply = [ 'ok' => true, 'commit' => $sha, 'changed' => $changed, 'summary' => $summary ];
+// The minted number goes back to the caller: the page has to be able to tell
+// Ian what his new item is CALLED, and it must be the number the file actually
+// took rather than one the page guessed at.
+if ( isset( $GLOBALS['MINTED'] ) ) { $reply['id'] = (string) $GLOBALS['MINTED']; }
+out( $reply );

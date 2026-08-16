@@ -111,7 +111,13 @@ function indexIds(string $clone): array
         if (!$in) { if (str_starts_with($l, '## PRIORITY INDEX')) { $in = true; } continue; }
         if (str_starts_with($l, '---')) { break; }
         if (preg_match('/^\*\*(.+?)\*\*\s*$/u', $l)) { $band = true; continue; }
-        if ($band && preg_match('/^([A-Z]?\d+(?:\.\d+)?)\s/u', $l, $m)) { $ids[] = $m[1]; }
+        // MATCHES THE FILE, not a stricter idea of it. This helper required a
+        // SPACE straight after the id, but the real backlog writes "6. Front-end
+        // COMPOSE" with a dot — so it silently missed every dotted row. It
+        // reported a newly added item as "no row appeared" and a promoted id as
+        // "renumbered", two false failures against working code. An independent
+        // parse is only worth having if it is also a CORRECT one.
+        if ($band && preg_match('/^([A-Z]?\d+(?:\.\d+)?)\s*[.)]?\s+/u', $l, $m)) { $ids[] = $m[1]; }
     }
     return $ids;
 }
@@ -285,6 +291,109 @@ is_(str_contains($kf, '`redis-cli ping`'),
     '...and stored VERBATIM — backticks intact, so the relay delivers what he typed');
 
 /* ---------------------------------------------------------------------- */
+section("[12] ADDING AND PROMOTING — position is rank, number is a permanent name");
+
+/**
+ * Ian, 2026-08-16: "Could I add things. Add headers and sub items. Or promote
+ * sub items to headers." Keeper's design note is the invariant everything here
+ * checks: POSITION IS RANK, NUMBER IS A PERMANENT NAME — so an add or a
+ * promotion must NEVER renumber an existing item.
+ */
+$idsBefore = indexIds($clone);
+$bodiesBefore = [];
+foreach (explode("\n", (string) file_get_contents($clone . '/docs/BACKLOG.md')) as $l) {
+    if (preg_match('/^([A-Z]?\d+(?:\.\d+)?)\s*[.)]?\s+(.*)$/u', $l, $m)) { $bodiesBefore[$m[1]] = $m[2]; }
+}
+
+$r = svc($SVC, $clone, ['actor' => 'ian-via-board', 'intent' => 'item_add',
+                        'title' => 'A brand new thing Ian typed']);
+is_(($r['json']['ok'] ?? false) === true, 'a new top-level item is added');
+is_(($r['json']['id'] ?? '') === '28',
+    'it takes the next free number FROM THE FILE (got ' . (string) ($r['json']['id'] ?? '-') . ', expected 28)');
+
+$idsAfter = indexIds($clone);
+$bodiesAfter = [];
+foreach (explode("\n", (string) file_get_contents($clone . '/docs/BACKLOG.md')) as $l) {
+    if (preg_match('/^([A-Z]?\d+(?:\.\d+)?)\s*[.)]?\s+(.*)$/u', $l, $m)) { $bodiesAfter[$m[1]] = $m[2]; }
+}
+
+// THE INVARIANT, stated as a comparison rather than a hope.
+$lost = array_diff($idsBefore, $idsAfter);
+is_($lost === [], 'NOTHING was renumbered or dropped — every id that existed still does'
+    . ($lost === [] ? '' : ' (lost: ' . implode(',', $lost) . ')'));
+$changed = [];
+foreach ($bodiesBefore as $id => $body) {
+    if (($bodiesAfter[$id] ?? null) !== $body) { $changed[] = $id; }
+}
+is_($changed === [], 'ADDITIVE ONLY — not one existing line was edited'
+    . ($changed === [] ? '' : ' (changed: ' . implode(',', $changed) . ')'));
+is_(count($idsAfter) === count($idsBefore) + 1, 'exactly one row appeared');
+is_(str_contains((string) ($bodiesAfter['28'] ?? ''), 'A brand new thing Ian typed'), 'and it carries his words');
+
+/* --- the sub-item, and the decimal trap ------------------------------- */
+$r = svc($SVC, $clone, ['actor' => 'ian-via-board', 'intent' => 'item_add',
+                        'parent' => '4', 'title' => 'a child of four']);
+is_(($r['json']['id'] ?? '') === '4.3',
+    'a sub-item takes the next child of its parent (got ' . (string) ($r['json']['id'] ?? '-') . ', expected 4.3)');
+
+/**
+ * THE DECIMAL TRAP, exercised rather than described. The real backlog carries
+ * `3.10`, and `(float) "3.10" === (float) "3.1"` — so any numeric handling of an
+ * id merges the two, and "next child" computed by adding 0.1 hands out a number
+ * that already exists. With integer arithmetic on the part after the dot, the
+ * child after 3.10 is 3.11.
+ */
+$bl = $clone . '/docs/BACKLOG.md';
+$raw = (string) file_get_contents($bl);
+file_put_contents($bl, str_replace("\nE1 ", "\n3.9 nine\n3.10 ten\nE1 ", $raw));
+sh('git add -A && git -c user.name=t -c user.email=t@t commit -q -m dec && git push -q origin HEAD:main', $clone);
+
+$r = svc($SVC, $clone, ['actor' => 'ian-via-board', 'intent' => 'item_add',
+                        'parent' => '3', 'title' => 'the one after ten']);
+is_(($r['json']['id'] ?? '') === '3.11',
+    'the child after 3.10 is 3.11, NOT 3.2 — ids are dotted integers, not decimals (got '
+    . (string) ($r['json']['id'] ?? '-') . ')');
+is_(!in_array('3.11', $idsBefore, true) && in_array('3.10', indexIds($clone), true),
+    '...and 3.10 is still there, not merged with 3.1');
+
+/* --- a title cannot forge structure ----------------------------------- */
+$r = svc($SVC, $clone, ['actor' => 'ian-via-board', 'intent' => 'item_add',
+                        'title' => "first line\n99 a forged row\n**A FORGED BAND**"]);
+is_(($r['json']['ok'] ?? false) === true, 'a multi-line title is accepted');
+$after = indexIds($clone);
+is_(!in_array('99', $after, true), '...but cannot forge a second index row');
+// The forged text DOES appear — inside the title, where it is just words. The
+// property is that it is not a BAND, and a band is a line that is bold from
+// start to end. Asserting the substring was asserting the wrong thing.
+$bandLines = 0;
+foreach (explode("\n", (string) file_get_contents($bl)) as $l) {
+    if (preg_match('/^\*\*(.+?)\*\*\s*$/u', $l) && str_contains($l, 'FORGED')) { $bandLines++; }
+}
+is_($bandLines === 0, '...and cannot forge a band header, however the title is written');
+
+$r = svc($SVC, $clone, ['actor' => 'ian-via-board', 'intent' => 'item_add', 'title' => '   ']);
+is_(($r['json']['refused'] ?? false) === true, 'an empty title is refused');
+
+/* --- promotion --------------------------------------------------------- */
+$idsBefore = indexIds($clone);
+$r = svc($SVC, $clone, ['actor' => 'ian-via-board', 'intent' => 'item_promote', 'id' => '4.2']);
+is_(($r['json']['ok'] ?? false) === true, 'a sub-item can be promoted');
+$newId = (string) ($r['json']['id'] ?? '');
+$file  = (string) file_get_contents($bl);
+
+is_($newId !== '' && str_contains($file, $newId . '. ' . ($bodiesBefore['4.2'] ?? 'x')),
+    'the content moved VERBATIM to the new number');
+is_((bool) preg_match('/^4\.2\.\s+→ promoted to ' . preg_quote($newId, '/') . '$/m', $file),
+    'the old number SURVIVES as a pointer — a three-month-old reference still lands somewhere true');
+$lost = array_diff($idsBefore, indexIds($clone));
+is_($lost === [], 'and nothing was renumbered by the promotion'
+    . ($lost === [] ? '' : ' (lost: ' . implode(',', $lost) . ')'));
+
+$r = svc($SVC, $clone, ['actor' => 'ian-via-board', 'intent' => 'item_promote', 'id' => '4.2']);
+is_(($r['json']['refused'] ?? false) === true, 'promoting the same sub-item twice is refused');
+$r = svc($SVC, $clone, ['actor' => 'ian-via-board', 'intent' => 'item_promote', 'id' => '27']);
+is_(($r['json']['refused'] ?? false) === true, 'a top-level item cannot be "promoted"');
+
 section("[11] DELIVERY RECEIPTS — the shape that makes the relay idempotent");
 
 /**
@@ -356,8 +465,14 @@ sh('git add -A && git -c user.name=t -c user.email=t@t commit -q -m dupe', $clon
 sh('git push -q origin HEAD:main', $clone);
 
 $dupIds = indexIds($clone);
-is_(count($dupIds) === 5 && count(array_unique($dupIds)) === 4,
-    'the fixture now carries a duplicate id (' . implode(',', $dupIds) . ')');
+// Counted as a DELTA, not against a fixed total. This asserted "exactly 5 ids,
+// 4 distinct" — true only while no earlier section had added anything to the
+// shared fixture. The moment one did, a working duplicate-fence read as broken.
+// An assertion that depends on what ran before it is an assertion that will
+// fail for a reason that has nothing to do with its subject.
+$dupCount = count($dupIds) - count(array_unique($dupIds));
+is_($dupCount === 1 && count(array_keys($dupIds, '27')) === 2,
+    'the fixture now carries exactly one duplicated id, and it is 27 (' . implode(',', $dupIds) . ')');
 
 $r = svc($SVC, $clone, ['actor' => 'ian-via-board', 'intent' => 'reorder',
                         'order' => ['4.1', '4.2', '27', '27', 'E1']]);
