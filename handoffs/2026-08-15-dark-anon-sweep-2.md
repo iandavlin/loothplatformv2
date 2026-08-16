@@ -431,6 +431,44 @@ that I have not identified. Re-setting `#1a1d1a` would be a no-op "fix".
 **Do not patch that site until a matched-rules probe names the winning rule** —
 and note the white *wrapper* under dark may be the real bug rather than the ink.
 
+### Borderless fields, resolved per-site (2026-08-16) — 1 false positive, 2 real, 1 open
+
+The `field-borderless` check compares an input's fill to its **immediate parent**.
+For a COMPOSITE control (icon + input inside a bordered bar) that is the wrong
+question: the *wrapper* is the affordance, not the inner input. So each site was
+tested for what actually matters — **can the user find the box against the page?**
+
+| site | parent | parent border vs page | verdict |
+|---|---|---|---|
+| events | `.lgev-ubar` | `#767c76` 1px @ **4.2:1** | **FALSE POSITIVE** — wrapper is findable |
+| hub / hub-door | `form.hub-tsearch` | `#2c312d` 1px @ **1.35:1** | **REAL** — border exists but is far too faint |
+| directory | `div.filt` | **no border**, fill `#ffffff` @ 1.0 vs page | **REAL** — no boundary at all |
+| shop | `label.hd__search` | `#6fb98f` 1px, page bg unresolved | **OPEN** — inconclusive, re-measure |
+
+**events is already fixed** by `LG_DARK_SEARCH_WRAPPER_FIX` (ON) — its wrapper
+carries `DARK_SEARCH_BORDER` `#767c76`. Do not touch it.
+
+**hub is the interesting one:** `form.hub-tsearch` gets `#2c312d`, the OLD
+pre-fix border value, not `DARK_SEARCH_BORDER` `#767c76`. `app-settings.js:179`
+claims ".hub-tsearch (forums.css) gets its own new border under this same token"
+— **that claim does not hold on the served page.** Either the rule does not reach
+it or forums.css wins. Fix = make `.hub-tsearch` actually take
+`DARK_SEARCH_BORDER`; the token and flag already exist, so this is a reach
+problem, not a new mechanism.
+
+**directory** `div.filt` has no border and a white fill on a dark page — that
+panel appears not to be themed at all. Likely the same untheme'd
+`directory-desktop.js` noted above (zero `data-lguser-theme` rules in the file).
+
+**shop is NOT resolved** — the probe could not resolve a page background behind
+`label.hd__search`, so its border contrast is unknown. Do not fix it on a guess;
+re-measure with an explicit page-background walk first.
+
+**Method note for the next seat:** verify this class with the gate's OWN probe
+filtered to `kind == 'field-borderless'`, not a hand-rolled colour read. Two
+hand-rolled measurements of the wrong property are what produced the "invisible
+text" and then the "phantom" claims above.
+
 ## Next
 
 The ranked wave list (110+ remaining) is the standing charter — badness order,
