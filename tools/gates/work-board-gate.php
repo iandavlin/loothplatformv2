@@ -820,7 +820,10 @@ is_(str_contains($wsHtml, '    Active: failed'),
     'a pasted 4-space indent survives the store round trip');
 is_(str_contains($wsHtml, '      Loaded: bad'),
     '...and a 6-space one, so terminal output is not flattened');
-sh('rm -rf ' . escapeshellarg($wsLane));
+// shell_exec, not sh() — that helper lives in the COMMITTER's gate, not this
+// one. Copying a line between two gates that look alike is how a gate acquires
+// a fatal that only fires after the assertions have already printed ok.
+shell_exec('rm -rf ' . escapeshellarg($wsLane));
 
 // An absent relay must read as absent, not as a lane with nothing to say.
 $noThrHtml = render($PAGE, $BACK);
