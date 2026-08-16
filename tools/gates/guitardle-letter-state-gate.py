@@ -56,6 +56,7 @@ ASSETS = os.path.join(ROOT, "archive-poc", "web", "guitardle")
 WPDIR = os.environ.get("LG_GDLE_WPDIR", "/var/www/dev")
 PROBE_PREFIX = "gdle_ls_gate_"
 PROBE_LOGIN  = PROBE_PREFIX + str(os.getpid())
+PROBE_LOGIN_B = PROBE_PREFIX + str(os.getpid()) + "b"
 # LG_GDLE_SERVED=1 measures dev2's served code (main) — the red-first direction.
 LOCAL = "" if os.environ.get("LG_GDLE_SERVED") == "1" else ASSETS
 
@@ -159,8 +160,9 @@ UID = int(uid)
 # concurrent run's account safe.
 stale = wp('$ids=[];$cut=time()-1800;'
            'foreach(get_users(["search"=>"%s*","search_columns"=>["user_login"]]) as $u){'
-           'if($u->user_login==="%s")continue;if(strtotime($u->user_registered)>$cut)continue;'
-           '$ids[]=(int)$u->ID;}echo $ids?implode(",",$ids):"none";' % (PROBE_PREFIX, PROBE_LOGIN))
+           'if($u->user_login==="%s"||$u->user_login==="%s")continue;'
+           'if(strtotime($u->user_registered)>$cut)continue;'
+           '$ids[]=(int)$u->ID;}echo $ids?implode(",",$ids):"none";' % (PROBE_PREFIX, PROBE_LOGIN, PROBE_LOGIN_B))
 if stale not in ("none", ""):
     ids = ",".join(i for i in stale.split(",") if i.strip().isdigit())
     if ids:
@@ -168,20 +170,36 @@ if stale not in ("none", ""):
         wp('require_once ABSPATH."wp-admin/includes/user.php";'
            'foreach([%s] as $i) wp_delete_user($i); echo "ok";' % ids)
 
+# A SECOND probe member, for the cross-ACCOUNT axis (phase 7). Ian, 2026-08-16:
+# "Logged in as mikelle and it seems to be picking up my moves as ian.davlin."
+# Cross-DEVICE (phase 3) and cross-ACCOUNT are different axes and only one was
+# gated -- two devices are two browsers with one member; two accounts are ONE
+# browser with two members, and it is the shared localStorage that leaks.
+uid_b = wp('$l="%s";$u=get_user_by("login",$l);'
+           'if(!$u){$id=wp_insert_user(["user_login"=>$l,"user_pass"=>wp_generate_password(24),'
+           '"user_email"=>$l."@invalid.local","role"=>"subscriber"]);'
+           'if(is_wp_error($id)){echo "ERR";return;}$u=get_user_by("id",$id);}echo $u->ID;' % PROBE_LOGIN_B)
+if not uid_b.isdigit():
+    cannot_run("could not create the SECOND per-run probe member")
+UID_B = int(uid_b)
+
 CK = wp("echo LOGGED_IN_COOKIE;")
 
-def mint():
+def mint(uid=None):
     """A FRESH token per browser context: one shared token did not survive a
     second context's reload, and the run then measured a signed-out page."""
+    u = UID if uid is None else uid
     return wp('$t=WP_Session_Tokens::get_instance(%d)->create(time()+3600);'
-              'echo wp_generate_auth_cookie(%d,time()+3600,"logged_in",$t);' % (UID, UID))
+              'echo wp_generate_auth_cookie(%d,time()+3600,"logged_in",$t);' % (u, u))
 
-def wipe():
-    psql("DELETE FROM discovery.guitardle_results WHERE wp_user_id=%d;" % UID)
+def wipe(uid=None):
+    for u in ([UID, UID_B] if uid is None else [uid]):
+        psql("DELETE FROM discovery.guitardle_results WHERE wp_user_id=%d;" % u)
 
 def cleanup():
     wipe()
-    wp('require_once ABSPATH."wp-admin/includes/user.php";wp_delete_user(%d);echo "ok";' % UID)
+    for u in (UID, UID_B):
+        wp('require_once ABSPATH."wp-admin/includes/user.php";wp_delete_user(%d);echo "ok";' % u)
 
 
 class Browser:
@@ -202,9 +220,10 @@ class Browser:
 class Device:
     """One ISOLATED browser context == one device. Two tabs would share cookies
     AND localStorage, which hides the very cross-device bug under test."""
-    def __init__(self, browser, metrics, sp=True):
+    def __init__(self, browser, metrics, sp=True, uid=None):
         self.browser = browser
         self.sp = sp
+        self.uid = UID if uid is None else uid
         self.subbed = set()
         self.ctx = browser.cmd("Target.createBrowserContext")["browserContextId"]
         tid = browser.cmd("Target.createTarget", url="about:blank",
@@ -227,8 +246,18 @@ class Device:
     def cookies(self):
         self.cmd("Network.setCookie", name="loothdev_auth", value=GATE,
                  domain=".dev2.loothgroup.com", path="/", secure=True)
-        self.cmd("Network.setCookie", name=CK, value=mint(),
+        self.cmd("Network.setCookie", name=CK, value=mint(self.uid),
                  domain="dev2.loothgroup.com", path="/", secure=True)
+
+    def become(self, uid):
+        """Sign a DIFFERENT member into THIS browser -- one device, two accounts.
+        Cookies are cleared first because Network.setCookie ADDS a second WP
+        cookie instead of replacing one, and the run would then execute as
+        whichever the server happened to pick. localStorage is deliberately NOT
+        touched: it is the leak under test."""
+        self.uid = uid
+        self.cmd("Network.clearBrowserCookies")
+        self.cookies()
 
     def cmd(self, m, **p):
         self.i += 1
@@ -641,6 +670,100 @@ try:
                     check(not (c_hit and "hit" in c_hit and not s2["painted"]),
                           "[6] a letter drawn as a HIT is actually painted in the word",
                           "%s reads %r but painted=%s" % (A_HIT, c_hit, s2["painted"]))
+    finally:
+        d.close()
+
+    # ── PHASE 7 — ONE BROWSER, TWO MEMBERS (the cross-ACCOUNT axis) ────────
+    # Ian, 2026-08-16, re-testing the fix above: "Logged in as mikelle and it
+    # seems to be picking up my moves as ian.davlin."
+    #
+    # PHASE 3 IS NOT THIS. Two devices are two browsers with ONE member, and it
+    # is asserted with two ISOLATED contexts precisely so localStorage is NOT
+    # shared. This is ONE browser with TWO members, where the shared
+    # localStorage is the whole leak -- so it runs in a SINGLE context and only
+    # the session cookie changes, which is exactly what signing out and in does.
+    # The family has two axes and only one of them was gated.
+    #
+    # MEASURED BEFORE BUILDING, and it ruled the server out: Ian's row held
+    # {"moves":5,...} while Mikelle had NO ROW AT ALL. The resume query is per
+    # wp_user_id from the session and the endpoint sends no-store + Vary: Cookie,
+    # so nothing server-side could hand her his game.
+    #
+    # It leaks more than the board: NONE of the ten guitardle_* keys was scoped
+    # to a member, so the next member inherited the position, the hardcore mode,
+    # the played-today lock AND the streak/stats block -- another member's
+    # record, on a family device.
+    #
+    # ⚠️ MEMBER A PLAYS THE **LEGACY** BOARD HERE, AND THAT IS NOT A SHORTCUT.
+    # The first cut of this phase had A play under server play and its LIVENESS
+    # ASSERTION FAILED, correctly: under server play the client writes NO
+    # localStorage at all (serverReveal calls no saveGame), so there was nothing
+    # to leak and every assertion below it would have passed against an empty
+    # browser. Legacy is where a snapshot is actually written -- and legacy is
+    # what LIVE runs, so it is also the shape a member most likely meets.
+    print("PHASE 7 — a second member on the SAME browser inherits NOTHING")
+    wipe()
+    d = Device(br, DESKTOP, sp=False)
+    try:
+        if not d.open():
+            check(False, "[7] member A reached a ready board")
+        elif LOCAL and not check(bool(d.subbed), "[7] this tree's client was substituted"):
+            pass
+        else:
+            d.tap(A_HIT)
+            s_a = d.tap(A_MISS)
+            # Give member A a distinctive STATS footprint too, so the assertion
+            # covers the record and not only the board.
+            d.js("localStorage.setItem('guitardle_streak','7');"
+                 "localStorage.setItem('guitardle_gamesPlayed','42')")
+            snap = d.js("localStorage.getItem('guitardle_game')")
+            # LIVENESS: member A must really have left state behind, or every
+            # assertion below passes against an empty browser.
+            live = bool(snap) and A_HIT in (snap or "")
+            if not check(live,
+                         "[7] LIVENESS: member A left a local game naming the hit",
+                         "localStorage=%s -- with nothing stored the checks below "
+                         "would pass having measured nothing" % snap):
+                pass
+            else:
+                check(cls_for(s_a, A_HIT) and "hit" in cls_for(s_a, A_HIT),
+                      "[7] setup: member A's board really shows the hit",
+                      "got %r" % cls_for(s_a, A_HIT))
+                # SIGN IN AS MEMBER B, same browser, same tab, same URL.
+                d.become(UID_B)
+                if check(d.reload(), "[7] member B's board comes back ready"):
+                    check(d.js("(typeof scoreAuth!=='undefined'&&scoreAuth.wp_user_id)||0") == UID_B,
+                          "[7] the page really is member B now, not member A",
+                          "wp_user_id=%s wanted %d"
+                          % (d.js("(typeof scoreAuth!=='undefined'&&scoreAuth.wp_user_id)||0"), UID_B))
+                    s_b = d.state()
+                    check(not s_b["keys"],
+                          "[7] member B's picker carries NO letter from member A",
+                          "B sees %s -- these are A's guesses" % s_b["keys"])
+                    check(not s_b["painted"],
+                          "[7] member B's word display is empty",
+                          "B sees painted=%s -- these are A's letters" % s_b["painted"])
+                    check(d.js("document.getElementById('move-count')"
+                               "?document.getElementById('move-count').textContent.trim():'0'")
+                          in ("0", "", None),
+                          "[7] member B's move count does not inherit A's moves",
+                          "shows %r" % d.js("document.getElementById('move-count')"
+                                            "?document.getElementById('move-count').textContent.trim():'0'"))
+                    # The RECORD, not just the board.
+                    check(d.js("localStorage.getItem('guitardle_streak')") in (None, "0"),
+                          "[7] member B does not inherit member A's STREAK",
+                          "B reads streak=%r (A's was 7)"
+                          % d.js("localStorage.getItem('guitardle_streak')"))
+                    check(d.js("localStorage.getItem('guitardle_gamesPlayed')") in (None, "0"),
+                          "[7] member B does not inherit member A's games-played",
+                          "B reads %r (A's was 42)"
+                          % d.js("localStorage.getItem('guitardle_gamesPlayed')"))
+                    # And the server was never the culprit: B has no row.
+                    row = psql("SELECT count(*) FROM discovery.guitardle_results "
+                               "WHERE wp_user_id=%d;" % UID_B)
+                    check(row.strip() in ("0", "1"),
+                          "[7] member B's own server row is hers alone",
+                          "count=%s" % row)
     finally:
         d.close()
 

@@ -564,6 +564,53 @@ function incrementMoves() {
 // ─────────────────────────────────────────────────────────────────────────────
 //  SAVED GAME (refresh-proof)
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─── ONE BROWSER, TWO MEMBERS ───────────────────────────────────────────────
+// Ian, 2026-08-16, re-testing the letter-state fix: "Logged in as mikelle and
+// it seems to be picking up my moves as ian.davlin."
+//
+// NOT ONE of this game's local keys was scoped to a member -- not the position,
+// not the hardcore mode, not the played-today lock, and not the streak/stats
+// block. So on ANY shared browser the next member to sign in inherited the
+// previous member's game AND their record: their streak, their games played,
+// their win count, their score distribution. That is a member-data leak on a
+// family device, not only a wrong-looking board.
+//
+// MEASURED for Ian's report rather than assumed, and it rules out the server:
+// his row held {"moves":5,"revealed":["F","B","T","K","G"]} while Mikelle had
+// NO ROW AT ALL. The server never handed her anything -- the resume query is
+// per wp_user_id from the session, and the endpoint sends Cache-Control:
+// no-store with Vary: Cookie. Every symptom was this browser replaying him.
+//
+// The SERVER is the only authority on who you are, so ownership can only be
+// judged once the handshake lands -- which is why init() awaits it before any
+// local state is read. It has been in flight since initScoreSync() by then, so
+// that await is usually a promise that has already settled.
+const OWNER_KEY = 'guitardle_owner';
+
+function localOwner() {
+    return (scoreAuth && scoreAuth.authenticated && scoreAuth.wp_user_id)
+        ? 'u' + scoreAuth.wp_user_id
+        : 'anon';
+}
+
+// Deliberately the SAME prefix sweep the ?reset door uses. Namespacing the ten
+// keys individually would have been the other option and is worse twice over:
+// it leaves the previous member's un-namespaced data sitting in the browser,
+// and the eleventh key added later would silently not be covered.
+function enforceLocalOwnership() {
+    const now  = localOwner();
+    const prev = localStorage.getItem(OWNER_KEY);
+    const foreign = prev !== null && prev !== now;
+    if (foreign) {
+        Object.keys(localStorage)
+            .filter(k => k.startsWith('guitardle_'))
+            .forEach(k => localStorage.removeItem(k));
+    }
+    localStorage.setItem(OWNER_KEY, now);   // after the sweep: it is one of them
+    return foreign;
+}
+
 function saveGame() {
     // The first move is what spends the day's allowance, and saveGame() is
     // called on every move -- so this is the honest place to claim it.
@@ -1454,6 +1501,15 @@ async function init() {
     } else {
         await loadPhrase();
     }
+
+    // WHO owns this browser's local state is a SERVER fact, so nothing local may
+    // be read before the handshake lands. Under server play it is already
+    // awaited above for the board shape; this second await covers the LEGACY
+    // path -- which is what live runs, and where members meet this too. It has
+    // been in flight since initScoreSync(), racing loadPhrase(), so it costs a
+    // promise that has usually already settled rather than a round trip.
+    await scoreSyncPromise;
+    enforceLocalOwnership();
 
     if (serverPlay) { renderPhraseFromShape(SHAPE); } else { renderPhrase(); }
     attachKeyboardListeners();
