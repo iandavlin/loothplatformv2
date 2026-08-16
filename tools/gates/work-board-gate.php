@@ -713,6 +713,35 @@ is_(str_contains($pageSrc, 'nothing was deleted to make room'),
 
 is_(str_contains($pageSrc, 'image no longer stored'),
     'a deleted image reads as gone — never a broken icon, never a silent gap');
+
+/**
+ * PASTE WORKS IN EVERY BOX THAT TAKES A MESSAGE, not only the chat. The spec
+ * said "threads/chat" and the first cut wired the chat alone — the wrong half,
+ * because an item's thread is where a screenshot belongs PERMANENTLY, beside
+ * the decision it caused, while the chat scrolls away.
+ */
+is_(substr_count($pageSrc, 'function bindPaste(') === 1,
+    'one paste binder, so every box behaves the same way');
+is_(substr_count($pageSrc, 'bindPaste(') >= 4,
+    '...bound to the chat, the item threads and the note box, not just one of them');
+
+/**
+ * AND THE HELPERS THEY SHARE MUST BE IN THE SAME SCOPE. `withMedia` began life
+ * inside the chat's closure while `fillWrite` sits outside it, so an item modal
+ * calling it would have thrown a ReferenceError the moment it opened — a break
+ * a syntax check cannot see, because the syntax is fine. Asserted by brace
+ * depth: both must be at the top level of the page's IIFE.
+ */
+$scriptStart = strrpos($pageSrc, '<script>');
+$depthOf = static function (string $needle) use ($pageSrc, $scriptStart): int {
+    $i = strpos($pageSrc, $needle, $scriptStart);
+    if ($i === false) { return -1; }
+    $seg = substr($pageSrc, $scriptStart, $i - $scriptStart);
+    return substr_count($seg, '{') - substr_count($seg, '}');
+};
+is_($depthOf('function withMedia(') === $depthOf('function fillWrite(')
+    && $depthOf('function withMedia(') > 0,
+    'withMedia and fillWrite share a scope — an item modal can actually call it');
 is_(!preg_match('/chat_send[\s\S]{0,900}?innerHTML\s*\+=/', $pageSrc),
     '...and never appends a message it made up from the typed text');
 is_(str_contains($openBox, 'Something else'),

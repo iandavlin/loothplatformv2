@@ -2135,7 +2135,9 @@ header('X-Robots-Tag: noindex, nofollow');
       say.hidden = true;
       var thread = document.getElementById('lgb-thread'),
           cnt    = document.getElementById('lgb-threadc');
-      thread.textContent = d.thread || '';
+      // The item's thread renders its pictures too — a path is not what he
+      // pasted. Escaped first, then only known media paths become images.
+      thread.innerHTML = withMedia(d.thread || '');
       thread.style.display = d.thread ? '' : 'none';
       cnt.textContent = d.thread ? '' : '— nothing yet';
       document.getElementById('lgb-note').value = '';
@@ -2163,6 +2165,7 @@ header('X-Robots-Tag: noindex, nofollow');
 
     function busy(btn, on) { btn.disabled = on; btn.textContent = on ? 'Saving…' : btn.dataset.was; }
 
+    bindPaste(document.getElementById('lgb-note'), document.getElementById('lgb-say'));
     document.getElementById('lgb-notesend').dataset.was = 'Add note';
     document.getElementById('lgb-notesend').addEventListener('click', function () {
       var t = document.getElementById('lgb-note').value.trim();
@@ -2283,6 +2286,7 @@ header('X-Robots-Tag: noindex, nofollow');
       var btn = box.querySelector('.thrbox__go'),
           ta  = box.querySelector('.thrbox__in'),
           out = box.querySelector('.thrbox__say');
+      bindPaste(ta, out);                      // every thread takes a screenshot
       if (!btn || !ta) { return; }
       btn.addEventListener('click', function (e) {
         e.preventDefault(); e.stopPropagation();     // must not toggle the row
@@ -2438,6 +2442,72 @@ header('X-Robots-Tag: noindex, nofollow');
      */
     function esc2(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 
+
+    /**
+     * A /board-media/ path in a message renders as the picture. Ian's
+     * screenshots are the fleet's best bug reports and today every one of them
+     * arrives by a side channel and has to be described back into a lane.
+     *
+     * THE TEXT IS ESCAPED FIRST and only then are known media paths turned
+     * into images — the pattern is anchored and narrow, so a message can
+     * never inject markup by looking like one.
+     *
+     * A FILE THAT IS GONE SAYS SO. The spec is explicit: a deleted image must
+     * read as "no longer stored", never as a broken image icon and never as a
+     * silent gap, because a gap looks like he never sent it.
+     */
+    function withMedia(text) {
+      return esc2(text).replace(/\/board-media\/[A-Za-z0-9._-]+\.(png|jpg|jpeg|gif|webp)/g, function (p) {
+        return '<a href="' + p + '" target="_blank" rel="noopener">'
+             + '<img class="msg__img" src="' + p + '" alt="pasted image" '
+             + 'onerror="this.replaceWith(Object.assign(document.createElement(\'em\'),'
+             + '{textContent:\'image no longer stored\'}))"></a>';
+      });
+    }
+
+    /**
+     * PASTE AN IMAGE INTO ANY BOX THAT TAKES A MESSAGE — the chat, an item's
+     * thread, a lane thread. The spec said "threads/chat" and the first cut
+     * wired only the chat, which would have been the wrong half: the per-item
+     * thread is where a screenshot belongs PERMANENTLY, next to the decision it
+     * caused, while the chat scrolls away.
+     *
+     * What lands in the box is the PATH, not the bytes — cheap to render, and
+     * keeper opens the original from disk. Nothing is stored in any thread until
+     * he chooses to send.
+     */
+    function bindPaste(ta, out) {
+      if (!ta) { return; }
+      ta.addEventListener('paste', function (e) {
+        var items = (e.clipboardData && e.clipboardData.items) || [];
+        for (var i = 0; i < items.length; i++) {
+          if (items[i].type.indexOf('image/') !== 0) { continue; }
+          var file = items[i].getAsFile();
+          if (!file) { continue; }
+          e.preventDefault();
+          var say = function (cls, txt) {
+            if (!out) { return; }
+            out.hidden = false; out.className = 'thrbox__say' + (cls ? ' ' + cls : ''); out.textContent = txt;
+          };
+          say('', 'Uploading image…');
+          var fr = new FileReader();
+          fr.onload = function () {
+            var b64 = String(fr.result).split(',')[1] || '';
+            post({ action: 'media_upload', data: b64 }).then(function (res) {
+              if (res && res.ok) {
+                ta.value = (ta.value ? ta.value + '\n' : '') + res.path;
+                say('w2__say--ok', 'Image attached — send to post it.');
+              } else {
+                say('w2__say--no', (res && res.error) || 'the image could not be attached');
+              }
+            });
+          };
+          fr.readAsDataURL(file);
+          return;
+        }
+      });
+    }
+
     (function () {
       var log = document.getElementById('lgb-chatlog'),
           ta  = document.getElementById('lgb-chatin'),
@@ -2446,27 +2516,6 @@ header('X-Robots-Tag: noindex, nofollow');
       if (!btn) { return; }
       btn.dataset.was = 'Send';
 
-      /**
-       * A /board-media/ path in a message renders as the picture. Ian's
-       * screenshots are the fleet's best bug reports and today every one of them
-       * arrives by a side channel and has to be described back into a lane.
-       *
-       * THE TEXT IS ESCAPED FIRST and only then are known media paths turned
-       * into images — the pattern is anchored and narrow, so a message can
-       * never inject markup by looking like one.
-       *
-       * A FILE THAT IS GONE SAYS SO. The spec is explicit: a deleted image must
-       * read as "no longer stored", never as a broken image icon and never as a
-       * silent gap, because a gap looks like he never sent it.
-       */
-      function withMedia(text) {
-        return esc2(text).replace(/\/board-media\/[A-Za-z0-9._-]+\.(png|jpg|jpeg|gif|webp)/g, function (p) {
-          return '<a href="' + p + '" target="_blank" rel="noopener">'
-               + '<img class="msg__img" src="' + p + '" alt="pasted image" '
-               + 'onerror="this.replaceWith(Object.assign(document.createElement(\'em\'),'
-               + '{textContent:\'image no longer stored\'}))"></a>';
-        });
-      }
 
       function paint(msgs) {
         if (!msgs || !msgs.length) { return; }
@@ -2484,35 +2533,7 @@ header('X-Robots-Tag: noindex, nofollow');
        * which keeps the thread cheap to render and lets keeper open the original
        * from disk.
        */
-      ta.addEventListener('paste', function (e) {
-        var items = (e.clipboardData && e.clipboardData.items) || [];
-        for (var i = 0; i < items.length; i++) {
-          if (items[i].type.indexOf('image/') !== 0) { continue; }
-          var file = items[i].getAsFile();
-          if (!file) { continue; }
-          e.preventDefault();
-          out.hidden = false; out.className = 'thrbox__say'; out.textContent = 'Uploading image…';
-          var fr = new FileReader();
-          fr.onload = function () {
-            var b64 = String(fr.result).split(',')[1] || '';
-            post({ action: 'media_upload', data: b64 }).then(function (res) {
-              if (res && res.ok) {
-                // The path goes into the message he is composing; it is committed
-                // when he sends, like any other words. Nothing is stored in the
-                // thread until he chooses to send it.
-                ta.value = (ta.value ? ta.value + '\n' : '') + res.path;
-                out.className = 'thrbox__say w2__say--ok';
-                out.textContent = 'Image attached — send to post it.';
-              } else {
-                out.className = 'thrbox__say w2__say--no';
-                out.textContent = (res && res.error) || 'the image could not be attached';
-              }
-            });
-          };
-          fr.readAsDataURL(file);
-          return;
-        }
-      });
+      bindPaste(ta, out);
 
       /**
        * NEAR-LIVE: poll for keeper's replies. Ian used this chat for the first
