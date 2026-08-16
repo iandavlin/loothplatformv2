@@ -420,6 +420,23 @@ if (!is_readable($led)) {
     is_($posWrite !== false && $posDrop !== false && $posWrite < $posDrop,
         'the ledger line is written BEFORE the backlog line is removed — the worst case is a duplicate, never a loss');
 
+    /**
+     * IT RUNS IN A GIT WORKTREE. Written with is_dir('.git') it refused to run
+     * anywhere a lane actually works — in a worktree `.git` is a FILE pointing
+     * at the real gitdir. Found by running the tool against a real worktree
+     * rather than only against the fixture it was built with.
+     */
+    $wt = $tmp . '/wt';
+    sh('git worktree add -q --detach ' . escapeshellarg($wt) . ' HEAD 2>/dev/null', $lt);
+    if (is_dir($wt)) {
+        $wtRun = sh('LGB_LEDGER_REPO=' . escapeshellarg($wt) . ' ' . PHP_BINARY . ' '
+                  . escapeshellarg($led) . ' --range ' . $old . '..' . $new . ' --dry-run', $ROOT);
+        is_(!str_contains($wtRun['out'], 'no repo at'),
+            'the ledger runs inside a git WORKTREE, where .git is a file — not only in a clone');
+    } else {
+        echo "  .. could not create a worktree here; skipping that leg\n";
+    }
+
     /* A range with no trailers must do nothing at all. */
     $none = sh($env . PHP_BINARY . ' ' . escapeshellarg($led) . ' --range ' . $old . '..' . $old, $ROOT);
     is_(str_contains($none['out'], 'nothing to record'),

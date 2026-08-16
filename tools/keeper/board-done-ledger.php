@@ -54,7 +54,12 @@ foreach ($argv_ as $i => $a) {
     if ($a === '--range' && isset($argv_[$i + 1])) { $range = $argv_[$i + 1]; }
 }
 if ($range === '' || !str_contains($range, '..')) { bail('need --range <old>..<new>', 3); }
-if (!is_dir($repo . '/.git')) { bail('no repo at ' . $repo, 3); }
+// `file_exists`, not `is_dir`: in a git WORKTREE `.git` is a FILE pointing at the
+// real gitdir, so an is_dir check refuses to run anywhere a lane actually works.
+// Found by running this tool against my own worktree — it is meant for keeper's
+// clone, but a tool that only works in one kind of checkout is a tool that will
+// be reached for in the other kind.
+if (!file_exists($repo . '/.git')) { bail('no repo at ' . $repo, 3); }
 
 /* Which items did this train close? Read from the commits, not from anyone. */
 $r = run('git log --format=%H%x1f%s%x1f%b%x1e ' . escapeshellarg($range), $repo);
