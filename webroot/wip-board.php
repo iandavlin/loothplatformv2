@@ -622,6 +622,49 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                                'id' => (string) ($req['id'] ?? ''), 'dry_run' => $dry], $LGB_SOCKET);
             break;
 
+        /**
+         * THE GENERAL CHAT. No delivery step exists — the commit IS the
+         * delivery — so this action does exactly one thing and then the panel
+         * refetches from the store. Nothing is drawn from what the client hoped.
+         */
+        case 'chat_send':
+            $text = rtrim((string) ($req['text'] ?? ''));
+            if (trim($text) === '') { $reply(['ok' => false, 'error' => 'an empty message is not a message'], 400); }
+            $res = lgb_commit(['intent' => 'keeper_message', 'actor' => LGB_ACTOR,
+                               'text' => $text, 'dry_run' => $dry], $LGB_SOCKET);
+            break;
+
+        /**
+         * READ-BACK. The panel refetches after a send rather than fabricating a
+         * DOM node, so every message on screen came from the committed store —
+         * keeper's rule, satisfied without making a chat that swallows what he
+         * just typed until a reload.
+         */
+        case 'chat_read':
+            $reply(['ok' => true, 'messages' => lgb_chat($BACKLOG)]);
+            break;
+
+        case 'question_ask':
+            $text = rtrim((string) ($req['text'] ?? ''));
+            if (trim($text) === '') { $reply(['ok' => false, 'error' => 'an empty question is not a question'], 400); }
+            $res = lgb_commit(['intent' => 'question_ask', 'actor' => LGB_ACTOR,
+                               'text' => $text, 'dry_run' => $dry], $LGB_SOCKET);
+            break;
+
+        /**
+         * A DECISION ANSWERED FROM THE DESK DOOR. The page does not check
+         * whether it is already answered — the committer does, and it is the
+         * only thing that should, or the two doors would each hold their own
+         * idea of "already ruled".
+         */
+        case 'decision_answer':
+            $choice = rtrim((string) ($req['choice'] ?? ''));
+            if (trim($choice) === '') { $reply(['ok' => false, 'error' => 'a decision needs an answer'], 400); }
+            $res = lgb_commit(['intent' => 'decision_answer', 'actor' => LGB_ACTOR,
+                               'id' => (string) ($req['id'] ?? ''), 'choice' => $choice,
+                               'door' => 'desk', 'dry_run' => $dry], $LGB_SOCKET);
+            break;
+
         case 'note':
             $id   = (string) ($req['id'] ?? '');
             $text = trim((string) ($req['text'] ?? ''));
@@ -833,6 +876,118 @@ function lgb_thread_box(string $lane, bool $ok, array $sent, array $rep, string 
       <?php endif; ?>
     </div>
     <?php
+}
+
+/**
+ * ONE PARSER for every quoted-block store on this board — the chat, the
+ * questions rail, the lane threads, the decisions.
+ *
+ * They all share the same shape on disk: a "### " or "#### " head line, then the
+ * body quoted one "> " deep. Writing a reader per store would mean four copies
+ * of the unquoting rule, and the FIRST thing to drift would be whitespace
+ * handling — which is the one thing Ian's paste-back requires be exact.
+ *
+ * Strips exactly one "> ", never a character class: `ltrim($l, '> ')` eats every
+ * leading '>' AND every leading space, which deletes the indentation in a stack
+ * trace or a systemctl dump.
+ *
+ * @return array<int,array{head:string,depth:int,text:string}>
+ */
+function lgb_blocks(string $file): array
+{
+    if (!is_readable($file)) { return []; }
+    $out = []; $cur = null; $buf = [];
+    $flush = static function () use (&$out, &$cur, &$buf): void {
+        if ($cur === null) { return; }
+        $cur['text'] = rtrim(implode("\n", array_map(
+            static fn (string $l): string => (string) preg_replace('/^>\s?/', '', $l), $buf)));
+        $out[] = $cur;
+    };
+    foreach (explode("\n", str_replace(["\r\n", "\r"], "\n", (string) file_get_contents($file))) as $line) {
+        if (preg_match('/^(#{3,4})\s+(.*)$/', $line, $m)) {
+            $flush(); $buf = [];
+            $cur = ['head' => trim($m[2]), 'depth' => strlen($m[1]), 'text' => ''];
+            continue;
+        }
+        if ($cur !== null && str_starts_with($line, '>')) { $buf[] = $line; }
+    }
+    $flush();
+    return $out;
+}
+
+/**
+ * The general chat. Every entry is a committed message; there is no other
+ * source, which is what keeper's "renders ONLY committed messages" means in
+ * practice — the panel cannot show something the repository does not hold.
+ *
+ * @return array<int,array{when:string,who:string,text:string,mine:bool}>
+ */
+function lgb_chat(string $backlogPath): array
+{
+    $out = [];
+    foreach (lgb_blocks(lgb_board_dir($backlogPath, 'board-chat') . '/keeper.md') as $b) {
+        if (!preg_match('/^(\S+ \S+)\s*—\s*(.+)$/u', $b['head'], $m)) { continue; }
+        $who = trim($m[2]);
+        $out[] = ['when' => $m[1], 'who' => $who, 'text' => $b['text'],
+                  'mine' => $who !== 'keeper'];
+    }
+    return $out;
+}
+
+/**
+ * The questions rail. An entry is OPEN until an answer block names it — a
+ * question is never removed, only answered, so "open" is derived from the
+ * absence of an answer rather than from any status anyone maintains.
+ *
+ * @return array{open:array<int,array>,answered:array<int,array>}
+ */
+function lgb_questions(string $backlogPath): array
+{
+    $qs = []; $answers = [];
+    foreach (lgb_blocks(lgb_board_dir($backlogPath, 'board-questions') . '/questions.md') as $b) {
+        if (preg_match('/^(q\d+)\s+(\S+ \S+)\s*—\s*(.+)$/u', $b['head'], $m)) {
+            $qs[$m[1]] = ['id' => $m[1], 'when' => $m[2], 'who' => trim($m[3]), 'text' => $b['text'], 'answer' => null];
+        } elseif (preg_match('/^answer to (q\d+)\s*—\s*(\S+ \S+)\s*—\s*(.+)$/u', $b['head'], $m)) {
+            $answers[$m[1]] = ['when' => $m[2], 'who' => trim($m[3]), 'text' => $b['text']];
+        }
+    }
+    foreach ($answers as $qid => $a) { if (isset($qs[$qid])) { $qs[$qid]['answer'] = $a; } }
+    $open = []; $done = [];
+    foreach ($qs as $q) { $q['answer'] === null ? $open[] = $q : $done[] = $q; }
+    return ['open' => array_reverse($open), 'answered' => array_reverse($done)];
+}
+
+/**
+ * Decisions posed by keeper and awaiting Ian. ONE STORE, TWO DOORS: the desk box
+ * and his VS box read the same files, so an answer through either shows here as
+ * answered with the choice — no second status to keep in step.
+ *
+ * @return array<int,array{id:string,question:string,options:string[],answer:?array}>
+ */
+function lgb_decisions(string $backlogPath): array
+{
+    $dir = lgb_board_dir($backlogPath, 'board-decisions');
+    if (!is_dir($dir)) { return []; }
+    $out = [];
+    foreach ((array) glob($dir . '/*.md') as $f) {
+        $id = basename((string) $f, '.md');
+        $raw = (string) file_get_contents((string) $f);
+        $opts = [];
+        foreach (explode("\n", $raw) as $l) {
+            if (str_starts_with($l, '- ')) { $opts[] = trim(substr($l, 2)); }
+        }
+        $question = ''; $answer = null;
+        foreach (lgb_blocks((string) $f) as $b) {
+            if ($b['depth'] === 4 && preg_match('/^answered (\S+ \S+)\s*—\s*(.+?)\s*—\s*via (\w+)$/u', $b['head'], $m)) {
+                $answer = ['when' => $m[1], 'who' => trim($m[2]), 'door' => $m[3], 'choice' => $b['text']];
+            }
+        }
+        // The question is the file's own first quoted line, above the options.
+        if (preg_match('/^>\s?(.+)$/m', $raw, $qm)) { $question = trim($qm[1]); }
+        if ($question === '' && $opts === []) { continue; }
+        $out[] = ['id' => $id, 'question' => $question, 'options' => $opts, 'answer' => $answer];
+    }
+    return $out;
 }
 
 $backlog  = lgb_parse_backlog($BACKLOG);
@@ -1109,17 +1264,64 @@ header('X-Robots-Tag: noindex, nofollow');
          in the sentinel's seat list, so without this there is no way to reach it
          from the board at all. -->
     <div class="rail">
-      <?php
-        $kSent = lgb_lane_sent($BACKLOG, 'keeper')['sent'];
-        $kRep  = lgb_lane_replies($LGB_THREADS, 'keeper');
-        $kN    = count($kSent) + count($kRep['replies']);
-      ?>
-      <div class="rail__h"><span>Ask keeper</span><span><?= $kN > 0 ? (int) $kN . ' messages' : 'anything, any time' ?></span></div>
+      <?php $chat = lgb_chat($BACKLOG); ?>
+      <div class="rail__h"><span>Ask keeper</span><span><?= $chat !== [] ? count($chat) . ' messages' : 'anything, any time' ?></span></div>
       <div class="askk">
+        <!-- REPOINTED at the commit-only store. This panel used to route through
+             the lane-thread shape, which means terminal delivery; Ian ruled the
+             general chat ships FIRST and without any of that, so a message here
+             is a commit and nothing else. One chat, not two — the old mechanism
+             was replaced rather than joined. -->
         <div class="askk__w">For anything that belongs to no single item — how is
           it all going, what should you look at first, why is something stuck.
-          Replies come back here; they are person-paced, not instant.</div>
-        <?php lgb_thread_box('keeper', true, $kSent, $kRep, 'Ask keeper anything…'); ?>
+          Every message here is committed; keeper's replies land the same way.</div>
+        <div class="thrbox" data-chat="1">
+          <div class="thrbox__log" id="lgb-chatlog">
+            <?php foreach ($chat as $m): ?>
+              <div class="msg <?= $m['mine'] ? 'msg--out' : 'msg--in' ?>"><span class="msg__w"><?= lgb_h($m['when'] . ' · ' . $m['who']) ?></span><?= lgb_h($m['text']) ?></div>
+            <?php endforeach; ?>
+            <?php if ($chat === []): ?><div class="thrbox__no">Nothing yet.</div><?php endif; ?>
+          </div>
+          <textarea class="thrbox__in" id="lgb-chatin" rows="2" placeholder="Ask keeper anything…"></textarea>
+          <button class="thrbox__go" id="lgb-chatgo">Send</button>
+          <div class="thrbox__say" id="lgb-chatsay" hidden></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- OPEN QUESTIONS. Ian: "I feel like I ask questions stream of consciousness
+         on here and they wind up getting lost." A question here cannot be lost:
+         the store has no verb that removes one, and OPEN is derived from having
+         no answer rather than from a status anyone maintains. -->
+    <div class="rail">
+      <?php $qq = lgb_questions($BACKLOG); ?>
+      <div class="rail__h"><span>Open questions</span><span>
+        <?= count($qq['open']) ?> open<?= $qq['answered'] !== [] ? ' · ' . count($qq['answered']) . ' answered' : '' ?>
+      </span></div>
+      <div class="qbox">
+        <textarea class="thrbox__in" id="lgb-qin" rows="2" placeholder="Ask something before it slips…"></textarea>
+        <button class="thrbox__go" id="lgb-qgo">Ask</button>
+        <div class="thrbox__say" id="lgb-qsay" hidden></div>
+        <?php foreach ($qq['open'] as $q): ?>
+          <div class="q q--open">
+            <span class="q__tag">open</span>
+            <div class="q__t"><?= lgb_h($q['text']) ?></div>
+            <div class="q__w"><?= lgb_h($q['when'] . ' · ' . $q['who']) ?></div>
+          </div>
+        <?php endforeach; ?>
+        <?php if ($qq['open'] === []): ?><div class="thrbox__no">Nothing open.</div><?php endif; ?>
+        <?php if ($qq['answered'] !== []): ?>
+          <details class="qdrawer">
+            <summary>answered (<?= count($qq['answered']) ?>)</summary>
+            <?php foreach ($qq['answered'] as $q): ?>
+              <div class="q">
+                <div class="q__t"><?= lgb_h($q['text']) ?></div>
+                <div class="q__a"><?= lgb_h($q['answer']['text']) ?></div>
+                <div class="q__w"><?= lgb_h($q['answer']['when'] . ' · ' . $q['answer']['who']) ?></div>
+              </div>
+            <?php endforeach; ?>
+          </details>
+        <?php endif; ?>
       </div>
     </div>
 
@@ -1199,6 +1401,42 @@ header('X-Robots-Tag: noindex, nofollow');
             $opt = count($desk['items']) - $needed;
             if ($opt > 0) { echo ' · ' . (int) $opt . ' optional'; } ?></span>
         </div>
+        <?php
+        /**
+         * DECISION BOXES — real controls, right where he already looks.
+         *
+         * Ian's stated purpose, 2026-08-16: *"That way you can keep working
+         * here."* The desk absorbs the blocking, so keeper never idles waiting
+         * on an open box.
+         *
+         * ONE STORE, TWO DOORS. These read the same files his VS box does, so an
+         * answer given there shows here as ANSWERED with the choice — there is no
+         * second status to keep in step, because there is no second store. The
+         * page does not decide whether something is already answered; the
+         * committer does, and it refuses the second door.
+         */
+        foreach (lgb_decisions($BACKLOG) as $dec): ?>
+          <div class="dbox" data-dec="<?= lgb_h($dec['id']) ?>">
+            <div class="dbox__q"><?= lgb_h($dec['question']) ?></div>
+            <?php if ($dec['answer'] !== null): ?>
+              <div class="dbox__a">Answered — <?= lgb_h($dec['answer']['choice']) ?>
+                <span class="q__w">(<?= lgb_h($dec['answer']['when'] . ' · via ' . $dec['answer']['door']) ?>)</span></div>
+            <?php else: ?>
+              <div class="w2__opts">
+                <?php foreach ($dec['options'] as $o): ?>
+                  <button class="w2__opt" type="button" aria-pressed="false"><?= lgb_h($o) ?></button>
+                <?php endforeach; ?>
+              </div>
+              <!-- "Something else…" is a first-class answer, not an escape
+                   hatch: two buttons quietly assert those are the only two
+                   answers, and often they are not. -->
+              <textarea class="thrbox__in dbox__other" rows="2" placeholder="Something else… (your own words)"></textarea>
+              <button class="thrbox__go dbox__go">Record my decision</button>
+              <div class="thrbox__say dbox__say" hidden></div>
+            <?php endif; ?>
+          </div>
+        <?php endforeach; ?>
+
         <?php foreach ($desk['items'] as $d): ?>
           <div class="desk__i<?= $d['optional'] ? ' desk__i--opt' : '' ?>">
             <span class="desk__b"></span>
@@ -1516,6 +1754,18 @@ header('X-Robots-Tag: noindex, nofollow');
     .newitem__t{flex:1;font:inherit;font-size:13px;padding:6px;border-radius:6px;resize:vertical;
                 border:1px solid rgba(128,128,128,.35);background:transparent;color:inherit}
     .newitem .w2__say{flex-basis:100%}
+    .qbox{font-size:12px}
+    .q{padding:6px 8px;border-radius:6px;background:rgba(128,128,128,.10);margin:5px 0}
+    .q--open{border-left:3px solid #4a9eff}
+    .q__tag{font-size:10px;text-transform:uppercase;letter-spacing:.05em;opacity:.7}
+    .q__t{white-space:pre-wrap;margin:2px 0}
+    .q__a{white-space:pre-wrap;margin-top:4px;padding-left:8px;border-left:2px solid rgba(128,128,128,.4)}
+    .q__w{font-size:10px;opacity:.55;margin-top:3px}
+    .qdrawer{margin-top:6px}
+    .qdrawer summary{cursor:pointer;opacity:.7}
+    .dbox{margin:6px 0;padding:7px 9px;border-radius:7px;background:rgba(74,158,255,.10)}
+    .dbox__q{font-weight:600;margin-bottom:5px}
+    .dbox__a{background:rgba(60,160,90,.14);padding:5px 7px;border-radius:6px}
   </style>
   <script type="application/json" id="lgb-details"><?php
     // ONE ENTRY PER ITEM, always. Only 7 of the file's 39 detail sections are
@@ -1924,6 +2174,108 @@ header('X-Robots-Tag: noindex, nofollow');
         });
       });
     })();
+
+    /* ---- THE GENERAL CHAT, THE QUESTIONS RAIL, THE DESK BOXES -------------
+     *
+     * All three write through the committer and all three REFETCH rather than
+     * fabricate. Nothing on these surfaces is drawn from what the client hoped —
+     * every line came out of the committed store, which is keeper's rule and
+     * also the only way the two decision doors can agree.
+     */
+    function esc2(t) { var d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+    (function () {
+      var log = document.getElementById('lgb-chatlog'),
+          ta  = document.getElementById('lgb-chatin'),
+          btn = document.getElementById('lgb-chatgo'),
+          out = document.getElementById('lgb-chatsay');
+      if (!btn) { return; }
+      btn.dataset.was = 'Send';
+
+      function paint(msgs) {
+        if (!msgs || !msgs.length) { return; }
+        log.innerHTML = msgs.map(function (m) {
+          return '<div class="msg ' + (m.mine ? 'msg--out' : 'msg--in') + '">'
+               + '<span class="msg__w">' + esc2(m.when + ' · ' + m.who) + '</span>'
+               + esc2(m.text) + '</div>';
+        }).join('');
+        log.scrollTop = log.scrollHeight;
+      }
+
+      btn.addEventListener('click', function () {
+        var t = ta.value.replace(/\s+$/, '');
+        if (!t.trim()) { return; }
+        busy(btn, true);
+        post({ action: 'chat_send', text: t }).then(function (res) {
+          busy(btn, false);
+          out.hidden = false;
+          out.className = 'thrbox__say ' + (res && res.ok ? 'w2__say--ok' : 'w2__say--no');
+          out.textContent = res && res.ok ? 'Sent — commit ' + (res.commit || '?') + '.' : landed(res);
+          if (res && res.ok) {
+            ta.value = '';
+            // REFETCH, never fabricate: the panel may only show what the store
+            // holds, and this is what makes that rule survivable as a chat.
+            post({ action: 'chat_read' }).then(function (r) { if (r && r.ok) { paint(r.messages); } });
+          }
+        });
+      });
+    })();
+
+    (function () {
+      var ta = document.getElementById('lgb-qin'), btn = document.getElementById('lgb-qgo'),
+          out = document.getElementById('lgb-qsay');
+      if (!btn) { return; }
+      btn.dataset.was = 'Ask';
+      btn.addEventListener('click', function () {
+        var t = ta.value.replace(/\s+$/, '');
+        if (!t.trim()) { return; }
+        busy(btn, true);
+        post({ action: 'question_ask', text: t }).then(function (res) {
+          busy(btn, false);
+          out.hidden = false;
+          out.className = 'thrbox__say ' + (res && res.ok ? 'w2__say--ok' : 'w2__say--no');
+          out.textContent = res && res.ok
+            ? 'Filed as ' + (res.id || 'a question') + ' — it stays open until it is answered.'
+            : landed(res);
+          if (res && res.ok) { ta.value = ''; }
+        });
+      });
+    })();
+
+    document.querySelectorAll('.dbox[data-dec]').forEach(function (box) {
+      var go = box.querySelector('.dbox__go');
+      if (!go) { return; }                       // already answered: nothing to press
+      go.dataset.was = 'Record my decision';
+      box.querySelectorAll('.w2__opt').forEach(function (b) {
+        b.addEventListener('click', function () {
+          box.querySelectorAll('.w2__opt').forEach(function (x) { x.setAttribute('aria-pressed', 'false'); });
+          b.setAttribute('aria-pressed', 'true');
+        });
+      });
+      go.addEventListener('click', function () {
+        var picked = box.querySelector('.w2__opt[aria-pressed="true"]'),
+            words  = box.querySelector('.dbox__other').value.replace(/\s+$/, ''),
+            out    = box.querySelector('.dbox__say');
+        var choice = words.trim() !== '' ? words : (picked ? picked.textContent : '');
+        if (!choice.trim()) {
+          out.hidden = false; out.className = 'thrbox__say w2__say--no';
+          out.textContent = 'Pick an option, or write what you want instead.';
+          return;
+        }
+        busy(go, true);
+        post({ action: 'decision_answer', id: box.dataset.dec, choice: choice }).then(function (res) {
+          busy(go, false);
+          out.hidden = false;
+          out.className = 'thrbox__say ' + (res && res.ok ? 'w2__say--ok' : 'w2__say--no');
+          // A refusal here is usually the OTHER DOOR having got there first,
+          // which is not an error — it is the rule working. Say what happened
+          // rather than colouring it as a failure of his.
+          out.textContent = res && res.ok
+            ? 'Recorded — commit ' + (res.commit || '?') + '. Keeper is woken by it.'
+            : landed(res);
+        });
+      });
+    });
 
     document.getElementById('lgb-close').addEventListener('click', close);
     scrim.addEventListener('click', function (e) { if (e.target === scrim) close(); });

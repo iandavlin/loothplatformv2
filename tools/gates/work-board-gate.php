@@ -56,6 +56,8 @@ function bad(string $m): void { global $fail; $fail++; echo "  FAIL $m\n"; }
 function is_(bool $c, string $m): void { $c ? ok($m) : bad($m); }
 function section(string $t): void { echo "\n$t\n"; }
 function cannot(string $w): void { echo "CANNOT RUN: $w\n"; exit(3); }
+/** This gate's own shell helper — it does NOT have the committer gate's sh(). */
+function sh2(string $cmd): void { shell_exec($cmd); }
 
 foreach ([$PAGE, $BACK] as $f) { if (!is_readable($f)) cannot("missing $f"); }
 
@@ -543,6 +545,89 @@ is_(str_contains($noArchHtml, 'class="hist hist--none"')
 is_(!str_contains($noArchHtml, 'class="hist__i"'), '...and invents no entries');
 @unlink($noArch);
 
+section("[6e] THE CHAT, THE QUESTIONS RAIL, AND THE DESK DECISION BOXES");
+
+/**
+ * Ian's first cut, 2026-08-16. Three surfaces, one property between them: the
+ * page shows only what the COMMITTED STORE holds. No client echo, no second
+ * status, nothing drawn from what the page hoped.
+ */
+$fx = $tmp . '-fx';
+@mkdir($fx . '/board-chat', 0755, true);
+@mkdir($fx . '/board-questions', 0755, true);
+@mkdir($fx . '/board-decisions', 0755, true);
+copy($BACK, $fx . '/BACKLOG.md');
+file_put_contents($fx . '/board-chat/keeper.md',
+    "# chat\n\n### 2026-08-16 14:00 — ian-via-board\n\n> how is it all going?\n"
+  . "\n### 2026-08-16 14:01 — keeper\n\n> three lanes green\n>     indented reply\n");
+file_put_contents($fx . '/board-questions/questions.md',
+    "# q\n\n### q1 2026-08-16 14:00 — ian-via-board\n\n> why the Map?\n"
+  . "\n### q2 2026-08-16 14:02 — ian-via-board\n\n> and the digest floor?\n"
+  . "\n#### answer to q1 — 2026-08-16 14:05 — keeper\n\n> the index already existed\n");
+file_put_contents($fx . '/board-decisions/aron.md',
+    "# Decision aron\n\n> What happens to Aron Bach?\n\n- Retract to free\n- Give him a grace period\n");
+file_put_contents($fx . '/board-decisions/price.md',
+    "# Decision price\n\n> Set the price?\n\n- 9 a month\n"
+  . "\n#### answered 2026-08-16 13:00 — ian-via-board — via vs\n\n> 9 a month\n");
+
+$fxHtml = (string) shell_exec('LGB_MAIN_COPY=/nonexistent/m.md LGB_THREADS=/nonexistent/t.json LGB_BACKLOG='
+    . escapeshellarg($fx . '/BACKLOG.md') . ' ' . PHP_BINARY . ' ' . escapeshellarg($PAGE) . ' 2>/dev/null');
+
+is_(substr_count($fxHtml, 'class="msg msg--') === 2, 'both chat messages render');
+is_(str_contains($fxHtml, 'msg--in"><span class="msg__w">2026-08-16 14:01 · keeper'),
+    "keeper's reply is marked as keeper's — the actor decides the side, not the page");
+is_(str_contains($fxHtml, '    indented reply'),
+    "...and a pasted indent survives into the chat panel");
+
+is_(substr_count($fxHtml, 'class="q q--open"') === 1, 'only the UNANSWERED question is open (1 of 2)');
+is_(str_contains($fxHtml, 'answered (1)'), '...and the answered one moved to the drawer');
+is_(str_contains($fxHtml, 'the index already existed'),
+    '...where it still shows the QUESTION and its answer — never deleted');
+is_(str_contains($fxHtml, 'why the Map?'), '...the question text itself survives being answered');
+
+is_(substr_count($fxHtml, 'class="dbox"') === 2, 'both decisions render on the desk');
+is_(str_contains($fxHtml, 'Answered — 9 a month'),
+    'ONE STORE TWO DOORS: a decision answered in his VS box shows ANSWERED on the desk');
+is_(str_contains($fxHtml, 'via vs'), '...naming which door answered it');
+
+// An already-ruled box must offer NOTHING to press. Otherwise he presses it, the
+// committer refuses (first answer wins), and the board looks broken when it is
+// in fact working exactly as designed.
+$answeredBox = preg_match('/data-dec="price".*?<\/div>\s*<\/div>/s', $fxHtml, $bm) ? $bm[0] : '';
+is_($answeredBox !== '' && !str_contains($answeredBox, '<button class="w2__opt"'),
+    '...and offers no buttons, so he is never invited to answer it twice');
+
+$openBox = preg_match('/data-dec="aron".*?dbox__say/s', $fxHtml, $om) ? $om[0] : '';
+// Counted on the BUTTON, not the bare class: the container is `w2__opts`,
+// which CONTAINS the substring `w2__opt`, so the naive count was always one
+// too high. Sixth time this session a match has caught something adjacent to
+// what it named.
+is_(substr_count($openBox, '<button class="w2__opt"') === 2,
+    'the open decision offers its posed options (2)');
+
+/**
+ * THE CHAT REFETCHES, IT DOES NOT FABRICATE — keeper's "renders ONLY committed
+ * messages", asserted against the client source. After a send the panel asks
+ * the server for the store's contents; it never builds a message element out of
+ * what was typed. Without this the rule holds only until someone "improves" the
+ * UX with an optimistic append, which is exactly how a chat starts showing
+ * messages the repository never took.
+ */
+// Read HERE rather than borrowing section [6]'s $src — that variable is
+// assigned further down the file, so this ran against an empty string and
+// reported a working page as broken. Second time this session a section has
+// used a helper its predecessor had not defined yet; sections are not
+// independent just because they look it.
+$pageSrc = (string) file_get_contents($PAGE);
+is_(str_contains($pageSrc, "action: 'chat_read'"),
+    'after a send the chat REFETCHES the committed store');
+is_(!preg_match('/chat_send[\s\S]{0,900}?innerHTML\s*\+=/', $pageSrc),
+    '...and never appends a message it made up from the typed text');
+is_(str_contains($openBox, 'Something else'),
+    "...and always an Other field — two buttons assert those are the only two answers, and often they are not");
+
+sh2('rm -rf ' . escapeshellarg($fx));
+
 section("[6a] THE BOARD SAYS WHICH COPY IT IS SHOWING");
 
 /**
@@ -781,7 +866,13 @@ is_(str_contains($thrHtml, 'class="thrbox__bad">NOT DELIVERED — lane not runni
  * reachable independently of the seat list.
  */
 is_(str_contains($thrHtml, 'class="askk"'), 'the general "Ask keeper" surface is on the page');
-is_(str_contains($thrHtml, 'data-lane="keeper"'), '...addressed to keeper, so a message has somewhere to go');
+// REPOINTED, and this assertion follows it. Ian ruled the general chat ships
+// with NO terminal delivery, so the panel no longer routes through the
+// lane-thread shape — it addresses the commit-only chat store instead. Keeping
+// the old assertion would have held the page to a mechanism its own ruling
+// removed.
+is_(str_contains($thrHtml, 'data-chat="1"'),
+    '...and it is the COMMIT-ONLY chat surface, not a lane thread with a delivery step');
 
 $sentinelLanes = json_decode((string) @file_get_contents('/home/ubuntu/.sentinel-status.json'), true);
 $seatNames = array_column((array) ($sentinelLanes['lanes'] ?? []), 'name');
@@ -795,8 +886,12 @@ file_put_contents($kThr, json_encode(['lanes' => ['keeper' => ['replies' => [],
     'delivery' => ['ok' => false, 'why' => 'keeper is not answering', 'when' => '2026-08-16 13:00']]]]));
 $kHtml = (string) shell_exec('LGB_MAIN_COPY=/nonexistent/main-copy.md LGB_THREADS=' . escapeshellarg($kThr)
     . ' LGB_BACKLOG=' . escapeshellarg($BACK) . ' ' . PHP_BINARY . ' ' . escapeshellarg($PAGE) . ' 2>/dev/null');
-is_(str_contains($kHtml, 'class="thrbox__bad">NOT DELIVERED — keeper is not answering'),
-    'a failed message to KEEPER is shown as NOT DELIVERED too — the general chat is not a second implementation');
+// There is no delivery to fail: a chat message IS a commit. So the general
+// chat must carry NO delivery banner at all — its absence is the property now,
+// and its presence would mean the relay had crept back into a surface Ian
+// ruled must not have one.
+is_(!str_contains($kHtml, 'class="thrbox__bad"'),
+    'the general chat shows no delivery status — being committed IS being delivered');
 @unlink($kThr);
 
 /**
