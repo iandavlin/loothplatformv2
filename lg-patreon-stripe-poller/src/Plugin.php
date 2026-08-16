@@ -134,6 +134,22 @@ final class Plugin
         // mu-plugin (which is @lg-dev-only and excluded from the live deploy).
         add_filter( 'pre_wp_mail', [ self::class, 'gateOutboundMail' ], 10, 2 );
 
+        /**
+         * A NEW ACCOUNT MAY BE SPENDING AN INVITE. Ian, 2026-08-16: the Test
+         * Group took only existing wp users, so a fresh recruit's join — the
+         * rehearsal that matters most before cutover — could not be tested.
+         *
+         * Hooked at PRIORITY 20 so the account is fully written before this
+         * looks at its email, and guarded by the same flag the pages read: with
+         * invites off this is a function call that returns immediately, so the
+         * hook is a no-op rather than a behaviour nobody asked for.
+         */
+        add_action( 'user_register', static function ( $userId ): void {
+            $on = get_option( Invites::FLAG, '' );
+            if ( $on !== '1' && $on !== 'true' ) { return; }
+            Invites::consumeForUser( (int) $userId );
+        }, 20, 1 );
+
         // Register a custom 5-minute cron interval (WP only ships hourly,
         // twicedaily, daily). Used by the reconcile-pending sweep.
         add_filter( 'cron_schedules', [ self::class, 'registerCronSchedule' ] );

@@ -638,6 +638,58 @@ if ($invSrc === '' || $gateSrc === '') {
         '...and the module travels WITH the gate, so the two doors cannot disagree about invites');
 }
 
+/* --- THE WRITE HALF: minting and spending ------------------------------- */
+$mintSrc   = (string) @file_get_contents($REPO . '/lg-patreon-stripe-poller/src/Invites.php');
+$pluginSrc = (string) @file_get_contents($REPO . '/lg-patreon-stripe-poller/src/Plugin.php');
+if ($mintSrc === '' || $pluginSrc === '') {
+    bad('the invite write half is missing');
+} else {
+    is_(str_contains($mintSrc, 'bin2hex( random_bytes( 16 ) )'),
+        'the token is unguessable — random_bytes, not an id or a hash of the email');
+    // SINGLE-quoted pattern. Written in double quotes, `$token` INTERPOLATED to
+    // the empty string, so the regex could never match and the negative was
+    // always true — the assertion tested only half of what it claimed, and the
+    // mutation that stored the raw token sailed past it. A pattern that does not
+    // mean what it looks like is worse than no pattern.
+    // Scoped to the STORED RECORD, not the whole file. mint() legitimately
+    // RETURNS the raw token — that is the link being handed over — so a
+    // file-wide search for "'token' => $token" matched the return and failed on
+    // a correct implementation. The property is that the token is not STORED,
+    // and the only place that can happen is the record written to the option.
+    $stored = preg_match('/\$all\[ hash\(.*?\] = \[(.*?)\];/s', $mintSrc, $sm) ? $sm[1] : '';
+    is_($stored !== '' && !preg_match('/\'token\'\s*=>/', $stored),
+        'only a HASH is stored — the raw token exists once, in the link handed over');
+    is_(str_contains($mintSrc, 'hash( \'sha256\', $token )'),
+        '...and the key IS that hash, so a database read cannot be replayed as an invite');
+
+    /**
+     * SINGLE-USE MEANS ONE ACCOUNT. Spending it when the link is merely OPENED
+     * would kill it on a refresh or a back button, which is a support ticket
+     * rather than a fence.
+     */
+    is_(str_contains($pluginSrc, "add_action( 'user_register'"),
+        'an invite is spent when an ACCOUNT is created, not when a page is opened');
+    // str_contains, not a regex: the string carries quotes that make the pattern
+    // harder to read than the property it tests, and an assertion nobody can
+    // read is an assertion nobody maintains.
+    is_(str_contains($pluginSrc, 'if ( $on !== \'1\' && $on !== \'true\' ) { return; }'),
+        '...and with invites OFF the hook returns immediately — a no-op, not a behaviour nobody asked for');
+
+    /**
+     * THE MATCH IS ON EMAIL, which is what stops a forwarded link becoming a
+     * general door: whoever clicks it still has to register the address it was
+     * minted for.
+     */
+    is_(str_contains($mintSrc, 'self::liveFor( $user->user_email )'),
+        'the invite is matched to the account\'s EMAIL — a forwarded link enrols nobody else');
+    is_(str_contains($mintSrc, 'CohortAllowlist::add( $wpUserId )'),
+        '...the account it creates lands ON the Test Group list');
+    is_(str_contains($mintSrc, '_lgms_invite_created'),
+        '...stamped invite-created, so HOW a member got in is answerable later');
+    is_(str_contains($mintSrc, 'if ( (int) ( $rec[\'expires\'] ?? 0 ) > time() ) { return null; }'),
+        'a second live invite for the same email is refused — two links for one single-use invite is one broken click');
+}
+
 section("[11] SINGLE TIER IS DERIVED FROM THE CATALOGUE, NOT PREVIEWED");
 
 /**
