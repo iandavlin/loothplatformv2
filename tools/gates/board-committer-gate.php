@@ -367,6 +367,82 @@ $r = svc($SVC, $clone, ['actor' => 'keeper', 'intent' => 'decision_pose', 'id' =
                         'question' => 'asking again', 'options' => ['x']]);
 is_(($r['json']['refused'] ?? false) === true, 're-posing an answered decision is refused — it would erase a ruling');
 
+section("[14] THE DOORBELL — it rings once, and never for keeper's own hand");
+
+/**
+ * In 56's space deliberately: the doorbell READS the stores this committer
+ * writes, so these assertions are the round trip of that contract. If the
+ * committer's format and the doorbell's reader ever drift, Ian's questions stop
+ * waking anyone and nothing else fails.
+ *
+ * The store here is the one section [13] has already written through the real
+ * committer, so this is not a hand-made fixture pretending to be the format.
+ */
+$bell = $ROOT . '/tools/keeper/board-doorbell.php';
+if (!is_readable($bell)) {
+    bad('the doorbell is missing at ' . $bell);
+} else {
+    $seen = $tmp . '/doorbell-seen';
+    @unlink($seen);
+    $bsrc = str_replace(
+        ["const CLONE_DIR = '/home/ubuntu/board-lane-relay-clone';",
+         "const SEEN      = '/home/ubuntu/.board-doorbell-seen';"],
+        ["const CLONE_DIR = '" . $clone . "';",
+         "const SEEN      = '" . $seen . "';"],
+        (string) file_get_contents($bell));
+    $btmp = $tmp . '/doorbell.php';
+    file_put_contents($btmp, $bsrc);
+    sh('git push -q origin HEAD:main', $clone);
+    sh('git fetch -q origin', $clone);
+
+    $rings = [];
+    for ($i = 0; $i < 5; $i++) {
+        $r = sh(PHP_BINARY . ' ' . escapeshellarg($btmp) . ' --once');
+        $first = trim(explode("\n", $r['out'])[0] ?? '');
+        $rings[] = $first;
+        if (str_starts_with($first, 'nothing waiting')) { break; }
+    }
+
+    $alerts = array_values(array_filter($rings, static fn (string $l): bool => str_starts_with($l, 'ALERT')));
+    is_($alerts !== [], sprintf('the doorbell rings for what the committer wrote (%d alert(s))', count($alerts)));
+    is_(count($alerts) === count(array_unique($alerts)),
+        'each thing rings ONCE — it remembers, so keeper relaunching does not re-ring the same item');
+    is_(str_starts_with((string) end($rings), 'nothing waiting'),
+        '...and once everything is rung it goes QUIET, instead of ringing forever');
+
+    $joined = implode(' | ', $alerts);
+    is_(str_contains($joined, 'board-question q'),
+        '...an unanswered question wakes keeper — the point of the rail');
+    is_(str_contains($joined, 'RULED via desk'),
+        '...and so does a ruling from the desk door, so keeper acts mid-work rather than idling');
+
+    // KEEPER'S OWN WRITES ARE NOT A DOORBELL. Without this, keeper answering a
+    // question wakes keeper, which wakes keeper.
+    $r = svc($SVC, $clone, ['actor' => 'keeper', 'intent' => 'decision_pose', 'id' => 'kself',
+                            'question' => 'a keeper-posed one', 'options' => ['yes']]);
+    $r = svc($SVC, $clone, ['actor' => 'keeper', 'intent' => 'decision_answer',
+                            'id' => 'kself', 'choice' => 'yes', 'door' => 'chat']);
+    sh('git fetch -q origin', $clone);
+    $r = sh(PHP_BINARY . ' ' . escapeshellarg($btmp) . ' --once');
+    is_(str_starts_with(trim(explode("\n", $r['out'])[0] ?? ''), 'nothing waiting'),
+        "keeper's OWN answer does not ring keeper — no self-wake loop");
+
+    is_(str_contains($r['out'], 'RELAUNCH NOW'),
+        'every exit carries the relaunch order, so a wake-up cannot be separated from re-arming');
+
+    // It must never write the repo — it fetches and reads blobs, nothing else.
+    // COMMENTS STRIPPED FIRST. The doorbell's own docblock says "no checkout, no
+    // reset" and "safe beside the committer mid-write" — so a raw match found
+    // every word it was looking for and called a read-only tool a writer. This
+    // is the SEVENTH time this session an assertion has matched prose instead of
+    // code; gate 50 already strips comments before its write check, and this one
+    // now does the same.
+    $bcode = (string) preg_replace('!/\*.*?\*/!s', '', $bsrc);
+    $bcode = (string) preg_replace('!^\s*//.*$!m', '', $bcode);
+    is_(!preg_match('/reset --hard|git checkout|git commit|git push/', $bcode),
+        'the doorbell never writes the repo — fetch and read only, safe beside a working clone');
+}
+
 section("[12] ADDING AND PROMOTING — position is rank, number is a permanent name");
 
 /**
