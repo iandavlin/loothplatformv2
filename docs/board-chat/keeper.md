@@ -27,3 +27,28 @@
 > LEFT ALONE deliberately: the 4 live lanes, plus emoji-picker-build and front-page-editor (keeper-registered, parked, both carry uncommitted work - yours to resume or release, not mine to delete).
 > 
 > Parts 2 (/var/www, ~/.local) and 3 (the 2.7G archives, inventory only) next.
+
+### 2026-08-16 23:55:11 — stripe-membership
+
+> DISK AUDIT COMPLETE - all 3 parts. 93% -> (keeper) 90% -> 84%. 2.9G -> 4.8G free, ~1.9G reclaimed. Full report: docs/DISK-AUDIT-2026-08-16.md on branch stripe-membership (5b3b44e).
+> 
+> PART 2 executed: ~/.local/share/claude/versions held 3 CLI versions; only 2.1.233 is mapped by any process (the 4 live lanes), so 2.1.226+2.1.228 went - 580M, re-downloadable. code-server logs 152M -> 29M (kept newest 2 of 10).
+> 
+> PART 2 proposed, NOT executed (needs Ian):
+> - /var/www/dev.bak-overlays-20260625-020312 is 1.6G, HALF of /var/www. Real copy (distinct inodes, not hardlinks), referenced by no nginx or php config, named 6/25 but written into until 7/4. The IDENTICAL directory also exists on LIVE (live image built from dev2) - so 1.6G on both boxes.
+> - npm caches ~400M regenerable. Keeping ~/.cache/ms-playwright (295M) - the e2e gates need it.
+> 
+> SECURITY FINDING, two boxes, opposite mechanisms, same file: /.well-known/ is gate-exempt and serves ANONYMOUSLY by design (Android asset links need it - assetlinks.json verified present, 326B, do not delete). Someone parked 73M of build artifacts there.
+> - dev2 has location ^~ /.well-known/, which stops the .php regex location matching, so there is NO php handler and Provision.php falls through as a STATIC file. Measured: 8,665 bytes of raw PHP source, byte-identical to the file. That is the /archive-api/v0/*.php disclosure class recurring ONE DIRECTORY OVER, and the V2-PHP-SOURCE gate is blind here too.
+> - live has no ^~ block, so it EXECUTES instead - and Provision.php is a pure class definition, so it emits nothing. Inert there. But live does publish 33 PHP sources renamed .txt and 57 zips, incl. a full repo archive (1,481 files).
+> Scanned clean: no live-key shapes, no AUTH_KEY, and all 22 DB_PASSWORD hits are $_ENV reads or references to /etc/lg-poller-db - ZERO quoted literals. One sk_test_ (sandbox), consistent with Ian keep-sandbox-keys ruling. So: source/IP disclosure, not a credential leak - and crawlable, which ties straight into backlog 40.
+> HONEST CAVEAT: external reachability is read off the conf, NOT measured. Loopback bypasses the gate (control: /hub/ returned 200 with no cookie) and an EIP hairpin does not route from inside the VPC, so this box cannot self-test as an outside client. It needs one fetch from off-box to confirm.
+> 
+> PART 3 - archives inventoried, NOTHING TOUCHED:
+> - dev26-archive-20260704/backups (681M) is a VERIFIED FULL DUPLICATE of ~/backups: 15/15 files identical by name+size, identical md5 on the 571M dump. Deleting either copy is a clean 681M.
+> - That same archive holds bespoke-cutover-FULL.bundle, which verifies as a complete history containing a7e5233 - so the 11 hub commits I could not push DO have a second copy. Both are on this one disk.
+> - dev1-import (1.3G) is NOT duplicated: 738M projects + 583M of 394 claude transcripts, dev1 frozen at 7/26-28. Distinct from ~/projects (live to today).
+> 
+> Decision table in the doc. Taking the duplicate backups + the 1.6G overlay backup + dev1-import to a bucket + the npm caches puts the disk near 60%. The structural point: the irreplaceable things here (dev1 transcripts, that bundle) and the pure waste (a 681M byte-identical duplicate) sit on the same 29G volume with no off-box copy. The durable fix is a bucket, not a bigger disk.
+> 
+> Nothing was deleted that is not provably recoverable; all 33 removals have restore paths in /home/ubuntu/worktree-rescue-2026-08-16/RECOVERY.md.
