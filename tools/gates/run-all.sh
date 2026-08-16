@@ -886,7 +886,7 @@ run "guitardle-daypuzzle" python3 "$(dirname "$0")/guitardle-daypuzzle-gate.py"
 
 # Gate number 55 — requested from keeper 2026-08-15; 55 verified free on main
 # (54 is the weekly-front seat's, on an unmerged branch). Lanes never mint.
-echo "=== GATE 55: no player is served the same puzzle twice in a cycle ==="
+echo "=== GATE 60: no player is served the same puzzle twice in a cycle ==="
 # Backlog 35. Ian caught this on LIVE 2026-08-15: members got DAN ERLEWINE on
 # day 12 (23 June) and again on day 65 (15 August).
 #

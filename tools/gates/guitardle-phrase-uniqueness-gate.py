@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 r"""
-GATE 55 — no player is ever served the same puzzle twice in a cycle.
+GATE 60 — no player is ever served the same puzzle twice in a cycle.
 
 Ian caught this on LIVE on 2026-08-15: members got DAN ERLEWINE on day 12
 (23 June) and again on day 65 (15 August). The obvious diagnosis -- "the
@@ -126,7 +126,7 @@ def norm(t):
     return re.sub(r'[\s-]+', ' ', t.upper()).strip()
 
 
-print('GATE 55 — guitardle phrase uniqueness / no repeated puzzle')
+print('GATE 60 — guitardle phrase uniqueness / no repeated puzzle')
 print('  library: %s (%d rows, %d active)' % (CSV, len(rows), len(active)))
 print('  sequence: %d entries, startDate %s' % (len(sequence), start_date))
 

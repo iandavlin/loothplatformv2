@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 r"""
-RED-FIRST for gate 55 (guitardle-phrase-uniqueness-gate.py).
+RED-FIRST for gate 60 (guitardle-phrase-uniqueness-gate.py).
 
 Every assertion in that gate is broken here, one at a time, against a SNAPSHOT
 COPY of the assets -- never the working tree. (A harness that restores with
@@ -151,7 +151,7 @@ MUTATIONS = [
 ]
 
 bad = []
-print('RED-FIRST — gate 55, %d mutations\n' % len(MUTATIONS))
+print('RED-FIRST — gate 60, %d mutations\n' % len(MUTATIONS))
 
 work = tempfile.mkdtemp(prefix='gdle-redfirst-%d-' % os.getpid())
 try:
