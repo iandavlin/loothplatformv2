@@ -97,7 +97,7 @@ def count(uuid, typ=None):
 
 
 def main():
-    print("=== notif-type-filter-gate: backlog 11.6 (filter by type, clear a type) ===")
+    print("=== GATE 57: notif-type-filter — backlog 11.6 (filter by type, clear a type) ===")
     if not os.path.isfile(PROBE):
         print(f"notif-type-filter-gate: NO VERDICT — probe missing at {PROBE}")
         return 2

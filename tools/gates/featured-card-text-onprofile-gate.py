@@ -93,7 +93,7 @@ def norm(s):
 
 
 def main():
-    print("=== featured-card-text-onprofile-gate: the card may only say what the profile says ===")
+    print("=== GATE 58: featured-card-text-onprofile — the card may only say what the profile says ===")
 
     token = gate_token()
     if not token:
