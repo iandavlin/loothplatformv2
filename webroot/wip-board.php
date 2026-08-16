@@ -1240,11 +1240,19 @@ html[data-lguser-theme="dark"]{
 html[data-lguser-theme="dark"] .rail{background:#202426}
 html[data-lguser-theme="dark"] .bar{background:#2c312d}
 html[data-lguser-theme="dark"] .absent{background:#2e211c}
+/* Chat timestamps: opacity .55 over the bubbles measured 4.12:1/4.42:1 once
+   the chatlog gained its first real messages (gate 61's catch, 8/16 night) —
+   explicit passing ink in dark instead of an opacity-derived one. */
+html[data-lguser-theme="dark"] .msg__w{opacity:1;color:var(--ink-soft)}
 html[data-lguser-theme="dark"] .P3 .band__dot{background:#4a4f4a}
 html[data-lguser-theme="dark"] .desk{background:#1e2124}
 html[data-lguser-theme="dark"] .rail{background:#202426}
 html[data-lguser-theme="dark"] .bar{background:#2c312d}
 html[data-lguser-theme="dark"] .absent{background:#2e211c}
+/* Chat timestamps: opacity .55 over the bubbles measured 4.12:1/4.42:1 once
+   the chatlog gained its first real messages (gate 61's catch, 8/16 night) —
+   explicit passing ink in dark instead of an opacity-derived one. */
+html[data-lguser-theme="dark"] .msg__w{opacity:1;color:var(--ink-soft)}
 html[data-lguser-theme="dark"] .P3 .band__dot{background:#4a4f4a}
 html[data-lguser-theme="dark"] .desk{background:#1e2124}
 html[data-lguser-theme="dark"] .desk__opt{background:#242826}
