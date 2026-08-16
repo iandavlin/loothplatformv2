@@ -65,11 +65,24 @@ if ($author_id) {
     }
 }
 
-/* Bio: ACF `author_about` → WP `description` → empty. */
+/* Bio: profile-sourced (Ian 2026-08-16 ruling; platform/config/profile-bio.php,
+   OFF by default), falling back to the legacy ACF `author_about` -> WP
+   `description` chain when off or the member has no public profile row.
+   Mirrors lg-layout-v2/blocks/post-footer/render.php exactly, so this
+   VENDORED COPY (see RENDER-STANDALONE-POC.md) stays behaviourally
+   identical to the WP-loaded renderer. lg_profile_bio() uses no WP
+   functions and fails closed (returns null) on any DB error, so it cannot
+   break this engine's own no-WP-boot, dark-launch self-containment. */
+require_once dirname(__DIR__, 5) . '/platform/lib/lg-profile-bio.php';
 $bio = '';
 if ($author_id) {
-    $bio = trim((string) (get_user_meta($author_id, 'author_about', true) ?: ''));
-    if ($bio === '') $bio = trim((string) (get_user_meta($author_id, 'description', true) ?: ''));
+    $profileBio = lg_profile_bio($author_id);
+    if ($profileBio !== null) {
+        $bio = $profileBio['bio'];
+    } else {
+        $bio = trim((string) (get_user_meta($author_id, 'author_about', true) ?: ''));
+        if ($bio === '') $bio = trim((string) (get_user_meta($author_id, 'description', true) ?: ''));
+    }
 }
 
 $pub_name = function_exists('get_bloginfo') ? (string) get_bloginfo('name') : '';
