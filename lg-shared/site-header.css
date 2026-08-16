@@ -597,10 +597,22 @@ body.lg-sm-open { overflow: hidden; }
   margin: 0 0 8px; font: 400 12px/1.5 var(--lg-font-sans, system-ui, sans-serif);
   color: var(--lg-ink, #323532);
 }
+/* ⚠️ NOT --lg-rust, and NOT white ink. Measured in a browser on these exact
+   rules: white on --lg-rust is 3.84:1 in light and 2.61:1 in DARK, because
+   --lg-rust repoints to a LIGHTER colour under dark (#e08a72) while the ink
+   stayed white — the identical failure directory.css already documents for
+   --lg-sage-d on the view toggle. So: a darkened rust that carries white in
+   light (4.77:1), and DARK ink on the light rust under dark (6.49:1). This is
+   the one destructive control in the panel; it has to be the most readable
+   thing there, not the least. */
 .lg-notif-bulk__b {
   appearance: none; cursor: pointer; width: 100%; border: 0; border-radius: 8px;
-  background: var(--lg-rust, #c66845); color: #fff; padding: 10px;
+  background: #b35937; color: #fff; padding: 10px;
   font: 700 13px/1 var(--lg-font-sans, system-ui, sans-serif);
+}
+html[data-lguser-theme="dark"] .lg-notif-bulk__b,
+html[data-theme="dark"] .lg-notif-bulk__b {
+  background: var(--lg-rust, #e08a72); color: #1a1d20;
 }
 .lg-notif-bulk__b:disabled { opacity: .6; cursor: default; }
 @media (max-width: 640px) { .lg-notif-bulk__b { padding: 13px; } }
