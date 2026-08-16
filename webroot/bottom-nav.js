@@ -119,7 +119,12 @@
   // those do not reach every context that renders this bar (a flag that is set in
   // one pool and absent in another serves the OFF path on the very URL built to
   // preview it).
-  var LG_ANON_DASH_SIGNIN = false;
+  // FLIPPED ON 2026-08-16 on Ian's ruling (backlog 4.2), post-slot ONLY — the
+  // floating-pill option from the mock is dead and was never built. The comment
+  // above still describes exactly what ships: for an anonymous visitor the centre
+  // slot stops being a "+" that could not post and becomes Sign in. Nothing else
+  // about anonymous browsing changes, and it must never become a login wall.
+  var LG_ANON_DASH_SIGNIN = true;
   //
   // Preview override, following the house ?lgdebug=1 convention: ?lgdash=signin
   // forces ON and ?lgdash=plus forces OFF. This is what lets Ian look at the real
