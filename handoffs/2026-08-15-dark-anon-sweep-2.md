@@ -1,6 +1,47 @@
 # dark-anon-sweep — state note (2026-08-15, re-chartered seat)
 
-> ## ⚠ CORRECTION 2 (2026-08-16) — THE "INVISIBLE SEARCH FIELDS" ARE A PHANTOM
+> ## ⚠ CORRECTION 3 (2026-08-16) — CORRECTION 2 WAS ALSO WRONG. THE FINDING IS REAL.
+>
+> I have now mischaracterised these five findings **twice**, in opposite
+> directions, and both errors have the same root: **I read `fg`/`bg` without
+> reading `kind`.**
+>
+> The probe's `kind` for all five is **`field-borderless`**, `need: 3.0`. It does
+> NOT compare ink to background. It compares **the field's own fill to the page
+> behind it** — WCAG 1.4.11, *"the field is findable only if its FILL differs
+> from the page."*
+>
+> | my claim | reality |
+> |---|---|
+> | "invisible text, members-cannot-use-this" | wrong property — the **text is fine** (12.2–13.0:1) |
+> | "phantom, all four already pass" | wrong — I measured **ink**, which passes; the **fill** does not |
+>
+> **The real defect: you cannot see where the search box is.** `input#q` on /shop/
+> has fill `#0b2528` on a page of `#0b2528` — the identical hex, no border. The
+> box is invisible as a box. Same shape on hub/hub-door (`#222629` on `#262b30`),
+> events (`#222629` on `#1e2124`) and directory (`#ffffff` on `#ffffff`,
+> `#1e2124` on `#1e2124`). All are `visible` by the probe's own reachability
+> filter, so these are not hidden-element artifacts.
+>
+> **The dropped ink fix was still correctly dropped** — it changed the wrong
+> property. But "phantom" was wrong, and the stylesheet precondition (which is a
+> genuine instrument improvement and stays) did **not** make these go away: the
+> re-run has `darkStyles: true` on all 48 runs and these findings persist.
+>
+> **Correct fix shape:** give these borderless fields a visible boundary in dark —
+> a border or a distinguishable fill. `app-settings.js` already carries
+> `DARK_SEARCH_BORDER` / `DARK_BORDER` and the `LG_DARK_SEARCH_WRAPPER_FIX` /
+> `LG_DARK_BORDER_FIX` flags (both already ON) for exactly this family; these five
+> fields simply are not reached by them. **Do not touch the ink** — it passes.
+>
+> **THE GENERAL LESSON, worth more than the fix:** a finding's `kind` determines
+> what `fg`/`bg` MEAN. Reading them as ink-on-background is only valid for
+> `text` / `field-text` kinds. This probe also emits `field-border`,
+> `field-borderless` and `icon-control`, each with its own 3:1 bar and its own
+> pair of things being compared. Every number below in this handoff should be
+> read with its `kind` in hand.
+
+> ## ⚠ CORRECTION 2 (2026-08-16, SUPERSEDED BY CORRECTION 3 ABOVE)
 >
 > The worklist below calls them the wave's top item and a
 > members-cannot-use-this defect. **They are not a defect at all.** Measured on
