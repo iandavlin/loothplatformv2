@@ -33,19 +33,31 @@ SNIPDIR="/etc/nginx/snippets"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BEGIN="# >>> lane-preview BEGIN (tools/preview/lane-preview.sh) — REMOVABLE"
 END="# <<< lane-preview END"
+# GLOB include, not a per-lane one. The vhost carries ONE permanent
+# `include .../lane-preview-*.conf;` between the markers (this is what actually
+# picks up every lane's snippet now) — a prior version of this script instead
+# grep/sed'd in a SEPARATE, lane-specific include line on every `up`. That
+# double-includes the file the moment the glob is also present: nginx reads the
+# same locations twice and refuses with "duplicate location". Found 2026-08-16
+# when featured-members' own `up` started failing that way on a vhost that
+# already had the glob (someone had already landed it centrally, fixing the
+# "include keeps dropping" problem this file's own header used to warn about;
+# the add/remove logic here just never caught up). BOX-WIDE: every lane's `up`
+# hits this on next run until this file is updated on their branch too.
+inc="    include $SNIPDIR/lane-preview-*.conf;"
 
 cmd="${1:-}"; lane="${2:-}"
 [ -n "$cmd" ] && [ -n "$lane" ] || { echo "usage: $0 {up|down|status} <lane>"; exit 2; }
 
 src="$REPO/platform/nginx/lane-preview-$lane.conf"
 dst="$SNIPDIR/lane-preview-$lane.conf"
-inc="    include $dst;"
 
 die() { echo "lane-preview: $*" >&2; exit 1; }
 
 # The include block lives just before the server block's closing brace. Finding
 # that line rather than hardcoding one is what keeps this working after the vhost
-# is edited by someone else.
+# is edited by someone else. Inserts the GLOB include (see $inc above) — a lane
+# never needs its own include line, only its snippet file present in $SNIPDIR.
 ensure_markers() {
     grep -q "$BEGIN" "$VHOST" && return 0
     local last
@@ -53,6 +65,7 @@ ensure_markers() {
     [ -n "$last" ] || die "cannot find the vhost's closing brace"
     sudo -n sed -i "${last}i\\
 $BEGIN\\
+$inc\\
 $END" "$VHOST" || die "could not add markers"
 }
 
@@ -91,18 +104,14 @@ up)
 
     sudo -n cp "$src" "$dst" || die "could not install the snippet"
     ensure_markers
-    if ! grep -qF "$inc" "$VHOST"; then
-        sudo -n sed -i "s|^$END|$inc\n$END|" "$VHOST" || die "could not add the include"
-    fi
     reload_or_revert "$backup" || exit 1
     echo "UP: https://dev2.loothgroup.com/preview/$lane/"
     ;;
 down)
     backup="/tmp/lane-preview-vhost-$(id -u).bak"
     sudo -n cp "$VHOST" "$backup"
-    sudo -n sed -i "\|^$(printf '%s' "$inc" | sed 's/[|]/\\|/g')$|d" "$VHOST"
-    # Markers are left in place: they are two comment lines, and removing them is
-    # another edit to the live vhost for no gain.
+    # The glob include (see $inc above) is shared by every lane and stays;
+    # only this lane's own snippet file is removed.
     sudo -n rm -f "$dst"
     reload_or_revert "$backup" || exit 1
     echo "DOWN: /preview/$lane/ removed"
