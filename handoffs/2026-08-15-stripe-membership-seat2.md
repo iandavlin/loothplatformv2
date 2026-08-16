@@ -493,6 +493,37 @@ token when the token is fine.
 
 Sandbox only until Ian's cutover, as ever.
 
+### One design unknown I resolved for you, and one I did not
+
+**Resolved:** `$ctx` does **not** carry the requested slug (checked
+`membership-pages/lib/whoami.php` — it has `authenticated`, `wp_user_id`,
+`capabilities`, no slug). So the scope fence cannot read the page from `$ctx`.
+Do **not** solve that by adding a slug argument to
+`lg_membership_prelaunch_gate_or_exit($ctx)` — every page file calls it and you
+would be changing a signature in ~6 places, which is how one page gets missed
+and silently keeps the old rule. Put a slug resolver **inside the invite
+module**, mirroring the router's own resolution, so both doors get the same
+answer without any call site changing. That is the same principle that fixed the
+two-door bug in the first place.
+
+**Not resolved, and it is yours to decide:** whether the token lives in the URL
+query (`/join?lginv=…`) or is exchanged once for a short-lived cookie on first
+hit. The query form is simpler and is what "invite URL" implies, but it means the
+token sits in browser history, in any referrer, and in Ian's inbox forever — and
+it is a gate bypass, however scoped. The cookie exchange costs one redirect and
+keeps the bypass out of history. **I did not pick one**, because it is a
+security posture call above my pay grade on a live-money path, and because
+picking it silently in code is exactly how such a choice stops being visible.
+
+### ⚠️ WHY I STOPPED HERE RATHER THAN STARTING IT
+
+The design above is complete and the fences are specified — but this feature is a
+**scoped gate bypass on the payment path**, and I was near the end of a very long
+session. A half-wired bypass is the single worst thing to leave in a tree: it
+either fails closed and looks broken, or fails open and nobody notices. Every
+other piece this session was safe to leave mid-flight; this one is not. So it is
+captured to be **executed cleanly from the top**, not resumed from the middle.
+
 ### The whitespace bug that phase 3 would have hit
 `ltrim($l, '> ')` strips a character **class** — every leading `>` *and* every
 leading space — so quoted terminal output came back with its indentation
