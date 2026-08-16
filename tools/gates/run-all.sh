@@ -1055,7 +1055,7 @@ echo "=== GATE 51: new members arrive alive — the profile-setup step, flag OFF
 # RED from each — run it after touching either the feature or this gate.
 run "profile-setup" python3 "$(dirname "$0")/profile-setup-gate.py"
 
-echo "=== GATE (unnumbered — pending keeper): directory location cap — backlog 20, list views never exceed City/State ==="
+echo "=== GATE 55: directory location cap — backlog 20, list views never exceed City/State ==="
 # Ian 8/15, via keeper: found live via member Luke (WP 2091) — an admin
 # browsing the directory saw every member's raw street address on every row.
 # Number not yet allocated — gate numbers are ALLOCATED BY KEEPER, never
