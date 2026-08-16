@@ -1259,6 +1259,33 @@ echo "=== GATE 62: a branch that ADDS a flag must REGISTER it in docs/FLAGS.md =
 # branches have no register: both exit 2, never 1, so neither can redden a train.
 run "flag-register" python3 "$(dirname "$0")/flag-register-gate.py"
 
+echo "=== GATE 63: the welcome one-shot reaches BOTH rails, fires once, never retro-fires ==="
+# The rail-agnostic first-activation welcome. Arbiter::sync used to stamp the
+# one-shot only on a TRANSITION into a paid tier, which is really a question about
+# whether the paid role was applied before or after the account was created — and
+# the two production creation paths sit on opposite sides of it. Same money, same
+# tier, different product by rail, which is exactly what Ian's dual-wield ruling
+# forbids.
+#
+# THE HEADLINE IS ASSERTED AS SYMMETRY, not as "the welcome fires": the two
+# creation SHAPES must end in the SAME outcome, and the gate says nothing about
+# which. That survives the mechanism moving, and it is red exactly while the
+# defect exists.
+#
+# THE DANGEROUS HALF IS RETRO-FIRE. 1,109 currently-paying members carry no
+# welcome marker, so a fix keyed on "paid and never welcomed" mails eleven hundred
+# people on the first sweep, unrecallably. §D asserts the cutover fence
+# BEHAVIOURALLY against a member shaped like those 1,109, and does so WITHOUT
+# running any backfill — a backfill is something a person has to remember to run,
+# which makes it a plan, not a guard.
+#
+# It READS THE FLAG rather than hardcoding a state, so it stays correct the day
+# the default flips. Mail assertions read STAMP INTENT, never delivery: pre_wp_mail
+# is filtered on dev2 and the poller's mail is separately suppressed on live.
+# Companion: welcome-activation-redfirst.py mutates 10 ways and requires a RED
+# from each, plus a no-op control and a prose control that must stay GREEN.
+run "welcome-activation" python3 "$(dirname "$0")/welcome-activation-gate.py"
+
 echo "=== GATE 55: directory location cap — backlog 20, list views never exceed City/State ==="
 # Ian 8/15, via keeper: found live via member Luke (WP 2091) — an admin
 # browsing the directory saw every member's raw street address on every row.

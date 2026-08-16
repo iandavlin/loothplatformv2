@@ -1,0 +1,107 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sign-up screens — light and dark</title>
+<style>
+ :root{color-scheme:light}
+ body{font-family:system-ui,sans-serif;background:#f6f6f2;color:#1A1E12;margin:0;
+   padding:0 0 96px}
+ .wrap{max-width:1180px;margin:0 auto;padding:0 1.25em}
+ .head{background:#1A1E12;color:#fff;padding:18px 16px;text-align:center;
+   font:600 13px/1.6 system-ui,sans-serif}
+ h1{font-size:1.35em;margin:1.2em 0 .2em}
+ .lede{color:#3c4a28;line-height:1.6;margin:0 0 1.4em;max-width:70ch}
+ .fix{background:#eef3e2;border:1px solid #c3d2a4;border-radius:8px;padding:1em 1.2em;
+   margin:0 0 1.8em;max-width:70ch}
+ .fix table{border-collapse:collapse;margin-top:.6em;font-size:.92em}
+ .fix td,.fix th{text-align:left;padding:.22em .9em .22em 0}
+ .was{color:#b3361f;font-weight:700} .now{color:#3f5c22;font-weight:700}
+ section{margin:0 0 2.6em}
+ h2{font-size:1.05em;margin:0 0 .6em;border-bottom:1px solid #d9ddcf;padding-bottom:.35em}
+ .dev{font-weight:400;color:#6b7256;font-size:.86em}
+ .pair{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+ @media (max-width:820px){.pair{grid-template-columns:1fr}}
+ figure{margin:0}
+ figcaption{font-size:.82em;font-weight:700;color:#3c4a28;margin:0 0 .35em}
+ img{width:100%;height:auto;border:1px solid #c9c5b6;border-radius:6px;display:block}
+</style></head><body>
+<div class="head">THE REAL SCREENS, PHOTOGRAPHED IN BOTH THEMES — not drawings. Both are
+ shown side by side so you do not have to switch your own theme to check.<br>
+ The app's own bottom nav and “Install Looth” banner are hidden in these shots — they float
+ over the middle of a full-page capture and were covering the privacy dials. Everything you
+ see below is the step itself.</div>
+<div class="wrap">
+<h1>The sign-up step, light and dark</h1>
+<p class="lede">You reported the section headers were invisible in dark mode. They were:
+ the card kept a light green fill while the labels followed the dark theme ink, so they
+ rendered near-white on near-white. Measured, fixed, and re-measured — every label now
+ clears the AA contrast bar in both themes at both widths.</p>
+<div class="fix">
+ <strong>What the numbers were, and are</strong> (AA needs 4.5:1)
+ <table>
+  <tr><th></th><th>Was</th><th>Now</th></tr>
+  <tr><td>“Your name”, “A photo of you”, “Where are you?”</td>
+      <td class="was">1.11:1</td><td class="now">12.29:1</td></tr>
+  <tr><td>“Your profile”, “Where you are”</td>
+      <td class="was">1.10:1</td><td class="now">10.58:1</td></tr>
+  <tr><td>“While you are here — who sees this?”</td>
+      <td class="was">1.10:1</td><td class="now">10.58:1</td></tr>
+  <tr><td>“This is optional…” <em>(failed the other way — dark on dark)</em></td>
+      <td class="was">1.88:1</td><td class="now">9.66:1</td></tr>
+ </table>
+</div>
+
+  <section>
+    <h2>The step <span class="dev">desktop</span></h2>
+    <div class="pair">
+      <figure><figcaption>Light</figcaption>
+        <img src="theme-shots/step__light__desktop.png" alt="The step, light, desktop" loading="lazy"></figure>
+      <figure><figcaption>Dark</figcaption>
+        <img src="theme-shots/step__dark__desktop.png" alt="The step, dark, desktop" loading="lazy"></figure>
+    </div>
+  </section>
+  <section>
+    <h2>After they save <span class="dev">desktop</span></h2>
+    <div class="pair">
+      <figure><figcaption>Light</figcaption>
+        <img src="theme-shots/saved__light__desktop.png" alt="After they save, light, desktop" loading="lazy"></figure>
+      <figure><figcaption>Dark</figcaption>
+        <img src="theme-shots/saved__dark__desktop.png" alt="After they save, dark, desktop" loading="lazy"></figure>
+    </div>
+  </section>
+  <section>
+    <h2>If they skip <span class="dev">desktop</span></h2>
+    <div class="pair">
+      <figure><figcaption>Light</figcaption>
+        <img src="theme-shots/skipped__light__desktop.png" alt="If they skip, light, desktop" loading="lazy"></figure>
+      <figure><figcaption>Dark</figcaption>
+        <img src="theme-shots/skipped__dark__desktop.png" alt="If they skip, dark, desktop" loading="lazy"></figure>
+    </div>
+  </section>
+  <section>
+    <h2>The step <span class="dev">mobile</span></h2>
+    <div class="pair">
+      <figure><figcaption>Light</figcaption>
+        <img src="theme-shots/step__light__mobile.png" alt="The step, light, mobile" loading="lazy"></figure>
+      <figure><figcaption>Dark</figcaption>
+        <img src="theme-shots/step__dark__mobile.png" alt="The step, dark, mobile" loading="lazy"></figure>
+    </div>
+  </section>
+  <section>
+    <h2>After they save <span class="dev">mobile</span></h2>
+    <div class="pair">
+      <figure><figcaption>Light</figcaption>
+        <img src="theme-shots/saved__light__mobile.png" alt="After they save, light, mobile" loading="lazy"></figure>
+      <figure><figcaption>Dark</figcaption>
+        <img src="theme-shots/saved__dark__mobile.png" alt="After they save, dark, mobile" loading="lazy"></figure>
+    </div>
+  </section>
+  <section>
+    <h2>If they skip <span class="dev">mobile</span></h2>
+    <div class="pair">
+      <figure><figcaption>Light</figcaption>
+        <img src="theme-shots/skipped__light__mobile.png" alt="If they skip, light, mobile" loading="lazy"></figure>
+      <figure><figcaption>Dark</figcaption>
+        <img src="theme-shots/skipped__dark__mobile.png" alt="If they skip, dark, mobile" loading="lazy"></figure>
+    </div>
+  </section>
+</div></body></html>

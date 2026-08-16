@@ -400,3 +400,70 @@ Six of the new assertions were wrong before they were right:
 - The gate must **read the flag** and assert per state (absent / OFF / ON) so
   flipping the default later needs no gate edit.
 - Red-first: break every new assertion before trusting it once.
+
+## 9. The welcome one-shot — measured, corrected, and the fix shape (next feed)
+
+Keeper's feed after backlog 19: make the one-shot welcome key on FIRST ACTIVATION
+regardless of rail, without retro-firing for existing members. Measured before
+designing, as instructed, and the measurement **corrected my own carried finding**.
+
+### It is not "the hook never fires". It fires for one rail and not the other.
+
+`Arbiter::sync` derives `$oldTier` from the member's **current WordPress roles**
+and stamps the one-shot only on a transition into a paid tier. The two production
+account-creation paths do opposite things with the role:
+
+| path | role at creation | what the arbiter sees | welcome |
+|---|---|---|---|
+| `lg-patreon-onboard.php:1615` | **applied** (`'role' => $wp_role`) | `old === winning` | **never fires** |
+| `UserLifecycle.php:231` (email-first minter, the Stripe arrival) | **none** | `null → looth3` | fires |
+
+Reproduced deterministically in `tools/welcome-activation-repro.php` — same tier,
+same arbiter call, opposite outcomes, decided only by whether the role was applied
+before or after.
+
+**This makes it a live dual-rail violation, not a dormant feature.** Two members
+who paid the same money get a different product depending on the rail.
+
+### Measured on live, 2026-08-15
+
+| | |
+|---|---|
+| members | 1,847 |
+| holding a paid tier | 1,225 |
+| welcome emails EVER / newest | **16** / 2026-06-21 |
+| joined since 1 July / with a pending stamp | 33 / **1** |
+| **paid members with NO welcome marker of any kind** | **1,109** |
+
+That last row governs the design: the obvious fix — "fire when a paid member has
+never been welcomed" — mails **1,109 people** on the first sweep after deploy.
+
+### Fix shape (posted to the board before building)
+
+Key on **first activation**, not on a transition: a durable marker written the
+first time the arbiter observes the member holding a paid tier. It hangs off the
+**arbiter** (rail-agnostic, where both rails already converge) and reaches
+**nothing** into the Stripe leg, which gate 34d forbids from mailing, firing hooks
+or stamping member data.
+
+**Two independent guards, because a mass mail is unrecallable:**
+1. A **backfill** stamping every existing paid member as already-activated, with a
+   provenance value that reads as `backfill` so it can never be mistaken for a real
+   activation, sending nothing.
+2. An independent **date fence**: never welcome an account registered before the
+   cutover — so one missed backfill row still cannot mail a 2024 member.
+
+Order: deploy flag OFF → backfill → verify (paid-with-marker == 1,225; sent still
+15) → only then discuss flipping.
+
+### Separate finding, not fixed here
+
+**118 members carry an unconsumed pending welcome stamp; 114 still pay; 109
+registered before 2026.** The modal markup, its CSS (`.is-visible` is defined) and
+its dismiss JS are all intact, so this is not a broken modal. The likeliest reading
+is that those members never land on a WordPress-rendered page — the hub, profiles
+and membership pages are strangler surfaces where `wp_footer` never runs. It is its
+own item, and it decides whether a corrected trigger reaches anybody at all.
+
+**Dev2 note:** the repro's `mailed` column is always `no` here because
+`pre_wp_mail` is filtered on this box. Read `welcome_stamp`.

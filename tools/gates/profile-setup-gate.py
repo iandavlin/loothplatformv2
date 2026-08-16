@@ -707,6 +707,260 @@ else:
         ok("the snapshot is inert: no script, no write endpoint on either page")
 
 
+
+# ── K. DARK: EVERY LABEL CLEARS AA AGAINST WHAT IT ACTUALLY RENDERS ON ─────────
+# Ian, 2026-08-16, from a screenshot: the section headers were invisible in dark.
+# Measured at the time: 'Your name' 1.11:1, the privacy title 1.10:1, against a
+# 4.5 bar. The cause was NOT in this file's CSS being wrong on its own terms — an
+# injected html[data-lguser-theme="dark"] body{color:#e5e7e1!important} supplied
+# the ink to every element that named no colour, while .card and .privacy pinned
+# LIGHT fills. So a source-reading assertion would have been GREEN on the defect,
+# and that is why this section drives a real browser.
+#
+# THE BAR IS RENDERED CONTRAST, NOT THE PRESENCE OF A DARK BLOCK. A gate that
+# asserts "a dark rule exists" passes the moment somebody writes one, whether or
+# not it wins the cascade — which is precisely the failure this is guarding.
+#
+# TWO DIRECTIONS, because the defect had two: elements that INHERIT the theme ink
+# fail on a light surface, and elements that NAME their own dark ink fail on the
+# dark page. .lede was the second kind at 1.88:1 and was not in the report.
+#
+# INJECTED APP CHROME IS EXCLUDED. The docroot injects /pwa.js into the snapshot,
+# which mounts the hub menu sheet and the notifications modal; their headings sit
+# in .lg-* containers and are NOT this page's surface. A visual gate that
+# photographs them reports another component's defects as this one's, and this
+# repo has already had a gate whose counts moved on 10 of 24 surfaces for exactly
+# that reason.
+AA_TEXT = 4.5
+
+DARK_PROBE = r"""
+(function () {
+  function parse(s){ if(!s) return null;
+    var m=/rgba?\(([^)]+)\)/.exec(s); if(!m) return null;
+    var p=m[1].split(',').map(function(x){return parseFloat(x.trim())});
+    if(p.length<3||p.some(isNaN)) return null;
+    return {r:p[0],g:p[1],b:p[2],a:p.length>3?p[3]:1}; }
+  function lum(c){ var ch=[c.r,c.g,c.b].map(function(v){ v=v/255;
+    return v<=0.03928? v/12.92 : Math.pow((v+0.055)/1.055,2.4); });
+    return 0.2126*ch[0]+0.7152*ch[1]+0.0722*ch[2]; }
+  function ratio(f,b){ var A=lum(f),B=lum(b); var hi=Math.max(A,B),lo=Math.min(A,B);
+    return (hi+0.05)/(lo+0.05); }
+  function over(src,dst){ var a=src.a; if(a>=1) return {r:src.r,g:src.g,b:src.b,a:1};
+    if(a===0) return dst;
+    return {r:src.r*a+dst.r*(1-a), g:src.g*a+dst.g*(1-a), b:src.b*a+dst.b*(1-a), a:1}; }
+  function hex(c){ function h(v){var s=Math.round(Math.max(0,Math.min(255,v))).toString(16);
+    return s.length<2?'0'+s:s;} return '#'+h(c.r)+h(c.g)+h(c.b); }
+  // Composite ancestors UNTIL opaque. Starting at the element itself compares a
+  // panel to itself; stopping at the first non-transparent value ignores alpha.
+  function effBg(el){
+    var acc={r:0,g:0,b:0,a:0}, n=el, chrome=false;
+    while(n){
+      if(n.className && /\blg-/.test(String(n.className))) chrome=true;
+      var c=parse(getComputedStyle(n).backgroundColor);
+      if(c && c.a>0){
+        acc = (acc.a===0) ? {r:c.r,g:c.g,b:c.b,a:c.a} : over(acc,c);
+        if(acc.a>=1) return {c:acc, chrome:chrome};
+      }
+      n=n.parentElement;
+    }
+    var pg=parse(getComputedStyle(document.body).backgroundColor)||{r:255,g:255,b:255,a:1};
+    return {c: acc.a>0? over(acc,pg) : pg, chrome:chrome};
+  }
+  var out=[];
+  ['h2','.lede','label','.privacy__h','.hint','.found h3'].forEach(function(sel){
+    Array.prototype.slice.call(document.querySelectorAll(sel)).forEach(function(el){
+      var cs=getComputedStyle(el);
+      if(cs.display==='none'||cs.visibility==='hidden') return;
+      var txt=(el.innerText||'').trim(); if(!txt) return;
+      var fg=parse(cs.color); if(!fg) return;
+      var bg=effBg(el);
+      if(bg.chrome) return;                 // injected app chrome, not this page
+      var fgc = fg.a<1 ? over(fg,bg.c) : fg;
+      out.push({sel:sel,text:txt.slice(0,40),fg:hex(fgc),bg:hex(bg.c),
+                ratio:Math.round(ratio(fgc,bg.c)*100)/100});
+    });
+  });
+  return JSON.stringify({
+    theme: document.documentElement.getAttribute('data-lguser-theme')||'(none)',
+    cardBg: (document.querySelector('.card')? getComputedStyle(document.querySelector('.card')).backgroundColor : ''),
+    text: (document.body.innerText||'').slice(0,8000),
+    is403: /403|Forbidden/i.test(document.body.innerText.slice(0,200)),
+    rows: out
+  });
+})()
+"""
+
+
+def _dark_unavailable(why):
+    """Environment, not the code under test. But NEVER discard a RED already
+    recorded above: cannot() exits 2 immediately, and run-all.sh reads 2 as
+    'could not run', so calling it here with fails pending would convert a real
+    finding into a shrug. Only a clean run may report CANNOT RUN."""
+    if fails:
+        print(f"  ..  dark section SKIPPED ({why}) — earlier findings stand, verdict below")
+        return
+    cannot(f"dark contrast section: {why}")
+
+
+def _run_dark():
+    import json as _json
+    import time as _time
+    import urllib.request as _url
+    try:
+        import websocket
+    except ImportError:
+        return _dark_unavailable("python websocket-client is not installed")
+    try:
+        _url.urlopen("http://127.0.0.1:9222/json/version", timeout=5).read()
+    except Exception:
+        return _dark_unavailable("no headless Chrome on 127.0.0.1:9222")
+
+    tokf = os.path.join(ROOT, "tools", "gates", "gate-env.sh")
+    tok = ""
+    try:
+        r = subprocess.run(["bash", tokf], capture_output=True, text=True, timeout=30)
+        for line in r.stdout.splitlines():
+            if line.startswith("LG_GATE_TOKEN="):
+                tok = line.split("=", 1)[1]
+    except Exception:
+        pass
+    if not tok:
+        return _dark_unavailable("no dev-gate token from gate-env.sh")
+
+    BASE = "https://dev2.loothgroup.com/footer-mockups/profiles-alive/built/"
+    # ALL THREE published screens, each with a marker only IT can contain.
+    #
+    # §K measured only step.html to begin with, and that was a real blind spot:
+    # saved.html is captured by a DIFFERENT script from the running JS, so it did
+    # not pick up the dark fix when the other two were rebuilt, and no assertion
+    # anywhere would have noticed. §H compares PHRASES, which are unchanged by a
+    # styling regression. A per-screen marker rather than one shared selector,
+    # because the three are genuinely different documents — the skip screen has no
+    # form at all.
+    SCREENS = (
+        ("step",    "step.html",    "Set up your profile"),
+        ("skipped", "skipped.html", "No problem"),
+        ("saved",   "saved.html",   "Open the full profile editor"),
+    )
+    DESK = {"width": 1440, "height": 900, "mobile": False, "deviceScaleFactor": 1}
+    PHONE = {"width": 390, "height": 844, "mobile": True, "deviceScaleFactor": 2}
+
+    t = _json.load(_url.urlopen(_url.Request("http://127.0.0.1:9222/json/new?about:blank",
+                                             method="PUT"), timeout=15))
+    ws = websocket.create_connection(t["webSocketDebuggerUrl"], max_size=None,
+                                     timeout=20, suppress_origin=True)
+    box = {"i": 0}
+
+    def call(m, **p):
+        box["i"] += 1
+        ws.send(_json.dumps({"id": box["i"], "method": m, "params": p}))
+        while True:
+            msg = _json.loads(ws.recv())
+            if msg.get("id") == box["i"]:
+                if "error" in msg:
+                    raise RuntimeError(f"{m}: {msg['error']}")
+                return msg.get("result", {})
+
+    def js(e):
+        r = call("Runtime.evaluate", expression=e, returnByValue=True, awaitPromise=True)
+        return r.get("result", {}).get("value")
+
+    def goto(u, settle=1.6):
+        call("Page.navigate", url=u)
+        start = _time.monotonic()
+        while _time.monotonic() - start < 25:
+            _time.sleep(0.15)
+            try:
+                if js("document.readyState") == "complete":
+                    break
+            except Exception:
+                continue
+        _time.sleep(settle)
+
+    measured = 0
+    try:
+        call("Page.enable"); call("Runtime.enable"); call("Network.enable")
+        for device, metrics in (("desktop", DESK), ("mobile", PHONE)):
+            for mode in ("light", "app-dark", "os-dark"):
+                call("Emulation.setDeviceMetricsOverride", **metrics)
+                call("Emulation.setTouchEmulationEnabled", enabled=metrics["mobile"])
+                call("Emulation.setEmulatedMedia", features=[
+                    {"name": "prefers-color-scheme",
+                     "value": "dark" if mode == "os-dark" else "light"}])
+                for screen, fname, marker in SCREENS:
+                    url = BASE + fname
+                    tag = f"{screen}/{device}/{mode}"
+                    # Clear FIRST: setCookie ADDS rather than replaces, and a
+                    # leftover session from another lane would measure a
+                    # different page.
+                    call("Network.clearBrowserCookies")
+                    call("Network.setCookie", name="loothdev_auth", value=tok,
+                         domain=".dev2.loothgroup.com", path="/", secure=True)
+                    goto(url, settle=0.8)
+                    if mode == "app-dark":
+                        js("try{localStorage.setItem('lg-set-theme','dark')}catch(e){}")
+                    else:
+                        js("try{localStorage.clear()}catch(e){}")
+                    goto(url, settle=1.4)
+                    if mode == "app-dark":
+                        goto(url, settle=1.8)
+                    data = _json.loads(js(DARK_PROBE))
+
+                    # LIVENESS. A dev-gate 403 is a styled page that measures
+                    # beautifully and tells you nothing; so does a dark run that
+                    # never actually went dark, and so does the WRONG screen.
+                    if data.get("is403") or marker not in (data.get("text") or ""):
+                        bad(f"dark/{tag}: the screen did not render "
+                            f"(gate 403, missing snapshot, or no {marker!r})",
+                            "every ratio below would have been measured on the wrong page")
+                        continue
+                    if mode != "light" and data.get("theme") != "dark":
+                        bad(f"dark/{tag}: dark never resolved "
+                            f"(data-lguser-theme={data.get('theme')!r})",
+                            "the assertions would have passed by measuring the LIGHT page")
+                        continue
+                    if not data.get("rows"):
+                        bad(f"dark/{tag}: probe returned no rows",
+                            "an all-pass with nothing measured is not a pass")
+                        continue
+
+                    worst = min(r["ratio"] for r in data["rows"])
+                    failing = [r for r in data["rows"] if r["ratio"] < AA_TEXT]
+                    measured += len(data["rows"])
+                    if failing:
+                        worst_rows = sorted(failing, key=lambda r: r["ratio"])[:3]
+                        bad(f"dark/{tag}: {len(failing)} of {len(data['rows'])} "
+                            f"labels fail AA on the rendered background",
+                            "; ".join(f"{r['text']!r} {r['ratio']}:1 ({r['fg']} on {r['bg']})"
+                                      for r in worst_rows))
+                    else:
+                        ok(f"{tag}: all {len(data['rows'])} labels clear AA "
+                           f"(worst {worst}:1)")
+    finally:
+        # NEVER leave the shared chrome profile stamped dark: app-settings.js
+        # persists the pick and this profile is shared with every other lane —
+        # a stamped theme once turned every lane's browser dark for a whole run.
+        try:
+            goto(BASE + "step.html", settle=0.4)
+            js("try{localStorage.clear()}catch(e){}")
+        except Exception:
+            pass
+        for fn in (lambda: ws.close(),
+                   lambda: _url.urlopen("http://127.0.0.1:9222/json/close/" + t["id"],
+                                        timeout=10).read()):
+            try:
+                fn()
+            except Exception:
+                pass
+
+    if measured == 0:
+        bad("dark section measured nothing at all",
+            "six combinations ran and not one produced a row — treat as unmeasured, not as clean")
+
+
+print("\nK. dark — every label clears AA against its ACTUAL rendered background")
+_run_dark()
+
 # ── verdict ────────────────────────────────────────────────────────────────────
 print(f"\n{checks} checks run.")
 if fails:
@@ -715,4 +969,5 @@ if fails:
         print("  ✗ " + f)
     sys.exit(1)
 print("GATE 51 GREEN — flag OFF is a no-op, both rails wired, all four of Ian's "
-      "sharpenings held, and no nudge surface exists.")
+      "sharpenings held, no nudge surface exists, and every label clears AA in "
+      "both themes at both widths.")

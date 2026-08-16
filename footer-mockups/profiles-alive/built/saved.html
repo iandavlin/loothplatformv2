@@ -1,19 +1,19 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8">
+<!doctype html><html lang="en" data-lguser-theme="default" data-lguser-dark="0" data-lguser-feed="immersive" style="font-size: 100%; --lguser-scale: 1; --lg-read-scale: 1;"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>After saving — Set up your profile — The Looth Group</title>
+<title>After they save — Set up your profile — The Looth Group</title>
 <meta name="robots" content="noindex, nofollow">
 <link rel="stylesheet" href="/lg-shared/site-header.css?v=1785529924">
 <style>
   body{font-family:system-ui,sans-serif;background:#f6f6f2;margin:0;color:#1A1E12}
-  .wrap{max-width:560px;margin:56px auto;padding:0 1.25em}
+  .wrap{max-width:680px;margin:56px auto 72px;padding:0 1.5em}
   h2{margin:.2em 0 .35em}
   .lede{margin:0 0 1.1em;color:#3c4a28;font-size:.98em;line-height:1.6}
-  .card{padding:1.4em 1.6em;background:#d4e0b8;border:1px solid #87986A;border-radius:8px}
-  label{font-size:.92em;font-weight:600;display:block;margin-top:.9em}
-  .hint{font-size:.85em;color:#3c4a28;margin:.15em 0 .35em;line-height:1.5}
-  input[type=text]{width:100%;box-sizing:border-box;padding:.7em .8em;border:1px solid #87986A;
+  .card{padding:2em 2.2em;background:#d4e0b8;border:1px solid #87986A;border-radius:10px}
+  label{font-size:.92em;font-weight:600;display:block;margin-top:1.5em}
+  .hint{font-size:.85em;color:#3c4a28;margin:.2em 0 .6em;line-height:1.55}
+  input[type=text]{width:100%;box-sizing:border-box;padding:.8em .9em;border:1px solid #87986A;
     border-radius:5px;font-size:1em;background:#fff;color:#1A1E12;font-family:inherit}
-  .photorow{display:flex;align-items:center;gap:12px;margin:.45em 0 .2em}
+  .photorow{display:flex;align-items:center;gap:14px;margin:.5em 0 .3em}
   .avi{width:56px;height:56px;flex:0 0 56px;border-radius:50%;background:#c9c5b6;overflow:hidden;
     display:flex;align-items:center;justify-content:center}
   .avi img{width:100%;height:100%;object-fit:cover;display:block}
@@ -23,7 +23,7 @@
   input[type=file]{position:absolute;left:-9999px}
   /* Ian: skip is FIRST-CLASS. Same size, same row, same weight as Save — a
      different colour, not a lesser status. */
-  .actions{display:flex;flex-wrap:wrap;gap:.6em;margin-top:1.3em}
+  .actions{display:flex;flex-wrap:wrap;gap:.85em;margin-top:2em}
   .btn{padding:.7em 1.3em;border-radius:5px;font-size:1em;font-family:inherit;font-weight:600;
     cursor:pointer;border:1px solid transparent;text-decoration:none;display:inline-block}
   .btn--go{background:#1A1E12;color:#fff}
@@ -34,26 +34,162 @@
   .msg.ok{color:#3f5c22}
   .addr{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#eef3e2;
     padding:.05em .35em;border-radius:3px}
-  .privacy{margin-top:1.1em;padding:.9em 1em;background:#eef3e2;border:1px solid #c3d2a4;
+  .privacy{margin-top:1.8em;padding:1.3em 1.4em;background:#eef3e2;border:1px solid #c3d2a4;
     border-radius:6px}
-  .privacy__h{font-weight:700;font-size:.94em;margin-bottom:.2em}
+  .privacy__h{font-weight:700;font-size:.94em;margin-bottom:.35em}
   .privacy label{margin-top:.55em}
-  select{width:100%;box-sizing:border-box;padding:.6em .7em;border:1px solid #87986A;
+  select{width:100%;box-sizing:border-box;padding:.7em .8em;border:1px solid #87986A;
     border-radius:5px;font-size:1em;background:#fff;color:#1A1E12;font-family:inherit}
-  .found{padding:1.2em 1.4em;background:#fff;border:1px solid #e3ddd0;border-radius:8px;margin-top:1em}
+  .found{padding:1.7em 1.9em;background:#fff;border:1px solid #e3ddd0;border-radius:10px;margin-top:1.4em}
   .found h3{margin:0 0 .5em;font-size:1.02em}
   .found ol{margin:.4em 0 0;padding-left:1.2em}
   .found li{margin:.35em 0;line-height:1.55;font-size:.95em}
+
+  @media (max-width:560px){
+    .wrap{margin:32px auto 56px;padding:0 1em}
+    .card{padding:1.6em 1.25em}
+    .privacy{padding:1.15em 1em}
+    .found{padding:1.4em 1.25em}
+  }
+
+  /* ── DARK ─────────────────────────────────────────────────────────────────
+     Ian, 2026-08-16, from a screenshot: the section headers were invisible.
+     MEASURED CAUSE, not guessed — an injected global rule,
+     html[data-lguser-theme="dark"] body{color:#e5e7e1!important}, sets the page
+     ink, and every element above that does NOT name its own colour inherits it.
+     The card and the privacy box, meanwhile, pin LIGHT fills with no dark
+     variant. So 'Your name', 'A photo of you', 'Where are you?', the privacy
+     title and the dial labels rendered near-white on a light green card:
+     measured 1.11:1 and 1.10:1, against an AA bar of 4.5.
+
+     There were TWO failure directions, and the second was not in the report:
+     .lede names its own dark ink (#3c4a28) and therefore did NOT follow the
+     theme — it stayed dark on the now-dark page at 1.88:1. Elements that opt out
+     of inheritance fail in the opposite direction to those that opt in, which is
+     why the fix has to name a colour for BOTH kinds rather than just flip a
+     surface.
+
+     SCOPED TO THE ATTRIBUTE ONLY, deliberately. Measured: app-dark (the gear
+     pick) and os-dark (prefers-color-scheme, nothing picked) BOTH resolve
+     data-lguser-theme="dark", so this one selector covers both. Adding a
+     @media (prefers-color-scheme: dark) block as well would be actively wrong —
+     it would darken the page for a member whose OS is dark but who explicitly
+     chose Light in the gear, which is the one combination the attribute exists
+     to express.
+
+     Ratios are computed against the ACTUAL rendered background, walking up and
+     compositing alpha; every value below clears 4.5:1 for text and 3:1 for
+     control borders. The gate re-measures rather than trusting this comment. */
+  html[data-lguser-theme="dark"] h2,
+  html[data-lguser-theme="dark"] label,
+  html[data-lguser-theme="dark"] .privacy__h,
+  html[data-lguser-theme="dark"] .found h3{color:#e8ebe4}
+  html[data-lguser-theme="dark"] .lede,
+  html[data-lguser-theme="dark"] .hint{color:#b6c2ac}
+  html[data-lguser-theme="dark"] .card{background:#212a22;border-color:#556b53}
+  html[data-lguser-theme="dark"] .privacy{background:#2b352c;border-color:#556b53}
+  html[data-lguser-theme="dark"] .found{background:#212a22;border-color:#556b53}
+  html[data-lguser-theme="dark"] input[type=text],
+  html[data-lguser-theme="dark"] select{background:#161a16;color:#e8ebe4;border-color:#788a76}
+  html[data-lguser-theme="dark"] .filebtn{background:#2b352c;color:#dbe3d3;border-color:#788a76}
+  html[data-lguser-theme="dark"] .btn--go{background:#c9dd9e;color:#15171a}
+  html[data-lguser-theme="dark"] .btn--skip{background:#2b352c;color:#e8ebe4;border-color:#788a76}
+  html[data-lguser-theme="dark"] .addr{background:#2b352c;color:#e8ebe4}
+  html[data-lguser-theme="dark"] .avi{background:#3a443a}
+  html[data-lguser-theme="dark"] .msg.err{color:#ffb3a3}
+  html[data-lguser-theme="dark"] .msg.ok{color:#b6dc8c}
   /* The docroot injects /pwa.js here, which mounts the fixed bottom tabbar; it has
      previously landed on the exact control a mock was built to show. Reserve room. */
   body{padding-bottom:96px}
-</style></head>
-<body><div style="background:#1A1E12;color:#fff;font:600 13px/1.6 system-ui,sans-serif;
- padding:11px 16px;text-align:center">
- THE PAGE AFTER SAVING — captured from the running code with every network call stubbed, so nothing was written. Every control is <b>inert here</b>: the scripts are
- stripped, so nothing on this snapshot can save, upload or change anything.
- <a href="../" style="color:#c9dd9e">&larr; back to the decision page</a>
-</div>
+</style><link rel="manifest" href="/manifest.json"><meta name="theme-color" content="#87986a" data-lg-orig="#87986a"><style id="lg-smoothnav">html.lg-feed-booting .feed-page .feed{opacity:0}.feed-page .feed{transition:opacity .15s ease}</style><link rel="preconnect" href="https://fonts.googleapis.com" crossorigin=""><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""><style id="lg-settings-apply">body{font-family:var(--lg-font-sans)}html[data-lguser-dark="1"]{color-scheme:dark}</style><style id="lg-dark-style">html[data-lguser-theme="dark"]{background:#15171a;color-scheme:dark}
+html[data-lguser-theme="dark"] body{background:#15171a!important;color:#e5e7e1!important}
+html[data-lguser-theme="dark"] .feed-page,html[data-lguser-theme="dark"] .feed,html[data-lguser-theme="dark"] .bb-layout,html[data-lguser-theme="dark"] .bb-layout__main,html[data-lguser-theme="dark"] main{background:#15171a!important}
+html[data-lguser-theme="dark"] .feed-card{background:#1e2124!important;border-color:#2c312d!important;box-shadow:none!important}
+html[data-lguser-theme="dark"] .feed-card__title,html[data-lguser-theme="dark"] .fc-title,html[data-lguser-theme="dark"] .fc-title a,html[data-lguser-theme="dark"] .feed-card__title a,html[data-lguser-theme="dark"] .feed-card__op-author,html[data-lguser-theme="dark"] .fc-author__name,html[data-lguser-theme="dark"] .lg-fb-name,html[data-lguser-theme="dark"] .reply-stub__author{color:#f2f4ee!important}
+html[data-lguser-theme="dark"] .feed-card__op-excerpt,html[data-lguser-theme="dark"] .fc-excerpt,html[data-lguser-theme="dark"] .feed-card__full-body,html[data-lguser-theme="dark"] .reply-stub,html[data-lguser-theme="dark"] .reply-stub__body,html[data-lguser-theme="dark"] .reply-stub__excerpt,html[data-lguser-theme="dark"] .feed-card__meta-top,html[data-lguser-theme="dark"] .fc-time,html[data-lguser-theme="dark"] .feed-card__time,html[data-lguser-theme="dark"] .lg-fb-time,html[data-lguser-theme="dark"] .fc-breadcrumb,html[data-lguser-theme="dark"] .feed-card__ctx-forum{color:#cdd0ca!important}
+html[data-lguser-theme="dark"] .lg-fb-bubble{background:#262b30!important;color:#e5e7e1!important}
+html[data-lguser-theme="dark"] .feed-sort-bar,html[data-lguser-theme="dark"] .feed-toolbar{background:#15171a!important;border-color:#2c312d!important}
+html[data-lguser-theme="dark"] .lg-sort-pill,html[data-lguser-theme="dark"] .feed-sort-bar a,html[data-lguser-theme="dark"] .feed-sort-bar button{color:#cdd0ca}
+html[data-lguser-theme="dark"] .lg-hub-search .ubar,html[data-lguser-theme="dark"] .lg-hub-search input,html[data-lguser-theme="dark"] .lgdm-ubar,html[data-lguser-theme="dark"] .lgev-ubar{background:#1e2124!important;border-color:#767c76!important;color:#e5e7e1!important}
+html[data-lguser-theme="dark"] .lg-hub-search input::placeholder,html[data-lguser-theme="dark"] input::placeholder{color:#7e857c!important}
+html[data-lguser-theme="dark"] #looth-tabbar{background:rgba(21,23,26,.92)!important;border-color:#2c312d!important}
+html[data-lguser-theme="dark"] .lt-sheet,html[data-lguser-theme="dark"] .lt-sheet__row,html[data-lguser-theme="dark"] .lg-set-opt{color:#e5e7e1}
+html[data-lguser-theme="dark"] .lt-sheet,html[data-lguser-theme="dark"] #looth-rep-sheet .lrs-card,html[data-lguser-theme="dark"] #looth-lp-sheet .llp-card,html[data-lguser-theme="dark"] #lgdm-sheet,html[data-lguser-theme="dark"] .lgdm-fsheet,html[data-lguser-theme="dark"] #lgdm-suggest,html[data-lguser-theme="dark"] .bb-layout__nav{background:#1b1e21!important;color:#e5e7e1!important}
+html[data-lguser-theme="dark"] .lt-sheet__name,html[data-lguser-theme="dark"] .lrs-t,html[data-lguser-theme="dark"] .llp-t{color:#f2f4ee!important}
+html[data-lguser-theme="dark"] .lg-set-opt{background:#222629!important;border-color:#767c76!important;color:#e5e7e1!important}
+html[data-lguser-theme="dark"] .lg-set-opt.is-on{background:#2a341f!important;border-color:#9cb37d!important}
+html[data-lguser-theme="dark"] input,html[data-lguser-theme="dark"] textarea,html[data-lguser-theme="dark"] select{background:#222629!important;color:#e5e7e1!important;border-color:#767c76!important}
+html[data-lguser-theme="dark"] .feed-card__tags .tag-chip,html[data-lguser-theme="dark"] .fc-tag,html[data-lguser-theme="dark"] .hl,html[data-lguser-theme="dark"] .fcr-chip{background:#243024!important;color:#b6c79a!important;border-color:transparent!important}
+html[data-lguser-theme="dark"] .lg-hub-search{background:#1e2124!important;border-color:#000!important}
+html[data-lguser-theme="dark"] #site-header,html[data-lguser-theme="dark"] .lg-chrome,html[data-lguser-theme="dark"] #site-header .lg-chrome__inner{background:#000!important;border-color:#15171a!important}
+html[data-lguser-theme="dark"] .lg-chrome{--lg-ink:#e5e7e1!important;--lg-mute:#9aa097!important;--lg-line:#2c312d!important}
+
+html[data-lguser-theme="dark"] .lg-chrome__account{background:#1e2124!important;border-color:#2c312d!important}
+html[data-lguser-theme="dark"] .lg-chrome__edit,html[data-lguser-theme="dark"] .lg-chrome__tier--admin{background:#2c312d!important;color:#f2f4ee!important}
+html[data-lguser-theme="dark"] .lg-hub-search input::placeholder{color:#9aa097!important}
+html[data-lguser-theme="dark"] .lg-hub-search .lg-hub-search__ico,html[data-lguser-theme="dark"] .lg-hub-search svg{color:#9aa097!important;stroke:#9aa097!important}
+html[data-lguser-theme="dark"] .lg-hub-search__panel{background:#15171a!important;border-color:#2c312d!important}
+html[data-lguser-theme="dark"] .lg-hub-search__item{border-color:#2c312d!important}
+html[data-lguser-theme="dark"] .lg-hub-search__t{color:#e5e7e1!important}
+html[data-lguser-theme="dark"] .feed-sort-bar a,html[data-lguser-theme="dark"] .feed-sort-bar button{background:#22262a!important;color:#d0d4cd!important;border:1px solid #767c76!important;font-weight:600!important;transition:background .15s,color .15s!important}
+html[data-lguser-theme="dark"] .feed-sort-bar a.active,html[data-lguser-theme="dark"] .feed-sort-bar .is-active{background:#9cb37d!important;color:#15171a!important;border-color:#9cb37d!important;font-weight:700!important;box-shadow:0 1px 6px rgba(156,179,125,.35)!important}
+html[data-lguser-theme="dark"] .feed-sort-bar .lg-filters-chip{background:#9cb37d!important;color:#15171a!important}
+html[data-lguser-theme="dark"] .feed-sort-bar .lg-newpost{background:#243024!important;color:#e5e7e1!important}
+html[data-lguser-theme="dark"] .feed-page .feed-card,html[data-lguser-theme="dark"] .feed .feed-card,html[data-lguser-theme="dark"] .feed-card{border-color:#2c312d!important;border-top-color:#2c312d!important;border-right-color:#2c312d!important;border-bottom-color:#2c312d!important;border-left-color:#2c312d!important}
+html[data-lguser-theme="dark"] .feed-page .fc-actions,html[data-lguser-theme="dark"] .feed-card .fc-actions,html[data-lguser-theme="dark"] .fc-actions{border-color:#2c312d!important;border-top-color:#2c312d!important}
+html[data-lguser-theme="dark"] .replies-sort__btn{color:#cdd0ca!important;border-color:#2c312d!important}
+html[data-lguser-theme="dark"] .replies-sort__btn.is-active{color:#15171a!important;background:#b0c693!important}
+html[data-lguser-theme="dark"] .lg-fb-act{color:#9aa097!important}
+html[data-lguser-theme="dark"] .lg-fb-time{color:#80867d!important}
+html[data-lguser-theme="dark"] .dir-card{background:#1e2124!important;border-color:#2c312d!important}
+html[data-lguser-theme="dark"] .dir-card__name,html[data-lguser-theme="dark"] .dir-card a:not(.dir-link),html[data-lguser-theme="dark"] .dir-name{color:#f2f4ee!important}
+html[data-lguser-theme="dark"] .dir-card__loc,html[data-lguser-theme="dark"] .dir-loc,html[data-lguser-theme="dark"] .dir-card__meta{color:#cdd0ca!important}
+html[data-lguser-theme="dark"] .dir-members__count,html[data-lguser-theme="dark"] .dir-results__count{color:#cdd0ca!important}
+html[data-lguser-theme="dark"] .feed-card__inline-compose .fic-send,html[data-lguser-theme="dark"] .reply-stub__editbox .rse-save,html[data-lguser-theme="dark"] .lg-fb-send{background:#2a341f!important;color:#e5e7e1!important;border-color:#3d5233!important}
+html[data-lguser-theme="dark"] .leaflet-container{background:#15171a!important}
+html[data-lguser-theme="dark"] .leaflet-tile{filter:invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.65)}
+html[data-lguser-theme="dark"] .leaflet-control-zoom a{background:#262b30!important;color:#e5e7e1!important;border-color:#2c312d!important}
+html[data-lguser-theme="dark"] .leaflet-control-attribution{background:rgba(21,23,26,.8)!important;color:#80867d!important}
+html[data-lguser-theme="dark"] .leaflet-control-attribution a{color:#9cb37d!important}
+html[data-lguser-theme="dark"] .reply-stub__editbox .ql-toolbar.ql-snow,html[data-lguser-theme="dark"] .reply-stub__editbox .ql-container.ql-snow,html[data-lguser-theme="dark"] .ntm-form .ql-toolbar.ql-snow,html[data-lguser-theme="dark"] .ntm-form .ql-container.ql-snow{background:#1e2124!important;border-color:#2c312d!important}
+html[data-lguser-theme="dark"] .reply-stub__editbox .ql-toolbar.ql-snow .ql-stroke,html[data-lguser-theme="dark"] .ntm-form .ql-toolbar.ql-snow .ql-stroke{stroke:#cdd0ca!important}
+html[data-lguser-theme="dark"] .reply-stub__editbox .ql-toolbar.ql-snow .ql-fill,html[data-lguser-theme="dark"] .ntm-form .ql-toolbar.ql-snow .ql-fill{fill:#cdd0ca!important}
+html[data-lguser-theme="dark"] main.lg-standalone-main{background:#f4f2ec!important;color-scheme:light;--lg-ink:#262925!important;--lg-mute:#565a55!important;--lg-charcoal:#1a1d1a!important;--lg-line:#e4e7d8!important;--lg-cream:#fbfbf8!important;--lg-card-bg:#ffffff!important;--lg-sage-d:#586b3f!important;--lg-sage-tint:#eef2e3!important}
+html[data-lguser-theme="dark"] .lg-chrome-foot{background:#101214!important;border-color:#2c312d!important;color:#cdd0ca!important;--lg-ink:#e5e7e1!important;--lg-mute:#a6ac9f!important;--lg-line:#2c312d!important}
+html[data-lguser-theme="dark"] .lg-chrome-foot a{color:#cdd0ca!important}
+html[data-lguser-theme="dark"] .lg-chrome-foot a:hover{color:#e5e7e1!important}
+html[data-lguser-theme="dark"] .lg-social-modal__panel{background:#1a1d20!important}
+html[data-lguser-theme="dark"] .lg-social-modal__head{border-color:#2c312d!important}
+html[data-lguser-theme="dark"] .lg-social-modal__title{color:#e5e7e1!important}
+html[data-lguser-theme="dark"] .lg-social-modal__close,html[data-lguser-theme="dark"] .lg-social-modal__back-btn{color:#9aa097!important}
+html[data-lguser-theme="dark"] .lg-social-modal__close:hover,html[data-lguser-theme="dark"] .lg-social-modal__back-btn:hover{background:#243024!important;color:#e5e7e1!important}
+html[data-lguser-theme="dark"] .lg-social-tab{color:#9aa097!important}
+html[data-lguser-theme="dark"] .lg-social-tab:hover{color:#e5e7e1!important}
+html[data-lguser-theme="dark"] .lg-social-tab.is-active{color:#b0c693!important;background:#243024!important}
+html[data-lguser-theme="dark"] .lg-conn__item,html[data-lguser-theme="dark"] .lg-msg__thread,html[data-lguser-theme="dark"] .lg-notif__item{border-bottom-color:#2c312d!important}
+html[data-lguser-theme="dark"] .lg-conn__item--pending{background:#243024!important}
+html[data-lguser-theme="dark"] .lg-conn__name,html[data-lguser-theme="dark"] .lg-msg__name,html[data-lguser-theme="dark"] .lg-notif__text,html[data-lguser-theme="dark"] .lg-msg__msg-text{color:#e5e7e1!important}
+html[data-lguser-theme="dark"] .lg-conn__section-h,html[data-lguser-theme="dark"] .lg-msg__preview,html[data-lguser-theme="dark"] .lg-msg__meta,html[data-lguser-theme="dark"] .lg-msg__msg-time,html[data-lguser-theme="dark"] .lg-notif__time,html[data-lguser-theme="dark"] .lg-sm__status,html[data-lguser-theme="dark"] .lg-sm__empty{color:#9aa097!important}
+html[data-lguser-theme="dark"] .lg-conn__search,html[data-lguser-theme="dark"] .lg-msg__reply-input{background:#22262a!important;border-color:#767c76!important;color:#e7ebe1!important}
+html[data-lguser-theme="dark"] .lg-msg__thread--unread,html[data-lguser-theme="dark"] .lg-msg__msg,html[data-lguser-theme="dark"] .lg-notif__item--unread{background:#22262a!important}
+html[data-lguser-theme="dark"] .lg-msg__msg--mine{background:#2a341f!important}
+html[data-lguser-theme="dark"] .lg-msg-side{background:#1a1d20!important;border-left-color:#2c312d!important}
+html[data-lguser-theme="dark"] .lg-msg-side__head,html[data-lguser-theme="dark"] .lg-msg-side .lg-msg__compose{border-color:#2c312d!important}
+html[data-lguser-theme="dark"] .lg-msg-side__peer-nm{color:#e5e7e1!important}
+html[data-lguser-theme="dark"] .lg-msg-side__close{color:#9aa097!important}
+html[data-lguser-theme="dark"] .lg-msg-side__close:hover{background:#243024!important;color:#e5e7e1!important}
+html[data-lguser-theme="dark"] .lg-msg-card__in{background:#1a1d20!important}
+html[data-lguser-theme="dark"] .lg-msg-card__nm{color:#e5e7e1!important}
+html[data-lguser-theme="dark"] .lg-msg-card__noconn{background:#22262a!important;color:#9aa097!important}
+html[data-lguser-theme="dark"] .lg-notif__more{color:#9cb37d!important}
+html[data-lguser-theme="dark"] .lg-notif__more:hover,html[data-lguser-theme="dark"] .lg-notif__more[aria-expanded="true"]{background:#2c312d!important}
+html[data-lguser-theme="dark"] .lg-notif-menu{background:#1c1f22!important;border-color:#2c312d!important;box-shadow:0 12px 32px rgba(0,0,0,.5)!important}
+html[data-lguser-theme="dark"] .lg-notif-menu__item{color:#e5e7e1!important}
+html[data-lguser-theme="dark"] .lg-notif-menu__item:hover{background:#22262a!important}
+html[data-lguser-theme="dark"] .lg-notif-menu__item.is-on,html[data-lguser-theme="dark"] .lg-notif-menu__tick{color:#9cb37d!important}
+html[data-lguser-theme="dark"] .lg-notif-menu__note,html[data-lguser-theme="dark"] .lg-notif-menu__load{color:#9aa097!important}
+</style><style id="looth-tabbar-style">#looth-tabbar{position:fixed;left:0;right:0;bottom:0;z-index:2147481200;display:none;align-items:stretch;justify-content:space-around;height:calc(54px + env(safe-area-inset-bottom,0px));padding-bottom:env(safe-area-inset-bottom,0px);background:rgba(251,251,248,.92);-webkit-backdrop-filter:saturate(1.6) blur(14px);backdrop-filter:saturate(1.6) blur(14px);border-top:1px solid var(--lg-line,#e3ddd0);box-shadow:0 -1px 12px rgba(26,29,26,.06);font:11px/1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}#looth-tabbar a,#looth-tabbar button{all:unset;box-sizing:border-box;position:relative;flex:1 1 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;color:var(--lg-mute,#6b6f6b);-webkit-tap-highlight-color:transparent;padding:7px 2px 5px;min-width:0;transition:color .15s ease}#looth-tabbar .lt-ico{width:25px;height:25px;display:block}#looth-tabbar .lt-ico svg{width:25px;height:25px;display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}#looth-tabbar .lt-avi{border-radius:50%;overflow:hidden;background:var(--lg-sage-tint,#eef2e3);box-shadow:0 0 0 1.5px transparent;transition:box-shadow .15s ease}#looth-tabbar .lt-avi img{width:100%;height:100%;object-fit:cover;display:block}#looth-tabbar .is-active .lt-avi{box-shadow:0 0 0 2px var(--lg-sage-d,#6b7c52)}#looth-tabbar .lt-lb{font-weight:600;letter-spacing:.01em;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#looth-tabbar .is-active{color:var(--lg-sage-d,#6b7c52)}#looth-tabbar a:active,#looth-tabbar button:active{color:var(--lg-sage,#87986a)}#looth-tabbar .lt-post{flex:0 0 auto;width:64px;color:#fff !important;justify-content:flex-start}#looth-tabbar .lt-post-ico{margin-top:-20px;width:54px;height:54px;border-radius:50%;background:var(--lg-sage-d,#52613d);display:flex;align-items:center;justify-content:center;border:3px solid var(--lg-cream,#fbfbf8);box-shadow:0 6px 16px rgba(82,97,61,.45);transition:transform .12s ease}#looth-tabbar .lt-post-ico svg{width:27px;height:27px;stroke:#fff;stroke-width:2.4}#looth-tabbar .lt-post:active .lt-post-ico{transform:scale(.93)}@media (max-width: 640px){#looth-tabbar{display:flex}body.has-looth-tabbar{padding-bottom:calc(54px + env(safe-area-inset-bottom,0px)) !important}#looth-shop-fab{display:none !important}.feed-sort-bar>.lg-newpost,.feed-sort-bar>.feed-post-btn,.forum-header__new-post{display:none !important}#looth-pwa-banner{bottom:calc(68px + env(safe-area-inset-bottom,0px)) !important}.lg-chrome__account{display:none !important}.lg-chrome__hamburger{display:none !important}.lg-chrome__nav{display:none !important}}.lt-sheet-bd{position:fixed;inset:0;z-index:2147481300;background:rgba(26,29,26,.45);opacity:0;visibility:hidden;transition:opacity .22s ease,visibility .22s ease}.lt-sheet-bd.is-open{opacity:1;visibility:visible}.lt-sheet{position:fixed;left:0;right:0;bottom:0;z-index:2147481400;max-height:86vh;overflow:auto;-webkit-overflow-scrolling:touch;background:var(--lg-cream,#fbfbf8);border-radius:18px 18px 0 0;box-shadow:0 -8px 40px rgba(26,29,26,.22);transform:translateY(100%);transition:transform .26s cubic-bezier(.32,.72,0,1);padding:0 16px calc(18px + env(safe-area-inset-bottom,0px));font:14px/1.4 var(--lg-font-sans,system-ui,-apple-system,"Segoe UI",sans-serif);color:var(--lg-ink,#323532)}.lt-sheet.is-open{transform:translateY(0)}.lt-sheet__grab{width:40px;height:5px;border-radius:999px;background:var(--lg-line,#e3ddd0);margin:0 auto 2px;padding:13px 30px;box-sizing:content-box;background-clip:content-box;cursor:pointer;touch-action:none}.lt-sheet__head{display:flex;align-items:center;gap:12px;padding:8px 2px 14px;border-bottom:1px solid var(--lg-line,#e3ddd0)}.lt-sheet__avi{width:46px;height:46px;border-radius:50%;overflow:hidden;flex:0 0 auto;background:var(--lg-sage-tint,#eef2e3);box-shadow:0 0 0 2px var(--lg-sage-d,#6b7c52)}.lt-sheet__avi img{width:100%;height:100%;object-fit:cover;display:block}.lt-sheet__id{display:flex;flex-direction:column;min-width:0}.lt-sheet__name{font-weight:700;font-size:15px;color:var(--lg-charcoal,#1a1d1a);font-family:var(--lg-font-serif,Georgia,serif);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lt-sheet__view{font-size:12.5px;color:var(--lg-sage-d,#6b7c52);text-decoration:none}.lt-sheet__nav{display:flex;flex-direction:column;padding:6px 0;border-bottom:1px solid var(--lg-line,#e3ddd0)}.lt-sheet__row{display:block;padding:12px 6px;color:var(--lg-ink,#323532);text-decoration:none;border-radius:10px;font-weight:600}.lt-sheet__row:active{background:var(--lg-sage-tint,#eef2e3)}.lt-sheet__logout{margin-left:auto;flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:9px 13px;border:1px solid rgba(198,104,69,.45);border-radius:999px;color:#c66845;font:700 13px/1 var(--lg-font-sans,system-ui,sans-serif);text-decoration:none;background:rgba(198,104,69,.06)}.lt-sheet__logout:active{background:rgba(198,104,69,.18)}.lt-sheet__logout svg{flex:0 0 auto}.lt-sheet__login{margin-left:auto;flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:9px 13px;border:1px solid var(--lg-sage-d,#6b7c52);border-radius:999px;color:#fff;font:700 13px/1 var(--lg-font-sans,system-ui,sans-serif);text-decoration:none;background:var(--lg-sage-d,#52613d)}.lt-sheet__login:active{background:var(--lg-sage,#87986a)}.lt-sheet__login svg{flex:0 0 auto}.lt-navback{display:inline-flex;align-items:center;gap:4px;margin:0 0 -4px;padding:9px 12px 9px 8px;border:0;background:none;cursor:pointer;-webkit-appearance:none;appearance:none;-webkit-tap-highlight-color:transparent;border-radius:10px;color:var(--lg-sage-d,#6b7c52);font:700 13px/1 var(--lg-font-sans,system-ui,sans-serif)}.lt-navback:active{background:var(--lg-sage-tint,#eef2e3)}.lt-navback svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}.lt-sheet__sech{font-weight:700;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--lg-mute,#6b6f6b);padding:14px 6px 4px}button.lt-navitem{background:none;border:0;cursor:pointer;width:100%;box-sizing:border-box;-webkit-appearance:none;appearance:none;-webkit-tap-highlight-color:transparent}.lt-navgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:6px 0 4px}.lt-navitem{display:flex;flex-direction:column;align-items:center;gap:7px;padding:13px 4px;border-radius:14px;text-decoration:none;color:var(--lg-ink,#323532);font:600 12px/1.1 var(--lg-font-sans,system-ui,sans-serif);text-align:center}.lt-navitem:active{background:var(--lg-sage-tint,#eef2e3)}.lt-navitem .lt-nico{width:48px;height:48px;border-radius:50%;background:var(--lg-sage-tint,#eef2e3);display:flex;align-items:center;justify-content:center;color:var(--lg-sage-d,#6b7c52)}.lt-navitem .lt-nico svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.lt-navitem.is-here .lt-nico{box-shadow:0 0 0 2px var(--lg-sage-d,#6b7c52)}.lt-navitem.lt-home .lt-nico{background:var(--lg-sage-d,#52613d);color:#fff}.lt-navitem .lt-ndot{position:absolute;margin:-4px 0 0 30px;min-width:8px;height:8px;border-radius:50%;background:#e23b3b}#looth-tabbar .lt-badge{position:absolute;top:5px;left:calc(50% + 5px);min-width:16px;height:16px;padding:0 4px;box-sizing:border-box;border-radius:9px;background:#e23b3b;color:#fff;font:700 10px/16px var(--lg-font-sans,system-ui,sans-serif);text-align:center;box-shadow:0 0 0 2px var(--lg-cream,#fbfbf8);pointer-events:none}.lt-notifs__h{display:flex!important;align-items:center;justify-content:space-between}.lt-notifs__clear{border:0;background:none;color:var(--lg-sage-d,#6b7c52);font:700 12px/1 var(--lg-font-sans,system-ui,sans-serif);text-transform:none;letter-spacing:0;cursor:pointer;padding:4px 6px}.lt-notifs{padding:2px 0 6px;display:flex;flex-direction:column}.lt-notif{display:flex;align-items:center;gap:11px;width:100%;text-align:left;border:0;background:none;text-decoration:none;color:inherit;box-sizing:border-box;cursor:pointer;padding:9px 6px;border-radius:10px}.lt-notif:active{background:var(--lg-sage-tint,#eef2e3)}.lt-notif.is-unread{background:var(--lg-sage-tint,#eef2e3)}.lt-notif-avi{flex:0 0 auto;width:34px;height:34px;border-radius:50%;overflow:hidden;background:var(--lg-sage-3,#d4e0b8)}.lt-notif-avi img{width:100%;height:100%;object-fit:cover;display:block}.lt-notif-tx{min-width:0;display:flex;flex-direction:column;gap:1px;flex:1 1 auto}.lt-notif-t{font:500 13.5px/1.3 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#323532)}.lt-notif-time{font:12px/1 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-mute,#6b6f6b)}.lt-notif-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:#e23b3b}.lt-notif-empty{padding:10px 6px;color:var(--lg-mute,#6b6f6b);font:13px/1.4 var(--lg-font-sans,system-ui,sans-serif)}.lt-saved{padding:2px 0 6px;display:flex;flex-direction:column}.lt-saved-row{display:flex;align-items:center;gap:11px;padding:8px 6px;text-decoration:none;border-radius:10px}.lt-saved-row:active{background:var(--lg-sage-tint,#eef2e3)}.lt-saved-thumb{flex:0 0 auto;width:46px;height:46px;border-radius:8px;background:var(--lg-sage-3,#d4e0b8) center/cover no-repeat}.lt-saved-t{min-width:0;font:600 13.5px/1.35 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#323532);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.lt-notif-all{margin:4px 0 2px;border:0;background:none;color:var(--lg-sage-d,#6b7c52);cursor:pointer;font:600 13px/1 var(--lg-font-sans,system-ui,sans-serif);text-align:left;padding:8px 6px}.lg-set-sec{padding:6px 6px 10px}.lg-set-sec__h{font-size:12.5px;font-weight:600;color:var(--lg-mute,#6b6f6b);margin:0 0 8px}.lg-set-row{display:flex;flex-wrap:wrap;gap:8px}.lg-set-opt{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid var(--lg-line,#e3ddd0);border-radius:999px;padding:8px 13px;font:600 13px/1 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#323532);cursor:pointer}.lg-set-opt.is-on{border-color:var(--lg-sage-d,#6b7c52);box-shadow:0 0 0 1px var(--lg-sage-d,#6b7c52);background:var(--lg-sage-tint,#eef2e3)}.lg-set-swatch{width:15px;height:15px;border-radius:50%;border:1px solid rgba(0,0,0,.12);flex:0 0 auto}body.lt-sheet-open #looth-pwa-banner{display:none !important}#looth-skel{position:fixed;left:0;top:0;right:0;bottom:0;z-index:2147481000;background:var(--lg-cream,#fbfbf8);display:none;padding:14px 12px;overflow:hidden}#looth-skel.is-on{display:block}#looth-skel .sk{background:#fff;border:1px solid var(--lg-line,#e3ddd0);border-radius:16px;margin:0 0 12px;overflow:hidden;position:relative}#looth-skel .sk-cover{height:150px;background:#ece9e1}#looth-skel .sk-row{height:13px;border-radius:7px;background:#ece9e1;margin:10px 14px}#looth-skel .sk::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);transform:translateX(-100%);animation:lt-shimmer 1.2s infinite}@keyframes lt-shimmer{100%{transform:translateX(100%)}}html[data-lguser-feed="immersive"] #looth-skel{padding:0}html[data-lguser-feed="immersive"] #looth-skel .sk{border:0;border-radius:0;margin:0 0 3px;border-bottom:1px solid var(--lg-line,#e3ddd0)}html[data-lguser-feed="immersive"] #looth-skel .sk-cover{height:188px}html[data-lguser-theme="dark"] #looth-skel{background:#15171a}html[data-lguser-theme="dark"] #looth-skel .sk{background:#1e2124;border-color:#2c312d}html[data-lguser-theme="dark"] #looth-skel .sk-cover,html[data-lguser-theme="dark"] #looth-skel .sk-row{background:#2a2f2b}html[data-lguser-theme="dark"] #looth-skel .sk::after{background:linear-gradient(90deg,transparent,rgba(255,255,255,.06),transparent)}html[data-lguser-theme="dark"][data-lguser-feed="immersive"] #looth-skel .sk{border-bottom-color:#2c312d}html[data-lguser-theme="dark"] #looth-tabbar .lt-post-ico svg{stroke:#15171a}</style><style id="lg-dset-style">@media (min-width:641px){.lg-set-gear{display:inline-flex;align-items:center;justify-content:center;cursor:pointer}.lg-set-gear svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}#lg-dset-pop{position:fixed;top:62px;right:14px;z-index:2147481500;width:330px;max-width:92vw;max-height:80vh;overflow:auto;background:var(--lguser-card,var(--bg-card,#fff));color:var(--lguser-ink,var(--fg,#1a1d1a));border:1px solid var(--lguser-line,var(--border,#e3ddd0));border-radius:16px;box-shadow:0 18px 50px -12px rgba(0,0,0,.45);padding:4px 12px 14px;opacity:0;transform:translateY(-8px) scale(.98);transform-origin:top right;pointer-events:none;transition:opacity .16s ease,transform .16s ease}#lg-dset-pop.is-open{opacity:1;transform:none;pointer-events:auto}#lg-dset-pop .lg-dset__hd{font:700 16px/1.2 var(--lg-font-serif,Georgia,serif);padding:14px 6px 4px;color:var(--lguser-ink,var(--fg,#1a1d1a))}#lg-dset-pop .lg-dset__sub{font:400 12.5px/1.45 var(--lg-font-sans,system-ui,sans-serif);color:var(--lguser-mute,var(--fg-muted,#6b6f6b));padding:0 6px 9px;border-bottom:1px solid var(--lguser-line,var(--border,#e3ddd0));margin-bottom:2px}#lg-dset-pop .lg-set-opt{background:var(--lguser-pill,#fff);color:var(--lguser-ink,var(--fg,#1a1d1a));border-color:var(--lguser-line,var(--border,#e3ddd0))}#lg-dset-pop .lg-set-opt.is-on{background:var(--lguser-card,#fff)!important;border-color:var(--lguser-accent,var(--lg-sage-d,#6b7c52))!important;box-shadow:0 0 0 1.5px var(--lguser-accent,var(--lg-sage-d,#6b7c52))!important;color:var(--lguser-ink,#1a1d1a)!important}#lg-dset-pop .lg-set-sec__h{color:var(--lguser-mute,var(--fg-muted,#6b6f6b))}.lg-set-gear:focus-visible{outline:2px solid var(--lguser-accent,var(--lg-sage-d,#6b7c52));outline-offset:2px;border-radius:8px}#lg-dset-pop .lg-set-opt:focus-visible{outline:2px solid var(--lguser-accent,var(--lg-sage-d,#6b7c52));outline-offset:2px}}@media (max-width:640px){.lg-set-gear{display:none!important}#lg-dset-pop{display:none!important}}</style></head>
+<body class="has-looth-tabbar">
 <style>
 /* Critical chrome overrides — inline so they beat any <head> stylesheet (BB theme,
    archive.css, etc.) that loads after site-header.css at equal or higher specificity. */
@@ -289,11 +425,9 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
 <header class="lg-chrome" id="site-header">
   <div class="lg-chrome__inner">
 
-    <button class="lg-chrome__hamburger" type="button"
-            aria-label="Menu" aria-expanded="false" data-lg-mobile-toggle>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M3 6h18M3 12h18M3 18h18"/>
+    <button class="lg-chrome__hamburger" type="button" aria-label="Menu" aria-expanded="false" data-lg-mobile-toggle="">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 6h18M3 12h18M3 18h18"></path>
       </svg>
     </button>
 
@@ -305,15 +439,11 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
     
     <nav class="lg-chrome__nav" aria-label="Primary">
       <ul class="lg-chrome__menu">
-                <li class="lg-chrome__has-sub" data-lg-hassub>
-          <a href="/hub/" data-lg-hub-link aria-expanded="false">The Hub</a>
-          <button class="lg-chrome__sub-toggle" type="button"
-                  aria-expanded="false" aria-controls="lg-hub-submenu"
-                  aria-label="Browse the Hub by content type" data-lg-sub-toggle>
-            <svg viewBox="0 0 24 24" width="12" height="12" fill="none"
-                 stroke="currentColor" stroke-width="2.5"
-                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <polyline points="6 9 12 15 18 9"/>
+                <li class="lg-chrome__has-sub" data-lg-hassub="">
+          <a href="/hub/" data-lg-hub-link="" aria-expanded="false">The Hub</a>
+          <button class="lg-chrome__sub-toggle" type="button" aria-expanded="false" aria-controls="lg-hub-submenu" aria-label="Browse the Hub by content type" data-lg-sub-toggle="">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="6 9 12 15 18 9"></polyline>
             </svg>
           </button>
           <ul class="lg-chrome__submenu" id="lg-hub-submenu">
@@ -341,76 +471,56 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
 
       
         
-        <button class="lg-chrome__icon-btn lg-chrome__icon-btn--badged"
-                type="button"
-                aria-label="Messages"
-                data-lg-msg-link>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/>
-            <path d="M22 6l-10 7L2 6"/>
+        <button class="lg-chrome__icon-btn lg-chrome__icon-btn--badged" type="button" aria-label="Messages" data-lg-msg-link="">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"></path>
+            <path d="M22 6l-10 7L2 6"></path>
           </svg>
-                      <span class="lg-chrome__badge" data-lg-msg-count hidden>0</span>
+                      <span class="lg-chrome__badge" data-lg-msg-count="" hidden=""></span>
                   </button>
 
-        <button class="lg-chrome__icon-btn lg-chrome__icon-btn--badged"
-                type="button"
-                aria-label="Notifications"
-                data-lg-notif-link>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/>
-            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        <button class="lg-chrome__icon-btn lg-chrome__icon-btn--badged" type="button" aria-label="Notifications" data-lg-notif-link="">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
           </svg>
-                      <span class="lg-chrome__badge" data-lg-notif-count hidden>0</span>
+                      <span class="lg-chrome__badge" data-lg-notif-count="" hidden=""></span>
                   </button>
 
-        <button class="lg-chrome__icon-btn lg-chrome__icon-btn--badged"
-                aria-label="Connections"
-                data-lg-conn-link>
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
-               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-            <circle cx="9" cy="7" r="4"/>
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        <button class="lg-chrome__icon-btn lg-chrome__icon-btn--badged" aria-label="Connections" data-lg-conn-link="">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="9" cy="7" r="4"></circle>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
           </svg>
-          <span class="lg-chrome__badge" data-lg-conn-count hidden>0</span>
+          <span class="lg-chrome__badge" data-lg-conn-count="" hidden=""></span>
         </button>
 
         <!-- Account dropdown trigger -->
-        <div class="lg-chrome__account-wrap" data-lg-account-wrap style="position:relative">
-          <button class="lg-chrome__account" type="button"
-                  aria-haspopup="true" aria-expanded="false"
-                  aria-controls="lg-account-menu"
-                  data-lg-account-btn>
+        <button type="button" class="lg-chrome__icon-btn lg-set-gear" aria-label="Display settings" aria-haspopup="dialog" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.1"></circle><path d="M19.4 13a7.6 7.6 0 0 0 0-2l1.9-1.5-1.9-3.2-2.2.9a7.5 7.5 0 0 0-1.8-1L15 3.5h-3.8l-.4 2.7a7.5 7.5 0 0 0-1.8 1l-2.2-.9-1.9 3.2L6 11a7.6 7.6 0 0 0 0 2l-1.9 1.5 1.9 3.2 2.2-.9a7.5 7.5 0 0 0 1.8 1l.4 2.7H15l.4-2.7a7.5 7.5 0 0 0 1.8-1l2.2.9 1.9-3.2z"></path></svg></button><div class="lg-chrome__account-wrap" data-lg-account-wrap="" style="position:relative">
+          <button class="lg-chrome__account" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="lg-account-menu" data-lg-account-btn="">
             <span class="lg-chrome__avatar" aria-hidden="true">
-                                              <img src="http://dev2.loothgroup.com/wp-content/uploads/avatars/0/674d94a777132-bpthumb.jpg"
-                     alt="marty"
-                     width="30" height="30">
+                                              <img src="http://dev2.loothgroup.com/wp-content/uploads/avatars/0/674d94a777132-bpthumb.jpg" alt="marty" width="30" height="30">
                           </span>
             <span class="lg-chrome__account-name">marty</span>
                           <span class="lg-chrome__tier lg-chrome__tier--pro">
                 Pro              </span>
-                        <svg class="lg-chrome__account-caret" viewBox="0 0 24 24" width="12" height="12"
-                 fill="none" stroke="currentColor" stroke-width="2.5"
-                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <polyline points="6 9 12 15 18 9"/>
+                        <svg class="lg-chrome__account-caret" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="6 9 12 15 18 9"></polyline>
             </svg>
           </button>
 
-          <ul class="lg-chrome__account-menu" id="lg-account-menu"
-              role="menu" aria-label="Account menu" hidden>
+          <ul class="lg-chrome__account-menu" id="lg-account-menu" role="menu" aria-label="Account menu" hidden="">
             <li role="none">
               <a role="menuitem" href="#" title="inert in this snapshot">My Profile</a>
             </li>
                         <li role="none">
               <a role="menuitem" href="/manage-subscription/">Manage Account</a>
             </li>
-                                                <li role="none" class="lg-chrome__account-menu-divider"></li>
+                                                                        <li role="none" class="lg-chrome__account-menu-divider"></li>
             <li role="none">
-              <a role="menuitem" class="lg-chrome__account-menu-signout"
-                 href="https://dev2.loothgroup.com/wp-login.php?action=logout&amp;amp;_wpnonce=4a54a8fb7f">Sign out</a>
+              <a role="menuitem" class="lg-chrome__account-menu-signout" href="https://dev2.loothgroup.com/wp-login.php?action=logout&amp;amp;_wpnonce=0e95b5881b">Sign out</a>
             </li>
           </ul>
         </div><!-- .lg-chrome__account-wrap -->
@@ -420,17 +530,15 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
   </div><!-- .lg-chrome__inner -->
 </header>
 
-<div class="lg-hubmenu" id="lg-hubmenu" hidden aria-hidden="true"
-     role="dialog" aria-modal="true" aria-label="Browse the Hub by content type">
-  <div class="lg-hubmenu__backdrop" data-lg-hubmenu-close></div>
+<div class="lg-hubmenu" id="lg-hubmenu" hidden="" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Browse the Hub by content type">
+  <div class="lg-hubmenu__backdrop" data-lg-hubmenu-close=""></div>
   <div class="lg-hubmenu__sheet" role="document">
         <div class="lg-hubmenu__grab lt-sheet__grab" aria-hidden="true"></div>
     <div class="lg-hubmenu__head">
       <h2 class="lg-hubmenu__title">Browse the Hub</h2>
-      <button class="lg-hubmenu__close" type="button" aria-label="Close" data-lg-hubmenu-close>
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
-             stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      <button class="lg-hubmenu__close" type="button" aria-label="Close" data-lg-hubmenu-close="">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+          <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
       </button>
     </div>
@@ -455,17 +563,15 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
 <!-- ── P9 social modals ────────────────────────────────────── -->
 
 <!-- Notifications modal -->
-<div class="lg-social-modal" id="lg-notif-modal"
-     hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Notifications">
+<div class="lg-social-modal" id="lg-notif-modal" hidden="" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Notifications">
   <div class="lg-social-modal__backdrop"></div>
   <div class="lg-social-modal__panel">
     <div class="lg-social-modal__head">
       <h2 class="lg-social-modal__title">Notifications</h2>
-      <button class="lg-social-modal__action" data-lg-notif-clearall hidden>Clear all</button>
-      <button class="lg-social-modal__close" aria-label="Close" data-lg-modal-close>
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
-             stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      <button class="lg-social-modal__action" data-lg-notif-clearall="" hidden="">Clear all</button>
+      <button class="lg-social-modal__close" aria-label="Close" data-lg-modal-close="">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+          <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
       </button>
     </div>
@@ -474,25 +580,22 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
 </div>
 
 <!-- Unified social modal: Messages + Connections tabs -->
-<div class="lg-social-modal" id="lg-social-modal"
-     hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Messages and connections">
+<div class="lg-social-modal" id="lg-social-modal" hidden="" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Messages and connections">
   <div class="lg-social-modal__backdrop"></div>
   <div class="lg-social-modal__panel">
     <div class="lg-social-modal__head">
-      <button class="lg-social-modal__back-btn" data-lg-thread-back aria-label="Back to threads" hidden>
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
-             stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
-          <polyline points="15 18 9 12 15 6"/>
+      <button class="lg-social-modal__back-btn" data-lg-thread-back="" aria-label="Back to threads" hidden="">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+          <polyline points="15 18 9 12 15 6"></polyline>
         </svg>
       </button>
       <div class="lg-social-tabs" role="tablist" aria-label="Social">
         <button class="lg-social-tab" data-lg-tab="messages" role="tab" aria-selected="true">Messages</button>
         <button class="lg-social-tab" data-lg-tab="connections" role="tab" aria-selected="false">Connections</button>
       </div>
-      <button class="lg-social-modal__close" aria-label="Close" data-lg-modal-close>
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
-             stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      <button class="lg-social-modal__close" aria-label="Close" data-lg-modal-close="">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+          <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
       </button>
     </div>
@@ -502,10 +605,9 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
       <!-- Start a new message / group. Shown only in the thread-list view; JS hides it
            the moment a thread, the compose picker, or the member manager opens. -->
       <div class="lg-msg__newbar" id="lg-msg-newbar">
-        <button type="button" class="lg-msg__newbtn" data-lg-new-msg>
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
-               stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        <button type="button" class="lg-msg__newbtn" data-lg-new-msg="">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
           New message
         </button>
@@ -516,59 +618,51 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
            hidden with the newbar whenever a thread / picker / manager is showing. -->
       <div class="lg-msg__searchbar" id="lg-msg-searchbar">
         <label class="lg-msg__search">
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
-               stroke-width="2" stroke-linecap="round" aria-hidden="true">
-            <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.6" y2="16.6"/>
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.6" y2="16.6"></line>
           </svg>
-          <input type="search" id="lg-msg-search-in" placeholder="Search chats &amp; messages"
-                 autocomplete="off" aria-label="Search chats and messages">
+          <input type="search" id="lg-msg-search-in" placeholder="Search chats &amp; messages" autocomplete="off" aria-label="Search chats and messages">
         </label>
       </div>
       <!-- Thread list view -->
       <div class="lg-social-modal__body" id="lg-msg-list"></div>
       <!-- Compose picker + member manager share this panel; filled by social-modals.js.
            [hidden] counter-rule in the css (same trap as .lg-msg-detail). -->
-      <div class="lg-msg__panel" id="lg-msg-panel" hidden></div>
+      <div class="lg-msg__panel" id="lg-msg-panel" hidden=""></div>
       <!-- Thread detail view. Layout via the .lg-msg-detail class, NOT an
            inline style — inline display:flex beat the UA [hidden] rule, so
            the pane never hid again after opening a thread (Buck 6/11; the
            css keeps a defensive [hidden] counter-rule either way). -->
-      <div id="lg-msg-detail" class="lg-msg-detail" hidden>
+      <div id="lg-msg-detail" class="lg-msg-detail" hidden="">
         <!-- Who you are talking to. The thread LIST is the only other place the
              counterpart is named, and it is display:none the moment a thread
              opens — so without this an open conversation carried no identity at
              all, and you could not confirm the recipient before sending
              (HK-019). Filled by social-modals.js renderPeerHeader(). -->
-        <div class="lg-msg__peer" id="lg-msg-peer" hidden></div>
+        <div class="lg-msg__peer" id="lg-msg-peer" hidden=""></div>
         <div class="lg-msg__messages" id="lg-msg-messages"></div>
         <div class="lg-msg__compose" id="lg-msg-compose">
           <!-- staged image preview (above the input); shown only when a photo is picked -->
-          <div class="lg-msg__attach-preview" id="lg-msg-attach-preview" hidden>
+          <div class="lg-msg__attach-preview" id="lg-msg-attach-preview" hidden="">
             <div class="lg-msg__attach-thumb">
               <img id="lg-msg-attach-img" alt="Attachment preview">
-              <button type="button" class="lg-msg__attach-remove" data-lg-attach-remove
-                      aria-label="Remove photo">&times;</button>
+              <button type="button" class="lg-msg__attach-remove" data-lg-attach-remove="" aria-label="Remove photo">×</button>
             </div>
           </div>
           <div class="lg-msg__compose-row">
-            <input type="file" id="lg-msg-attach-input" class="lg-msg__attach-input"
-                   accept="image/jpeg,image/png,image/webp" hidden>
-            <button type="button" class="lg-msg__attach-btn" data-lg-attach aria-label="Attach photo" title="Attach photo">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
-                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/>
+            <input type="file" id="lg-msg-attach-input" class="lg-msg__attach-input" accept="image/jpeg,image/png,image/webp" hidden="">
+            <button type="button" class="lg-msg__attach-btn" data-lg-attach="" aria-label="Attach photo" title="Attach photo">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21.4 11.05 12.25 20.2a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"></path>
               </svg>
             </button>
             <!-- Same noun as the mobile sheet ("Message…"); the keyboard hint is kept
                  because only this surface has a hardware keyboard (HK-086). -->
-            <textarea id="lg-msg-reply-input" class="lg-msg__reply-input"
-                      placeholder="Message… (Enter to send, Shift+Enter for newline)"
-                      rows="2"></textarea>
-            <button class="lg-msg__send-btn" data-lg-send-reply aria-label="Send">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
-                   stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <line x1="22" y1="2" x2="11" y2="13"/>
-                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            <textarea id="lg-msg-reply-input" class="lg-msg__reply-input" placeholder="Message… (Enter to send, Shift+Enter for newline)" rows="2"></textarea>
+            <button class="lg-msg__send-btn" data-lg-send-reply="" aria-label="Send">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
               </svg>
             </button>
           </div>
@@ -577,16 +671,15 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
     </div>
 
     <!-- Connections pane -->
-    <div class="lg-social-pane" data-lg-pane="connections" role="tabpanel" hidden>
+    <div class="lg-social-pane" data-lg-pane="connections" role="tabpanel" hidden="">
       <div class="lg-social-modal__body">
-        <div id="lg-conn-pending-section" hidden>
+        <div id="lg-conn-pending-section" hidden="">
           <h3 class="lg-conn__section-h">Pending requests</h3>
           <div id="lg-conn-pending"></div>
         </div>
         <h3 class="lg-conn__section-h">Your connections</h3>
         <div class="lg-conn__search-wrap">
-          <input type="search" id="lg-conn-search" class="lg-conn__search"
-                 placeholder="Search connections…" aria-label="Search your connections" autocomplete="off">
+          <input type="search" id="lg-conn-search" class="lg-conn__search" placeholder="Search connections…" aria-label="Search your connections" autocomplete="off">
         </div>
         <div id="lg-conn-accepted"></div>
       </div>
@@ -598,25 +691,11 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
 
 <div class="wrap">
   <h2>Set up your profile, marty</h2>
-  <p class="lede"><strong>This is optional</strong> &mdash; you can skip it and do it later. It takes
+  <p class="lede"><strong>This is optional</strong> — you can skip it and do it later. It takes
      about a minute, and it is what makes you findable to the rest of the community instead of
      showing up as a blank grey circle.</p>
 
-  <div class="found" id="lg-ps-done"><h3>Saved.</h3><p class="lede">You are on the member map now. The full editor is where you can place your pin exactly and choose how closely it shows.</p><p class="lede">Do you want to open the full profile interface and keep going, or head into the community?</p><div class="actions"><a class="btn btn--go" href="/u/marty">Open the full profile editor</a><a class="btn btn--skip" href="/">Take me to the community</a></div></div></div>
-      </div>
-
-      <label for="ps-what">What do you do? One line.</label>
-      <div class="hint">Shown publicly next to your name, so keep it short and public-facing.</div>
-      <input type="text" id="ps-what" maxlength="140" placeholder="e.g. Acoustic repairs and neck resets">
-
-      <p class="msg" id="ps-msg" role="status" aria-live="polite"></p>
-
-      <div class="actions">
-        <button type="button" class="btn btn--go" id="ps-save">Save and finish</button>
-        <a class="btn btn--skip" id="ps-skip" href="./skipped.html">Skip for now</a>
-      </div>
-    </form>
-  </div>
+  <div class="found" id="lg-ps-done"><h3>Saved.</h3><p class="lede">You are on the member map now. The full editor is where you can place your pin exactly and choose how closely it shows.</p><p class="lede">Do you want to open the full profile interface and keep going, or head into the community?</p><div class="actions"><a class="btn btn--go" href="#" title="inert in this snapshot">Open the full profile editor</a><a class="btn btn--skip" href="/">Take me to the community</a></div></div>
 </div>
 <footer class="lg-chrome-foot" role="contentinfo">
   <div class="lg-chrome-foot__inner">
@@ -663,4 +742,4 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
   </div>
 </footer>
 
-</body></html>
+<nav id="looth-tabbar" role="navigation" aria-label="Primary"><button type="button" aria-label="Menu" aria-haspopup="dialog"><span class="lt-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6"></rect><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"></rect><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"></rect><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"></rect></svg></span><span class="lt-lb">Nav</span></button><button type="button" class="lt-post" aria-label="New post"><span class="lt-post-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></span></button><a href="/profile/edit" aria-label="You"><span class="lt-ico lt-avi"><img src="https://dev2.loothgroup.com/wp-content/uploads/avatars/0/674d94a777132-bpthumb.jpg" alt=""></span><span class="lt-lb">You</span><span class="lt-badge" hidden=""></span></a></nav><div id="lg-dset-pop" role="dialog" aria-label="Display settings"><div class="lg-dset__hd">Appearance</div><div class="lg-dset__sub">Theme, text size &amp; more. Applies across Looth on this device.</div><div class="lg-dset__body"></div></div><iframe height="0" width="0" aria-hidden="true" alt="" style="pointer-events: none; height: 0px; width: 0px; position: absolute; padding: 0px; margin: 0px; border: 0px; visibility: hidden;"></iframe></body></html>

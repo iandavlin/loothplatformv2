@@ -168,15 +168,15 @@ add_action('init', function () {
 <link rel="stylesheet" href="/lg-shared/site-header.css?v=<?php echo $css_ver; ?>">
 <style>
   body{font-family:system-ui,sans-serif;background:#f6f6f2;margin:0;color:#1A1E12}
-  .wrap{max-width:560px;margin:56px auto;padding:0 1.25em}
+  .wrap{max-width:680px;margin:56px auto 72px;padding:0 1.5em}
   h2{margin:.2em 0 .35em}
   .lede{margin:0 0 1.1em;color:#3c4a28;font-size:.98em;line-height:1.6}
-  .card{padding:1.4em 1.6em;background:#d4e0b8;border:1px solid #87986A;border-radius:8px}
-  label{font-size:.92em;font-weight:600;display:block;margin-top:.9em}
-  .hint{font-size:.85em;color:#3c4a28;margin:.15em 0 .35em;line-height:1.5}
-  input[type=text]{width:100%;box-sizing:border-box;padding:.7em .8em;border:1px solid #87986A;
+  .card{padding:2em 2.2em;background:#d4e0b8;border:1px solid #87986A;border-radius:10px}
+  label{font-size:.92em;font-weight:600;display:block;margin-top:1.5em}
+  .hint{font-size:.85em;color:#3c4a28;margin:.2em 0 .6em;line-height:1.55}
+  input[type=text]{width:100%;box-sizing:border-box;padding:.8em .9em;border:1px solid #87986A;
     border-radius:5px;font-size:1em;background:#fff;color:#1A1E12;font-family:inherit}
-  .photorow{display:flex;align-items:center;gap:12px;margin:.45em 0 .2em}
+  .photorow{display:flex;align-items:center;gap:14px;margin:.5em 0 .3em}
   .avi{width:56px;height:56px;flex:0 0 56px;border-radius:50%;background:#c9c5b6;overflow:hidden;
     display:flex;align-items:center;justify-content:center}
   .avi img{width:100%;height:100%;object-fit:cover;display:block}
@@ -186,7 +186,7 @@ add_action('init', function () {
   input[type=file]{position:absolute;left:-9999px}
   /* Ian: skip is FIRST-CLASS. Same size, same row, same weight as Save — a
      different colour, not a lesser status. */
-  .actions{display:flex;flex-wrap:wrap;gap:.6em;margin-top:1.3em}
+  .actions{display:flex;flex-wrap:wrap;gap:.85em;margin-top:2em}
   .btn{padding:.7em 1.3em;border-radius:5px;font-size:1em;font-family:inherit;font-weight:600;
     cursor:pointer;border:1px solid transparent;text-decoration:none;display:inline-block}
   .btn--go{background:#1A1E12;color:#fff}
@@ -197,16 +197,70 @@ add_action('init', function () {
   .msg.ok{color:#3f5c22}
   .addr{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#eef3e2;
     padding:.05em .35em;border-radius:3px}
-  .privacy{margin-top:1.1em;padding:.9em 1em;background:#eef3e2;border:1px solid #c3d2a4;
+  .privacy{margin-top:1.8em;padding:1.3em 1.4em;background:#eef3e2;border:1px solid #c3d2a4;
     border-radius:6px}
-  .privacy__h{font-weight:700;font-size:.94em;margin-bottom:.2em}
+  .privacy__h{font-weight:700;font-size:.94em;margin-bottom:.35em}
   .privacy label{margin-top:.55em}
-  select{width:100%;box-sizing:border-box;padding:.6em .7em;border:1px solid #87986A;
+  select{width:100%;box-sizing:border-box;padding:.7em .8em;border:1px solid #87986A;
     border-radius:5px;font-size:1em;background:#fff;color:#1A1E12;font-family:inherit}
-  .found{padding:1.2em 1.4em;background:#fff;border:1px solid #e3ddd0;border-radius:8px;margin-top:1em}
+  .found{padding:1.7em 1.9em;background:#fff;border:1px solid #e3ddd0;border-radius:10px;margin-top:1.4em}
   .found h3{margin:0 0 .5em;font-size:1.02em}
   .found ol{margin:.4em 0 0;padding-left:1.2em}
   .found li{margin:.35em 0;line-height:1.55;font-size:.95em}
+
+  @media (max-width:560px){
+    .wrap{margin:32px auto 56px;padding:0 1em}
+    .card{padding:1.6em 1.25em}
+    .privacy{padding:1.15em 1em}
+    .found{padding:1.4em 1.25em}
+  }
+
+  /* ── DARK ─────────────────────────────────────────────────────────────────
+     Ian, 2026-08-16, from a screenshot: the section headers were invisible.
+     MEASURED CAUSE, not guessed — an injected global rule,
+     html[data-lguser-theme="dark"] body{color:#e5e7e1!important}, sets the page
+     ink, and every element above that does NOT name its own colour inherits it.
+     The card and the privacy box, meanwhile, pin LIGHT fills with no dark
+     variant. So 'Your name', 'A photo of you', 'Where are you?', the privacy
+     title and the dial labels rendered near-white on a light green card:
+     measured 1.11:1 and 1.10:1, against an AA bar of 4.5.
+
+     There were TWO failure directions, and the second was not in the report:
+     .lede names its own dark ink (#3c4a28) and therefore did NOT follow the
+     theme — it stayed dark on the now-dark page at 1.88:1. Elements that opt out
+     of inheritance fail in the opposite direction to those that opt in, which is
+     why the fix has to name a colour for BOTH kinds rather than just flip a
+     surface.
+
+     SCOPED TO THE ATTRIBUTE ONLY, deliberately. Measured: app-dark (the gear
+     pick) and os-dark (prefers-color-scheme, nothing picked) BOTH resolve
+     data-lguser-theme="dark", so this one selector covers both. Adding a
+     @media (prefers-color-scheme: dark) block as well would be actively wrong —
+     it would darken the page for a member whose OS is dark but who explicitly
+     chose Light in the gear, which is the one combination the attribute exists
+     to express.
+
+     Ratios are computed against the ACTUAL rendered background, walking up and
+     compositing alpha; every value below clears 4.5:1 for text and 3:1 for
+     control borders. The gate re-measures rather than trusting this comment. */
+  html[data-lguser-theme="dark"] h2,
+  html[data-lguser-theme="dark"] label,
+  html[data-lguser-theme="dark"] .privacy__h,
+  html[data-lguser-theme="dark"] .found h3{color:#e8ebe4}
+  html[data-lguser-theme="dark"] .lede,
+  html[data-lguser-theme="dark"] .hint{color:#b6c2ac}
+  html[data-lguser-theme="dark"] .card{background:#212a22;border-color:#556b53}
+  html[data-lguser-theme="dark"] .privacy{background:#2b352c;border-color:#556b53}
+  html[data-lguser-theme="dark"] .found{background:#212a22;border-color:#556b53}
+  html[data-lguser-theme="dark"] input[type=text],
+  html[data-lguser-theme="dark"] select{background:#161a16;color:#e8ebe4;border-color:#788a76}
+  html[data-lguser-theme="dark"] .filebtn{background:#2b352c;color:#dbe3d3;border-color:#788a76}
+  html[data-lguser-theme="dark"] .btn--go{background:#c9dd9e;color:#15171a}
+  html[data-lguser-theme="dark"] .btn--skip{background:#2b352c;color:#e8ebe4;border-color:#788a76}
+  html[data-lguser-theme="dark"] .addr{background:#2b352c;color:#e8ebe4}
+  html[data-lguser-theme="dark"] .avi{background:#3a443a}
+  html[data-lguser-theme="dark"] .msg.err{color:#ffb3a3}
+  html[data-lguser-theme="dark"] .msg.ok{color:#b6dc8c}
 </style></head>
 <body>
 <?php if (function_exists('lg_shared_render_site_header')) lg_shared_render_site_header($ctx); ?>
