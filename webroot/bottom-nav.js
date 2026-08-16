@@ -617,15 +617,31 @@
       nav.appendChild(postBtn);
     }
 
-    // You (opens the profile sheet — unchanged behavior)
+    // You / Account (opens the profile sheet — unchanged behavior)
+    //
+    // ANON READS "Account", MEMBERS KEEP "You". Ian's pick, 2026-08-16, from the
+    // three candidates drawn at real bar width in
+    // /footer-mockups/anon-mobile-dash/label-addendum.html.
+    //
+    // "You" is wrong for someone with no account yet, and the tray behind this
+    // icon offers Sign in / Join / Connect Patreon / Reset password — reset and
+    // Connect Patreon are ACCOUNT jobs, not sign-in jobs, so "Account" is the
+    // only candidate that covers all four without promising the wrong one.
+    //
+    // "Sign in" was the better label in isolation and was NOT chosen for a
+    // reason invisible in the word itself: the centre slot becomes Sign in under
+    // LG_ANON_DASH_SIGNIN, so picking it would put "Sign in" in two adjacent
+    // slots of a three-slot bar. Members are untouched — "You" is correct for
+    // them and already tested.
+    var YOU_LABEL = isAuthed() ? 'You' : 'Account';
     var youBtn = document.createElement('a');
     youBtn.href = '/profile/edit';
     var src = avatarSrc();
     youBtn.innerHTML = (src
         ? '<span class="lt-ico lt-avi"><img src="' + src + '" alt=""></span>'
         : '<span class="lt-ico"><svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS.person + '</svg></span>') +
-      '<span class="lt-lb">You</span>';
-    youBtn.setAttribute('aria-label', 'You');
+      '<span class="lt-lb">' + YOU_LABEL + '</span>';
+    youBtn.setAttribute('aria-label', YOU_LABEL);
     if (/^\/(profile|u)(\/|$)/.test(location.pathname || '')) { youBtn.className = 'is-active'; youBtn.setAttribute('aria-current', 'page'); }
     youBtn.addEventListener('click', function (e) { e.preventDefault(); openSheet(); });
     nav.appendChild(youBtn);
