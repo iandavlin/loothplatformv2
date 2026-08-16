@@ -71,7 +71,12 @@ while true; do
       # (Ian 8/15: "If it stops to ask a question, we should answer the question").
       QF="$HOME/worktrees/$L/.lane-state/QUESTION"
       if [ -f "$QF" ]; then
-        echo "ALERT question-waiting $L — ANSWER IT: $(head -c 300 "$QF")"; exit 0
+        # Ian 8/16, verbatim, because this rule kept getting lost: "Every thing
+        # that stops a lane on my decision needs to end with a decision box.
+        # Always." The alert carries the rule so it fires in the trigger path.
+        echo "ALERT question-waiting $L — ANSWER IT: $(head -c 300 "$QF")"
+        echo "==> IF THIS IS IAN'S DECISION: this keeper turn ENDS WITH THE DECISION BOX (sharpen inside the box, never bounce to the lane first)."
+        exit 0
       fi
       # Park-ok entries EXPIRE (8/15: a stale exemption is a silent blind spot).
       # Format: "<lane> <expires-epoch> [# comment]". Bare legacy lines = expired.
