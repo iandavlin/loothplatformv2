@@ -104,11 +104,25 @@
     });
   }
 
+  // Backlog 38's own trace: joining multiple selected authors with a plain
+  // comma broke any ONE display name that itself contains a comma (measured
+  // live: "John Lehmann, Old Naples Guitars" and 5 others) — the join and
+  // the server's split couldn't tell a name's own comma from the delimiter.
+  // Flagged (platform/config/hub-author-comma-fix.php via
+  // window.LG_HUB_AUTHOR_COMMA_FIX, _chrome.php): OFF keeps ',' — today's
+  // exact behaviour — so this ships without changing anything Ian has not
+  // looked at yet. ON uses \x1F (ASCII Unit Separator), matching
+  // _hub-filters.php's hub_author_delim() exactly — not a character a
+  // display name plausibly contains, and it round-trips through
+  // URLSearchParams' percent-encoding like any byte, so neither side needs
+  // its own escaping logic.
+  var AUTHOR_DELIM = window.LG_HUB_AUTHOR_COMMA_FIX ? '\x1f' : ',';
+
   function addAuthor(name) {
     var u = new URL(window.location.href);
-    var cur = (u.searchParams.get('author') || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    var cur = (u.searchParams.get('author') || '').split(AUTHOR_DELIM).map(function (s) { return s.trim(); }).filter(Boolean);
     if (cur.indexOf(name) === -1) cur.push(name);
-    u.searchParams.set('author', cur.join(','));   // AND-combines: keeps q/type/cat already in the URL
+    u.searchParams.set('author', cur.join(AUTHOR_DELIM));   // AND-combines: keeps q/type/cat already in the URL
     u.searchParams.delete('offset');
     // The author field lives only inside #hub-fmodal. If the modal is open (the
     // mobile search tray, or the desktop dialog), apply in-place via forums.js's
