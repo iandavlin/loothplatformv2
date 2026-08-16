@@ -55,9 +55,10 @@ const ALLOWED_PATHS = [
     'docs/board-chat/',       // the general Ian↔keeper chat — BOTH directions committed
     'docs/board-questions/',  // Ian's open questions and their answers — APPEND ONLY
     'docs/board-decisions/',  // posed decisions and their ONE answer
+    'docs/board-branches/',   // which branch is doing the work on which card
 ];
 
-const INTENTS = [ 'reorder', 'note_append', 'media_ref', 'lane_message', 'lane_receipt', 'item_add', 'item_promote', 'keeper_message', 'question_ask', 'question_answer', 'decision_pose', 'decision_answer' ];
+const INTENTS = [ 'reorder', 'note_append', 'media_ref', 'lane_message', 'lane_receipt', 'item_add', 'item_promote', 'keeper_message', 'question_ask', 'question_answer', 'decision_pose', 'decision_answer', 'item_branch' ];
 
 /* ---------------------------------------------------------------------- */
 
@@ -500,6 +501,51 @@ function applyDecisionAnswer( string $repo, string $id, string $choice, string $
 }
 
 /**
+ * ATTACH A BRANCH TO A CARD. Backlog 39, Ian: *"So I can track branches better."*
+ *
+ * The LINK is committed here; the branch's STATE is not. Whether a branch still
+ * exists, and whether it has merged, changes without anyone touching this file —
+ * so recording it here would be a fact that rots. The board derives that at
+ * render time from a snapshot, the same way it derives lane lights: this store
+ * answers "which branch is doing the work on this card", and nothing else.
+ *
+ * Append-only, like every other board store: a branch that turned out to be the
+ * wrong one is history rather than an embarrassment to erase, and there is no
+ * verb here that could remove one.
+ */
+function applyItemBranch( string $repo, string $id, string $branch, string $actor ): array
+{
+    if ( ! preg_match( '/^[A-Z]?\d+(\.\d+)?$/', $id ) ) { refuse( 'that is not an item id: ' . $id ); }
+
+    // Git's own rules, tightened: no spaces, no leading dash, no double dots, no
+    // path traversal. This name is written into a file AND handed to git by
+    // whatever reads it later, so it is fenced here rather than trusted twice.
+    $branch = trim( $branch );
+    if ( ! preg_match( '#^[A-Za-z0-9][A-Za-z0-9._/-]{0,80}$#', $branch )
+      || str_contains( $branch, '..' ) || str_ends_with( $branch, '.lock' ) ) {
+        refuse( 'that is not a branch name: ' . $branch );
+    }
+
+    $rel = 'docs/board-branches/' . $id . '.md';
+    if ( ! pathAllowed( $rel ) ) { refuse( 'path outside the fence: ' . $rel ); }
+
+    $dir = $repo . '/docs/board-branches';
+    if ( ! is_dir( $dir ) && ! @mkdir( $dir, 0755, true ) ) { fail( 'could not create the branches directory' ); }
+    if ( ! is_file( $repo . '/' . $rel ) ) {
+        file_put_contents( $repo . '/' . $rel, "# Branches — item " . $id . "\n" );
+    }
+
+    $existing = (string) file_get_contents( $repo . '/' . $rel );
+    if ( preg_match( '/^- ' . preg_quote( $branch, '/' ) . ' /m', $existing ) ) {
+        refuse( $branch . ' is already attached to ' . $id );
+    }
+
+    file_put_contents( $repo . '/' . $rel, sprintf( "- %s — %s — %s\n",
+        $branch, gmdate( 'Y-m-d H:i' ), $actor ), FILE_APPEND );
+    return [ $rel ];
+}
+
+/**
  * Read the PRIORITY INDEX as (line number → id), in file order.
  *
  * IDS ARE DOTTED INTEGER PAIRS, NOT DECIMALS, and that is the whole reason this
@@ -761,6 +807,10 @@ switch ( $intent ) {
     case 'lane_message':
         $touched = applyLaneMessage( CLONE_DIR, (string) ( $req['lane'] ?? '' ), (string) ( $req['text'] ?? '' ), $actor );
         $summary = 'message to ' . (string) ( $req['lane'] ?? '?' );
+        break;
+    case 'item_branch':
+        $touched = applyItemBranch( CLONE_DIR, (string) ( $req['id'] ?? '' ), (string) ( $req['branch'] ?? '' ), $actor );
+        $summary = 'attached ' . (string) ( $req['branch'] ?? '?' ) . ' to item ' . (string) ( $req['id'] ?? '?' );
         break;
     case 'keeper_message':
         $touched = applyKeeperMessage( CLONE_DIR, (string) ( $req['text'] ?? '' ), $actor );

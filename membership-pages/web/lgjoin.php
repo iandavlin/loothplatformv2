@@ -121,7 +121,24 @@ $promoFromUrl = (string) preg_replace('/[^A-Za-z0-9_\-]/', '', $promoFromUrl);
 $countryFromUrl = isset($_GET['country']) ? strtoupper((string) preg_replace('/[^A-Za-z]/', '', (string) $_GET['country'])) : '';
 if (strlen($countryFromUrl) !== 2) { $countryFromUrl = ''; }
 
-$previewSingle = isset($_GET['preview']) && $_GET['preview'] === 'single';
+/**
+ * SINGLE-TIER IS DERIVED, NOT PREVIEWED. Ian, 2026-08-16: *"It looks like there
+ * is a single tier preview. We shouldn't need that anymore right? I should be
+ * able to have 1 tier just by registering one tier."*
+ *
+ * There used to be a `?preview=single` toggle that rendered a MOCK product with
+ * invented prices — a design mockup living inside the shipping page. It is gone.
+ * The layout now follows the REGISTERED TIER COUNT, decided in renderTiers()
+ * once the catalogue has actually loaded, because the catalogue is fetched by
+ * the browser and PHP cannot know the count at render time.
+ *
+ * NO FLAG, and here is why rather than by omission: the behaviour is keyed on
+ * data that already exists. Today's catalogue registers TWO products (Looth LITE
+ * and Looth PRO), so this renders exactly what it rendered before — the single
+ * -tier branch cannot fire until somebody deliberately registers one tier, which
+ * IS the switch Ian asked for. A flag on top would be a second switch for the
+ * same decision.
+ */
 
 $heading     = $h((string) $atts['heading']);
 $subheading  = $h((string) $atts['subheading']);
@@ -156,14 +173,9 @@ $configJs    = json_encode([
     'loggedIn'      => $isLoggedIn,
     'authUrl'       => $authUrl,
     'forgotUrl'     => lg_ms_home('/wp-login.php?action=lostpassword'),
-    'previewSingle' => $previewSingle,
 ]);
 
-/* preview toggle links (remove_query_arg / add_query_arg stand-ins) */
 $reqPath        = strtok((string) ($_SERVER['REQUEST_URI'] ?? '/lgjoin/'), '?') ?: '/lgjoin/';
-$qsNoPreview    = $_GET; unset($qsNoPreview['preview']);
-$urlExitPreview = $reqPath . ($qsNoPreview ? '?' . http_build_query($qsNoPreview) : '');
-$urlEnterView   = $reqPath . '?' . http_build_query(array_merge($_GET, ['preview' => 'single']));
 
 /* JS-string URLs */
 $jsManage   = lg_ms_esc_js(lg_ms_home('/manage-subscription/'));
@@ -205,16 +217,6 @@ $asset_v = (string) (@filemtime(__DIR__ . '/lg-shortcodes.css') ?: '1');
                 <span class="lg-join__trial-banner-inner">&#10003; 7-day free trial on all plans &mdash; no charge until day 8</span>
             </div>
 
-            <?php if ( $previewSingle ) : ?>
-            <div class="lg-join__preview-bar">
-                <span>&#9888; Preview mode: single tier</span>
-                <a href="<?php echo $h( $urlExitPreview ); ?>" class="lg-join__preview-exit">Exit preview</a>
-            </div>
-            <?php else : ?>
-            <div class="lg-join__preview-bar lg-join__preview-bar--hint">
-                <a href="<?php echo $h( $urlEnterView ); ?>" class="lg-join__preview-link">&#128065; Preview single-tier layout</a>
-            </div>
-            <?php endif; ?>
 
             <div class="lg-join__region-note" data-lg-region-note hidden></div>
 
@@ -809,16 +811,27 @@ $asset_v = (string) (@filemtime(__DIR__ . '/lg-shortcodes.css') ?: '1');
                 const trialBanner = document.querySelector('[data-lg-trial-banner]');
                 if (trialBanner) trialBanner.hidden = !anyTrial;
 
-                if (CONFIG.previewSingle) {
-                    renderSingleTierPreview();
-                    return;
-                }
+                /**
+                 * SINGLE TIER IS A FACT ABOUT THE CATALOGUE, not a mode.
+                 * Ian: "I should be able to have 1 tier just by registering one
+                 * tier." So the layout follows the count of what came back —
+                 * one registered product renders as one centred card, with its
+                 * REAL name, features and prices. The old branch rendered a
+                 * MOCK product with invented prices, which meant the only way
+                 * to see the single-tier layout was to look at something that
+                 * was not the catalogue.
+                 */
+                const singleTier = products.length === 1;
 
                 products.forEach(function(prod){
                     const recurringOnly = (prod.prices || []).filter(p => p.type !== 'one_time');
                     const sorted    = sortPrices(recurringOnly);
                     const isPopular = (prod.ref && CONFIG.popular && prod.ref === CONFIG.popular);
-                    const card      = buildTierCard(prod, sorted, isPopular, false);
+                    const card      = buildTierCard(prod, sorted, isPopular, singleTier);
+                    if (singleTier) {
+                        card.style.maxWidth = '420px';
+                        card.style.margin   = '0 auto';
+                    }
                     tiersEl.appendChild(card);
 
                     if (isPopular) {
@@ -834,22 +847,6 @@ $asset_v = (string) (@filemtime(__DIR__ . '/lg-shortcodes.css') ?: '1');
                 });
             }
 
-            function renderSingleTierPreview(){
-                const mockProd = {
-                    name: 'Looth Group',
-                    ref:  'single',
-                    features: ['Member forums & community', 'Interviews & AMAs', 'Demo-based content', 'Live session archives'],
-                };
-                const mockPrices = [
-                    { stripe_price_id: 'mock_month', type: 'recurring', interval: 'month', unit_amount_cents: 800,  trial_days: 7 },
-                    { stripe_price_id: 'mock_year',  type: 'recurring', interval: 'year',  unit_amount_cents: 8000, trial_days: 7 },
-                    { stripe_price_id: 'mock_once',  type: 'one_time',  interval: null,    unit_amount_cents: 9600 },
-                ];
-                const card = buildTierCard(mockProd, mockPrices, false, true);
-                card.style.maxWidth = '420px';
-                card.style.margin   = '0 auto';
-                tiersEl.appendChild(card);
-            }
 
             function selectPrice(price, prod, btn, opts){
                 opts = opts || {};
