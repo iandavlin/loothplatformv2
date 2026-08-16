@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-loothprint-edit-door-gate.py — the way IN to editing your own Loothprint.
+loothprint-edit-door-gate.py — GATE 69 — the way IN to editing your own Loothprint.
 
-⚠️ NO GATE NUMBER YET. Keeper mints, lanes never.
+Number minted by keeper 2026-08-16. Lanes never self-number.
 
 WHY IT EXISTS. Ruled scope item 4, and Ian picked the shape (2026-08-16): the Edit
 button on a Loothprint opens a two-line choice — "Details & files", the acf_form
