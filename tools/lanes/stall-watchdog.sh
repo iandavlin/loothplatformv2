@@ -42,6 +42,14 @@ while true; do
     # A pane with live background shells is WORKING even at an idle prompt
     # (8/15: two seats false-alarmed all day while running background jobs).
     if echo "$L_LINE" | grep -q "shell" ; then rm -f "$STATED/$L"; continue; fi
+    # 8/16: the CLI prints the shell count in the PANE status bar ("· 2 shell"),
+    # not in the `lanes` line — the check above never matched and six seats
+    # false-alarmed through a whole dispatch morning. An active spinner
+    # ("Actioning… (Nm Ns · ↓ Nk tokens)") is likewise WORKING: `lanes` can
+    # read a mid-turn seat as parked.
+    if printf '%s' "$PANE" | grep -qE "[0-9]+ shell|↓ [0-9.]+k tokens"; then
+      rm -f "$STATED/$L"; continue
+    fi
     if echo "$L_LINE" | grep -q parked; then
       # A lane parked ON A QUESTION is answered, not aged: escalate immediately
       # (Ian 8/15: "If it stops to ask a question, we should answer the question").
