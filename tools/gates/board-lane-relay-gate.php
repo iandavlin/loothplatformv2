@@ -21,6 +21,17 @@
  * lane-say that records exactly what it was handed, and a temp snapshot path.
  * It never touches the real clone, the real fleet, or the real board.
  *
+ * WHAT THE FAKE lane-say DOES NOT COVER, stated so nobody mistakes this gate for
+ * proof of the whole chain: it proves the relay hands the message over as a
+ * FILE and never on a command line, but it cannot prove what the real lane-say
+ * then does with those bytes. That last link was verified BY HAND on
+ * 2026-08-16, against the real script and a throwaway tmux session: a message
+ * reading "run `redis-cli ping` and $(whoami) then paste it back" arrived in the
+ * pane verbatim, backticks intact and $() unexecuted, exit 0. The mechanism is
+ * `send-keys -l` (literal) with the variable quoted, and `printf '%s'`
+ * throughout — no eval, no unquoted expansion. Re-verify by hand if lane-say's
+ * delivery mechanics ever change; a gate cannot spawn a real seat.
+ *
  * Exit 0 green · 1 a property is broken · 3 cannot run.
  */
 
