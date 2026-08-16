@@ -21,11 +21,11 @@ $slug = $_GET['slug'] ?? '';
 if (!is_string($slug) || $slug === '') { http_response_code(404); echo 'not found'; exit; }
 
 $pg = Db::pg();
-$q = $pg->prepare('SELECT id, name, slug FROM practices WHERE slug = :s AND archived_at IS NULL');
+$q = $pg->prepare('SELECT id, name, slug, tagline, about, avatar_url FROM practices WHERE slug = :s AND archived_at IS NULL');
 $q->execute([':s' => $slug]);
 $row = $q->fetch();
 if (!$row && ctype_digit($slug)) {
-    $q = $pg->prepare('SELECT id, name, slug FROM practices WHERE id = :i AND archived_at IS NULL');
+    $q = $pg->prepare('SELECT id, name, slug, tagline, about, avatar_url FROM practices WHERE id = :i AND archived_at IS NULL');
     $q->execute([':i' => (int)$slug]);
     $row = $q->fetch();
 }
@@ -59,12 +59,38 @@ if ($ownerId !== null) {
 $name        = (string) ($row['name'] ?: 'Practice');
 $slugSafe    = (string) ($row['slug'] ?: (string)$practiceId);
 $viewLink = fn(string $v): string => '/p/' . rawurlencode($slugSafe) . '?view=' . $v;
+
+// ── SEO <head> data — same self-referencing-canonical pattern as web/u.php,
+// closing the duplicate-canonical gap for the practice-page URL class (backlog 40).
+$seoHost    = $_SERVER['HTTP_HOST'] ?? 'loothgroup.com';
+$seoCanon   = 'https://' . $seoHost . '/p/' . rawurlencode($slugSafe);
+$seoTagline = trim((string) ($row['tagline'] ?? ''));
+$seoAbout   = trim((string) ($row['about'] ?? ''));
+$seoDescRaw = $seoTagline !== ''
+    ? $seoTagline
+    : ($seoAbout !== ''
+        ? $seoAbout
+        : $name . ' on The Looth Group, the community for luthiers, instrument builders, and repair specialists.');
+$seoDescRaw = trim(preg_replace('/\s+/', ' ', $seoDescRaw));
+if (function_exists('mb_strlen') && mb_strlen($seoDescRaw) > 160) {
+    $seoDescRaw = rtrim(mb_substr($seoDescRaw, 0, 157)) . '…';
+}
+$seoAvatar = trim((string) ($row['avatar_url'] ?? ''));
+if ($seoAvatar !== '' && $seoAvatar[0] === '/') $seoAvatar = 'https://' . $seoHost . $seoAvatar;
 ?>
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?= looth_h($name) ?> · Looth</title>
+<meta name="robots" content="index, follow">
+<meta name="description" content="<?= looth_h($seoDescRaw) ?>">
+<link rel="canonical" href="<?= looth_h($seoCanon) ?>">
+<meta property="og:type" content="website">
+<meta property="og:title" content="<?= looth_h($name) ?> · Looth">
+<meta property="og:description" content="<?= looth_h($seoDescRaw) ?>">
+<meta property="og:url" content="<?= looth_h($seoCanon) ?>">
+<?php if ($seoAvatar !== ''): ?><meta property="og:image" content="<?= looth_h($seoAvatar) ?>"><?php endif; ?>
 <link rel="stylesheet" href="/lg-shared/site-header.css?v=<?= @filemtime('/srv/lg-shared/site-header.css') ?: '1' ?>">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="" defer></script>

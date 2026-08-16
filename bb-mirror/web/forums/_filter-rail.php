@@ -94,7 +94,7 @@ function hub_rail_row(string $facet, string $key, string $label, int $n, array $
     $f_url  = hub_url(hub_toggle($filters, $facet, $key), $sort);
     ?>
     <div class="hub-rail__row<?= $on ? ' is-on' : '' ?><?= $is_mut ? ' is-muted' : '' ?><?= $n === 0 ? ' hub-rail__row--empty' : '' ?>">
-      <a class="hub-rail__nm" href="<?= $f_url ?>"><?= htmlspecialchars($label) ?></a>
+      <a class="hub-rail__nm"<?= $on ? '' : ' rel="nofollow"' ?> href="<?= $f_url ?>"><?= htmlspecialchars($label) ?></a>
       <span class="hub-rail__ct"><?= $n ?></span>
     </div>
     <?php
@@ -132,10 +132,10 @@ function hub_render_cat_parent(array $p, array $filters, array $muted, string $s
     $row_cls = 'hub-rail__row hub-acc__parent'
         . ($on ? ' is-on' : '') . ($is_mut ? ' is-muted' : '')
         . ((int)$p['count'] === 0 ? ' hub-rail__row--empty' : '');
-    $row = function (string $chev) use ($p, $filters, $muted, $sort, $is_mut): void {
+    $row = function (string $chev) use ($p, $filters, $muted, $sort, $is_mut, $on): void {
         ?>
         <?= $chev ?>
-        <a class="hub-rail__nm" href="<?= hub_url(hub_toggle($filters, 'cat', $p['key']), $sort) ?>"><?= htmlspecialchars($p['label']) ?></a>
+        <a class="hub-rail__nm"<?= $on ? '' : ' rel="nofollow"' ?> href="<?= hub_url(hub_toggle($filters, 'cat', $p['key']), $sort) ?>"><?= htmlspecialchars($p['label']) ?></a>
         <span class="hub-rail__ct"><?= (int)$p['count'] ?></span>
         <?php
     };
@@ -147,7 +147,7 @@ function hub_render_cat_parent(array $p, array $filters, array $muted, string $s
           $lon  = in_array($lf['key'], $filters['leaves'] ?? [], true);
           $lmut = in_array($lf['key'], $muted['leaves'] ?? [], true); ?>
           <div class="hub-rail__row hub-acc__leaf<?= $lon ? ' is-on' : '' ?><?= $lmut ? ' is-muted' : '' ?><?= (int)$lf['count'] === 0 ? ' hub-rail__row--empty' : '' ?>">
-            <a class="hub-rail__nm" href="<?= hub_url(hub_toggle($filters, 'leaf', $lf['key']), $sort) ?>"><?= htmlspecialchars($lf['label']) ?></a>
+            <a class="hub-rail__nm"<?= $lon ? '' : ' rel="nofollow"' ?> href="<?= hub_url(hub_toggle($filters, 'leaf', $lf['key']), $sort) ?>"><?= htmlspecialchars($lf['label']) ?></a>
             <span class="hub-rail__ct"><?= (int)$lf['count'] ?></span>
           </div>
         <?php endforeach; ?>
@@ -228,7 +228,7 @@ function hub_render_rail(array $facets, array $filters, array $muted, string $so
             $sf  = $filters; $sf['show'] = $son ? '' : $sh['slug'];
           ?>
           <div class="hub-rail__row<?= $son ? ' is-on' : '' ?>">
-            <a class="hub-rail__nm" href="<?= hub_url($sf, $sort) ?>"><?= htmlspecialchars($sh['label']) ?></a>
+            <a class="hub-rail__nm"<?= $son ? '' : ' rel="nofollow"' ?> href="<?= hub_url($sf, $sort) ?>"><?= htmlspecialchars($sh['label']) ?></a>
             <span class="hub-rail__ct"><?= (int)$sh['count'] ?></span>
           </div>
           <?php endforeach; ?>
@@ -268,7 +268,7 @@ function hub_render_shows_chip(PDO $db, array $filters, string $sort = 'new'): v
       <div class="lg-shows-modal__grid">
         <a class="lg-shows-modal__item is-all" href="<?= htmlspecialchars($base) ?>">&#8635; All videos<?= $active !== '' ? ' &middot; clear show' : '' ?></a>
         <?php foreach ($shows as $sh): $on = ($sh['slug'] === $active); ?>
-          <a class="lg-shows-modal__item<?= $on ? ' is-on' : '' ?>"
+          <a class="lg-shows-modal__item<?= $on ? ' is-on' : '' ?>" rel="nofollow"
              href="<?= htmlspecialchars($base . '&show=' . urlencode($sh['slug'])) ?>">
             <span class="lg-shows-modal__name"><?= htmlspecialchars($sh['label']) ?></span>
             <span class="lg-shows-modal__n"><?= (int)$sh['count'] ?></span>
