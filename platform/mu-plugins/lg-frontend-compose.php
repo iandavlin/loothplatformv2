@@ -1124,14 +1124,34 @@ function lg_fc_relabel($field)
     $field['instructions'] = $hint;
     $field['wrapper']['class'] = trim(($field['wrapper']['class'] ?? '') . ' lgfc-field');
 
-    // ACF's _post_content pseudo-field is a WYSIWYG, which would pull TinyMCE
-    // into a member-facing composer. The mock draws a plain box, so it gets one.
-    // Deliberate deviation, recorded: the discussion composer uses Quill, so if
-    // rich text is later wanted here that is a parity decision to take on
-    // purpose rather than inherit from an ACF default nobody chose.
+    /* RICH TEXT — Ian, 2026-08-16: "rich text with light tinymce controls".
+       This is the parity decision the previous comment here said would have to be
+       taken on purpose: the field was deliberately downgraded to a textarea so a
+       member-facing composer would not drag TinyMCE in by an ACF default nobody
+       chose. It is now chosen.
+
+       A CUSTOM TOOLBAR, NOT ACF's 'basic'. ACF's basic maps to WordPress's teeny
+       mode, which carries underline, strikethrough, blockquote and three
+       alignments — more than "light", and every extra button is a tag the save
+       path then has to allow. This toolbar is exactly bold, italic, the two
+       lists, link/unlink and undo/redo, so the rule "nothing stored that the
+       toolbar cannot make" is a statement about one list rather than a hope.
+
+       DELAYED INIT (delay => 1) IS THE CRAFT LAW, not a preference: composers load
+       on intent, never eagerly. TinyMCE is heavy and most visitors to this form
+       are filling in a title and a file. ACF only boots the editor when the field
+       is first clicked.
+
+       media_upload OFF — the photo and ZIP fields own uploads here, and the media
+       modal is already scoped to this post's own library by lg_fc_scope_library().
+       A second, UNSCOPED uploader inside the editor would drive straight through
+       that. */
     if ($name === '_post_content') {
-        $field['type'] = 'textarea';
-        $field['rows'] = 4;
+        $field['type']         = 'wysiwyg';
+        $field['toolbar']      = 'lgfc_light';
+        $field['media_upload'] = 0;
+        $field['tabs']         = 'visual';
+        $field['delay']        = 1;
     }
 
     // ⚠️ PREFILL THE PSEUDO-FIELDS OURSELVES ON EDIT. ACF only fills _post_title
@@ -1155,11 +1175,118 @@ function lg_fc_relabel($field)
         if ($name === '_post_title') {
             $field['value'] = get_post_field('post_title', $edit_id);
         } elseif ($name === '_post_content') {
-            $field['value'] = get_post_field('post_content', $edit_id);
+            $field['value'] = lg_fc_content_for_editor(
+                (string) get_post_field('post_content', $edit_id));
         }
     }
     return $field;
 }
+
+/**
+ * The ONE list of tags this field may contain. The toolbar can make exactly these
+ * and nothing else, which is what makes the save filter a closed statement rather
+ * than a guess. Add a button here and you must add its tag, and the reverse.
+ */
+function lg_fc_richtext_allowed(): array
+{
+    return [
+        'p'      => [],
+        'br'     => [],
+        'strong' => [], 'b'  => [],
+        'em'     => [], 'i'  => [],
+        'ul'     => [], 'ol' => [], 'li' => [],
+        // rel is forced below; target is allowed so an editor-made link survives
+        // a round trip unchanged rather than being silently rewritten.
+        'a'      => ['href' => [], 'title' => [], 'target' => [], 'rel' => []],
+    ];
+}
+
+/**
+ * Stored write-up -> what the editor should be handed.
+ *
+ * ⚠️ BACK-COMPAT, AND IT IS NOT HYPOTHETICAL. Measured on dev2 before writing
+ * this: of 169 published loothprints, 43 already hold HTML, 54 are empty, and
+ * 72 ARE PLAIN TEXT — 32 of those containing newlines. Hand plain text with
+ * blank lines straight to a WYSIWYG and TinyMCE collapses it into one
+ * paragraph: 32 members' write-ups silently lose their structure the first time
+ * anyone opens the new editor and presses Post. That is the "eats line breaks"
+ * half of the ruling, with a number on it.
+ *
+ * So: content that already contains markup is passed through untouched (running
+ * wpautop over real HTML is how you get double paragraphs), and content that is
+ * plain gets wpautop, which is the same transformation the front end has always
+ * applied to it on display. The editor therefore shows what the reader already
+ * sees, which is the only definition of "unchanged" that matters to a member.
+ */
+function lg_fc_content_for_editor(string $raw): string
+{
+    if (trim($raw) === '') {
+        return '';
+    }
+    // A cheap, deliberate test: does this look like markup at all? strip_tags
+    // changing the string is the same question the back-compat count above asked,
+    // so the code and the measurement agree by construction.
+    if ($raw !== strip_tags($raw)) {
+        return $raw;
+    }
+    return wpautop($raw);
+}
+
+/**
+ * Save-side sanitisation: nothing is stored that the toolbar cannot make.
+ *
+ * Runs on the RAW POST value before ACF/WordPress writes it, because the field is
+ * a pseudo-field that lands in post_content rather than in meta — so an
+ * acf/update_value filter never sees it.
+ *
+ * wp_kses to lg_fc_richtext_allowed(), then links are forced to rel="nofollow ugc"
+ * — member-authored links on a public page, which is what ugc is for.
+ */
+function lg_fc_sanitize_richtext(string $html): string
+{
+    $clean = wp_kses($html, lg_fc_richtext_allowed());
+    if ($clean !== '' && function_exists('wp_rel_ugc')) {
+        $clean = wp_rel_ugc($clean);
+    }
+    return $clean;
+}
+
+/**
+ * The light toolbar itself. Registered as its own toolbar rather than overriding
+ * ACF's, so nothing else that asks for 'basic' changes underneath us.
+ */
+/**
+ * WIRE THE SANITISER. Defined-but-unhooked is indistinguishable from absent, and
+ * this one guards what gets STORED, so it is hooked next to the function rather
+ * than somewhere a tidy-up could separate them.
+ *
+ * ⚠️ WHY acf/pre_save_post AND NOT acf/update_value. _post_content is a
+ * PSEUDO-field: its value lands in the post's own post_content, not in meta, so
+ * the per-field update_value filter never runs for it. pre_save_post fires with
+ * the raw $_POST still in hand and before ACF writes the post, which is the last
+ * point where the submitted HTML can be replaced.
+ *
+ * Scoped to this form's own fields, so nothing else on the site that uses
+ * acf_form() has its content rewritten by us.
+ */
+add_filter('acf/pre_save_post', function ($post_id) {
+    if (!empty($_POST['acf']['_post_content']) && is_string($_POST['acf']['_post_content'])) {
+        $_POST['acf']['_post_content'] =
+            lg_fc_sanitize_richtext(wp_unslash($_POST['acf']['_post_content']));
+        // Re-slash: WordPress expects the superglobal to still be slashed when it
+        // writes. Unslashing without re-slashing is how a stray backslash ends up
+        // in a member's write-up.
+        $_POST['acf']['_post_content'] = wp_slash($_POST['acf']['_post_content']);
+    }
+    return $post_id;
+}, 5);
+
+add_filter('acf/fields/wysiwyg/toolbars', function (array $toolbars): array {
+    $toolbars['lgfc_light'] = [
+        1 => ['bold', 'italic', 'bullist', 'numlist', 'link', 'unlink', 'undo', 'redo'],
+    ];
+    return $toolbars;
+});
 
 /**
  * EMBED IS STILL A WHOLE DOCUMENT, DELIBERATELY, and it is meant to be iframed.
