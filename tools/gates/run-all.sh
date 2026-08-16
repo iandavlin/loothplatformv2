@@ -1023,6 +1023,48 @@ echo "=== GATE 53: .lgpo-subtext keeps a dark-theme ink (and OFF stays a no-op) 
 # assertions and requires each to redden.
 run "dark-onboard-subtext" python3 "$(dirname "$0")/dark-onboard-subtext-gate.py"
 
+# ⚠️ REGISTERED BEFORE THE EARLY EXIT BELOW, DELIBERATELY. That `exit 1` is a
+# TERMINAL block in the middle of this file, so anything registered after it
+# NEVER RUNS on any run where an earlier gate is red — silently, with no line
+# saying gates were skipped. This gate was appended after it and therefore did
+# not run in the 2026-08-16 suite at all, while the summary named only the one
+# red gate. A gate that does not run is not coverage.
+# Gate number 59 — ASSIGNED BY KEEPER 2026-08-16. I had used 56 as a working
+# placeholder; 56 was already taken (board committer, minted at the stripe
+# merge). A placeholder is still self-minting — ask keeper first.
+echo "=== GATE 59: a guessed letter is a HIT or a MISS, and a resumed board PAINTS ==="
+# Ian, playing on dev2 2026-08-16: "it's keeping track of letters that are in
+# the puzzle, but not the guesses that were misses. The letter only stays lit
+# for a correct letter." Then: "refreshing on dt lights all letters, but the
+# correct letter just selected from mobile isn't there."
+#
+# NOTHING WAS EVER LOST — the server row was complete throughout, and this gate
+# asserts that too, because a lost move would be a FAIRNESS bug rather than a
+# paint one. Every symptom was the client drawing a correct record wrongly:
+#   - positions=[] means BOTH "vowel bought" and "miss", so every miss was
+#     filed as a purchase — and .purchased is styled for VOWELS ONLY, so a
+#     missed consonant rendered untouched AND stayed tappable;
+#   - server play draws tiles with data-i, legacy with data-letter, and BOTH
+#     restores used the data-letter painter — zero matches, zero paint, while
+#     the same loop lit every letter including misses.
+#
+# KEYED TO STATE, NOT WIDTH. The obvious desktop-vs-mobile gate would be the
+# wrong axis and would PASS: there is no width branching in this code and both
+# widths measure identically. What differs is state — live play, after a
+# refresh, and across two devices — so those are the phases.
+#
+# Two devices are two ISOLATED BROWSER CONTEXTS, not two tabs: tabs share
+# cookies and localStorage, which hides the very bug under test.
+#
+# Asserts THIS TREE's client, substituted over CDP, because dev2 serves main.
+# LG_GDLE_SERVED=1 measures the served code instead — that is the red-first
+# direction, and how this gate was proven: 24 assertions red on main, measured
+# 2026-08-16 rather than remembered. Three artifacts cited three DIFFERENT
+# numbers for this one measurement (here 4, CRAFT-STANDARD 14, the commit body
+# 19); 19 was correct for the original four-phase gate, the others never were.
+# Re-measure before quoting it -- phases 5 and 6 changed the count.
+run "guitardle-letter-state" python3 "$(dirname "$0")/guitardle-letter-state-gate.py"
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; echo "RED GATES: ${RED_GATES:-unknown}"; exit 1; fi
 
 echo "=== GATE 50: the work board renders EVERY item, and phase 1 cannot write ==="
@@ -1081,6 +1123,7 @@ echo "=== GATE 58: the featured card may only repeat what the member's profile p
 # Number 58 from keeper. Resolves both fields exactly as the card does, so it
 # asserts what ships rather than a parallel idea of it.
 run "featured-card-text" python3 "$(dirname "$0")/featured-card-text-onprofile-gate.py"
+
 
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then

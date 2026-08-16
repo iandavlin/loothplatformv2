@@ -19,6 +19,8 @@
 
     --key-used-bg:    #9FAC8C;  /* used consonant / revealed vowel — sage-muted, on-palette */
     --key-used-text:  #ffffff;
+    --key-miss-bg:    #4A4F45;  /* GUESSED AND NOT IN THE PHRASE — closed out, 8.42:1 on white */
+    --key-miss-text:  #ffffff;
 
     --text-dark:      #1f2d14;  /* primary text                        */
     --text-muted:     #6b7a5a;  /* secondary / muted text              */
@@ -546,6 +548,33 @@ height: 36px;
     box-shadow: none;
     cursor: default;
     opacity: 1; /* override browser disabled dimming */
+}
+
+/* ── Guessed and RESOLVED — a MISS is not a HIT ─────────────
+   Ian, 2026-08-16: "it's keeping track of letters that are in the puzzle, but
+   not the guesses that were misses. The letter only stays lit for a correct
+   letter."
+
+   Under server play a miss was filed as a vowel PURCHASE (the client branched
+   on positions.length, which is empty for BOTH a miss and a vowel's first tap)
+   — and .purchased is styled for VOWELS ONLY, so a missed CONSONANT received a
+   class with no rule anywhere and rendered completely untouched. On the legacy
+   path a miss did persist, but wore the same .used class as a hit, so the two
+   were indistinguishable there too. Both outcomes now carry their own state.
+
+   THE STRIKETHROUGH IS NOT DECORATION: hit and miss must not be separable by
+   COLOUR ALONE, or the distinction is invisible to a colour-blind player. */
+.key.consonant.used.miss,
+.key.vowel.used.miss {
+    background-color: var(--key-miss-bg);
+    border-color: var(--key-miss-bg);
+    color: var(--key-miss-text);
+}
+
+.key.used.miss .key-letter,
+.key.used.miss {
+    text-decoration: line-through;
+    text-decoration-thickness: 2px;
 }
 
 /* ── Vowel — locked (dashed border, greyed, +1 label) ──────── */

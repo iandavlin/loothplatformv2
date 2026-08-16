@@ -423,19 +423,11 @@ function restoreRemoteGame(pending) {
     if (box) box.checked = HARDCORE;
     localStorage.setItem('guitardle_hardcore', HARDCORE ? '1' : '0');
 
-    if (snap) {
+    if (snap && !(serverPlay && !serverPositionMap())) {
         state.moves           = snap.moves | 0;
-        state.revealedLetters = new Set(snap.revealed  || []);
-        state.purchasedVowels = new Set(snap.purchased || []);
-        state.revealedLetters.forEach(letter => {
-            revealTiles(letter);
-            const keyEl = keyboardEl.querySelector(`.key[data-letter="${letter}"]`);
-            if (keyEl) { keyEl.classList.add('used'); keyEl.disabled = true; }
-        });
-        state.purchasedVowels.forEach(letter => {
-            const keyEl = keyboardEl.querySelector(`.key[data-letter="${letter}"]`);
-            if (keyEl) keyEl.classList.add('purchased');
-        });
+        state.revealedLetters = new Set();
+        state.purchasedVowels = new Set();
+        replayPosition(snap.revealed, snap.purchased, serverPositionMap());
     }
 
     renderMoves();
@@ -603,6 +595,40 @@ function restoreSavedGame() {
         return;
     }
 
+    // UNDER SERVER PLAY THE SERVER OWNS THE POSITION, so a local snapshot is
+    // only ever a mirror of it. It carries letters but NO positions -- it
+    // cannot, the client never learns the phrase -- so it can neither paint a
+    // tile nor tell a hit from a miss. A snapshot the server's record does not
+    // account for is stale by definition (another device finished the day, the
+    // row was cleared, or it predates the switch to server play), and replaying
+    // it anyway marks EVERY letter a miss.
+    if (serverPlay) {
+        // AN EMPTY MAP IS NOT "NO MAP", and that distinction is the whole bug.
+        // The handshake builds the map by looping over revealed[], so a claimed
+        // row with nothing revealed yet encodes as PHP's [] -- a JSON ARRAY --
+        // and an empty array is TRUTHY in JavaScript. `!serverPositionMap()`
+        // therefore could not fire in exactly the state it was written for, and
+        // "the claim row IS the play session" makes that state the NORMAL one
+        // for every game between the claim and the first reveal.
+        //
+        // Replaying a snapshot against a map that knows no letters sends every
+        // lookup to the fallback branch, which asks PHRASE_LETTERS -- and that
+        // is ALWAYS '' under server play, because the client is never told the
+        // phrase (backlog 25). So hit=false for everything, and the board
+        // redraws letters the player EARNED as misses, painting none of them.
+        // That is worse than painting nothing: it tells the player they were
+        // wrong about letters they got right.
+        //
+        // The server owns the position, so a local snapshot naming a letter the
+        // server has never heard of is stale by definition -- another device
+        // finished the day, the row was cleared, or this snapshot predates the
+        // switch to server play. Clear it and let the server's own state paint.
+        const posMap = serverPositionMap();
+        const known  = posMap ? Object.keys(posMap) : [];
+        const stale  = (saved.revealed || []).some(L => known.indexOf(L) === -1);
+        if (!posMap || stale) { clearSavedGame(); return; }
+    }
+
     // The mode you started with is the mode you resume in.
     HARDCORE = !!saved.hardcore;
     const box = document.getElementById('hardcore-toggle');
@@ -610,18 +636,10 @@ function restoreSavedGame() {
     localStorage.setItem('guitardle_hardcore', HARDCORE ? '1' : '0');
 
     state.moves           = saved.moves | 0;
-    state.revealedLetters = new Set(saved.revealed || []);
-    state.purchasedVowels = new Set(saved.purchased || []);
+    state.revealedLetters = new Set();
+    state.purchasedVowels = new Set();
 
-    state.revealedLetters.forEach(letter => {
-        revealTiles(letter);
-        const keyEl = keyboardEl.querySelector(`.key[data-letter="${letter}"]`);
-        if (keyEl) { keyEl.classList.add('used'); keyEl.disabled = true; }
-    });
-    state.purchasedVowels.forEach(letter => {
-        const keyEl = keyboardEl.querySelector(`.key[data-letter="${letter}"]`);
-        if (keyEl) keyEl.classList.add('purchased');
-    });
+    replayPosition(saved.revealed, saved.purchased, serverPositionMap());
 
     renderMoves();
     updateScoreBox(state.moves);
@@ -637,6 +655,56 @@ function revealTiles(letter) {
         tile.classList.remove('blank');
         tile.classList.add('revealed');
         tile.textContent = letter;
+    });
+}
+
+// A guessed letter is RESOLVED: it is done, and it is either a hit or a miss.
+// One function owns that so the two paths and the two restores cannot drift --
+// they did, and the drift is exactly what Ian saw: a miss filed as a vowel
+// purchase (invisible, and still tappable) on one screen, and a hit and a miss
+// wearing the same class on another.
+function markKeyResolved(keyEl, hit) {
+    if (!keyEl) return;
+    keyEl.classList.remove('purchased');
+    keyEl.classList.add('used');
+    keyEl.classList.add(hit ? 'hit' : 'miss');
+    keyEl.disabled = true;
+}
+
+// The authoritative positions for a resumed game, when the server owns state.
+function serverPositionMap() {
+    return (serverPlay && scoreAuth && scoreAuth.puzzle && scoreAuth.puzzle.position)
+        ? (scoreAuth.puzzle.position.revealed || null)
+        : null;
+}
+
+// Replay a position onto the board -- correct for BOTH board shapes.
+//
+// THE BUG THIS REPLACES: server play draws tiles with data-i ONLY (the client
+// is never told the phrase -- backlog 25), legacy draws them with data-letter.
+// Both restores called revealTiles(), which selects [data-letter], so under
+// server play it matched nothing and painted NOTHING -- while the same loops
+// marked every letter in revealed[] as 'used', and revealed[] includes MISSES.
+// That is exactly what Ian saw: every key lit, the word blank.
+function replayPosition(revealed, purchased, posMap) {
+    (revealed || []).forEach(letter => {
+        let hit;
+        if (posMap && Object.prototype.hasOwnProperty.call(posMap, letter)) {
+            const positions = posMap[letter] || [];
+            hit = positions.length > 0;
+            if (hit) revealTilesAt(letter, positions);
+        } else {
+            // Legacy: the client knows the phrase, so it can tell hit from miss.
+            hit = !!PHRASE_LETTERS && PHRASE_LETTERS.indexOf(letter) !== -1;
+            if (hit) revealTiles(letter);
+        }
+        state.revealedLetters.add(letter);
+        markKeyResolved(keyboardEl.querySelector(`.key[data-letter="${letter}"]`), hit);
+    });
+    (purchased || []).forEach(letter => {
+        state.purchasedVowels.add(letter);
+        const keyEl = keyboardEl.querySelector(`.key[data-letter="${letter}"]`);
+        if (keyEl) keyEl.classList.add('purchased');
     });
 }
 
@@ -671,15 +739,21 @@ function serverReveal(letter, keyEl) {
             if (j.capped) { state.moves = j.moves; refreshCapState(); return; }
             MOVE_CAP  = j.cap;
             state.moves = j.moves;
-            if (j.positions && j.positions.length) {
-                state.revealedLetters.add(letter);
-                revealTilesAt(letter, j.positions);
-                keyEl.classList.remove('purchased');
-                keyEl.classList.add('used');
-                keyEl.disabled = true;
-            } else {
+            // positions=[] means TWO different things -- a vowel's first tap
+            // (bought, not yet revealed) and a MISS (revealed, but nowhere in
+            // the phrase) -- so branching on positions.length alone files every
+            // miss as a purchase. The server already tells us which: a purchase
+            // is in j.purchased, a miss is not.
+            const purchasedNow = Array.isArray(j.purchased) ? j.purchased : [];
+            if (purchasedNow.indexOf(letter) !== -1) {
                 state.purchasedVowels.add(letter);
                 keyEl.classList.add('purchased');
+            } else {
+                const hit = !!(j.positions && j.positions.length);
+                state.purchasedVowels.delete(letter);
+                state.revealedLetters.add(letter);
+                if (hit) revealTilesAt(letter, j.positions);
+                markKeyResolved(keyEl, hit);
             }
             renderMoves();
             updateScoreBox(state.moves);
@@ -696,8 +770,7 @@ function handleConsonant(letter, keyEl) {
     state.revealedLetters.add(letter);
     revealTiles(letter);
     incrementMoves();
-    keyEl.classList.add('used');
-    keyEl.disabled = true;
+    markKeyResolved(keyEl, PHRASE_LETTERS.indexOf(letter) !== -1);
 }
 
 function handleVowel(letter, keyEl) {
@@ -714,9 +787,7 @@ function handleVowel(letter, keyEl) {
         state.revealedLetters.add(letter);
         revealTiles(letter);
         incrementMoves();
-        keyEl.classList.remove('purchased');
-        keyEl.classList.add('used');
-        keyEl.disabled = true;
+        markKeyResolved(keyEl, PHRASE_LETTERS.indexOf(letter) !== -1);
     }
 }
 
