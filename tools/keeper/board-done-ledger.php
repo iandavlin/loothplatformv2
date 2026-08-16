@@ -33,7 +33,7 @@
 
 declare(strict_types=1);
 
-const REPO_DEFAULT = '/home/ubuntu/loothplatformv2-clean';
+const REPO_DEFAULT = '/home/ubuntu/keeper-repo';
 const TRAILER      = 'Closes-Backlog:';
 
 function say(string $m): void { fwrite(STDOUT, $m . "\n"); }
@@ -60,6 +60,12 @@ if ($range === '' || !str_contains($range, '..')) { bail('need --range <old>..<n
 // clone, but a tool that only works in one kind of checkout is a tool that will
 // be reached for in the other kind.
 if (!file_exists($repo . '/.git')) { bail('no repo at ' . $repo, 3); }
+// THE ONE RULE: the serving checkout only ever pulls. This tool WRITES, so it
+// must never target it — the first real run (8/16) shipped with that exact
+// default and dirtied the serve; content was right, location unlawful.
+if (realpath($repo) === realpath('/home/ubuntu/loothplatformv2-clean')) {
+    bail('refusing the SERVING checkout — write in a clone, the serve pulls', 3);
+}
 
 /* Which items did this train close? Read from the commits, not from anyone. */
 $r = run('git log --format=%H%x1f%s%x1f%b%x1e ' . escapeshellarg($range), $repo);
