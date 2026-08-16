@@ -1815,10 +1815,10 @@ html[data-lguser-theme="dark"]{--line:#767c76}
                  border-radius:6px;border:1px solid #8a8478;background:transparent;color:inherit}
     .w2__opts{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
     .w2__opt{font:inherit;font-size:12px;padding:5px 10px;border-radius:999px;cursor:pointer;
-             border:1px solid rgba(128,128,128,.45);background:transparent;color:inherit}
+             border:1px solid #8a8478;background:transparent;color:inherit}
     .w2__opt[aria-pressed="true"]{background:rgba(74,158,255,.18);border-color:#4a9eff}
     .w2__go{margin-top:8px;font:inherit;font-size:12px;padding:6px 12px;border-radius:6px;cursor:pointer;
-            border:1px solid rgba(128,128,128,.45);background:transparent;color:inherit}
+            border:1px solid #8a8478;background:transparent;color:inherit}
     .w2__go[disabled]{opacity:.5;cursor:default}
     .w2__say{margin-top:10px;font-size:12px;padding:8px;border-radius:6px}
     .w2__say--ok{background:rgba(60,160,90,.15)}
@@ -1849,7 +1849,7 @@ html[data-lguser-theme="dark"]{--line:#767c76}
     .thrbox__in{width:100%;box-sizing:border-box;font:inherit;font-size:12px;padding:5px;border-radius:6px;
                 border:1px solid #8a8478;background:transparent;color:inherit}
     .thrbox__go{margin-top:5px;font:inherit;font-size:11px;padding:4px 10px;border-radius:6px;cursor:pointer;
-                border:1px solid rgba(128,128,128,.45);background:transparent;color:inherit}
+                border:1px solid #8a8478;background:transparent;color:inherit}
     .thrbox__no{opacity:.6}
     .thrbox__bad{background:rgba(200,70,70,.18);padding:5px 7px;border-radius:6px;margin-bottom:5px}
     .thrbox__say{margin-top:5px;padding:5px 7px;border-radius:6px}
@@ -1857,7 +1857,7 @@ html[data-lguser-theme="dark"]{--line:#767c76}
     .askk .thrbox{margin-left:0}
     .newitem{display:flex;gap:6px;align-items:flex-start;margin:10px 0}
     .newitem__t{flex:1;font:inherit;font-size:13px;padding:6px;border-radius:6px;resize:vertical;
-                border:1px solid rgba(128,128,128,.35);background:transparent;color:inherit}
+                border:1px solid #8a8478;background:transparent;color:inherit}
     .newitem .w2__say{flex-basis:100%}
     .qbox{font-size:12px}
     .q{padding:6px 8px;border-radius:6px;background:rgba(128,128,128,.10);margin:5px 0}
