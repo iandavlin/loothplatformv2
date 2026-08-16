@@ -46,12 +46,34 @@ origin issued none.
 Confirming it properly needs Cloudflare's **firewall events / security analytics**
 filtered to Googlebot — dashboard access, so Ian's, and it will name the rule.
 
-## A second finding, free from the same logs
+## A second finding — test-account profiles in Google's crawl
 
-Googlebot is crawling **test-account profile URLs** and getting 404s:
-`/u/smoketest1`, `/u/smoketestpublic`, `/u/stink_305efb`,
-`/u/tst-staple-1778083260`. Probe accounts have been discovered and indexed as
-real member profiles. That is crawl budget spent on fixtures, and it is the same
-class as the 316 "Not found (404)" in the coverage export. Worth a sweep of test
-accounts, and worth knowing that anything a gate creates on live becomes
-crawlable unless it is cleaned up.
+Googlebot is still crawling **profile URLs for accounts that no longer exist**,
+and 404ing on all of them:
+
+```
+/u/piss   /u/poopy   /u/fart_52188d          <- crude test accounts
+/u/gerryhayestest  /u/profileapp-test  /u/gift-basil-test
+/u/single-gift-test  /u/qa_lite_1779037415  /u/qab50-1779041024
+/u/smoketest1  /u/smoketestpublic  /u/stink_305efb  /u/tst-staple-1778083260
+/u/ian  /u/1ian-davlin  /u/ian_921a24
+```
+
+**Checked before reporting it as exposure: none of these accounts still exist on
+live** — the user table returns zero rows for them. So this is historical, not a
+live leak: they were public member profiles while they existed, Google indexed
+the URLs, and they now 404.
+
+**What it costs today:** crawl budget spent on fixtures, and part of the 316
+"Not found (404)" in the coverage export. **What it cost then:** those URLs were
+publicly crawlable member profiles on a business site, including the crude ones.
+
+**The lesson is the reusable part**, and it is cheap to act on: *anything a test
+or a gate creates on live becomes publicly crawlable within days, and Google
+remembers the URL long after the account is deleted.* Test fixtures belong on
+dev2. Where a live probe is genuinely needed, it wants a name nobody minds seeing
+in a search result and a cleanup in the same breath.
+
+Nothing to fix urgently — the accounts are gone. If the 404s are worth clearing
+faster than they age out, serving **410 Gone** on `/u/` for a known-dead set is
+the lever, and that is a decision rather than a defect.
