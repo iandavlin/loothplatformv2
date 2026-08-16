@@ -306,7 +306,12 @@ function lg_fc_types(): array
             // sit wherever they are put. Verified both resolve rather than
             // assumed — a silently-unresolved selector renders as nothing at all.
             'fields'   => [
-                // name                          label                    hint                                                             extra  acf_label
+                // The 4th column is VESTIGIAL as of 2026-08-16 and is kept only so the
+                // rows stay readable in one shape: it used to mark a field for the
+                // "Add extras" fold, and that fold is gone by Ian's ruling. Nothing
+                // reads it now, so every value is false — a true would describe a
+                // construct that no longer exists.
+                // name                          label                    hint                                                             (unused) acf_label
                 ['_post_title',                  "What’s it called?",     '',                                                              false, 'Title of your Loothprint'],
                 ['loothprint_more_images',       'Show it off',           'One or more photos of your print — finished, or better still in use.', false, 'Add one or more image(s) of your print in action'],
                 ['loothprint_3d_file',           'The print files',       'A ZIP with your STLs — and the editable source too, if you’re happy to share it.', false, '3D File Upload ZIP File'],
@@ -314,10 +319,18 @@ function lg_fc_types(): array
                 ['loothprint_category',          'What kind of print is it?', '',                                                          false, 'Type of Loothprint'],
                 ['content_topic_broad_terms',    'And roughly what area of work?', '',                                                     false, 'Content Topic'],
                 ['loothprint_creative_commons',  'Licence',               'The usual choice — leave it unless you know you want something else.', false, 'Creative Commons Use License (leave default if unsure)'],
-                ['loothprint_video_instructions','A video of it in use',  '',                                                              true,  'Video instructions for use/build'],
-                ['loothprint_onshape_link',      'Onshape / CAD link',    '',                                                              true,  'Onshape Project Link'],
-                ['loothprint_buy_me_a_coffee',   'Tip jar',               'Buy Me A Coffee or similar, if you’d like one.',                true,  "Link to your Buy Me A Coffee or other 'leave me a tip' site (optional)"],
+                ['loothprint_video_instructions','A video of it in use',  '',                                                              false, 'Video instructions for use/build'],
             ],
+            /* REMOVED FROM THE FORM 2026-08-16, Ian testing live: "remove tip jar
+               and onshape". loothprint_onshape_link and loothprint_buy_me_a_coffee
+               are gone from the field list only.
+               ⚠️ THE DATA IS UNTOUCHED AND STILL RENDERS. lg-layout-v2 Plugin.php
+               (~530-564) synthesises both into page callouts, and on dev2 today 7
+               published loothprints carry an Onshape link and 14 carry a tip jar,
+               out of 168. So those keep showing on the page while no author can now
+               edit or clear them. That is a RENDER/DATA question, raised to keeper
+               rather than answered here — deleting members' links is not a
+               form-side decision. */
             // Rendered by us, not by ACF — see lg_fc_comment_status().
             'comments' => ['label' => 'Let people comment', 'acf_label' => 'Commenting'],
             // The mock drops the featured_image control and promises the footer
@@ -767,7 +780,6 @@ function lg_fc_route(): void
         'form_attributes'    => [
             'class'             => 'acf-form lgfc__form',
             'data-lgfc-type'    => $type,
-            'data-lgfc-extras'  => implode(',', lg_fc_extra_field_names($type)),
         ],
         'html_after_fields'  => lg_fc_own_controls($t),
         'html_submit_button' => '<input type="submit" class="lgfc__submit" value="%s" />'
@@ -808,7 +820,7 @@ function lg_fc_own_controls(array $t): string
 {
     $label = esc_html($t['comments']['label']);
     return <<<HTML
-<div class="acf-field lgfc-field lgfc__own" data-lgfc-extra="1" data-name="lg_fc_comments">
+<div class="acf-field lgfc-field lgfc__own" data-name="lg_fc_comments">
   <div class="acf-label"><label>{$label}</label></div>
   <div class="acf-input"><div class="lgfc__chips">
     <label class="lgfc__chip"><input type="radio" name="lg_fc_comments" value="open" checked> <span>Yes</span></label>
@@ -1057,25 +1069,6 @@ function lg_fc_relabel($field)
         }
     }
     return $field;
-}
-
-/**
- * The field names the mock folds away under "Add extras".
- *
- * Emitted as a data attribute and matched in JS by data-name, rather than by
- * pushing a custom key through ACF's wrapper array. ACF decides for itself which
- * wrapper keys it will render, and a fold that silently stops folding because an
- * ACF upgrade dropped an unknown attribute is a defect nobody would look for.
- */
-function lg_fc_extra_field_names(string $type): array
-{
-    $out = [];
-    foreach (lg_fc_types()[$type]['fields'] as $f) {
-        if (!empty($f[3])) {
-            $out[] = $f[0];
-        }
-    }
-    return $out;
 }
 
 /**
@@ -1372,17 +1365,6 @@ function lg_fc_css(): string
 .lgfc__chip:has(input:checked){background:var(--lg-sage-d,#6b7c52);
   border-color:var(--lg-sage-d,#6b7c52);color:#fff}
 
-/* ---- the extras fold ---- */
-.lgfc__fold{margin:4px 0 0;border:1px solid var(--lg-line,#e3ddd0);border-radius:11px;
-  background:var(--lg-paper,#fdfdfa);overflow:hidden}
-.lgfc__foldt{display:flex;align-items:center;gap:9px;width:100%;background:none;border:0;
-  padding:13px 14px;font:700 13.5px/1 var(--lg-font-sans,system-ui,sans-serif);
-  color:var(--lg-sage-d,#6b7c52);cursor:pointer;text-align:left}
-.lgfc__foldt .cv{margin-left:auto;color:var(--lg-mute,#6b6f6b);font-size:12px;font-weight:600}
-.lgfc__foldb{padding:0 14px 6px;display:none}
-.lgfc__fold[open] .lgfc__foldb,.lgfc__fold.is-open .lgfc__foldb{display:block}
-.lgfc__fold.is-open .lgfc__foldt .cv::after{content:" \25B2"}
-.lgfc__fold:not(.is-open) .lgfc__foldt .cv::after{content:" \25BC"}
 
 /* ---- footer: ACF's own submit row, dressed as the mock's ---- */
 .lgfc .acf-form-submit{margin:0;padding:15px 21px 19px;
@@ -1479,39 +1461,10 @@ CSS;
 function lg_fc_js(): string
 {
     return <<<'JS'
-(function () {
-  var form = document.querySelector('[data-lgfc-extras]');
-  if (!form) return;
-  var names = (form.getAttribute('data-lgfc-extras') || '').split(',').filter(Boolean);
-  var nodes = [];
-  names.forEach(function (n) {
-    var el = form.querySelector('.acf-field[data-name="' + n + '"]');
-    if (el) nodes.push(el);
-  });
-  form.querySelectorAll('[data-lgfc-extra]').forEach(function (el) {
-    if (nodes.indexOf(el) === -1) nodes.push(el);
-  });
-  if (!nodes.length) return;
-
-  var fold = document.createElement('div');
-  fold.className = 'lgfc__fold';
-  var btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'lgfc__foldt';
-  btn.setAttribute('aria-expanded', 'false');
-  btn.innerHTML = 'Add extras <span class="cv">' + nodes.length + ' optional</span>';
-  var body = document.createElement('div');
-  body.className = 'lgfc__foldb';
-  fold.appendChild(btn);
-  fold.appendChild(body);
-
-  nodes[0].parentNode.insertBefore(fold, nodes[0]);
-  nodes.forEach(function (el) { body.appendChild(el); });
-
-  btn.addEventListener('click', function () {
-    var open = fold.classList.toggle('is-open');
-    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-  });
-})();
+/* THE "ADD EXTRAS" ACCORDION IS GONE — Ian, 2026-08-16, testing live: "and the
+   extras accordiian in general". Everything that used to fold now sits in the main
+   body in its declared order, which is also why the registry's `extra` column is
+   now false everywhere: nothing reads it, and leaving true values behind would
+   describe a construct that no longer exists. */
 JS;
 }
