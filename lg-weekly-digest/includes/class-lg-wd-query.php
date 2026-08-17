@@ -131,12 +131,7 @@ class LG_WD_Query {
 
     /** Is the discussion-media thumb fallback armed? */
     public static function topic_media_enabled(): bool {
-        // Default flipped ON 8/17 morning: gate 72 green + verifier green on
-        // the deployed tree, and the digest reaches members only when Ian
-        // SENDS — his compose preview is the human check. He needs this
-        // week's email carrying images; a dark default would have handed him
-        // a second no-change deploy. The constant/filter still force OFF.
-        $on = defined( self::MEDIA_FLAG ) ? (bool) constant( self::MEDIA_FLAG ) : true;
+        $on = defined( self::MEDIA_FLAG ) ? (bool) constant( self::MEDIA_FLAG ) : false;
         return (bool) apply_filters( 'lg_wd_topic_media_thumbs', $on );
     }
 
