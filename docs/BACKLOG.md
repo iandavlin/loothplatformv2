@@ -201,7 +201,67 @@ refuses to consult is_read for connection_request for exactly this reason.
 Mark read what was actually SEEN, not the whole store. Red-first: a member with 12
 notifications who opens the sheet and closes it must still have unread rows.
 
-## 4.0 Weekly digest: discussion images SOMETIMES missing (P0, LIVE) — Ian 8/3
+## 4.0 Weekly digest: discussion images SOMETIMES missing — CAUSE FOUND, FIX BUILT
+##     BEHIND A FLAG @ 8a0f5b8, needs Ian's look then one line to switch on (P0, LIVE)
+
+**CAUSE.** A discussion resolved its thumb from exactly two places: a featured
+image (bbPress topics never have one) and the first inline `<img>` in
+post_content. On live, EVERY topic that ever carried an inline `<img>` came from
+FluentForm — the src is always `/wp-content/uploads/fluentform/ff-*`. By month in
+2026: May 12, June 9, **July 0, August 0**. The last FluentForm topic is
+2026-06-17. That pathway stopped and took the digest's only image source with it.
+
+That is the *"now"*. The *"sometimes"* is the same fact seen from before the
+cliff: form-created topics had images, composer-created topics never did. The hub
+composer strips inline previews on purpose — `bb-mirror/web/forums.js`: *"strip
+inline preview images (bbp_media carries the real ones)"* — and stores them as
+BuddyBoss media in the `bp_media_ids` meta, which the digest never read.
+*"Mostly the discussion section"* follows exactly: every other section renders a
+featured image and is untouched by any of this.
+
+**EVIDENCE FROM REAL SENDS** (`wp_fc_campaigns.email_body` on live):
+campaign 403, the Aug 3 issue, renders "From The Forum" with two cards and no
+image on either, while Events, Videos and Shorties all carry theirs; campaign
+342 (Jun 29) is the passing case, two of its three forum cards imaged, both from
+`fluentform` URLs.
+
+**FIX** — read `bp_media_ids` as a THIRD fallback, after the two that already
+exist, so it can never reach a card that already resolves. Sizing is by WIDTH,
+not by rung name (BuddyBoss rungs are bounding boxes; forum photos are mostly
+portrait). See docs/CRAFT-STANDARD.md, "Discussion media in the weekly digest
+EMAIL", for why there is no resizer and no `srcset` here.
+
+**PROVEN ON LIVE DATA, read-only**: 29 live discussions since 2026-07-01 whose
+only possible image source is `bp_media` now resolve — 633px median, 70KB mean,
+0 too-narrow, 0 above the craft ceiling. Ian's two Aug 3 cards resolve to files
+that return **HTTP 200** on live: topic 72509 → a 616px/48KB rung (its original
+is 2545×1652 / 689KB), topic 72447 → 480×640 / 59KB.
+
+**KNOWN GAP, deliberate.** Of the 47 live discussions since 2026-07-01: 29 carry
+media on the topic and are fixed by this; 16 have no image anywhere and correctly
+stay text-only; **2 have images only in a REPLY** and are still imageless. Those
+were left alone on purpose — a topic card showing a photo that is not in the topic
+misrepresents what the reader is clicking through to. If Ian would rather have the
+image than the strictness, it is a small change: fall back to the newest reply's
+`bp_media_ids`. Not guessed at without him.
+
+**STILL TO DO — this is the part that needs Ian.** The flag defaults OFF, so
+live behaviour is unchanged until it is switched on:
+
+```php
+define('LG_WD_TOPIC_MEDIA_THUMBS', true);   // wp-config.php
+```
+
+A PHP constant, not an env var, because the digest can be sent by WP-cron and
+`lg-wp-cron.service` carries no `Environment=`. Sequence: merge dark → Ian
+previews an issue on live with the constant set → he sends. Nothing here sends
+mail, and no live write was made by this lane.
+
+Verify with `bash lg-weekly-digest/dev/verify-discussion-media-thumbs.sh`
+(behavioural, against whatever corpus the box holds; every assertion proven to go
+RED against deliberately broken copies via `LG_WD_UNDER_TEST`).
+
+### Original report (Ian 8/3, narrowed 8/5)
 
 Ian, from live: *"images from discussions are now sometimes not making it into the
 weekly digest."*

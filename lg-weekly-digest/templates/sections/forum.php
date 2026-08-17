@@ -13,13 +13,18 @@ $title  = esc_html( $item['title'] );
 $url    = esc_url( LG_WD_Email_Builder::add_utm( $item['url'] ) );
 $date   = esc_html( $item['date'] );
 
-// Image: featured first, then first <img> in post content
+// Image: featured first, then first <img> in post content, then attached
+// BuddyBoss media (the composer strips inline previews and stores images there —
+// see LG_WD_Query::MEDIA_FLAG for the measurement behind this).
 $img_url = $item['thumb_url'] ?? '';
 if ( ! $img_url ) {
     $post = get_post( $item['id'] );
     if ( $post && preg_match( '/<img[^>]+src=["\']([^"\']+)["\']/', $post->post_content, $m ) ) {
         $img_url = $m[1];
     }
+}
+if ( ! $img_url ) {
+    $img_url = LG_WD_Query::topic_media_thumb( (int) $item['id'] );
 }
 
 // Excerpt

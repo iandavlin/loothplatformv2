@@ -67,6 +67,49 @@ The escape hatch already works: a discussion that carries its own attached photo
 uses *that* as the thumb, and that path is fully compliant — resizer, `srcset`,
 `width`/`height`.
 
+### Discussion media in the weekly digest EMAIL — one width, no resizer, no `srcset`
+
+`lg-weekly-digest` renders a discussion card's thumb from the BuddyBoss media
+attached to the topic (`LG_WD_Query::topic_media_thumb`). It ships a **single
+same-origin upload URL**, no `/img.php`, no `srcset`. All three departures are
+forced by the medium:
+
+- **The resizer is unreachable from an inbox.** Real mail clients fetch images
+  with no cookies and `img.php` sits behind the dev gate, so routing sent mail
+  through it breaks the image for every recipient. This is already settled and
+  documented at `class-lg-wd-signup-page.php:223` — the resizer is for the
+  on-page preview only.
+- **One URL has to serve both layouts.** `srcset` support across mail clients is
+  not dependable, and the card lays the thumb out in a 240px column that stacks
+  to ~448px in the `<=480px` block of `templates/email.php`. 448 is therefore the
+  slot the single URL must cover.
+
+**The rule is width-driven, not name-driven**: pick the narrowest registered rung
+whose width is `>= 448`, and prefer a real rung over an oversized original.
+BuddyBoss's rungs are *bounding boxes*, so one name is a different width per
+orientation — measured over 393 attachments on dev2:
+
+| rung | portrait | landscape | square |
+|---|---|---|---|
+| `bb-media-activity-image` | 300 | 546 | 400 |
+| `…album-directory-image-medium` | 401 | 755 | 534 |
+| `bb-media-photos-popup-image` | 675 | 1195 | 900 |
+
+Forum photos are mostly portrait phone photos, so a fixed *name* that reads well
+for landscape (546px) hands portrait a 300px file into a 448px slot.
+
+**Do not "fix" this by asking for `large` or `medium`.** WP's own sizes are never
+generated for `bb_medias` uploads, so core falls all the way back to the ORIGINAL
+— measured at 2545×1652 / **689 KB** on the topic in Ian's 2026-08-03 report.
+
+MEASURED: 393 attachments on dev2 → **640px median, 67 KB mean**, against 900px /
+439 KB for the originals. 29 live discussions from 2026-07-01 on → 633px median,
+70 KB mean, **0** narrower than the slot, **0** above the 1.7× ceiling.
+
+**Known cost: soft on a high-DPR phone**, and above 1.7× the 240px *desktop*
+column. Both are accepted because a single URL must serve both layouts and mail
+is read mostly on phones. Known, not missed.
+
 ### Not an exception: `img.php?s=bb_medias/…` without dims
 
 `/hub/<forum>/` ships a topic cover through the resizer *without* `width`/`height`.
@@ -283,6 +326,7 @@ This document exists to make that the default move, not the last resort.
 | 68 | `tools/gates/compose-chrome-gate.py` | **the standalone compose page wears the site header and footer, in BOTH themes, and the embed variant does not.** Ian 2026-08-16, mid-test: *"can we get the header and footer so it looks like a normal page?"* — with keeper's ruling that standalone pages MIMIC the chrome and the presence is gated in both themes from birth. **Liveness first**, because a locked-out browser serves a styled 403 that looks identical in every theme — a chrome assertion against it fails for the wrong reason and a presence-only one could PASS on it. Judges **visible, not present** (computed display + a real layout box, never a class name in the HTML): chrome in the DOM at height 0 is the *presence is not reachability* shape. **Both themes** because a token-coloured chrome can be present and invisible in one — this same form produced exactly that this week. The embed leg is an **absence assertion paired with a liveness one** ("no chrome" is trivially true of a 404) and SKIPS rather than scores if that route is unreachable. RED-FIRST from real state: 4 of 5, exit 1, before the chrome shipped | headless Chrome + the dev gate; compose reachable for an entitled member (flag OFF ⇒ exit 2, no verdict) |
 | 69 | `tools/gates/loothprint-edit-door-gate.py` | **the Edit button on a Loothprint opens a two-line choice — Details & files vs Page text — and only for the entitled.** Ruled scope item 4; shape picked by Ian 2026-08-16. **It guards the DOOR**, because the form and its permission check existed for months and were reachable by nobody. **Signed-in liveness**, not just page liveness: the control renders only for `edit_archive_poc` or the author, and that identity comes from a `/whoami` loopback that is INTERMITTENT for a minted cookie — measured, the same tree gave items=2 then items=0, so without it "no menu" and "not recognised" are one observation. Asserts a **real post id** (the first build would have shipped `id=0`), that **Page text still exists** (the ruling added a door, it did not remove one), that the menu is **not a bright slab in dark**, and that a **stranger gets nothing** (absence paired with liveness). ⚠️ Reads the EFFECTIVE flag from the **serving checkout**, not the repo, and prints which directory — a repo-relative read always answers the tracked default because the box-local override exists only beside the deployed app; this gate made that mistake on its first run and blamed the app, which was right | headless Chrome + the dev gate; an entitled and a non-entitled login (defaults claude_admin / erin.vogel) |
 | 70 | `tools/gates/mirror-sync-loud-gate.py` | **the mirror pipe announces its own failures, and reconcile can reach backwards.** Backlog 3.9. A skip is not a success: `bb_mirror_upsert_reply()` returns without writing for an unmirrorable row — correctly, since throwing there wedged live's reconcile for **11 days** — but `_sync` answered 200 either way, so the 8/9 analysis read 290 POSTs, saw all 200, and could not separate the 11 replies that vanished from the 61 that landed. ⚠️ Asserts **202 specifically, not "not 200"**: a 4xx/5xx looks stricter and is worse, because the WP hook is fire-and-forget and an error status retry-storms a row retrying cannot fix. Also asserts the upsert **still never throws** — loud is not fatal. Backwards reach: the delta walk is forward-only (`post_modified_gmt >= bookmark - 60`) and on 2026-08-16 all five diverged replies were 60–73 days older than it, so the deep sweep must be interval-bounded on its own key, repair on a **modified-time difference** (not just absence, or stale edits stay permanent), and **refuse an empty WP read**. Mutation-proven: 202→200, skip→500, guard removed, upsert made to throw, note deleted — all RED | source-read only: no browser, network or DB, so it cannot flake under load |
+| 72 | `lg-weekly-digest/dev/verify-discussion-media-thumbs.php` (+ `.sh`) | **the weekly digest's discussion cards keep their images.** Ian 2026-08-03: *"images from discussions are now sometimes not making it into the weekly digest"*, narrowed 08-05 to *"mostly the discussion section"*. A topic resolved a thumb from a featured image (bbPress topics never have one) and the first inline `<img>` in `post_content` — **nothing else**. The hub composer *strips* inline previews and stores images as BuddyBoss media, so every composer-made discussion lost its image; the last inline-`<img>` topic was 2026-06-17, which is the "now". **Measured on live before choosing an approach**, which is the substance: of 68 image-bearing discussions in 90 days, 13 already work, **54 are fixed by `bp_media`**, and **1** (71454) is reachable only from the mirror — so resolving from the mirror instead buys *one topic in ninety days* in exchange for a cross-DB dependency inside a **cron-driven mailer**, where `lg-wp-cron.service` carries no `Environment=`. Built on `bp_media`; 71454 recorded as knowingly uncovered. **DATA-SHAPED, SO IT RUNS ON THE REAL CORPUS, NOT A FIXTURE** — a seeded row proves the code can read a row we wrote; 40 real failing-class topics prove it reads what the composer produces. Reports the corpus it measured and exits **CANNOT RUN (2)** if the failing class vanishes, so it cannot pass vacuously. Asserts **both** flag states — 0/40 resolve OFF (the bug, reproduced), 40/40 ON — and that 40 passing-class cards are **byte-identical** between them, so the fix cannot reach a card that already worked. Proven able to fail: deleting the resolver reddens it (exit 1), restored from a snapshot copy, never `git checkout --`. **Reply-only images stay excluded ON PURPOSE** — *a topic card showing a photo that is not in the topic misrepresents the click* — recorded as Ian's call, not silently closed. ⚠️ **dev2 holds 2825 `bp_media` rows and ZERO media files**, so this gate proves the URL is resolved and emitted and can **never** prove the image *loads*; only live can | — (static: `wp eval-file`, no browser, no network) |
 
 ## Both themes from birth (keeper, 8/16)
 
