@@ -1147,6 +1147,34 @@ echo "=== GATE 61: the work board clears AA in dark (Ian's primary interface) ==
 # reds forever on an accepted baseline teaches everyone to ignore it.
 run "board-dark-contrast" python3 "$(dirname "$0")/board-dark-contrast-gate.py"
 
+# ⚠️ REGISTERED ABOVE THE RED-EXIT DELIBERATELY. This is a static corpus read
+# — no browser, no network, seconds — and it guards an email that GOES OUT to
+# members. A gate below the marker does not run when anything earlier is red,
+# which is exactly how gate 57 once executed nothing while looking covered.
+# Cheap + member-facing belongs above; the expensive tail belongs below.
+echo "=== GATE 72: the weekly digest's discussion cards keep their images ==="
+# Ian, 2026-08-03: "images from discussions are now sometimes not making it into
+# the weekly digest", narrowed 08-05 to "mostly the discussion section". A topic
+# resolved a thumb from a featured image (bbPress topics never have one) and the
+# first inline <img> in post_content — nothing else. The hub composer STRIPS
+# inline previews and stores images as BuddyBoss media, so every composer-made
+# discussion lost its image. Measured on live 2026-08-16: of 68 image-bearing
+# discussions in 90 days, 55 lose their image today.
+#
+# DATA-SHAPED, SO IT RUNS ON THE REAL CORPUS, NOT A FIXTURE. A seeded row proves
+# the code can read a row we wrote; 40 real failing-class topics prove it reads
+# what the composer actually produces. It REPORTS the corpus it measured and goes
+# CANNOT RUN (2) if the failing class disappears, so it cannot pass vacuously.
+#
+# It asserts BOTH flag states: 0 of 40 resolve with the flag OFF (the bug,
+# reproduced) and 40 of 40 with it ON, while 40 passing-class cards stay
+# BYTE-IDENTICAL between the two — the fix cannot reach a card that already
+# worked. Proven able to fail: deleting the resolver reddens it (exit 1).
+#
+# ⚠️ dev2 holds 2825 bp_media ROWS AND ZERO MEDIA FILES, so this gate proves the
+# URL is resolved and emitted — it can never prove the image LOADS. Only live can.
+run "digest-forum-images" bash "$(dirname "$0")/../../lg-weekly-digest/dev/verify-discussion-media-thumbs.sh"
+
 if [ "$red" -ne 0 ]; then
   echo "############ GATES RED — do not push ############"
   echo "RED GATES: ${RED_GATES:-unknown}"
@@ -1486,6 +1514,7 @@ echo "=== GATE 70: the mirror pipe is LOUD, and reconcile can reach backwards ==
 # ⚠️ Honest limit, in its docstring: a skip note DISABLED in place (if(false)) still
 # passes, because this leg reads source rather than executing. Deletion is caught.
 run "mirror-sync-loud" python3 "$(dirname "$0")/mirror-sync-loud-gate.py"
+
 echo "=== GATE 71: every sitemap-listed URL serves OPEN content to a logged-out visitor ==="
 # The standing gate keeper promised Ian (backlog 40, job 3): sample real URLs
 # from the live /sitemap.xml (static/content/profiles/discussions) and prove

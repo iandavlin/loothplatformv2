@@ -1,5 +1,13 @@
 <?php
 /**
+ * GATE 72 — the discussion cards that lost their images get them back.
+ *
+ * KEEPER GATE NUMBER: 72 — assigned 2026-08-17. Verified free against main AND
+ * every worktree on the box before being written here: three numbers collided on
+ * this board in one day (46/47, 55, 57), and every one was caught by a lane
+ * reading another lane's diff rather than by the allocation. "Keeper said so" is
+ * not evidence a number is free — check, it costs ten seconds.
+ *
  * verify-discussion-media-thumbs.php — the discussion cards that lost their images
  * get them back, and the ones that still work do not move a byte.
  *
