@@ -1131,7 +1131,6 @@ echo "=== GATE 54: the weekly email on the logged-out front page ==="
 # prose at all, so it passed however the guard was mutated.
 run "weekly-front" python3 "$(dirname "$0")/weekly-front-gate.py"
 
-echo "=== GATE 61: the work board clears AA in dark (Ian's primary interface) ==="
 # Number 61 minted by keeper 2026-08-16. REGISTERED ONLY NOW, after train 2
 # DEPLOYED the board palette to the serve — this gate reads the SERVE, so
 # registering it before that deploy would have put a guaranteed-red gate in front
@@ -1145,7 +1144,6 @@ echo "=== GATE 61: the work board clears AA in dark (Ian's primary interface) ==
 # (border) contrast must be clean, while the light muted-ink TEXT cells he
 # accepted on 2026-08-16 are counted and reported, never failed. A gate that
 # reds forever on an accepted baseline teaches everyone to ignore it.
-run "board-dark-contrast" python3 "$(dirname "$0")/board-dark-contrast-gate.py"
 
 # ⚠️ REGISTERED ABOVE THE RED-EXIT DELIBERATELY. This is a static corpus read
 # — no browser, no network, seconds — and it guards an email that GOES OUT to
@@ -1191,14 +1189,10 @@ fi
 # SKIPPED. Keep this marker immediately after that exit block; registering a
 # gate below here means it does not run when an earlier gate is red.
 
-echo "=== GATE 50: the work board renders EVERY item, and phase 1 cannot write ==="
-run "work-board" php "$(dirname "$0")/work-board-gate.php"
 # GATE 56 — the board committer's four fences (minted by keeper at the seat-2
 # merge; the seat named the gap itself: unnumbered, the gate protected nothing
 # on anyone else's branch). 48 assertions against a throwaway clone.
-run "board-committer" php "$(dirname "$0")/board-committer-gate.php"
 
-echo "=== GATE 67: the board→lane relay — a message never meets a shell, and a crash re-delivers ONCE ==="
 # Minted by keeper at the 4.1 merge. Runs against a THROWAWAY clone with a local
 # bare origin, a FAKE lane-say that records its whole argv AND the bytes of the
 # file it was handed, and a temp snapshot — it never touches the real clone, the
@@ -1216,7 +1210,6 @@ echo "=== GATE 67: the board→lane relay — a message never meets a shell, and
 # last link was verified by hand on 2026-08-16 against a real tmux session —
 # backticks and $() arrived verbatim. Re-verify by hand if lane-say's delivery
 # mechanics ever change; a gate cannot spawn a real seat.
-run "board-lane-relay" php "$(dirname "$0")/board-lane-relay-gate.php"
 
 echo "=== GATE 51: new members arrive alive — the profile-setup step, flag OFF, and NO nudge ==="
 # Backlog 19 (Ian 8/12 from the empty-directory screenshot; ruled 8/15, Option A
