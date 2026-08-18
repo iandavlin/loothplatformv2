@@ -16,8 +16,30 @@ set -euo pipefail
 
 REPO="/home/ubuntu/keeper-repo"
 SERVE="/home/ubuntu/loothplatformv2-clean"
+
+# Ceilings — Ian's ruling 8/18 (handoff-4): two numbers, not one. Disk allows
+# 9+ seats (~100MB each); these are the ruled caps, and the binding limits are
+# the 2-core box and attention, not storage.
+SEAT_CEILING=6     # worktrees existing
+WORKING_CAP=2      # lanes generating at once — and 1 while Ian is actively on dev2
+
 NO_LIVE=0; AGENTS=0; JSON=0; ALL=0
 for a in "$@"; do case "$a" in --no-live) NO_LIVE=1;; --agents) AGENTS=1;; --json) JSON=1;; --all) ALL=1;; esac; done
+
+# Ian's ruling 8/18: fetch before the unbacked count — remote-tracking refs go
+# stale, and a branch pushed hours ago must never read as unbacked. A failed
+# fetch is flagged, never silent (the count may then overstate).
+FETCH_OK=true
+timeout 20 git -C "$REPO" fetch origin --prune --quiet 2>/dev/null || FETCH_OK=false
+UNBACKED=$(git -C "$REPO" rev-list --count --branches --not --remotes=origin 2>/dev/null || echo 0)
+UNB_LINES=""
+if [[ "$UNBACKED" -gt 0 ]]; then
+    for b in $(git -C "$REPO" for-each-ref --format='%(refname:short)' refs/heads); do
+        n=$(git -C "$REPO" rev-list --count "$b" --not --remotes=origin 2>/dev/null || echo 0)
+        [[ "$n" -gt 0 ]] && UNB_LINES+="$n $b"$'\n'
+    done
+    UNB_LINES=$(printf '%s' "$UNB_LINES" | sort -rn)
+fi
 
 # ── deploy line: main / dev2 serve / live. Invisible when all agree. ─────────
 MAIN=$(git -C "$REPO" rev-parse main)
@@ -40,21 +62,12 @@ fi
 GAP=0
 [[ "$DEV2" != "$MAIN" ]] && GAP=1
 [[ $NO_LIVE -eq 0 && "$LIVE" != "$MAIN" ]] && GAP=1
-if [[ $JSON -eq 0 && $GAP -eq 1 ]]; then
-    echo "DEPLOY GAP:"
-    echo "  main  ${MAIN:0:7}"
-    if [[ "$DEV2" == "MISSING" ]]; then echo "  dev2  MISSING (serving checkout unreadable)"; else
-        echo "  dev2  ${DEV2:0:7}$([[ "$DEV2" != "$MAIN" ]] && echo '   <- differs from main')"; fi
-    if [[ $NO_LIVE -eq 0 ]]; then
-        if [[ "$LIVE" == "UNKNOWN" ]]; then echo "  live  UNKNOWN — read failed; NOT proof of health"; else
-            echo "  live  ${LIVE:0:7}$([[ "$LIVE" != "$MAIN" ]] && echo '   <- differs from main')"; fi
-    fi
-    echo
-fi
-
 # ── rows: one per worktree, straight from git ────────────────────────────────
-ROWS=""          # sortkey|folder|branch|behind|unique|push|status
+ROWS=""          # sortkey|folder|branch|behind|unique|push|status|rawpush|slug|scratch|mismatch
 SHOW_PUSH=0      # push column materializes only when a lane has unpushed work
+SEATS_USED=0     # real (non-scratch) worktree seats, parent excluded
+WT_BRANCHES=""   # branches that HAVE a worktree (parked zone excludes these)
+COLL_BRANCHES="" # seat branches with unique work (collision candidates)
 folder=""
 while IFS= read -r line; do
     case "$line" in
@@ -65,6 +78,7 @@ while IFS= read -r line; do
         "branch refs/heads/"*)
             branch="${line#branch refs/heads/}"
             scr=false; [[ "$folder" != /home/ubuntu/* ]] && scr=true
+            WT_BRANCHES+=" $branch"
             # mismatch = the folder-name-lies hazard: `git worktree remove`
             # takes a PATH, and this is exactly where the wrong one gets removed
             mm=false; [[ "$(basename "$folder")" != "$branch" ]] && mm=true
@@ -96,9 +110,41 @@ while IFS= read -r line; do
             if [[ "$push" == "NO REMOTE" ]]; then
                 if [[ "$unique" == "0" ]]; then cell="-"; else SHOW_PUSH=1; fi
             elif [[ "$push" != "0" ]]; then SHOW_PUSH=1; fi
+            [[ "$scr" == false ]] && SEATS_USED=$((SEATS_USED + 1))
+            [[ "$scr" == false && "$unique" =~ ^[0-9]+$ && "$unique" -gt 0 ]] && COLL_BRANCHES+=" $branch"
             ROWS+="$behind|${folder#/home/ubuntu/}|$branch|$behind|$unique|$cell|$status|${push/NO REMOTE/NR}|$slug|$scr|$mm"$'\n' ;;
     esac
 done < <(git -C "$REPO" worktree list --porcelain)
+
+# ── collisions: one file touched by two lanes merges clean and can still be
+#    wrong. Intersect changed-file lists across seats with unique work. ───────
+COLLISIONS=""    # file|branch branch...
+if [[ -n "${COLL_BRANCHES// /}" ]]; then
+    declare -A FMAP=()
+    for b in $COLL_BRANCHES; do
+        while IFS= read -r f; do [[ -n "$f" ]] && FMAP["$f"]+=" $b"; done \
+            < <(git -C "$REPO" diff --name-only "main...$b" 2>/dev/null)
+    done
+    for f in "${!FMAP[@]}"; do
+        [[ $(wc -w <<<"${FMAP[$f]}") -gt 1 ]] && COLLISIONS+="$f|${FMAP[$f]# }"$'\n'
+    done
+fi
+
+# ── parked: branches with NO worktree whose tip subject starts "PARKED: ".
+#    Explicitly marked ONLY — anything else is just a branch (cleanup footer),
+#    never a junk-drawer zone. Age is the cost of parking; behind>300 means
+#    the parking has expired in practice. ─────────────────────────────────────
+PARKED=""        # branch|reason|days|behind|expired
+NOW_TS=$(date +%s)
+while IFS='|' read -r b subj ts; do
+    [[ " $WT_BRANCHES " == *" $b "* ]] && continue
+    [[ "$subj" == "PARKED: "* ]] || continue
+    days=$(( (NOW_TS - ts) / 86400 ))
+    pbh=$(git -C "$REPO" rev-list --left-right --count "origin/main...$b" 2>/dev/null | tr '\t' ' ')
+    pbh=${pbh%% *}; [[ "$pbh" =~ ^[0-9]+$ ]] || pbh=0
+    pex=false; [[ "$pbh" -gt 300 ]] && pex=true
+    PARKED+="$b|${subj#PARKED: }|$days|$pbh|$pex"$'\n'
+done < <(git -C "$REPO" for-each-ref --format='%(refname:short)|%(subject)|%(committerdate:unix)' refs/heads)
 
 # ── --json: machine output for the eventual interface. No quiet rules here —
 #    machines get every field, always; hiding is a human-display concern. ─────
@@ -108,8 +154,37 @@ if [[ $JSON -eq 1 ]]; then
     if [[ $NO_LIVE -eq 0 ]]; then
         if [[ "$LIVE" == "UNKNOWN" ]]; then live_state="unknown"; else live_json="\"$LIVE\""; live_state="ok"; fi
     fi
-    printf '{\n  "deploy": {"main": "%s", "dev2": %s, "live": %s, "live_state": "%s", "in_sync": %s},\n  "lanes": [\n' \
+    printf '{\n  "deploy": {"main": "%s", "dev2": %s, "live": %s, "live_state": "%s", "in_sync": %s},\n' \
         "$MAIN" "$dev2_json" "$live_json" "$live_state" "$([[ $GAP -eq 0 ]] && echo true || echo false)"
+    printf '  "capacity": {"seats_used": %d, "seat_ceiling": %d, "working_cap": %d},\n' \
+        "$SEATS_USED" "$SEAT_CEILING" "$WORKING_CAP"
+    printf '  "unbacked": {"total": %d, "fetch_ok": %s, "branches": [' "$UNBACKED" "$FETCH_OK"
+    ufirst=1
+    while read -r n b; do
+        [[ -z "$b" ]] && continue
+        [[ $ufirst -eq 0 ]] && printf ', '
+        ufirst=0
+        printf '{"branch": "%s", "count": %s}' "$b" "$n"
+    done <<<"$UNB_LINES"
+    printf ']},\n  "collisions": ['
+    cfirst=1
+    while IFS='|' read -r f bs; do
+        [[ -z "$f" ]] && continue
+        [[ $cfirst -eq 0 ]] && printf ', '
+        cfirst=0
+        blist=""; for b in $bs; do blist+="\"$b\", "; done
+        printf '{"file": "%s", "branches": [%s]}' "${f//\"/\\\"}" "${blist%, }"
+    done <<<"$COLLISIONS"
+    printf '],\n  "parked": ['
+    pfirst=1
+    while IFS='|' read -r b reason days pbh pex; do
+        [[ -z "$b" ]] && continue
+        [[ $pfirst -eq 0 ]] && printf ', '
+        pfirst=0
+        printf '{"branch": "%s", "reason": "%s", "days": %s, "behind": %s, "expired": %s}' \
+            "$b" "${reason//\"/\\\"}" "$days" "$pbh" "$pex"
+    done <<<"$PARKED"
+    printf '],\n  "lanes": [\n'
     first=1
     while IFS='|' read -r _ f b behind unique _ _ rawpush slug scratch mismatch; do
         [[ -z "$f" ]] && continue
@@ -123,6 +198,34 @@ if [[ $JSON -eq 1 ]]; then
     done < <(printf '%s' "$ROWS" | sort -t'|' -k1,1n)
     printf '\n  ]\n}\n'
     exit 0
+fi
+
+# ── human view ───────────────────────────────────────────────────────────────
+printf "seats %d/%d · working cap %d (1 while Ian is actively on dev2)\n\n" \
+    "$SEATS_USED" "$SEAT_CEILING" "$WORKING_CAP"
+
+if [[ $GAP -eq 1 ]]; then
+    echo "DEPLOY GAP:"
+    echo "  main  ${MAIN:0:7}"
+    if [[ "$DEV2" == "MISSING" ]]; then echo "  dev2  MISSING (serving checkout unreadable)"; else
+        echo "  dev2  ${DEV2:0:7}$([[ "$DEV2" != "$MAIN" ]] && echo '   <- differs from main')"; fi
+    if [[ $NO_LIVE -eq 0 ]]; then
+        if [[ "$LIVE" == "UNKNOWN" ]]; then echo "  live  UNKNOWN — read failed; NOT proof of health"; else
+            echo "  live  ${LIVE:0:7}$([[ "$LIVE" != "$MAIN" ]] && echo '   <- differs from main')"; fi
+    fi
+    echo
+fi
+
+[[ "$FETCH_OK" == false ]] && { echo "WARN: fetch failed — unbacked count may be stale"; echo; }
+if [[ "$UNBACKED" -gt 0 ]]; then
+    echo "UNBACKED: $UNBACKED commit(s) exist ONLY on this box:"
+    while read -r n b; do [[ -n "$b" ]] && echo "  $n  $b"; done <<<"$UNB_LINES"
+    echo
+fi
+if [[ -n "$COLLISIONS" ]]; then
+    echo "COLLISIONS (same file, more than one lane):"
+    while IFS='|' read -r f bs; do [[ -n "$f" ]] && echo "  $f  <- $bs"; done <<<"$COLLISIONS"
+    echo
 fi
 
 # ── print, sorted by behind ascending (freshest first) ───────────────────────
@@ -143,6 +246,18 @@ printf '%s' "$ROWS" | sort -t'|' -k1,1n | while IFS='|' read -r _ f b behind uni
         printf "%-34s %-24s %7s %7s  %s\n" "$f" "$b" "$behind" "$unique" "$status"
     fi
 done
+
+# ── parked zone: deliberately set down, no seat, no cost — but drift accrues ─
+if [[ -n "$PARKED" ]]; then
+    echo
+    echo "── parked (branch kept, seat freed — deliberately marked):"
+    while IFS='|' read -r b reason days pbh pex; do
+        [[ -z "$b" ]] && continue
+        line="  $b · parked ${days}d · behind $pbh · \"$reason\""
+        [[ "$pex" == true ]] && line+="  ⚠ PARKING EXPIRED — re-cut on resume"
+        echo "$line"
+    done <<<"$PARKED"
+fi
 
 # ── --agents: the old tmux view, unchanged (trial column) ────────────────────
 if [[ $AGENTS -eq 1 ]]; then

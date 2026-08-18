@@ -16,7 +16,28 @@
 # cannot leak into keeper-repo or the serving checkout.
 set -euo pipefail
 
-LANE="${1:?usage: spin-lane.sh <lane-name> [charter-path]}"
+# ── park subcommand (Ian's ruling 8/18: lifecycle lives here, spin + park) ────
+#   spin-lane.sh park <lane> "<reason>"
+# Parking = keep the branch, free the seat. The dangerous step is removing the
+# worktree BEFORE pushing — this script makes that order impossible. Marks the
+# branch with the exact LANE-RULES prefix "PARKED: <reason>" (an empty commit),
+# pushes, then removes the worktree. Keeper/Ian action — lanes never park
+# themselves (LANE-RULES: lanes don't remove worktrees).
+if [[ "${1:-}" == "park" ]]; then
+    LANE="${2:?usage: spin-lane.sh park <lane> \"reason\"}"
+    REASON="${3:?park needs a reason — it becomes the PARKED: commit}"
+    WT="$HOME/worktrees/${LANE}"
+    [[ -d "$WT" ]] || { echo "park: no worktree at $WT" >&2; exit 1; }
+    BR="$(git -C "$WT" rev-parse --abbrev-ref HEAD)"
+    [[ -z "$(git -C "$WT" status --porcelain)" ]] || { echo "park: $LANE has uncommitted changes — commit them first (nothing may be lost by parking)" >&2; exit 1; }
+    git -C "$WT" commit --allow-empty -m "PARKED: $REASON"
+    git -C "$WT" push -u origin "$BR"
+    git -C "$HOME/keeper-repo" worktree remove "$WT"
+    echo "park: $BR parked (\"$REASON\") — seat '$LANE' freed, branch safe on origin"
+    exit 0
+fi
+
+LANE="${1:?usage: spin-lane.sh <lane-name> [charter-path]  |  spin-lane.sh park <lane> \"reason\"}"
 CHARTER="${2:-$HOME/lane-prompts/${LANE}.md}"
 WT="$HOME/worktrees/${LANE}"
 CLAUDE="${CLAUDE_BIN:-$HOME/.local/bin/claude}"

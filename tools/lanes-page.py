@@ -47,6 +47,10 @@ def main():
     freeable = [l for l in rows if l["status"] == "done"]
     table = [l for l in rows if l["status"] != "done"]   # finished lanes leave
     at_risk = [l for l in rows if l["status"] == "at-risk"]
+    cap = data.get("capacity", {})
+    unb = data.get("unbacked", {})
+    collisions = data.get("collisions", [])
+    parked = data.get("parked", [])
 
     now = datetime.datetime.now()
     chip = {"live": ("live lane", "#9db668"),
@@ -79,6 +83,13 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 .strip b{color:#e8e6df;font-weight:600;}
 </style></head><body><div class="wrap"><h1>lanes</h1>""")
 
+    # 0. capacity — one glance, no counting rows (Ian's item 1)
+    if cap:
+        h.append(f'<div class="dim" style="margin-bottom:12px">seats '
+                 f'<b style="color:#e8e6df">{cap["seats_used"]}/{cap["seat_ceiling"]}</b>'
+                 f' &middot; working cap {cap["working_cap"]}'
+                 f' <span class="dim">(1 while you&rsquo;re actively on dev2)</span></div>')
+
     # 1. deploy — invisible when everything agrees
     if not dep["in_sync"] or dep["live_state"] == "unknown":
         h.append('<div class="block gap"><b>DEPLOY GAP</b><br>')
@@ -98,6 +109,21 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
         h.append(f'<div class="block risk">AT RISK — {html.escape(l["branch"])} '
                  f'has {l["unique"]} commit(s) on one disk only '
                  f'({html.escape(l["folder"])})</div>')
+    if unb.get("total", 0) > 0:
+        names = " &middot; ".join(
+            f'{html.escape(b["branch"])} ({b["count"]})' for b in unb.get("branches", []))
+        h.append(f'<div class="block risk">UNBACKED — {unb["total"]} commit(s) '
+                 f'exist only on this box: {names}</div>')
+    if not unb.get("fetch_ok", True):
+        h.append('<div class="block gap">fetch failed — the unbacked count may '
+                 'be stale, not necessarily zero</div>')
+
+    # 2b. collisions — same file in more than one lane; absent when empty
+    for c in collisions:
+        lanes_named = ", ".join(html.escape(b) for b in c["branches"])
+        h.append(f'<div class="block risk">COLLISION — '
+                 f'<code>{html.escape(c["file"])}</code> is changed by: '
+                 f'{lanes_named}</div>')
 
     # 3. the lanes (finished lanes have left the table)
     h.append('<table><tr><th>seat</th><th style="text-align:right">unique</th>'
@@ -117,10 +143,26 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
                  f'<td><span class="chip" style="background:{color}">{label}</span></td></tr>')
     h.append('</table>')
 
-    # 4. cleanup footnote
+    # 3b. parked zone — no seat, no cost, drift accruing visibly
+    if parked:
+        h.append('<div class="strip"><b>Parked</b> <span class="dim">(branch '
+                 'kept, seat freed — deliberately marked)</span>')
+        for p in parked:
+            exp = (' <span style="color:#e05f4f;font-weight:700">PARKING '
+                   'EXPIRED — re-cut on resume</span>' if p["expired"] else '')
+            h.append(f'<div><b>{html.escape(p["branch"])}</b> — '
+                     f'{html.escape(p["reason"])} &middot; parked {p["days"]}d '
+                     f'&middot; behind {p["behind"]}{exp}</div>')
+        h.append('</div>')
+
+    # 4. cleanup footnote — names, not counts (a count isn't actionable)
+    free_names = " · ".join(
+        f'{l["folder"].removeprefix("worktrees/")}'
+        + (f' ({l["branch"]})' if l["mismatch"] else '')
+        for l in freeable) or "none"
     h.append(f'<div class="foot">cleanup: {len(merged)} merged branch(es) '
              f'deletable &middot; {len(backups)} backup branch(es) held for '
-             f'review &middot; {len(freeable)} seat(s) finished and freeable</div>')
+             f'review &middot; finished &amp; freeable: {html.escape(free_names)}</div>')
 
     # 5. shipped, last 7 days — self-clearing; where an unflipped flag shows up
     if shipped:

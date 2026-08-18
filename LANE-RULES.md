@@ -58,6 +58,13 @@ If the lane is being **stood down** instead of finished, the final commit subjec
 starts with the exact prefix `STOOD DOWN: ` — capitals, colon, space. The status
 tooling keys on that prefix; any other phrasing reads as a live lane forever.
 
+If the lane is being **parked** — branch kept, seat freed, work to resume later —
+the final commit subject starts with the exact prefix `PARKED: ` (capitals, colon,
+space) followed by the reason. Same rule: the tooling keys on the exact prefix.
+Parking is a keeper/Ian action done with `spin-lane.sh park <lane> "<reason>"`,
+which refuses dirty trees and pushes before removing the worktree. Lanes never
+park themselves — that would violate "don't delete worktrees."
+
 ## When you're unsure about repo state
 
 Print it, don't guess. `git status`, `git log --oneline -10`,
