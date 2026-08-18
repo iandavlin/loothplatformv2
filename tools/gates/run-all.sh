@@ -1530,6 +1530,32 @@ echo "=== GATE 71: every sitemap-listed URL serves OPEN content to a logged-out 
 # away would defeat the gate's own point.
 run "sitemap-anon-open" python3 "$(dirname "$0")/sitemap-anon-open-gate.py"
 
+echo "=== GATE 73: the profile prints the address the MEMBER TYPED, ladder unmoved ==="
+# John Wilmink retyped his location to his shop and dragged the pin. The pin moved
+# and was right; the address TEXT kept showing his HOME address, for 47 days. His
+# typed value was stored correctly the whole time in users.location_text — the block
+# printed users.location_address instead, a column whose ONLY writer in the repo is
+# the one-time BuddyBoss import. Nothing maintained it, so it froze on the
+# pre-import address the moment a member edited and, being read first, beat what
+# they had just typed. Four live members were mis-rendering (190, 590, 598, 1323).
+#
+# ⚠️ THE LEG THAT MATTERS MOST IS NOT THE FIX, IT IS THE LADDER. "Print what the
+# member typed" sits one careless edit away from printing a street address to an
+# audience who chose City. So every state asserts city/state still print the
+# STRUCTURED label AND that neither address string appears in them — a leak
+# assertion paired with a liveness one, since "no street address" is trivially true
+# of an empty string (feedback-absence-assertion-needs-liveness).
+#
+# Reads the flag rather than hardcoding a state, so flipping the default needs no
+# edit here. Pure function under test: no DB, no browser, no network, so it cannot
+# flake under load and cannot go vacuously green behind a locked-out browser.
+#
+# RED-FIRST, three mutations, each into a COPY of the tree (never a checkout --):
+#   revert the Block.php fix        RED exit 1, naming the home address it printed
+#   ungate one location_address write RED exit 1, "3 writes but 2 flag guards"
+#   make coarseText fall through    RED exit 1, 12 findings, ladder leak in all 3 states
+run "location-address" python3 "$(dirname "$0")/location-address-gate.py"
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"
