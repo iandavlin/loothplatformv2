@@ -38,5 +38,23 @@ git -C "$WT" config --worktree user.email "claude@loothgroup.com"
 
 echo "spin-lane: $LANE signs as '$(git -C "$WT" config user.name) <$(git -C "$WT" config user.email)>'"
 
+# ── LANE-RULES.md §"What the tooling already handles" — keep these promises TRUE ──
+# 1. Folder and branch always match. Three seat-reuse mismatches (8/18 audit) are
+#    exactly the "which folder am I in" hazard; refuse rather than inherit one.
+BRANCH="$(git -C "$WT" rev-parse --abbrev-ref HEAD)"
+[[ "$BRANCH" == "$LANE" ]] || { echo "spin-lane: worktree is on '$BRANCH', not '$LANE' — folder and branch must match (LANE-RULES.md). Re-cut the worktree from origin/main; don't rename or checkout." >&2; exit 1; }
+
+# 2. The branch exists on GitHub from the moment the lane opens.
+git -C "$WT" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1 \
+  || { echo "spin-lane: pushing $LANE to origin (work exists in two places from the first commit)"; git -C "$WT" push -u origin "$LANE"; }
+
 cd "$WT"
-exec "$CLAUDE" --dangerously-skip-permissions --model "$MODEL" "$(cat "$CHARTER")"
+# LANE-RULES.md rides ahead of every charter, from the lane's own checkout, so the
+# rules an agent reads are the rules its code version was cut with.
+RULES="$WT/LANE-RULES.md"
+if [[ -f "$RULES" ]]; then
+    exec "$CLAUDE" --dangerously-skip-permissions --model "$MODEL" "$(cat "$RULES")"$'\n\n---\n\n'"$(cat "$CHARTER")"
+else
+    echo "spin-lane: WARN — no LANE-RULES.md in this worktree (pre-rules cut); spawning with charter alone" >&2
+    exec "$CLAUDE" --dangerously-skip-permissions --model "$MODEL" "$(cat "$CHARTER")"
+fi
