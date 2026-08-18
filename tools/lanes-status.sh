@@ -16,8 +16,8 @@ set -euo pipefail
 
 REPO="/home/ubuntu/keeper-repo"
 SERVE="/home/ubuntu/loothplatformv2-clean"
-NO_LIVE=0; AGENTS=0; JSON=0
-for a in "$@"; do case "$a" in --no-live) NO_LIVE=1;; --agents) AGENTS=1;; --json) JSON=1;; esac; done
+NO_LIVE=0; AGENTS=0; JSON=0; ALL=0
+for a in "$@"; do case "$a" in --no-live) NO_LIVE=1;; --agents) AGENTS=1;; --json) JSON=1;; --all) ALL=1;; esac; done
 
 # ── deploy line: main / dev2 serve / live. Invisible when all agree. ─────────
 MAIN=$(git -C "$REPO" rev-parse main)
@@ -60,12 +60,17 @@ while IFS= read -r line; do
     case "$line" in
         "worktree "*) folder="${line#worktree }" ;;
         "detached")
-            ROWS+="999999|${folder#/home/ubuntu/}|(detached)|-|-|-|detached — investigate|NR|detached"$'\n' ;;
+            scr=false; [[ "$folder" != /home/ubuntu/* ]] && scr=true
+            ROWS+="999999|${folder#/home/ubuntu/}|(detached)|-|-|-|detached — investigate|NR|detached|$scr|false"$'\n' ;;
         "branch refs/heads/"*)
             branch="${line#branch refs/heads/}"
+            scr=false; [[ "$folder" != /home/ubuntu/* ]] && scr=true
+            # mismatch = the folder-name-lies hazard: `git worktree remove`
+            # takes a PATH, and this is exactly where the wrong one gets removed
+            mm=false; [[ "$(basename "$folder")" != "$branch" ]] && mm=true
             if [[ "$branch" == "main" ]]; then
                 # the parent checkout is not a seat; the deploy line covers it
-                ROWS+="-1|${folder#/home/ubuntu/}|main|0|0|0|— (parent checkout)|0|parent"$'\n'
+                ROWS+="-1|${folder#/home/ubuntu/}|main|0|0|0|— (parent checkout)|0|parent|false|false"$'\n'
                 continue
             fi
             lr=$(git -C "$REPO" rev-list --left-right --count "origin/main...$branch" 2>/dev/null | tr '\t' ' ' || true)
@@ -91,7 +96,7 @@ while IFS= read -r line; do
             if [[ "$push" == "NO REMOTE" ]]; then
                 if [[ "$unique" == "0" ]]; then cell="-"; else SHOW_PUSH=1; fi
             elif [[ "$push" != "0" ]]; then SHOW_PUSH=1; fi
-            ROWS+="$behind|${folder#/home/ubuntu/}|$branch|$behind|$unique|$cell|$status|${push/NO REMOTE/NR}|$slug"$'\n' ;;
+            ROWS+="$behind|${folder#/home/ubuntu/}|$branch|$behind|$unique|$cell|$status|${push/NO REMOTE/NR}|$slug|$scr|$mm"$'\n' ;;
     esac
 done < <(git -C "$REPO" worktree list --porcelain)
 
@@ -106,15 +111,15 @@ if [[ $JSON -eq 1 ]]; then
     printf '{\n  "deploy": {"main": "%s", "dev2": %s, "live": %s, "live_state": "%s", "in_sync": %s},\n  "lanes": [\n' \
         "$MAIN" "$dev2_json" "$live_json" "$live_state" "$([[ $GAP -eq 0 ]] && echo true || echo false)"
     first=1
-    while IFS='|' read -r _ f b behind unique _ _ rawpush slug; do
+    while IFS='|' read -r _ f b behind unique _ _ rawpush slug scratch mismatch; do
         [[ -z "$f" ]] && continue
         [[ $first -eq 0 ]] && printf ',\n'
         first=0
         bh="null"; [[ "$behind" =~ ^[0-9]+$ ]] && bh="$behind"
         un="null"; [[ "$unique" =~ ^[0-9]+$ ]] && un="$unique"
         if [[ "$rawpush" == "NR" ]]; then up="null"; nr="true"; else up="$rawpush"; nr="false"; fi
-        printf '    {"folder": "%s", "branch": "%s", "behind": %s, "unique": %s, "unpushed": %s, "no_remote": %s, "status": "%s"}' \
-            "$f" "$b" "$bh" "$un" "$up" "$nr" "$slug"
+        printf '    {"folder": "%s", "branch": "%s", "behind": %s, "unique": %s, "unpushed": %s, "no_remote": %s, "status": "%s", "scratch": %s, "mismatch": %s}' \
+            "$f" "$b" "$bh" "$un" "$up" "$nr" "$slug" "$scratch" "$mismatch"
     done < <(printf '%s' "$ROWS" | sort -t'|' -k1,1n)
     printf '\n  ]\n}\n'
     exit 0
@@ -126,8 +131,12 @@ if [[ $SHOW_PUSH -eq 1 ]]; then
 else
     printf "%-34s %-24s %7s %7s  %s\n" "FOLDER" "BRANCH" "BEHIND" "UNIQUE" "STATUS"
 fi
-printf '%s' "$ROWS" | sort -t'|' -k1,1n | while IFS='|' read -r _ f b behind unique cell status _ _; do
+printf '%s' "$ROWS" | sort -t'|' -k1,1n | while IFS='|' read -r _ f b behind unique cell status _ _ scratch mismatch; do
     [[ -z "$f" ]] && continue
+    # scratch worktrees (outside /home/ubuntu) are noise on every run — hidden
+    # unless --all; JSON always carries them, flagged, for machines to filter
+    [[ "$scratch" == "true" && $ALL -eq 0 ]] && continue
+    if [[ "$mismatch" == "true" ]]; then f="≠ $f"; status="$status — FOLDER≠BRANCH"; fi
     if [[ $SHOW_PUSH -eq 1 ]]; then
         printf "%-34s %-24s %7s %7s %10s  %s\n" "$f" "$b" "$behind" "$unique" "$cell" "$status"
     else

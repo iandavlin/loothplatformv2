@@ -1,0 +1,7 @@
+[Unit]
+Description=Render the lanes status page + json (static, behind the dev gate)
+
+[Service]
+Type=oneshot
+User=ubuntu
+ExecStart=/usr/bin/python3 /home/ubuntu/keeper-repo/tools/lanes-page.py
