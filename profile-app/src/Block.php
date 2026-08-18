@@ -650,7 +650,21 @@ final class Block
         $country = (string)($place['country'] ?? '');
 
         if ($precision === 'street') {
-            $text = (string)($place['address'] ?: $place['text'] ?: trim(implode(', ', array_filter([$city, $region]))));
+            // WHICH COLUMN IS THE MEMBER'S ADDRESS — see config/location-address.php.
+            // `place['address']` is users.location_address, whose only writer in the
+            // repo is the one-time BuddyBoss import; nothing maintains it, so once a
+            // member edits their location it is frozen on the OLD address and, being
+            // first, beats the value they just typed (John Wilmink, user 190: printed
+            // his home address while his shop address sat in location_text). ON
+            // prefers what the member typed. OFF keeps the historical order exactly,
+            // so it stays a byte-identical no-op.
+            //
+            // Only the STREET branch chooses — city/state below are untouched in both
+            // states and keep printing structured labels, never the typed line.
+            $primary = Flags::bool('location-address', 'prefer_typed_address')
+                ? ($place['text']    ?: $place['address'])
+                : ($place['address'] ?: $place['text']);
+            $text = (string)($primary ?: trim(implode(', ', array_filter([$city, $region]))));
             if (!empty($place['postcode'])) $text = ($text !== '' ? $text . ' · ' : '') . $place['postcode'];
             if ($text === '' && $lat === null) return null;
             return ['text' => $text, 'lat' => $lat, 'lng' => $lng, 'zoom' => 15, 'kind' => 'exact'];

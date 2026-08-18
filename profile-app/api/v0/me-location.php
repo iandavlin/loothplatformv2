@@ -6,6 +6,7 @@ require_once LG_PROFILE_APP_APP_ROOT . '/src/Block.php';   // not in config.php'
 use Looth\ProfileApp\Auth;
 use Looth\ProfileApp\Block;
 use Looth\ProfileApp\Db;
+use Looth\ProfileApp\Flags;
 use Looth\ProfileApp\GeoIP;
 use Looth\ProfileApp\Profile;
 
@@ -68,6 +69,20 @@ $set      = [];
 $params   = [':id' => (int)$user['id']];
 $geocoded = null;   // null = this call didn't set an address; true/false otherwise
 
+// Keep users.location_address in step with users.location_text — see
+// config/location-address.php. That column's ONLY writer in the repo is the
+// one-time BuddyBoss import (bin/snapshot-location-from-bb.php), so it freezes on
+// a member's pre-import address the moment they edit, while readers that trust it
+// (Block::locationDisplay at street, Profile.php's exact tier,
+// api/v0/directory-members.php) go on printing the stale value. Writing it here is
+// what stops it being a fossil.
+//
+// Gated with the read half, not separately: an ON that wrote the column while OFF
+// only changed rendering would leave members who saved during ON carrying data the
+// OFF path never meant to create. Both halves off ⇒ this endpoint touches exactly
+// the columns it touched before.
+$syncAddressColumn = Flags::bool('location-address', 'prefer_typed_address');
+
 // 1. Verbatim address + server-side forward-geocode. The owner's typed string is
 //    the listed address (stored verbatim, NOT replaced by Nominatim's display_name).
 if ($hasAddress) {
@@ -78,6 +93,10 @@ if ($hasAddress) {
 
     $set[] = 'location_text     = :text';
     $params[':text'] = $addr;                          // VERBATIM — what the owner typed
+    if ($syncAddressColumn) {
+        $set[] = 'location_address  = :addrcol';
+        $params[':addrcol'] = $addr;                   // same string, so the two can't drift
+    }
 
     if ($geo !== null) {
         // Confident placement: drop the pin and fill structured columns so City/State
@@ -138,6 +157,10 @@ if (is_array($nominatim)) {
         ':postcode' => $parsed['postcode'],
         ':raw'      => json_encode($nominatim, JSON_UNESCAPED_SLASHES),
     ];
+    if ($syncAddressColumn) {
+        $set[] = 'location_address  = :addrcol';
+        $params[':addrcol'] = $parsed['text'];
+    }
 }
 
 if (is_string($textOnly) && trim($textOnly) !== '') {
@@ -152,6 +175,10 @@ if (is_string($textOnly) && trim($textOnly) !== '') {
     $set[] = 'place_id          = NULL';
     $set[] = 'place_result      = NULL';
     $params[':text'] = trim($textOnly);
+    if ($syncAddressColumn) {
+        $set[] = 'location_address  = :addrcol';
+        $params[':addrcol'] = trim($textOnly);
+    }
 }
 
 if (is_string($visibility)) {
