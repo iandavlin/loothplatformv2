@@ -1,0 +1,49 @@
+# merged-branch sweep 20260818-2225 — every commit below is reachable from main
+# standing grant: Ian, handoff-2, 8/18 (--merged class only)
+account-following fea2305355fea9ceef88998ed3c4a3be78c3cc8e :: docs: the cadence seam — one store, three surfaces, and the two paragraphs that disagree
+admin-no-offline-shell e9b8a4da6337f0c002e2e0f26ef4bf2e13e6fd89 :: docs: backlog 28 handoff — the IS_DEV2 trap, the absent v-bump, and four process near-misses
+anon-frontdoor c5b023e40c7d99ae0b65196f13b76bfae5bbb864 :: gate 12/12 + CRAFT-STANDARD: presence is not reachability
+anon-mobile-dash 42ee7bbea064049d6e5ee3aa2de73b6f177a17e1 :: gate 12 + preview: hold each flag state to its own contract; survive the URL wipe
+compose-draft-first f06798152258ff0fb85377681985404a3832c775 :: handoff: record the suite result, the dark defect it found, and today's two open decisions
+compose-followups a8619e107a8bd8a165be0b1f15a172ba648e7a26 :: gate 69: register the loothprint edit-door gate — number from keeper
+compose-richtext 06eb4d4620c830722281b92556c75c1406064c79 :: gate (UNREGISTERED, needs a number): the write-up field is rich text, safely
+dark-board 196db28d51697fb47914b12567d37bfcd5fd5949 :: handoff: board verification CLOSED 4/4 — and my "pattern not a flake" call was wrong
+dark-board-gate61 03b44e2959f96de235b258916b33d9a384bb1ed3 :: gate fixes: normalise the label match, split its headline, register gate 61
+dev-files-exposure bb7585f493a1efc1296ffe1f2eb5217ae8c8fbc0 :: fix: lane tooling inside plugin trees was EXECUTED by anonymous request (deploy blocker)
+digest-forum-images 5f1b3bf2f99fe0144d823a1fd8bb5ae620d24cc5 :: gate 72: the weekly digest's discussion cards keep their images
+dupe-merge 197158548e002c2b5bdba06603a9a31d40e7d3b2 :: dupe-merge: journal retention + post-apply reversibility check
+edit-post-parity 5cf2c733af4d9a3bad820549f7e200eee8487520 :: FIX SILENT DATA LOSS: a superseded seed must stand down, not clobber the body
+events-fix-merge-tested 14fe0a55b5e247354209764cec1bdcc04e82d282 :: Merge remote-tracking branch 'origin/gate-harness-portable'
+events-mobile 03ef10a8776090824df758d17724a235598ef262 :: gates: the craft gate hung because it hijacked a shared tab on an untimed recv
+featured-members cd0a2ed7ff845651c03fc4a67305bf05676fbec1 :: directory: backlog 20 — cap list-view location at City/State, no matter the audience or dial
+follow-digest 6851d8980fd16a68780a5c6cfce3e937b0517595 :: fix: the digest's links go to the HUB, and the gate now asserts WHERE they point
+follow-digest-allowlist 767235bfdad9a8c645140a5de0fdf41d609a50d5 :: fix(gate): the promise assertion compared TWO DIFFERENT BUILDS
+front-weekly-email 24a2814323de154b85f362391609b932eb12eea6 :: weekly-front: the dev2 flip is a .local.php file, not an FPM env[]
+frontend-compose 3a08455b4f2f97ee5d2d64e79b33552db421fdaf :: handoff: move to handoffs/ per the 8/15 convention, and close the last check
+frontend-compose-followup 956e0374fba338988ebb9aee8a65197d96443a1c :: harness: a CDP cookie without sameSite manufactures a broken embedded frame
+guide-profile 758951f8d5e2363d367b22d2301a2de043bd1134 :: docs: backlog — events mobile banner crop + duplicated time line (Ian, screenshot)
+guitardle-account-bleed 18a7803cbcce8025d9842da97400ea7285b2b900 :: guitardle: local state belongs to a MEMBER, not to a browser
+guitardle-fairness 912f161c03c762c33a03dd817097cd77eec85888 :: gates: 37 covers the resume REPLAY, not just the resume payload
+guitardle-phrase-dupe 022b4925c31901b96818bb287deafa4d75cadcb4 :: gate 55 -> 60: keeper's number, because 55 went to featured-members
+hub-seo-landing ece027d09acce9b131d239762a9e6babfdc85450 :: handoff: rotate SESSION-HANDOFF for the hub-seo-landing lane at context rotation
+ian-test-integration d689ce0d8912a4c0f1416eddde5cdeb6864c54e6 :: atlas: BACKLOG — the queue for when all lane slots are full
+location-address 7ac2bee47d6837f3c2c4d769cf536162dcb3640c :: location-address: mark the plan BUILT, pointing at 5515757
+mirror-orphans-work 307d6ed3051cfecbf9b29fadaccff76c950de683 :: docs(bb-mirror): close the lane, and write the unproven hop down instead of dropping it
+mirror-sync 481193788cb061ace03a284a074f4cec769f0889 :: 3.9: my reproduction was unsound — redo it on real data, correct §5's mechanism
+mirror-sync-stall 510286caab498385dcb4827b146546c48991d692 :: verify-deploy + a cosmetic fix the deploy's own output exposed
+mobile-bugs c0347e5afbe229e2501a35a29017b6a4449864ea :: 3.8: rebuild as Ian's hybrid — C's lower-left corner, appear-on-scroll
+notif-bridge b8dc51573ea2f6729dbcee26ece7f5f30b045b34 :: re-mint 22-25 -> 23-26: mobile-bugs took 22 between the allocation and this rebase
+notif-quickreply-v2 4b93447bf80a5be9edf1fc6005e6220d23be1d1c :: merge main: keep BOTH the gate-62 row and keeper's both-themes rule
+poller-audit da18d150bd51b55cf0625cae2b295a3055e81b57 :: atlas: pin the audit's line refs to the baseline SHA + fix the §6 arithmetic
+profile-audit 8e93f4c30690cb3bc88b76066faf77c1ea3885fd :: atlas(profile-audit): capture pass done — 8 A-invariant frames, published
+profile-social-links 510ccd8b8c850f9aea1bc27c7697be668d0eccfd :: docs(runbook): deploy couplings a pull does not do — use symlink-farm, never hand ln
+profiles-alive 0e7532ce4685656c41197d4a587f939b3cf5f6d5 :: seed: 4 fixture discussions with images, tagged weeklyyes, for Ian's digest test
+pwa-sw-3.10 032f35a1a83d566c880f446e5af19b206340139f :: docs: armed suite 24/24 ALL GREEN, and the exit-less first run is not a finding
+react-fix 22d9c63b926c93ef85fa167841430d5feac1da33 :: gate 17 registered: the fixture is a prerequisite, not an optional extra
+recap-read-timer a0c30a0531642ab7815a6bd549ef632042bebe46 :: re-mint: gate 20 -> 21 (hub-topic-landing merged as 20 mid-flight), suite re-run
+release c57b70f701f6882286b91435bf47af2b6e805a9a :: Merge remote-tracking branch 'origin/slug-backfill'
+seo-canonical-hub a9251ae904a5b97fbd60bbc6ace4deb8b8d6b24e :: seo 3.5: the bare hub declares itself — and gate 20 now covers the STATIC sitemap
+shop-planner 5956e3e2977fd2ad4ed82546e12b3141aa5e02a4 :: docs: deploy order, three traps, and rollback for the standalone planner
+shorty-react 510ccd8b8c850f9aea1bc27c7697be668d0eccfd :: docs(runbook): deploy couplings a pull does not do — use symlink-farm, never hand ln
+stripe-build e642d9c6f21f92f5383411adb55b288df46f9e69 :: prune: dev.loothgroup.com -> dev2 everywhere active (Ian 8/12: 'prune whatever is pointing them towards dev')
+thread-follow 24517f93a4536092ed9597f5046da24753cb06b8 :: cadence: ONE store, ONE write path, both UI surfaces — the seam, implemented
