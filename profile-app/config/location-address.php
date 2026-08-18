@@ -78,6 +78,6 @@ return array(
 	 * popups. Flagged to Ian 2026-08-18; not changed here, because this lane is
 	 * bugs-only and that branch is not merged.
 	 */
-	'prefer_typed_address' => false,
+	'prefer_typed_address' => true,
 
 );
