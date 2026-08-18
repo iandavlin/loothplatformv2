@@ -16,8 +16,8 @@ set -euo pipefail
 
 REPO="/home/ubuntu/keeper-repo"
 SERVE="/home/ubuntu/loothplatformv2-clean"
-NO_LIVE=0; AGENTS=0
-for a in "$@"; do case "$a" in --no-live) NO_LIVE=1;; --agents) AGENTS=1;; esac; done
+NO_LIVE=0; AGENTS=0; JSON=0
+for a in "$@"; do case "$a" in --no-live) NO_LIVE=1;; --agents) AGENTS=1;; --json) JSON=1;; esac; done
 
 # ── deploy line: main / dev2 serve / live. Invisible when all agree. ─────────
 MAIN=$(git -C "$REPO" rev-parse main)
@@ -40,7 +40,7 @@ fi
 GAP=0
 [[ "$DEV2" != "$MAIN" ]] && GAP=1
 [[ $NO_LIVE -eq 0 && "$LIVE" != "$MAIN" ]] && GAP=1
-if [[ $GAP -eq 1 ]]; then
+if [[ $JSON -eq 0 && $GAP -eq 1 ]]; then
     echo "DEPLOY GAP:"
     echo "  main  ${MAIN:0:7}"
     if [[ "$DEV2" == "MISSING" ]]; then echo "  dev2  MISSING (serving checkout unreadable)"; else
@@ -60,12 +60,12 @@ while IFS= read -r line; do
     case "$line" in
         "worktree "*) folder="${line#worktree }" ;;
         "detached")
-            ROWS+="999999|${folder#/home/ubuntu/}|(detached)|-|-|-|detached — investigate"$'\n' ;;
+            ROWS+="999999|${folder#/home/ubuntu/}|(detached)|-|-|-|detached — investigate|NR|detached"$'\n' ;;
         "branch refs/heads/"*)
             branch="${line#branch refs/heads/}"
             if [[ "$branch" == "main" ]]; then
                 # the parent checkout is not a seat; the deploy line covers it
-                ROWS+="-1|${folder#/home/ubuntu/}|main|0|0|0|— (parent checkout)"$'\n'
+                ROWS+="-1|${folder#/home/ubuntu/}|main|0|0|0|— (parent checkout)|0|parent"$'\n'
                 continue
             fi
             lr=$(git -C "$REPO" rev-list --left-right --count "origin/main...$branch" 2>/dev/null | tr '\t' ' ' || true)
@@ -79,11 +79,11 @@ while IFS= read -r line; do
             subj=$(git -C "$REPO" log -1 --format=%s "$branch" 2>/dev/null || echo "")
             # Status: spec's five rules. Precedence note: AT RISK outranks
             # re-cut — the loud flag must never be masked by a big behind count.
-            if   [[ "$unique" == "0" ]]; then status="done — seat freeable"
-            elif [[ "$subj" == "STOOD DOWN: "* ]]; then status="stood down"
-            elif [[ "$push" == "NO REMOTE" ]]; then status="AT RISK — work on one disk only"
-            elif [[ "$behind" =~ ^[0-9]+$ && "$behind" -gt 300 ]]; then status="re-cut, don't rebase"
-            else status="live lane"
+            if   [[ "$unique" == "0" ]]; then status="done — seat freeable"; slug="done"
+            elif [[ "$subj" == "STOOD DOWN: "* ]]; then status="stood down"; slug="stood-down"
+            elif [[ "$push" == "NO REMOTE" ]]; then status="AT RISK — work on one disk only"; slug="at-risk"
+            elif [[ "$behind" =~ ^[0-9]+$ && "$behind" -gt 300 ]]; then status="re-cut, don't rebase"; slug="re-cut"
+            else status="live lane"; slug="live"
             fi
             # push cell: loud only when work is actually unpushed. A merged
             # branch with no remote has nothing at risk — stays quiet.
@@ -91,9 +91,34 @@ while IFS= read -r line; do
             if [[ "$push" == "NO REMOTE" ]]; then
                 if [[ "$unique" == "0" ]]; then cell="-"; else SHOW_PUSH=1; fi
             elif [[ "$push" != "0" ]]; then SHOW_PUSH=1; fi
-            ROWS+="$behind|${folder#/home/ubuntu/}|$branch|$behind|$unique|$cell|$status"$'\n' ;;
+            ROWS+="$behind|${folder#/home/ubuntu/}|$branch|$behind|$unique|$cell|$status|${push/NO REMOTE/NR}|$slug"$'\n' ;;
     esac
 done < <(git -C "$REPO" worktree list --porcelain)
+
+# ── --json: machine output for the eventual interface. No quiet rules here —
+#    machines get every field, always; hiding is a human-display concern. ─────
+if [[ $JSON -eq 1 ]]; then
+    dev2_json="null"; [[ "$DEV2" != "MISSING" ]] && dev2_json="\"$DEV2\""
+    live_json="null"; live_state="skipped"
+    if [[ $NO_LIVE -eq 0 ]]; then
+        if [[ "$LIVE" == "UNKNOWN" ]]; then live_state="unknown"; else live_json="\"$LIVE\""; live_state="ok"; fi
+    fi
+    printf '{\n  "deploy": {"main": "%s", "dev2": %s, "live": %s, "live_state": "%s", "in_sync": %s},\n  "lanes": [\n' \
+        "$MAIN" "$dev2_json" "$live_json" "$live_state" "$([[ $GAP -eq 0 ]] && echo true || echo false)"
+    first=1
+    while IFS='|' read -r _ f b behind unique _ _ rawpush slug; do
+        [[ -z "$f" ]] && continue
+        [[ $first -eq 0 ]] && printf ',\n'
+        first=0
+        bh="null"; [[ "$behind" =~ ^[0-9]+$ ]] && bh="$behind"
+        un="null"; [[ "$unique" =~ ^[0-9]+$ ]] && un="$unique"
+        if [[ "$rawpush" == "NR" ]]; then up="null"; nr="true"; else up="$rawpush"; nr="false"; fi
+        printf '    {"folder": "%s", "branch": "%s", "behind": %s, "unique": %s, "unpushed": %s, "no_remote": %s, "status": "%s"}' \
+            "$f" "$b" "$bh" "$un" "$up" "$nr" "$slug"
+    done < <(printf '%s' "$ROWS" | sort -t'|' -k1,1n)
+    printf '\n  ]\n}\n'
+    exit 0
+fi
 
 # ── print, sorted by behind ascending (freshest first) ───────────────────────
 if [[ $SHOW_PUSH -eq 1 ]]; then
@@ -101,7 +126,7 @@ if [[ $SHOW_PUSH -eq 1 ]]; then
 else
     printf "%-34s %-24s %7s %7s  %s\n" "FOLDER" "BRANCH" "BEHIND" "UNIQUE" "STATUS"
 fi
-printf '%s' "$ROWS" | sort -t'|' -k1,1n | while IFS='|' read -r _ f b behind unique cell status; do
+printf '%s' "$ROWS" | sort -t'|' -k1,1n | while IFS='|' read -r _ f b behind unique cell status _ _; do
     [[ -z "$f" ]] && continue
     if [[ $SHOW_PUSH -eq 1 ]]; then
         printf "%-34s %-24s %7s %7s %10s  %s\n" "$f" "$b" "$behind" "$unique" "$cell" "$status"

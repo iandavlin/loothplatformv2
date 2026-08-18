@@ -1,5 +1,12 @@
 # Project Instructions
 
+## Lane rules
+
+If you are working a lane in this repo, **`LANE-RULES.md` at the repo root is
+law** — the plan-first gate, worktree discipline, and the never-do list. Spun
+lanes are fed it automatically ahead of their charter; if you opened this repo
+any other way, read it before touching anything.
+
 ## Folder Schema
 
 `/home/ubuntu/projects/` is organized so you can find things by *kind of work*, not by chronology.
