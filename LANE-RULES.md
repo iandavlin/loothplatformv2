@@ -54,6 +54,10 @@ conflicts with something you were told in-session, stop and ask.
 Report: branch name, commit count, files touched, and anything you noticed but
 didn't fix. Then stop. Leave the worktree where it is.
 
+If the lane is being **stood down** instead of finished, the final commit subject
+starts with the exact prefix `STOOD DOWN: ` — capitals, colon, space. The status
+tooling keys on that prefix; any other phrasing reads as a live lane forever.
+
 ## When you're unsure about repo state
 
 Print it, don't guess. `git status`, `git log --oneline -10`,
