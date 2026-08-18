@@ -1,5 +1,11 @@
 # Location address text — plan
 
+> **BUILT 2026-08-18, commit `5515757`** — approved by Ian via keeper. Built as
+> written: the four files below, flag `prefer_typed_address` defaulted OFF, gate
+> **73** asserting absent/OFF/ON. Not merged and not flipped — keeper merges, the
+> flip is Ian's. Verified on the real row (user 190): OFF prints the old home
+> address exactly as today, ON prints his shop; City/State identical in both.
+
 ## 1. What I'm solving
 
 John Wilmink (Thomas Muse Guitars) edited his profile location to his shop. He
