@@ -113,6 +113,96 @@ if (!function_exists('lg_frontend_compose_enabled')) {
     }
 }
 
+// ── #129 COMPOSER: categorize last (ledger 44) ────────────────────────────────
+// The hub app's half of the flag. Same two-reader shape as
+// lg_frontend_compose_enabled() above and for the same recorded reason: when only
+// ONE of the two readers honored the box-local override, dev2 served a working
+// /compose/ route while the hub toggle that opens it never rendered (Ian, 8/16:
+// "Im not getting the toggle for loothprint compose"). Two readers, one truth.
+if (!function_exists('lg_ccl_config')) {
+    function lg_ccl_config(): array
+    {
+        static $cfg = null;
+        if ($cfg !== null) return $cfg;
+        // bb-mirror/ -> repo root is one level up.
+        $path = dirname(__DIR__) . '/platform/config/composer-categorize-last.php';
+        if (!is_readable($path)) {
+            error_log('[lg-ccl] tracked config unreadable at ' . $path . ' — OFF (fail-closed)');
+            return $cfg = ['enabled' => false, 'default_forum_id' => 0, 'taxo_forum_map' => []];
+        }
+        $raw = require $path;
+        $cfg = is_array($raw) ? $raw : [];
+        $loc = @include dirname(__DIR__) . '/platform/config/composer-categorize-last.local.php';
+        if (is_array($loc)) $cfg = array_merge($cfg, $loc);
+        return $cfg;
+    }
+}
+if (!function_exists('lg_ccl_enabled')) {
+    // getenv() AND $_SERVER: a lane-preview fastcgi_param lands in $_SERVER only,
+    // so a getenv()-only read serves OFF on the very preview URL built for Ian.
+    function lg_ccl_enabled(): bool
+    {
+        static $on = null;
+        if ($on !== null) return $on;
+        if (getenv('LG_CCL_PREVIEW') === '1' || (($_SERVER['LG_CCL_PREVIEW'] ?? '') === '1')) {
+            return $on = true;
+        }
+        return $on = ((lg_ccl_config()['enabled'] ?? false) === true);
+    }
+}
+if (!function_exists('lg_ccl_default_forum_id')) {
+    function lg_ccl_default_forum_id(): int
+    {
+        return (int)(lg_ccl_config()['default_forum_id'] ?? 0);
+    }
+}
+if (!function_exists('lg_ccl_default_forum_ok')) {
+    /**
+     * Is the configured default forum actually POSTABLE according to the mirror?
+     *
+     * ⚠️ THIS IS NOT CEREMONY. Measured 2026-08-19: forum 73564 "Discussions" — the
+     * forum ruling (a) made the default — exists in WordPress but is ABSENT from
+     * `forums.forum` in Postgres. Forum rows reach the mirror only via the
+     * bbp_new_forum / bbp_edit_forum hooks, and whatever created 73564 did not fire
+     * them (the mirror's newest row is 67776). The picker, the hub's forum reads and
+     * the postable contract ALL read Postgres, so filing a topic into an unmirrored
+     * forum points it at a row that does not exist.
+     *
+     * Called by the picker-suppression path so an unmirrored default fails LOUD —
+     * the Where step stays, rather than the composer silently filing posts into a
+     * void. Resync is one dispatch:
+     *     bb_mirror_sync_dispatch('forum', <id>, 'upsert')
+     */
+    function lg_ccl_default_forum_ok(): bool
+    {
+        $fid = lg_ccl_default_forum_id();
+        if ($fid <= 0) return false;
+        try {
+            $db = bb_mirror_db(true);   // readonly; sets search_path to the forums schema
+            $excluded = implode(',', array_map('intval', LG_BB_MIRROR_NONPOSTABLE_FORUM_IDS));
+            $st = $db->prepare(
+                "SELECT 1 FROM forum f
+                  WHERE f.id = :id
+                    AND f.visibility = 'public' AND f.status = 'open'
+                    AND f.forum_type = 'forum'
+                    AND f.id NOT IN ($excluded)
+                    AND f.id NOT IN (SELECT parent_forum_id FROM forum WHERE parent_forum_id IS NOT NULL)"
+            );
+            $st->execute([':id' => $fid]);
+            $ok = (bool)$st->fetchColumn();
+        } catch (Throwable $e) {
+            error_log('[lg-ccl] default-forum check failed: ' . $e->getMessage());
+            return false;
+        }
+        if (!$ok) {
+            error_log('[lg-ccl] default forum ' . $fid . ' is NOT postable per the mirror — '
+                    . 'keeping the Where step. Resync: '
+                    . "bb_mirror_sync_dispatch('forum', $fid, 'upsert')");
+        }
+        return $ok;
+    }
+}
+
 // Where the toggle's Loothprint form is fetched from. Preview-aware: under a lane
 // preview the compose route is mounted beside the hub, and hardcoding /compose/
 // would send the iframe to the REAL route, which is flagged off — the preview
