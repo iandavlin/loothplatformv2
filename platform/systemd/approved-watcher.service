@@ -1,0 +1,7 @@
+[Unit]
+Description=Ring the bell when an issue gains the approved label (dev2 only)
+
+[Service]
+Type=oneshot
+User=ubuntu
+ExecStart=/usr/bin/bash /home/ubuntu/keeper-repo/tools/approved-watcher.sh
