@@ -20,7 +20,7 @@ import pathlib
 import subprocess
 
 REPO = "/home/ubuntu/keeper-repo"
-OUT = pathlib.Path("/var/www/dev/mockups/lanes")
+OUT = pathlib.Path("/var/www/dev/lanes")
 API = "https://api.github.com/repos/iandavlin/loothplatformv2"
 
 
