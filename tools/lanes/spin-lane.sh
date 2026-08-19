@@ -37,8 +37,33 @@ if [[ "${1:-}" == "park" ]]; then
     exit 0
 fi
 
-LANE="${1:?usage: spin-lane.sh <lane-name> [charter-path]  |  spin-lane.sh park <lane> \"reason\"}"
+LANE="${1:?usage: spin-lane.sh <issue>-<slug> [charter-path]  |  spin-lane.sh park <lane> \"reason\"}"
 CHARTER="${2:-$HOME/lane-prompts/${LANE}.md}"
+
+# ── the plan-mode wall (Ian's ruling 8/19: "There is exactly one door") ───────
+# A lane opens ONLY from an OPEN issue carrying the 'approved' label. New lanes
+# are named <issue>-<slug>; the leading number IS the issue. Ian's literal
+# "SPIN <n>" does not bypass this — keeper applies the label first
+# (approve-issue.sh, which records the approval on the issue itself), then
+# spins through THIS check. No bypass flag exists, deliberately.
+ISSUE="${LANE%%-*}"
+[[ "$ISSUE" =~ ^[0-9]+$ ]] || { echo "spin-lane: lane name must start with its issue number (<issue>-<slug>) — plan-mode wall" >&2; exit 1; }
+TOKEN="$(grep '^LG_GITHUB_ISSUES_TOKEN=' /etc/looth/env | cut -d= -f2)"
+[[ -n "$TOKEN" ]] || { echo "spin-lane: no GitHub token in /etc/looth/env — cannot verify approval, refusing" >&2; exit 1; }
+GATE="$(curl -s -m 15 -H "Authorization: Bearer $TOKEN" \
+    "https://api.github.com/repos/iandavlin/loothplatformv2/issues/$ISSUE" \
+  | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    labels = [l["name"] for l in d.get("labels", [])]
+    ok = "approved" in labels and d.get("state") == "open"
+    print("yes" if ok else "no (state=%s labels=%s)" % (d.get("state"), ",".join(labels) or "none"))
+except Exception:
+    print("no (API unreadable)")
+')"
+[[ "$GATE" == "yes" ]] || { echo "spin-lane: issue #$ISSUE is not an open, approved issue — $GATE — the wall holds" >&2; exit 1; }
+echo "spin-lane: issue #$ISSUE carries 'approved' — the door opens"
 WT="$HOME/worktrees/${LANE}"
 CLAUDE="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
 MODEL="${LANE_MODEL:-opus[1m]}"

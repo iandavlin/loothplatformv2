@@ -12,6 +12,16 @@ conflicts with something you were told in-session, stop and ask.
   two places from the first commit.
 - Your git identity is set per lane, so commits are attributable.
 
+## How a lane comes to exist (the plan-mode wall)
+
+A lane opens **only** from a GitHub issue that is open and carries the
+`approved` label — spin-lane verifies this and refuses everything else.
+Conversation cannot produce a lane, however it is phrased; work heard in
+conversation becomes an issue, never a seat. Ian's literal `SPIN <n>` is the
+single verbal path, and it works by applying the label first, then using the
+same door. Lanes are named `<issue>-<slug>`; the leading number is the issue,
+and it's how the tooling links your seat to your card.
+
 ## Where you work
 
 - Work **only** inside your own worktree. Other worktrees belong to other lanes.
