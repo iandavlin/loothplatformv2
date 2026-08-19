@@ -60,6 +60,7 @@ def fetch_issue_state():
         pr = _gh("/issues?labels=plan-ready&state=open&per_page=50")
         needs = [i for i in pr
                  if not any(l["name"] == "approved" for l in i["labels"])]
+        investigating = _gh("/issues?labels=investigating&state=open&per_page=50")
         for i in needs:
             plan = None
             if i.get("comments"):
@@ -69,9 +70,9 @@ def fetch_issue_state():
                             None)
             i["_plan"] = plan or i.get("body") or "(no plan text found)"
         allopen = _gh("/issues?state=open&per_page=100")
-        return needs, allopen, True
+        return needs, investigating, allopen, True
     except Exception:
-        return [], [], False
+        return [], [], [], False
 
 
 def main():
@@ -178,7 +179,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
     # section this whole build was plumbing toward. Absent when empty; the
     # plan text is embedded at render time (<details>, no JS, no fetch); the
     # one action is a link — no token ever reaches the browser.
-    needs, allopen, gh_ok = fetch_issue_state()
+    needs, investigating, allopen, gh_ok = fetch_issue_state()
     if not gh_ok:
         h.append('<div class="block gap">GitHub unreadable — the "needs you" '
                  'state is UNKNOWN right now, not necessarily empty</div>')
@@ -199,6 +200,22 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
             f'{copy_btn("Copy for keeper", pointer)}'
             f'{copy_btn("Copy plan", i["_plan"][:6000])}'
             f'</details>')
+
+    # 2c2. in motion (no seat) — active investigations (#137): keeper working,
+    # nothing needed from Ian yet. Explicitly labeled only; absent when none.
+    if investigating:
+        h.append('<div class="strip"><b>In motion (no seat)</b> <span '
+                 'class="dim">— investigations keeper is actively working</span>')
+        for i in investigating:
+            upd = _dt.datetime.fromisoformat(i["created_at"].replace("Z", "+00:00"))
+            hrs = max(0, int((_dt.datetime.now(_dt.timezone.utc) - upd)
+                             .total_seconds() // 3600))
+            age = f"{hrs}h" if hrs < 48 else f"{hrs // 24}d"
+            h.append(f'<div><a href="{html.escape(i["html_url"])}" '
+                     f'target="_blank" rel="noopener" style="color:#c9a0dc">'
+                     f'#{i["number"]} {html.escape(i["title"][:70])}</a> '
+                     f'<span class="dim">· running {age}</span></div>')
+        h.append('</div>')
 
     # 2d. building — open issues matched to seats by branch leading number
     seat_nums = {l["branch"].split("-")[0]: l["branch"] for l in table
