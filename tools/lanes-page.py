@@ -129,7 +129,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 .strip{border-top:1px solid #2a2f38;margin-top:16px;padding-top:10px;}
 .strip div{font-size:13px;color:#9aa3ad;padding:2px 0;}
 .strip b{color:#e8e6df;font-weight:600;}
-.copybtn{background:#2d323b;color:#9db668;border:1px solid #3a4049;border-radius:6px;
+.copybtn,.rfbtn{background:#2d323b;color:#9db668;border:1px solid #3a4049;border-radius:6px;
   padding:2px 10px;font-size:12px;font-weight:700;cursor:pointer;margin-left:8px;}
 </style></head><body><div class="wrap"><h1>lanes</h1>""")
 
@@ -139,6 +139,28 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
                  f'<b style="color:#e8e6df">{cap["seats_used"]}/{cap["seat_ceiling"]}</b>'
                  f' &middot; working cap {cap["working_cap"]}'
                  f' <span class="dim">(1 while you&rsquo;re actively on dev2)</span></div>')
+
+    # 0b. resource strip (#143) — sampled each render, free (live rides the
+    # deploy ssh). Loud only past the box's own known danger lines.
+    res = data.get("resources", {})
+    if res.get("dev2"):
+        d2 = res["dev2"]
+        lv = res.get("live")
+        swap = int(d2.get("swap_m") or 0)
+        warn = (float(d2.get("load") or 0) > 2
+                or int(str(d2.get("disk", "0%")).rstrip("%") or 0) > 90
+                or swap > 1024
+                or (lv and float(lv.get("load") or 0) > 2))
+        line = (f'dev2 load {d2.get("load")} · mem {d2.get("mem_used_m")}/'
+                f'{d2.get("mem_total_m")}M · disk {d2.get("disk")}')
+        if swap:
+            line += f' · swap {swap}M'
+        if lv:
+            line += f' — live load {lv.get("load")} · disk {lv.get("disk")}'
+        style = 'color:#e05f4f;font-weight:700;' if warn else ''
+        h.append(f'<div class="dim" style="margin:-6px 0 12px;{style}">'
+                 f'{html.escape(line)}'
+                 f'<button class="rfbtn" id="lg-refresh">refresh</button></div>')
 
     # 1. deploy — invisible when everything agrees
     if not dep["in_sync"] or dep["live_state"] == "unknown":
@@ -369,6 +391,14 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
       },function(){});
     });
   });
+  var rf=document.getElementById('lg-refresh');
+  if(rf){rf.addEventListener('click',function(){
+    rf.disabled=true;rf.textContent='refreshing…';
+    fetch('/lanes-refresh.php',{method:'POST'}).then(function(r){return r.json()})
+    .then(function(j){if(j&&j.ok){setTimeout(function(){location.reload()},4000);}
+      else{rf.disabled=false;rf.textContent='refresh';}})
+    .catch(function(){rf.disabled=false;rf.textContent='refresh';});
+  });}
 })();
 </script>""")
     h.append('</div></body></html>')

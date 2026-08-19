@@ -1,0 +1,9 @@
+[Unit]
+Description=Redraw the lanes page when the refresh trigger is touched (#143)
+
+[Path]
+PathModified=/home/ubuntu/.lanes-refresh-request
+Unit=lanes-page.service
+
+[Install]
+WantedBy=paths.target

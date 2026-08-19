@@ -52,12 +52,16 @@ if [[ $NO_LIVE -eq 0 ]]; then
     # first (works the day live adds safe.directory for looth-ro), then the
     # loose ref, then packed-refs — loose before packed, matching git's own
     # precedence. UNKNOWN only when every read genuinely fails.
-    LIVE=$(timeout 6 ssh live-ro '
-        git -C /home/ubuntu/loothplatformv2-clean rev-parse main 2>/dev/null \
+    # #143: live's load + disk ride the SAME ssh call — zero extra connections
+    LIVE_RAW=$(timeout 8 ssh live-ro '
+        (git -C /home/ubuntu/loothplatformv2-clean rev-parse main 2>/dev/null \
         || cat /home/ubuntu/loothplatformv2-clean/.git/refs/heads/main 2>/dev/null \
-        || sed -n "s|^\([0-9a-f]\{40\}\) refs/heads/main$|\1|p" /home/ubuntu/loothplatformv2-clean/.git/packed-refs 2>/dev/null | head -1
+        || sed -n "s|^\([0-9a-f]\{40\}\) refs/heads/main$|\1|p" /home/ubuntu/loothplatformv2-clean/.git/packed-refs 2>/dev/null | head -1)
+        echo "RES $(cut -d" " -f1 /proc/loadavg) $(df -h / | awk "NR==2{print \$5}")"
     ') || true
-    [[ -z "$LIVE" ]] && LIVE="UNKNOWN"
+    LIVE=$(printf '%s\n' "$LIVE_RAW" | head -1)
+    LIVE_RES=$(printf '%s\n' "$LIVE_RAW" | sed -n 's/^RES //p')
+    [[ -z "$LIVE" || "$LIVE" == RES* ]] && LIVE="UNKNOWN"
 fi
 GAP=0
 [[ "$DEV2" != "$MAIN" ]] && GAP=1
@@ -159,6 +163,18 @@ if [[ $JSON -eq 1 ]]; then
         "$MAIN" "$dev2_json" "$live_json" "$live_state" "$([[ $GAP -eq 0 ]] && echo true || echo false)"
     printf '  "capacity": {"seats_used": %d, "seat_ceiling": %d, "working_cap": %d},\n' \
         "$SEATS_USED" "$SEAT_CEILING" "$WORKING_CAP"
+    # #143: resource sample per render — dev2 local (free), live from the ride-along
+    D2LOAD=$(cut -d' ' -f1 /proc/loadavg)
+    D2DISK=$(df -h / | awk 'NR==2{print $5}')
+    D2MEMU=$(free -m | awk '/^Mem:/{print $3}'); D2MEMT=$(free -m | awk '/^Mem:/{print $2}')
+    D2SWAP=$(free -m | awk '/^Swap:/{print $3}')
+    LIVE_JSON="null"
+    if [[ -n "${LIVE_RES:-}" ]]; then
+        read -r LLOAD LDISK <<<"$LIVE_RES"
+        [[ -n "$LLOAD" && -n "$LDISK" ]] && LIVE_JSON="{\"load\": $LLOAD, \"disk\": \"$LDISK\"}"
+    fi
+    printf '  "resources": {"dev2": {"load": %s, "mem_used_m": %s, "mem_total_m": %s, "swap_m": %s, "disk": "%s"}, "live": %s},\n' \
+        "$D2LOAD" "$D2MEMU" "$D2MEMT" "$D2SWAP" "$D2DISK" "$LIVE_JSON"
     printf '  "unbacked": {"total": %d, "fetch_ok": %s, "branches": [' "$UNBACKED" "$FETCH_OK"
     ufirst=1
     while read -r n b; do
