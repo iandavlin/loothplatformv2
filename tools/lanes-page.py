@@ -190,6 +190,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
     # 2d. building — open issues matched to seats by branch leading number
     seat_nums = {l["branch"].split("-")[0]: l["branch"] for l in table
                  if l["branch"].split("-")[0].isdigit()}
+    issue_by_num = {str(i["number"]): i for i in allopen}
     building = [i for i in allopen if str(i["number"]) in seat_nums]
     if building:
         h.append('<div class="strip"><b>Building</b>')
@@ -211,11 +212,52 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
             seat += f'<br><span class="mm">&ne; folder: {folder}</span>'
         else:
             seat += f'<br><span class="dim">{folder}</span>'
+        # seat ↔ issue: derived from the branch's leading number, nothing to
+        # keep true by hand; title inline, plan readable in place
+        num = l["branch"].split("-")[0]
+        iss = issue_by_num.get(num) if num.isdigit() else None
+        if iss:
+            seat += (f'<br><a href="{html.escape(iss["html_url"])}" '
+                     f'class="dim" style="color:#7fa8d9">#{iss["number"]} '
+                     f'{html.escape(iss["title"][:60])}</a>')
+            plan = None
+            try:
+                if iss.get("comments"):
+                    cs = _gh(iss["comments_url"])
+                    plan = next((c["body"] for c in reversed(cs)
+                                 if "Files I expect to touch" in c.get("body", "")), None)
+            except Exception:
+                pass
+            if plan:
+                seat += (f'<details><summary class="dim" style="cursor:pointer">'
+                         f'plan</summary><div style="white-space:pre-wrap;'
+                         f'font-size:12.5px">{html.escape(plan[:5000])}</div>'
+                         f'</details>')
         h.append(f'<tr><td>{seat}</td>'
                  f'<td class="num unique">{l["unique"]}</td>'
                  f'<td class="num dim">{l["behind"]}</td>'
                  f'<td><span class="chip" style="background:{color}">{label}</span></td></tr>')
     h.append('</table>')
+
+    # 3c. reconciliation — absent when clean. Approved-with-no-seat is the one
+    # that matters: "I said go and nothing started" must never look identical
+    # to work in progress.
+    if gh_ok:
+        approved_orphans = [
+            i for i in allopen
+            if any(l["name"] == "approved" for l in i["labels"])
+            and str(i["number"]) not in seat_nums]
+        for i in approved_orphans:
+            h.append(f'<div class="block risk">APPROVED, NOT STARTED — '
+                     f'<a href="{html.escape(i["html_url"])}" '
+                     f'style="color:#e8e6df">#{i["number"]} '
+                     f'{html.escape(i["title"][:70])}</a></div>')
+    unnumbered_seats = [l["branch"] for l in table
+                        if not l["branch"].split("-")[0].isdigit()]
+    if unnumbered_seats:
+        h.append(f'<div class="dim" style="margin-top:8px">seats without an '
+                 f'issue (the old world, counting down): '
+                 f'{html.escape(" · ".join(unnumbered_seats))}</div>')
 
     # 3b. parked zone — no seat, no cost, drift accruing visibly
     if parked:
