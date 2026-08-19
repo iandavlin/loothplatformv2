@@ -21,10 +21,50 @@ import subprocess
 
 REPO = "/home/ubuntu/keeper-repo"
 OUT = pathlib.Path("/var/www/dev/mockups/lanes")
+API = "https://api.github.com/repos/iandavlin/loothplatformv2"
 
 
 def run(cmd):
     return subprocess.run(cmd, capture_output=True, text=True, timeout=90).stdout
+
+
+def _token():
+    for line in open("/etc/looth/env"):
+        if line.startswith("LG_GITHUB_ISSUES_TOKEN="):
+            return line.split("=", 1)[1].strip()
+    return ""
+
+
+def _gh(url):
+    import urllib.request
+    req = urllib.request.Request(
+        url if url.startswith("http") else API + url,
+        headers={"Authorization": f"Bearer {_token()}",
+                 "Accept": "application/vnd.github+json"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return json.loads(r.read())
+
+
+def fetch_issue_state():
+    """Needs-you (plan-ready without approved, with embedded plan text) and
+    all open issues (to match building seats by branch number). Failure is
+    LOUD on the page, never a silently empty section."""
+    try:
+        pr = _gh("/issues?labels=plan-ready&state=open&per_page=50")
+        needs = [i for i in pr
+                 if not any(l["name"] == "approved" for l in i["labels"])]
+        for i in needs:
+            plan = None
+            if i.get("comments"):
+                cs = _gh(i["comments_url"])
+                plan = next((c["body"] for c in reversed(cs)
+                             if "Files I expect to touch" in c.get("body", "")),
+                            None)
+            i["_plan"] = plan or i.get("body") or "(no plan text found)"
+        allopen = _gh("/issues?state=open&per_page=100")
+        return needs, allopen, True
+    except Exception:
+        return [], [], False
 
 
 def main():
@@ -124,6 +164,40 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
         h.append(f'<div class="block risk">COLLISION — '
                  f'<code>{html.escape(c["file"])}</code> is changed by: '
                  f'{lanes_named}</div>')
+
+    # 2c. NEEDS YOU — plan-ready issues awaiting Ian's ruling. The missing
+    # section this whole build was plumbing toward. Absent when empty; the
+    # plan text is embedded at render time (<details>, no JS, no fetch); the
+    # one action is a link — no token ever reaches the browser.
+    needs, allopen, gh_ok = fetch_issue_state()
+    if not gh_ok:
+        h.append('<div class="block gap">GitHub unreadable — the "needs you" '
+                 'state is UNKNOWN right now, not necessarily empty</div>')
+    import datetime as _dt
+    for i in needs:
+        upd = _dt.datetime.fromisoformat(i["updated_at"].replace("Z", "+00:00"))
+        days = max(0, (_dt.datetime.now(_dt.timezone.utc) - upd).days)
+        h.append(
+            f'<details class="block" style="background:#3a3320;border:2px '
+            f'solid #e0b64f"><summary style="font-weight:700;font-size:16px;'
+            f'cursor:pointer">NEEDS YOU — {html.escape(i["title"])} '
+            f'<span class="dim">· waiting {days}d</span></summary>'
+            f'<div style="white-space:pre-wrap;font-size:13.5px;margin:10px 0">'
+            f'{html.escape(i["_plan"][:6000])}</div>'
+            f'<a href="{html.escape(i["html_url"])}" style="color:#9db668;'
+            f'font-weight:700">Approve on GitHub &#8599;</a></details>')
+
+    # 2d. building — open issues matched to seats by branch leading number
+    seat_nums = {l["branch"].split("-")[0]: l["branch"] for l in table
+                 if l["branch"].split("-")[0].isdigit()}
+    building = [i for i in allopen if str(i["number"]) in seat_nums]
+    if building:
+        h.append('<div class="strip"><b>Building</b>')
+        for i in building:
+            h.append(f'<div><b>#{i["number"]}</b> {html.escape(i["title"])} '
+                     f'<span class="dim">seat: '
+                     f'{html.escape(seat_nums[str(i["number"])])}</span></div>')
+        h.append('</div>')
 
     # 3. the lanes (finished lanes have left the table)
     h.append('<table><tr><th>seat</th><th style="text-align:right">unique</th>'
