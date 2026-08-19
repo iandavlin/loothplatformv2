@@ -255,12 +255,20 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
                  if l["branch"].split("-")[0].isdigit()}
     issue_by_num = {str(i["number"]): i for i in allopen}
     building = [i for i in allopen if str(i["number"]) in seat_nums]
+    agent_by_branch = {l["branch"]: l.get("agent", "none") for l in table}
+    AG_CHIP = {
+        "working": '<span class="chip" style="background:#9db668">● working</span>',
+        "parked": '<span class="chip" style="background:#e0b64f">idle — agent parked</span>',
+        "none": '<span class="chip" style="background:#3a4049;color:#9aa3ad">idle — no agent</span>',
+    }
     if building:
-        h.append('<div class="strip"><b>Building</b>')
+        h.append('<div class="strip"><b>Building</b> <span class="dim">— has a'
+                 ' seat (a desk); the chip says whether a worker is at it</span>')
         for i in building:
+            br = seat_nums[str(i["number"])]
             h.append(f'<div><b>#{i["number"]}</b> {html.escape(i["title"])} '
-                     f'<span class="dim">seat: '
-                     f'{html.escape(seat_nums[str(i["number"])])}</span></div>')
+                     f'{AG_CHIP.get(agent_by_branch.get(br, "none"))} '
+                     f'<span class="dim">seat: {html.escape(br)}</span></div>')
         h.append('</div>')
 
     # 3. the lanes (finished lanes have left the table)
@@ -297,6 +305,9 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
                          f'plan</summary><div style="white-space:pre-wrap;'
                          f'font-size:12.5px">{html.escape(plan[:5000])}</div>'
                          f'</details>')
+        ag = l.get("agent", "none")
+        if ag != "none":
+            seat += ' ' + AG_CHIP[ag]
         if l.get("riders"):
             seat += ('<br><span class="dim">riders: '
                      + " ".join(f'#{r}' for r in l["riders"]) + '</span>')
