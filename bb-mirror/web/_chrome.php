@@ -709,7 +709,7 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub', ?string $canoni
          crawlers to skip the aggregator and follow through to the per-topic
          addresses, which stay fully indexable. Humans never see a change. */
       if (function_exists('lg_hub_feed_noindex_on') && lg_hub_feed_noindex_on()
-          && rtrim((string)$canonical_path, '/') === 'hub'): ?>
+          && trim((string)$canonical_path, '/') === 'hub'): ?>
 <meta name="robots" content="noindex,follow">
 <?php endif; ?>
 <meta property="og:url" content="<?= $lg_canon ?>">
