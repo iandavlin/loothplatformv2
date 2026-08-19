@@ -22,6 +22,15 @@ single verbal path, and it works by applying the label first, then using the
 same door. Lanes are named `<issue>-<slug>`; the leading number is the issue,
 and it's how the tooling links your seat to your card.
 
+## Domain knowledge — read before you touch
+
+`docs/domains/INDEX.md` maps the domain dossiers (EMAIL, PAGE, INFRA, STRIPE,
+PROFILE): the accumulated laws, traps, and verified maps for each area. Your
+spawn prompt already carries the dossiers matching your issue's domain labels —
+but if your work strays into another domain mid-lane, read that domain's file
+FIRST. Closing an issue that wears a domain label updates that domain's file
+**in the same commit**.
+
 ## Where you work
 
 - Work **only** inside your own worktree. Other worktrees belong to other lanes.
