@@ -465,7 +465,13 @@ function lg_fc_page_is_frozen(int $post_id): bool
  */
 function lg_fc_post_status(string $type, int $user_id): string
 {
-    return 'publish';
+    /* RE-RULED 2026-08-19 (#93), reversing the 8/? removal above: Ian tested
+       compose on dev2 ("It works") and set the flip's last gate — member
+       submissions arrive PENDING and email him; the moderation queue is the
+       point now, not a valve. Moderators (edit_others_posts) still publish
+       directly: Ian composing must not moderate himself. Still computed
+       server-side from the authenticated user on the WRITE request. */
+    return user_can($user_id, 'edit_others_posts') ? 'publish' : 'pending';
 }
 
 /**
@@ -581,12 +587,28 @@ function lg_fc_promote_draft($post_id): void
     $post = get_post($post_id);
     if (!$post || $post->post_status !== 'auto-draft') return;
 
+    $status = lg_fc_post_status($post->post_type, (int) $post->post_author);
     wp_update_post([
         'ID'             => $post_id,
-        'post_status'    => lg_fc_post_status($post->post_type, (int) $post->post_author),
+        'post_status'    => $status,
         'comment_status' => lg_fc_comment_status(),
     ]);
     delete_post_meta($post_id, LG_FC_DRAFT_META);   // no longer the reaper's business
+
+    /* #93: a member submission entering the moderation queue emails Ian at
+       that moment — the queue is only real if he hears about it. Sent on the
+       pending path only; his own direct publishes stay silent. */
+    if ($status === 'pending') {
+        $author = get_userdata((int) $post->post_author);
+        wp_mail(
+            get_option('admin_email'),
+            'Pending review: ' . get_the_title($post_id),
+            "A member submitted a " . $post->post_type . " for review.\n\n"
+            . "Title:  " . get_the_title($post_id) . "\n"
+            . "Member: " . ($author ? $author->display_name : ('user #' . $post->post_author)) . "\n\n"
+            . "Review: " . admin_url('post.php?post=' . $post_id . '&action=edit') . "\n"
+        );
+    }
 }
 add_action('acf/save_post', 'lg_fc_promote_draft', 25);   // after the fields are written
 
@@ -791,9 +813,15 @@ function lg_fc_route(): void
         'html_after_fields'  => lg_fc_own_controls($t),
         'html_submit_button' => '<input type="submit" class="lgfc__submit" value="%s" />'
             . '<span class="lgfc__foot">' . esc_html($t['foot']) . '</span>',
+        /* #93: a member's new post arrives PENDING, so its permalink would 404
+           at them — send them back to compose with the review banner instead.
+           Same server-side status decision as the write path; moderators keep
+           landing on their published post. */
         'return'             => $edit
             ? add_query_arg('lg_fc', 'saved', get_permalink($edit) ?: home_url('/'))
-            : add_query_arg('lg_fc', 'posted', get_permalink() ?: home_url('/')),
+            : (lg_fc_post_status($type, get_current_user_id()) === 'pending'
+                ? add_query_arg('lg_fc', 'review', home_url('/compose/' . $type . '/'))
+                : add_query_arg('lg_fc', 'posted', get_permalink() ?: home_url('/'))),
     ]);
 
     add_action('wp_enqueue_scripts', 'lg_fc_shed_site_chrome', PHP_INT_MAX);
@@ -1076,6 +1104,16 @@ function lg_fc_render(string $type, int $edit = 0, bool $embed = false): void
     <p class="lgfc__sub lgfc__sub--wide"><?php echo esc_html($t['sub']); ?></p>
     <p class="lgfc__sub lgfc__sub--narrow"><?php echo esc_html($t['sub_narrow'] ?? $t['sub']); ?></p>
   </div>
+  <?php if (($_GET['lg_fc'] ?? '') === 'review'): ?>
+    <?php /* #93: the landing state for a member whose submission just went to
+             the moderation queue — their post's permalink would 404 at them,
+             so this banner IS the success page. */ ?>
+    <div class="lgfc__frozen" role="status">
+      <strong>Submitted — thank you!</strong>
+      Your loothprint is in for review and will appear on the site once it’s
+      approved. You’ll find it under your profile after that.
+    </div>
+  <?php endif; ?>
   <?php if ($edit && lg_fc_page_is_frozen($edit)): ?>
     <div class="lgfc__frozen" role="status">
       <strong>Heads up — the page and these details are kept separately.</strong>
