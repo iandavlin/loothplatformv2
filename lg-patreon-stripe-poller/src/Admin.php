@@ -744,6 +744,7 @@ final class Admin
             'welcome_email' => 'Welcome Email',
             'stripe_cohort' => 'Stripe Test Group',
             'stripe_price'  => 'Stripe Price',
+            'dual_payers'   => 'Dual Payers',
         ];
         ?>
         <div class="wrap">
@@ -764,11 +765,119 @@ final class Admin
                 'welcome_email' => self::renderWelcomeEmailTab(),
                 'stripe_cohort' => self::renderStripeCohortTab(),
                 'stripe_price'  => self::renderStripePriceTab(),
+                'dual_payers'   => self::renderDualPayersTab(),
                 default         => self::renderSettingsTab(),
             };
             ?>
         </div>
         <?php
+    }
+
+    // -------------------------------------------------------------------------
+    // Dual Payers tab (#149) — the direction we cannot block
+    // -------------------------------------------------------------------------
+
+    /**
+     * Members paying on BOTH rails at once.
+     *
+     * #150 shuts the door we own: a member already paying on Patreon cannot buy
+     * here. The reverse cannot be shut — nothing of ours runs at patreon.com,
+     * so a member who pays here and then pledges over there arrives in this
+     * list and nowhere else. That is why this screen exists rather than a
+     * quiet reconciliation: changing somebody's billing without telling anyone
+     * is worse than a list.
+     *
+     * READ ONLY, deliberately. There is no action on this screen, because what
+     * to do about a dual payer (refund which side? cancel which side? ask them?)
+     * is Ian's decision and not a button.
+     */
+    private static function renderDualPayersTab(): void
+    {
+        $rows  = \LGMS\Membership\DualPayers::find();
+        $sweep = \LGMS\Membership\DualPayers::lastSweepAt();
+        $flagOn = \LGMS\Membership\PatreonStanding::flagOn();
+        ?>
+        <h2>Dual payers</h2>
+        <p>
+            Members whose membership is being charged on <strong>both</strong> Patreon and Stripe right now.
+            Ian, 2026-08-19: <em>"We should disallow double payment source for the same user."</em>
+        </p>
+        <p>
+            Checkout on this site refuses a paying Patreon member while
+            <code>lgms_double_pay_block</code> is on — it is currently
+            <strong><?php echo $flagOn ? 'ON' : 'OFF'; ?></strong>.
+            The other direction cannot be refused by us: nothing we run sits at Patreon&rsquo;s checkout,
+            so a member who pays here and then pledges there shows up in this table and nowhere else.
+        </p>
+        <p class="description">
+            Patreon figures come from the last completed sweep<?php
+                echo $sweep !== null ? ' (' . esc_html( $sweep ) . ')' : ' (never recorded)'; ?>.
+            The row&rsquo;s own <code>synced_at</code> is deliberately not used as an age here: it records the last
+            time a patron&rsquo;s details CHANGED, not the last time they were checked, so the steadiest
+            members carry the oldest-looking rows.
+        </p>
+        <?php if ( $rows === [] ) : ?>
+            <p><strong>Nobody.</strong> No member is currently being charged on both rails.</p>
+        <?php else : ?>
+        <table class="widefat striped">
+            <thead>
+                <tr>
+                    <th>Member</th>
+                    <th>Patreon</th>
+                    <th>Stripe</th>
+                    <th>Matched by</th>
+                    <th><code>payment_source</code> says</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ( $rows as $r ) :
+                $p = $r['patreon'];
+                $money = static function ( $cents ) {
+                    return $cents === null ? '—' : '$' . number_format( ( (int) $cents ) / 100, 2 );
+                };
+                ?>
+                <tr>
+                    <td>
+                        <a href="<?php echo esc_url( admin_url( 'user-edit.php?user_id=' . (int) $r['wp_user_id'] ) ); ?>">
+                            <?php echo esc_html( $r['login'] ); ?></a><br>
+                        <span class="description">#<?php echo (int) $r['wp_user_id']; ?> · <?php echo esc_html( $r['wp_email'] ); ?></span>
+                    </td>
+                    <td>
+                        <?php echo esc_html( (string) ( $p['tier_label'] ?? '—' ) ); ?>
+                        · <?php echo esc_html( $money( $p['amount_cents'] ) ); ?><br>
+                        <span class="description">
+                            <?php echo esc_html( (string) ( $p['patron_status'] ?? '?' ) ); ?><?php
+                            if ( ! empty( $p['next_charge_date'] ) ) {
+                                echo ' · next ' . esc_html( (string) $p['next_charge_date'] );
+                            } ?>
+                        </span>
+                    </td>
+                    <td>
+                        <?php echo esc_html( (string) ( $r['stripe_tier'] ?? '—' ) ); ?>
+                        · <?php echo esc_html( $money( $r['stripe_cents'] ) ); ?><?php
+                        echo $r['stripe_interval'] ? ' / ' . esc_html( $r['stripe_interval'] ) : ''; ?><br>
+                        <span class="description">
+                            <?php echo esc_html( $r['stripe_status'] ); ?> · customer #<?php echo (int) $r['customer_id']; ?>
+                            · <?php echo esc_html( $r['stripe_email'] ); ?>
+                        </span>
+                    </td>
+                    <td>
+                        <?php echo esc_html( $r['matched_by'] ); ?>
+                        <?php if ( $r['matched_by'] === 'email' ) : ?>
+                            <br><span class="description">no bridge row — a shared address could match the wrong person</span>
+                        <?php endif; ?>
+                    </td>
+                    <td><code><?php echo esc_html( $r['payment_source_says'] ); ?></code></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+        <p class="description">
+            Nothing on this screen changes anything. <code>payment_source</code> is shown because it is
+            frequently WRONG for exactly these members — the two rails overwrite each other in that one
+            slot — and no verdict here is taken from it.
+        </p>
+        <?php endif;
     }
 
     // -------------------------------------------------------------------------
