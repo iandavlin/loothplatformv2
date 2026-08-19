@@ -542,6 +542,26 @@ is_( str_contains( bare( $mpConfig ), PatreonStanding::FLAG ),
 is_( ! str_contains( $joinBare, "payment_source" ),
      '...and never on payment_source' );
 
+/* A blocked page must not still be selling. The banner replacing the picker is
+   not enough on its own: the trial pitch, the "Secure checkout — we accept
+   Visa/Mastercard/Apple Pay" bar and the sign-up form all sat AFTER the picker
+   and rendered regardless, so the first working build told a member not to pay
+   and then showed them how. Found by rendering the real page, not by reading it. */
+$joinTight = (string) preg_replace( '/\s+/', '', $joinBare );   // the guard is written with spaces
+foreach ( [
+    'lg-join__trial-banner'    => 'the free-trial pitch',
+    'lg-join__pay-methods-bar' => 'the accepted-payment-methods bar',
+    'data-lg-signup-modal'     => 'the sign-up / checkout form',
+] as $needle => $what ) {
+    $at   = strpos( $joinTight, $needle );
+    $last = $at === false ? false : strrpos( substr( $joinTight, 0, $at ), '$blockedByPatreon' );
+    // The nearest preceding mention must be the NEGATED one. Searching for
+    // '!$blockedByPatreon' directly would also be found by the plain form one
+    // character later, so ask what sits in front of the last occurrence.
+    $negated = $last !== false && $last > 0 && $joinTight[ $last - 1 ] === '!';
+    is_( $negated, "$what is inside the not-blocked guard — a refused member is not sold to" );
+}
+
 $standAt = strpos( $joinBare, 'lg_membership_patreon_standing' );
 $tiersAt = strpos( $joinBare, 'data-lg-join-tiers' );
 is_( $standAt !== false && $tiersAt !== false && $standAt < $tiersAt,

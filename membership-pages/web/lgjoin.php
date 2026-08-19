@@ -235,14 +235,16 @@ $asset_v = (string) (@filemtime(__DIR__ . '/lg-shortcodes.css') ?: '1');
                 <?php endif; ?>
             </header>
 
+<?php if ( ! $blockedByPatreon ) : ?>
             <div class="lg-join__trial-banner" data-lg-trial-banner hidden>
                 <span class="lg-join__trial-banner-inner">&#10003; 7-day free trial on all plans &mdash; no charge until day 8</span>
             </div>
+<?php endif; ?>
 
 
             <div class="lg-join__region-note" data-lg-region-note hidden></div>
 
-            <?php if ( $blockedByPatreon ) : ?>
+<?php if ( $blockedByPatreon ) : ?>
             <div class="lg-join__patreon-block" role="status">
                 <h3>You are already a member through Patreon</h3>
                 <p><?php echo $h( lg_membership_patreon_refusal_message() ); ?></p>
@@ -250,12 +252,13 @@ $asset_v = (string) (@filemtime(__DIR__ . '/lg-shortcodes.css') ?: '1');
                     <a class="lg-join__patreon-manage" href="<?php echo $h( lg_membership_patreon_manage_url() ); ?>" rel="noopener">Manage your pledge on Patreon</a>
                 </p>
             </div>
-            <?php else : ?>
+<?php else : ?>
             <div class="lg-join__tiers" data-lg-join-tiers>
                 <p class="lg-join__loading">Loading plans&hellip;</p>
             </div>
-            <?php endif; ?>
+<?php endif; ?>
 
+<?php if ( ! $blockedByPatreon ) : ?>
             <div class="lg-pay-methods lg-join__pay-methods-bar" aria-label="Accepted payment methods">
                 <span class="lg-pay-methods__label">Secure checkout &mdash; we accept</span>
                 <ul class="lg-pay-methods__list">
@@ -359,6 +362,7 @@ $asset_v = (string) (@filemtime(__DIR__ . '/lg-shortcodes.css') ?: '1');
                 </div>
             </div>
 
+<?php endif; ?>
             <div class="lg-pay-modal" data-lg-join-checkout-modal hidden role="dialog" aria-modal="true" aria-label="Secure checkout">
                 <div class="lg-pay-modal__backdrop" data-lg-join-checkout-close></div>
                 <div class="lg-pay-modal__card">
@@ -743,12 +747,14 @@ $asset_v = (string) (@filemtime(__DIR__ . '/lg-shortcodes.css') ?: '1');
             // appeared. Now it runs in the background and we re-fetch only if it
             // turns up a different country with actual regional pricing.
             async function loadProducts(){
+<?php if ( $blockedByPatreon ) : ?>
                 // #150: the member is already being charged on Patreon, so the
                 // server rendered a banner where the picker goes. Return before
                 // the catalogue fetch — with no [data-lg-join-tiers] element to
                 // write into, going on would throw, and there is nothing to
                 // show anyway. No products call is made on a blocked page.
                 if (!tiersEl) return;
+<?php endif; ?>
                 showError('');
                 await fetchAndRenderProducts(DETECTED_COUNTRY);
                 if (!COUNTRY_OVERRIDE) {
