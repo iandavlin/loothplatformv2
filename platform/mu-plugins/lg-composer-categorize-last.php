@@ -344,7 +344,11 @@ function lg_ccl_apply(int $topic_id, array $slugs, array $opts = [])
 
     /* 4 — an audit trail, so a later reader can tell Ian's hand call from a
            supervised LLM suggestion. */
-    $log = (array)get_post_meta($topic_id, '_lg_ccl_log', true);
+    /* NOT (array)get_post_meta(...): an absent meta returns '' and (array)'' is
+       [''], so the very first run left a junk empty element at index 0. Caught by
+       reading the row back after the first real apply. */
+    $log = get_post_meta($topic_id, '_lg_ccl_log', true);
+    if (!is_array($log)) $log = [];
     $log[] = [
         'at'     => gmdate('c'),
         'user'   => get_current_user_id(),
@@ -472,4 +476,156 @@ function lg_ccl_forum_label(?int $forum_id): ?array
 {
     if (!$forum_id) return null;
     return ['id' => $forum_id, 'title' => get_the_title($forum_id)];
+}
+
+/* ═══════════════════════════════════════════════════════════ wp-cli ════════
+ *
+ *   wp lg-recat <topic-id>... --terms=<slug[,slug…]>
+ *                             [--forum=<id>] [--no-forum]
+ *                             [--dry-run] [--porcelain] [--reason=<text>]
+ *   wp lg-recat-list [--all] [--forum=<id>] [--since=<YYYY-MM-DD>]
+ *                    [--limit=<n>] [--format=<table|json|csv|ids>]
+ *
+ * Ian's hand tool AND the LLM's tool, which is why there are two verbs: one
+ * READS the uncategorized backlog, the other WRITES. A supervised batch reads with
+ * the first and applies suggestions through the second, one topic at a time, with
+ * --dry-run available for every one of them.
+ *
+ * It lives in this file rather than its own so the deploy needs ONE new mu-plugin
+ * symlink instead of two — mu-plugins are symlinked individually here, and a
+ * missing link is a feature that silently does not exist.
+ *
+ * SLUGS, NOT TERM IDS, on purpose: a slug is what a model can read straight off
+ * `wp lg-recat-list` and what a human can type without a lookup table.
+ */
+
+if (defined('WP_CLI') && WP_CLI) {
+
+    /**
+     * Assign Content Topics to discussions and re-home them to the mapped forum.
+     */
+    WP_CLI::add_command('lg-recat', function ($args, $assoc) {
+
+        /* The flag gates the tool as well as the UI, and it must: with the flag OFF
+           `shared_category` is not registered for `topic`, so terms written here
+           would be rows nothing reads — the worst kind of success. Naming the flag
+           in the failure is the difference between a five-second fix and an hour. */
+        if (!lg_ccl_enabled()) {
+            WP_CLI::error(
+                "categorize-last is OFF, so shared_category is not registered for topics and\n"
+              . "any terms written now would be unreadable. Turn it on first:\n"
+              . "  platform/config/composer-categorize-last.php  → 'enabled' => true\n"
+              . "  (or a box-local composer-categorize-last.local.php, or LG_CCL_PREVIEW=1)"
+            );
+        }
+
+        $ids = array_values(array_filter(array_map('intval', (array)$args)));
+        if (!$ids) WP_CLI::error('give me at least one topic id');
+
+        $terms_raw = (string)($assoc['terms'] ?? '');
+        $slugs = array_values(array_filter(array_map('trim', explode(',', $terms_raw))));
+        if (!$slugs && empty($assoc['no-forum'])) {
+            WP_CLI::error('--terms=<slug,slug> is required (or --no-forum to move without tagging)');
+        }
+
+        $opts = [
+            'append'   => true,
+            'dry_run'  => !empty($assoc['dry-run']),
+            'reason'   => (string)($assoc['reason'] ?? 'wp lg-recat'),
+            'no_forum' => !empty($assoc['no-forum']),
+        ];
+        if (isset($assoc['forum'])) $opts['forum'] = (int)$assoc['forum'];
+
+        $porcelain = !empty($assoc['porcelain']);
+        $ok = 0; $fail = 0;
+
+        foreach ($ids as $id) {
+            $r = lg_ccl_apply($id, $slugs, $opts);
+            if (is_wp_error($r)) {
+                $fail++;
+                WP_CLI::warning("#$id: " . $r->get_error_message());
+                continue;
+            }
+            $ok++;
+            if ($porcelain) {
+                // double quotes: in single quotes \t is a literal backslash-t, which
+                // would have made the porcelain output unsplittable by the batch caller.
+                WP_CLI::line(sprintf("%d\t%s\t%s\t%s",
+                    $r['topic_id'],
+                    implode(',', $r['terms']),
+                    $r['to_forum'] ? $r['from_forum'] . '->' . $r['to_forum'] : 'forum-unchanged',
+                    $r['dry_run'] ? 'dry-run' : 'applied'));
+                continue;
+            }
+            WP_CLI::line(sprintf('%s #%d %s',
+                $r['dry_run'] ? '[dry-run]' : '✔', $r['topic_id'], $r['title']));
+            WP_CLI::line('    topics: ' . (implode(', ', $r['terms']) ?: '(none)'));
+            if ($r['to_forum']) {
+                WP_CLI::line(sprintf('    forum:  %d → %d  (%s, plus %d repl%s re-homed)',
+                    $r['from_forum'], $r['to_forum'], get_the_title($r['to_forum']),
+                    $r['replies'], $r['replies'] === 1 ? 'y' : 'ies'));
+            } else {
+                WP_CLI::line('    forum:  unchanged (' . get_the_title($r['from_forum']) . ')');
+            }
+        }
+
+        /* A count ALWAYS, including zero — a run that printed nothing would read as
+           "nothing needed doing" when it means "everything was refused". */
+        $verb = $opts['dry_run'] ? 'would change' : 'changed';
+        WP_CLI::log(sprintf('%d %s, %d refused', $ok, $verb, $fail));
+
+        /* 0 = all applied · 1 = nothing applied · 2 = partial. Never silent. */
+        if ($ok && $fail)  WP_CLI::halt(2);
+        if (!$ok)          WP_CLI::halt(1);
+
+        if (!$opts['dry_run']) {
+            WP_CLI::log('verify in POSTGRES (forums.topic / forums.reply), not in MySQL — a '
+                      . 'change that does not reach the mirror looks perfect here');
+        }
+    });
+
+    /**
+     * The read side: which discussions have no Content Topic yet.
+     */
+    WP_CLI::add_command('lg-recat-list', function ($args, $assoc) {
+        $limit  = (int)($assoc['limit'] ?? 50);
+        $format = (string)($assoc['format'] ?? 'table');
+
+        $q = [
+            'post_type'      => 'topic',
+            'post_status'    => 'publish',
+            'posts_per_page' => $limit > 0 ? $limit : -1,
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+        ];
+        if (!empty($assoc['forum'])) $q['post_parent'] = (int)$assoc['forum'];
+        if (!empty($assoc['since'])) {
+            $q['date_query'] = [['after' => (string)$assoc['since']]];
+        }
+        /* Uncategorized IS the default — that is what the command is for. --all opts
+           out, for a spot check of a forum's whole contents. Spelling the default as
+           the ABSENCE of a flag means a batch caller cannot widen its own work set by
+           forgetting one. */
+        if (empty($assoc['all'])) {
+            $q['tax_query'] = [[
+                'taxonomy' => 'shared_category',
+                'operator' => 'NOT EXISTS',
+            ]];
+        }
+
+        $rows = [];
+        foreach (get_posts($q) as $p) {
+            $body = wp_strip_all_tags((string)$p->post_content);
+            $rows[] = [
+                'id'     => $p->ID,
+                'forum'  => get_the_title($p->post_parent),
+                'date'   => mysql2date('Y-m-d', $p->post_date),
+                'title'  => $p->post_title,
+                'excerpt'=> mb_substr(preg_replace('/\s+/u', ' ', $body), 0, 160),
+            ];
+        }
+        if (!$rows) { WP_CLI::log('0 uncategorized discussions matched'); return; }
+        if ($format === 'ids') { WP_CLI::line(implode(' ', wp_list_pluck($rows, 'id'))); return; }
+        WP_CLI\Utils\format_items($format, $rows, ['id', 'forum', 'date', 'title', 'excerpt']);
+    });
 }
