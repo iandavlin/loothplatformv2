@@ -1,8 +1,11 @@
 # #129 COMPOSER REDESIGN — write first, categorize last
 
-Lane `129-composer-redesign`. Phase 1 (measure) and Phase 2 (mock) are done and
-committed; this is the Phase-3 plan and the lane parks here. **No feature code has
-been written.**
+Lane `129-composer-redesign`. **BUILT** — Ian gave BUILD GO on 8/19 after ruling the
+mock ("Looks good"). This file is the plan as approved; §5 at the bottom records what
+was actually built and the two things a deploy has to do by hand.
+
+Phases 1 (measure) and 2 (mock) are in
+`129-composer-redesign-MEASUREMENT.md` and `129-mock-composer-v2/`.
 
 - Measurement: `handoffs/plans/129-composer-redesign-MEASUREMENT.md`, also posted as
   a comment on #129 (2026-08-19).
@@ -261,3 +264,71 @@ for a suggestion, nothing more.
     posting the measurement. I used the GitHub API directly with the same
     `LG_GITHUB_ISSUES_TOKEN` from `/etc/looth/env` that `approve-issue.sh` uses, to
     the same repo. Worth writing the helper so the next lane does not re-derive it.
+
+
+---
+
+## 5. What was actually built (added after BUILD GO, 8/19)
+
+Six commits. The flag is `composer-categorize-last`, **tracked default OFF**, registered
+in `docs/FLAGS.md` and asserted in all three states by **gate 74**.
+
+| commit | what |
+|---|---|
+| config | `platform/config/composer-categorize-last.php` — flag, per-box `default_forum_id`, the 21-row measured map; readers on both the WP and bb-mirror sides |
+| WP half | `register_taxonomy_for_object_type('shared_category','topic')` at `init:20`, `lg_ccl_apply()`, two REST routes |
+| UI | `_chrome.php` / `forums.js` / `forums.css` / `hub-polish.js` — Where step out, tag step + hierarchical picker in |
+| CLI | `wp lg-recat` + `wp lg-recat-list` |
+| gate | gate 74 + `categorize-last-redfirst.sh` (11 checks), wired into `run-all.sh`, row added to `CRAFT-STANDARD.md` |
+
+### 5.1 Two rulings landed, one is still open
+
+- **(a) RULED.** A new **top-level** forum is the landing: dev2 `73564` "Discussions".
+  Not the old `#3837 General`, which measured as a *child* of Repair and Restoration.
+- **(b) RULED workably.** An unmapped topic lands in the default. So the map holds
+  **only measured-correct pairs** — 21 of 36 — and the other 15 are listed in the
+  config with the reason each is absent. Nothing is guessed. Dedicated forums for the
+  two heavy unmapped topics (New Builds 145 uses, Tools/Spaces/Robots/Widgets 97) stay
+  open with Ian and are non-blocking.
+
+### 5.2 ⚠️ THE FLIP IS BLOCKED ON A MIRROR SYNC, AND THE CODE REFUSES UNTIL IT IS DONE
+
+Measured 8/19: forum **73564 exists in WordPress and is ABSENT from the Postgres
+mirror** (`forums.forum`; the mirror's newest row is 67776). Forum rows reach the
+mirror only via the `bbp_new_forum` / `bbp_edit_forum` hooks, and whatever created
+73564 did not fire them. The picker, the hub's forum reads and the postable contract
+**all read Postgres**, so a topic filed there would point at a forum row that does not
+exist.
+
+`lg_ccl_default_forum_ok()` therefore keeps the Where step while that is true — the
+composer refuses rather than filing posts into a void. Verified as the pool user, with
+a liveness control (73564 no · 3837 YES · 3818 parent no · 3876 excluded no).
+
+**Resync is one dispatch:** `bb_mirror_sync_dispatch('forum', 73564, 'upsert')`.
+
+### 5.3 Two deploy steps a `git pull` does NOT do
+
+1. **The new mu-plugin needs its symlink.** mu-plugins are linked individually (33 of
+   them) into `/var/www/dev/wp-content/mu-plugins/`. Until
+   `lg-composer-categorize-last.php` is linked, the WP half — taxonomy registration,
+   both REST routes and `wp lg-recat` — does not load at all, while the hub UI is
+   present. That is the "UI lies" shape, so link it in the same window as the pull.
+2. **Live needs its own `default_forum_id`.** Live's twin of "Discussions" is a
+   different post ID; the value is config precisely so live can differ.
+
+### 5.4 What the build verified, and what it could not
+
+Verified against real dev2 data: the flag readers (both sides), the postable contract,
+mapping precedence (most-specific-wins), the all-or-nothing slug validation, the three
+exit codes, and — on a throwaway topic keyed to the run — the **whole write path**,
+ending in `forums.topic.forum_id` **and** `forums.reply.forum_id` both moving in
+Postgres. That last line is the recorded trap (a change that does not bump
+`post_modified_gmt` never reaches the mirror, confirmed before for exactly the replies
+of a moved topic) measured as defeated rather than assumed. Probe deleted from both
+stores, zero orphans.
+
+**Not verified, and it cannot be from a lane:** the feature running on the dev2 serve.
+The serve serves `main` from `~/loothplatformv2-clean`, so nothing on this branch is
+reachable there until it is merged — which is the whole reason the flag exists. Ian's
+look happens after the merge, with the flag still OFF, then the mirror sync, then the
+flip.

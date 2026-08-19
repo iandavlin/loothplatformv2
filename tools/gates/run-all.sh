@@ -1173,6 +1173,45 @@ echo "=== GATE 72: the weekly digest's discussion cards keep their images ==="
 # URL is resolved and emitted — it can never prove the image LOADS. Only live can.
 run "digest-forum-images" bash "$(dirname "$0")/../../lg-weekly-digest/dev/verify-discussion-media-thumbs.sh"
 
+# ⚠️ PLACED ABOVE THE MID-FILE RED EXIT DELIBERATELY. The marker below warns that
+# anything registered under it never runs on a red suite — and main was red on 7
+# unrelated gates the day this landed, so down there it would have asserted
+# nothing in practice. It costs well under a second (pure source + config, no DB,
+# no browser, no network), so there is no reason for it to be skippable.
+echo
+echo "=== GATE 74: categorize-last — all THREE flag states, and five couplings ==="
+# #129 ledger 44. The composer's required "Where" step is gone and an OPTIONAL tag
+# step arrives at the end (Ian 8/16 ruled; Option C on 8/19: "add in the tags and
+# maybe popping up a new modal with a decent heirarchical layout"). Member-facing
+# change to the most-used write surface here, so it ships behind a flag OFF.
+#
+# The failure class this guards is NOT the ON path. It is that "flag OFF is a no-op"
+# gets asserted by nobody and quietly drifts. So the gate READS the flag rather than
+# hardcoding a state — flipping the default needs no edit here — and asserts:
+#   absent  both readers fail CLOSED when the tracked config is unreadable
+#   OFF     the original Where-step markup is present VERBATIM, and the taxonomy is
+#           NOT extended to topics (an ungated attach is a schema change, not a no-op)
+#   ON      the pre-made forum choice, the tag field, the Skip control, the endpoint
+#
+# Plus five couplings that each have a scar in this repo:
+#   1 the two non-postable forum lists (bb-mirror's constant, the WP literal) AGREE
+#   2 the landing forum is CONFIG not a constant — dev2 73564, live's twin differs
+#   3 the applier's reply loop bumps post_modified_gmt AND dispatches: a change that
+#     does not bump it never reaches the mirror, confirmed for exactly this operation
+#   4 both flag readers consult getenv() AND $_SERVER, or a lane-preview
+#     fastcgi_param serves OFF on the very URL built for Ian to click
+#   5 the MOBILE composer is guarded. "mobile is the flat form served unchanged" is
+#     true of forums.js and false of what a phone renders — hub-polish.js builds its
+#     own 4-step wizard whose step 1 was "Title & forum"
+#
+# Pure source + config: no DB, no browser, no network, so it cannot flake under load
+# and cannot go vacuously green behind a locked-out browser.
+#
+# RED-FIRST (tools/gates/categorize-last-redfirst.sh, 11 checks, mutating SNAPSHOT
+# copies — never a checkout): 9 mutations each red for their OWN stated reason, and
+# both the baseline and a no-op whitespace mutation stay GREEN.
+run "categorize-last" python3 "$(dirname "$0")/categorize-last-gate.py"
+
 if [ "$red" -ne 0 ]; then
   echo "############ GATES RED — do not push ############"
   echo "RED GATES: ${RED_GATES:-unknown}"
@@ -1555,40 +1594,6 @@ echo "=== GATE 73: the profile prints the address the MEMBER TYPED, ladder unmov
 #   ungate one location_address write RED exit 1, "3 writes but 2 flag guards"
 #   make coarseText fall through    RED exit 1, 12 findings, ladder leak in all 3 states
 run "location-address" python3 "$(dirname "$0")/location-address-gate.py"
-
-echo
-echo "=== GATE 74: categorize-last — all THREE flag states, and five couplings ==="
-# #129 ledger 44. The composer's required "Where" step is gone and an OPTIONAL tag
-# step arrives at the end (Ian 8/16 ruled; Option C on 8/19: "add in the tags and
-# maybe popping up a new modal with a decent heirarchical layout"). Member-facing
-# change to the most-used write surface here, so it ships behind a flag OFF.
-#
-# The failure class this guards is NOT the ON path. It is that "flag OFF is a no-op"
-# gets asserted by nobody and quietly drifts. So the gate READS the flag rather than
-# hardcoding a state — flipping the default needs no edit here — and asserts:
-#   absent  both readers fail CLOSED when the tracked config is unreadable
-#   OFF     the original Where-step markup is present VERBATIM, and the taxonomy is
-#           NOT extended to topics (an ungated attach is a schema change, not a no-op)
-#   ON      the pre-made forum choice, the tag field, the Skip control, the endpoint
-#
-# Plus five couplings that each have a scar in this repo:
-#   1 the two non-postable forum lists (bb-mirror's constant, the WP literal) AGREE
-#   2 the landing forum is CONFIG not a constant — dev2 73564, live's twin differs
-#   3 the applier's reply loop bumps post_modified_gmt AND dispatches: a change that
-#     does not bump it never reaches the mirror, confirmed for exactly this operation
-#   4 both flag readers consult getenv() AND $_SERVER, or a lane-preview
-#     fastcgi_param serves OFF on the very URL built for Ian to click
-#   5 the MOBILE composer is guarded. "mobile is the flat form served unchanged" is
-#     true of forums.js and false of what a phone renders — hub-polish.js builds its
-#     own 4-step wizard whose step 1 was "Title & forum"
-#
-# Pure source + config: no DB, no browser, no network, so it cannot flake under load
-# and cannot go vacuously green behind a locked-out browser.
-#
-# RED-FIRST (tools/gates/categorize-last-redfirst.sh, 11 checks, mutating SNAPSHOT
-# copies — never a checkout): 9 mutations each red for their OWN stated reason, and
-# both the baseline and a no-op whitespace mutation stay GREEN.
-run "categorize-last" python3 "$(dirname "$0")/categorize-last-gate.py"
 
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
