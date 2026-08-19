@@ -9,6 +9,13 @@ been written.**
 - Mock: `handoffs/plans/129-mock-composer-v2/index.html`, served at
   **https://dev2.loothgroup.com/mockups/composer-v2/** (behind the dev gate).
 
+**Ian ruled Option C on 8/19** (verbatim, relayed by keeper): *"I see it more being add
+in the tags and maybe popping up a new modal with a decent heirarchical layout."* The
+end-of-flow placement and the optional/bonus-points framing survive; the flat chip strip
+does not. Options A and B stay in the mock marked superseded. §1.2 below is written to
+Option C. His two data questions — (a) and (b) in §4 — remain open and still block
+Phase 4.
+
 ---
 
 ## 1. What I'd build
@@ -34,22 +41,53 @@ already enforces the postable list on the edit PUT, so the capability exists and
 the UI would be missing. Plan: keep a forum control on the **Review** row (the mock
 draws it as an `Edit` affordance on the Forum row) rather than resurrect the step.
 
-### 1.2 An optional topic-chip step at the end
+### 1.2 An optional tag step at the end, with a hierarchical picker
 
-Recommended shape is the mock's **Option A**: rail becomes `Write → Photos → Topics →
-Review`, where Topics is optional, visibly skippable, and encouragement-framed
-("bonus points"). `canLeave(3)` always returns true; the primary button never
-disables on that step. Mobile has no wizard (`buildNtmWizard()` returns null below
-641px) so the strip is simply the last block of the flat form, above Post.
+Per Ian's ruling the end step holds a **tag field**, not a chip cloud: picked topics
+accumulate as removable tags, and a **＋ Add topics** control opens a **picker modal**
+that presents the taxonomy as a hierarchy.
 
-Chips are `shared_category` ("Content Topics") terms. Top-level chips first, then the
-children of whatever was picked — the mock shows both rows.
+Rail becomes `Write → Photos → Topics → Review`, where Topics is optional and visibly
+skippable: `canLeave(3)` always returns true and the primary button never disables on
+that step. Mobile has no wizard (`buildNtmWizard()` returns null below 641px), so the
+tag field is the last block of the flat form and the picker is a bottom sheet.
 
-**This is the first writer of `shared_category` onto a discussion.** The taxonomy is
-registered for 8 object types and `topic` is not among them, so the mu-plugin must
-call `register_taxonomy_for_object_type('shared_category', 'topic')` on `init` after
-ACF registers it. It must NOT be done by editing the ACF definition — that lives in
-`wp_posts` 21219 in the database, and a DB edit is not traceable to a commit.
+The picker's layout **is** the hierarchy: 7 parents, 29 children. Desktop puts the
+parents in a left list carrying child counts and fills the right pane with the selected
+parent's children; mobile makes the same tree an accordion. Both carry a search box —
+36 terms is past scanning — and both offer **"Tag the whole area"**, which selects the
+parent term itself. That row is exactly what makes ruling (b) load-bearing: two of the
+four big parents have no forum to land in.
+
+Three implementation facts this shape drags in:
+
+**Stacking.** The picker is a modal *on top of* a modal, and the two composers sit at
+wildly different heights. `.ntm-overlay` (desktop) is `z-index: 9000`, while the mobile
+composer sheet `#looth-comp-sheet` is `2147483560` and the tabbar is `2147481000+`. The
+ceiling is `.lg-lightbox` at `2147483646`. The @-mention dropdown already solved this
+exact problem inside this exact composer — at its old `100000` it painted *behind* the
+opaque mobile composer card and was invisible on phones (Ian, 2026-07-23). Reuse that
+value rather than re-deriving it, and check the picker on a phone width before calling
+it done.
+
+**Where the term list comes from.** The composer has no term data today. Per the craft
+standard — editors and composers load on intent, never eagerly for anon — the 36 terms
+should arrive when **＋ Add topics** is first tapped, not be inlined into every Hub page
+render for every visitor.
+
+**A multi-select chip control in this composer has already been a bug once.** The
+archived `reply-to-coordinator-ntm-forum-picker.md` records that mobile's picker used to
+be `.lg-fbc-chips`, multi-select, and that toggling two chips read as *"posting to two
+forums"* — the "select two forums" bug, fixed by replacing it with the single-select
+radiogroup. Option C's tags are legitimately multi-select because they are **topics, not
+forums**, but that history is precisely why the **"Lands in <forum>"** line in the mock
+is not decoration: it is the thing that stops a multi-tag field re-reading as
+multi-forum. Keep it in the build.
+
+Leftover from that episode: `.lg-fbc-chip`, `.lg-fbc-chiprow`, `.lg-fbc-catgroup`,
+`.lg-fbc-catgroup__h` and `.lg-fbc-chips__h` are **still in `forums.css` with nothing
+building them** — `hub-polish.js` references `lg-fbc` 93 times but never those classes.
+Dead CSS in the file this lane edits; see §4.
 
 ### 1.3 taxo → forum mapping, committed and hand-reviewed
 
@@ -99,6 +137,7 @@ Guessing wider rather than narrower, per LANE-RULES.
 | `bb-mirror/web/forums.js` | remove step 1, add the Topics step, `ntmGetForum()` reads the hidden input, `ntmOpenForEdit()` no longer needs to skip a step, chip UI + submit payload |
 | `bb-mirror/web/forums.css` | Topics-step styles (`.lgt*`, chips); retire the `.ntm-forumlist` / `.lgw-acc` accordion rules once nothing renders them |
 | `bb-mirror/web/_chrome.php` | stop rendering the 37-row radiogroup; emit the hidden default `forum_id`; keep the postable query for the Review-row forum control |
+| **`webroot/hub-polish.js`** | **the one I had missed.** `fbStyleComposer()` is the *mobile* composer: it restyles `#ntm-forum` with injected CSS, wraps it in its own expand/collapse trigger, and enforces its **own** required-forum check before submit (`if (!wForum.querySelector('input[name=forum_id]:checked'))` → re-expands the picker and refuses). Leave it alone and mobile keeps demanding a forum — i.e. the pain point survives on the platform most members use |
 | `bb-mirror/config.php` | the default forum ID + the flag reader (already the shared home for `LG_BB_MIRROR_NONPOSTABLE_FORUM_IDS`, which two pools have to agree about) |
 | `platform/config/taxo-forum-map.php` **(new)** | the committed ID-keyed map |
 | `platform/mu-plugins/lg-frontend-compose.php` | `register_taxonomy_for_object_type` for `topic`; shared term-list helper |
@@ -212,7 +251,13 @@ for a suggestion, nothing more.
    whatever that archive renders, for the first time. Worth checking before the flag
    flips ON; anon reachability differs dev2 vs live and has given opposite answers on
    two URLs before.
-10. **`tools/lanes/comment-issue.sh` does not exist.** The charter names it for
+10. **Orphaned chip CSS in `forums.css`.** `.lg-fbc-chip*` / `.lg-fbc-catgroup*` are
+    styled and built by nothing — the remains of the multi-select mobile forum picker
+    that caused the "select two forums" bug. Not deleting it as a drive-by (it is
+    outside the ruling and someone may be mid-flight on it), but it should either be
+    reused by Option C's tag styling or removed, not left as a third chip vocabulary
+    beside `.lgw-chip` and Option C's `.tag`.
+11. **`tools/lanes/comment-issue.sh` does not exist.** The charter names it for
     posting the measurement. I used the GitHub API directly with the same
     `LG_GITHUB_ISSUES_TOKEN` from `/etc/looth/env` that `approve-issue.sh` uses, to
     the same repo. Worth writing the helper so the next lane does not re-derive it.
