@@ -1715,10 +1715,7 @@ $header_cat = $scoped_forum
       }
       // OP excerpt: format from content_html so @mentions + URLs are clickable.
       // Falls back to the plain content_text teaser if there's no HTML.
-      // #81: logged-out viewers get a SHORT teaser (flag ON) so search engines
-      // must credit the canonical landing page, not the feed. Members keep 440.
-      $lg_exc_len  = (!$can_post && lg_hub_anon_excerpts_on()) ? 150 : 440;
-      $excerpt     = bb_mirror_format_snippet((string)($topic['content_html'] ?? ''), $lg_exc_len, $db); // ~2x (Ian)
+      $excerpt     = bb_mirror_format_snippet((string)($topic['content_html'] ?? ''), 440, $db); // ~2x (Ian)
       if ($excerpt === '') $excerpt = feed_op_excerpt($topic);
       $topic_id    = (int)$topic['topic_id'];
       $reply_count = (int)$topic['reply_count'];
@@ -1726,10 +1723,7 @@ $header_cat = $scoped_forum
       $card_dims   = lg_cover_dims($topic['card_image'] ?? null);
 
       // One teaser reply (newest); full thread lazy-loads via ?replies=<id>.
-      // #81: withheld from logged-out viewers under the flag — reply text is
-      // more feed-food for crawlers; members are unaffected.
       $teaser    = $reply_teaser[$topic_id] ?? null;
-      if ($teaser && !$can_post && lg_hub_anon_excerpts_on()) $teaser = null;
       if ($teaser) {
           $teaser['excerpt_html'] = bb_mirror_format_snippet((string)($teaser['content_html'] ?? ''), 200, $db);
       }

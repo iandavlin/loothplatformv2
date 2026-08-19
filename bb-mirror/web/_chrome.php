@@ -703,6 +703,15 @@ function bb_mirror_chrome_header(string $page_title = 'The Hub', ?string $canoni
         $lg_canon = 'https://' . LG_BB_MIRROR_HOST . '/' . ltrim($canonical_path, '/');
         $lg_canon = htmlspecialchars($lg_canon, ENT_QUOTES, 'UTF-8'); ?>
 <link rel="canonical" href="<?= $lg_canon ?>">
+<?php /* #81 (Ian 8/19): strangers see the member-identical hub, so the bare
+         feed and the modal-open addresses carry the same words. This marker —
+         only ever on the page whose canonical IS the bare /hub/ — tells
+         crawlers to skip the aggregator and follow through to the per-topic
+         addresses, which stay fully indexable. Humans never see a change. */
+      if (function_exists('lg_hub_feed_noindex_on') && lg_hub_feed_noindex_on()
+          && rtrim((string)$canonical_path, '/') === 'hub'): ?>
+<meta name="robots" content="noindex,follow">
+<?php endif; ?>
 <meta property="og:url" content="<?= $lg_canon ?>">
 <meta property="og:type" content="<?= htmlspecialchars($og_type, ENT_QUOTES, 'UTF-8') ?>">
 <meta property="og:title" content="<?= $title ?>">

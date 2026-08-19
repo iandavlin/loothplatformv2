@@ -624,19 +624,19 @@ if (!function_exists('lg_notif_quickreply_enabled')) {
 }
 
 /**
- * hub-anon-excerpts (#81, Ian 8/19): short teasers for logged-out hub viewers
- * so search engines credit the discussion's canonical landing page instead of
- * the feed. Tracked default OFF; gitignored .local.php beside it wins per-key
- * (the weekly-front pattern — dev2 flips without a tracked edit, live is
- * protected by absence).
+ * hub-feed-noindex (#81 v2, Ian 8/19): the bare /hub/ carries a crawler-only
+ * noindex,follow so search links migrate to the modal-open per-topic
+ * addresses. Replaces the retired teaser approach — Ian ruled strangers see
+ * the member-identical hub (existing anonymizing unchanged). Tracked default
+ * OFF; gitignored .local.php beside it wins per-key; live protected by absence.
  */
-function lg_hub_anon_excerpts_on(): bool
+function lg_hub_feed_noindex_on(): bool
 {
     static $on = null;
     if ($on !== null) return $on;
-    $cfg = @include __DIR__ . '/../platform/config/hub-anon-excerpts.php';
+    $cfg = @include __DIR__ . '/../platform/config/hub-feed-noindex.php';
     $on  = is_array($cfg) && !empty($cfg['enabled']);
-    $loc = @include __DIR__ . '/../platform/config/hub-anon-excerpts.local.php';
+    $loc = @include __DIR__ . '/../platform/config/hub-feed-noindex.local.php';
     if (is_array($loc) && array_key_exists('enabled', $loc)) {
         $on = ($loc['enabled'] === true);
     }
