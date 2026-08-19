@@ -45,6 +45,13 @@ def _gh(url):
         return json.loads(r.read())
 
 
+def copy_btn(label, payload):
+    """A clipboard button (#133): payload rides in an attribute-escaped
+    data-copy; the page's one script does the rest. No fetch, no token."""
+    return (f'<button class="copybtn" '
+            f'data-copy="{html.escape(payload, quote=True)}">{label}</button>')
+
+
 def fetch_issue_state():
     """Needs-you (plan-ready without approved, with embedded plan text) and
     all open issues (to match building seats by branch number). Failure is
@@ -121,6 +128,8 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
 .strip{border-top:1px solid #2a2f38;margin-top:16px;padding-top:10px;}
 .strip div{font-size:13px;color:#9aa3ad;padding:2px 0;}
 .strip b{color:#e8e6df;font-weight:600;}
+.copybtn{background:#2d323b;color:#9db668;border:1px solid #3a4049;border-radius:6px;
+  padding:2px 10px;font-size:12px;font-weight:700;cursor:pointer;margin-left:8px;}
 </style></head><body><div class="wrap"><h1>lanes</h1>""")
 
     # 0. capacity — one glance, no counting rows (Ian's item 1)
@@ -177,6 +186,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
     for i in needs:
         upd = _dt.datetime.fromisoformat(i["updated_at"].replace("Z", "+00:00"))
         days = max(0, (_dt.datetime.now(_dt.timezone.utc) - upd).days)
+        pointer = f'Re issue #{i["number"]} — your plan-ready plan. Question: '
         h.append(
             f'<details class="block" style="background:#3a3320;border:2px '
             f'solid #e0b64f"><summary style="font-weight:700;font-size:16px;'
@@ -185,7 +195,10 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
             f'<div style="white-space:pre-wrap;font-size:13.5px;margin:10px 0">'
             f'{html.escape(i["_plan"][:6000])}</div>'
             f'<a href="{html.escape(i["html_url"])}" style="color:#9db668;'
-            f'font-weight:700">Approve on GitHub &#8599;</a></details>')
+            f'font-weight:700">Approve on GitHub &#8599;</a>'
+            f'{copy_btn("Copy for keeper", pointer)}'
+            f'{copy_btn("Copy plan", i["_plan"][:6000])}'
+            f'</details>')
 
     # 2d. building — open issues matched to seats by branch leading number
     seat_nums = {l["branch"].split("-")[0]: l["branch"] for l in table
@@ -233,6 +246,8 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
                          f'plan</summary><div style="white-space:pre-wrap;'
                          f'font-size:12.5px">{html.escape(plan[:5000])}</div>'
                          f'</details>')
+        seat_line = (f'/home/ubuntu/{l["folder"]}  (branch {l["branch"]})')
+        seat += "<br>" + copy_btn("copy path+branch", seat_line)
         h.append(f'<tr><td>{seat}</td>'
                  f'<td class="num unique">{l["unique"]}</td>'
                  f'<td class="num dim">{l["behind"]}</td>'
@@ -291,6 +306,20 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
     h.append(f'<div class="foot">generated {now.strftime("%H:%M")} &middot; '
              f'redraws every 5 minutes — an old timestamp means the timer is '
              f'dead, not that all is well</div>')
+    # the one script (#133): clipboard only; hides every button when the API
+    # is absent — quiet degrade, no dialogs
+    h.append("""<script>
+(function(){
+  var btns=document.querySelectorAll('.copybtn');
+  if(!navigator.clipboard){btns.forEach(function(b){b.style.display='none'});return;}
+  btns.forEach(function(b){b.addEventListener('click',function(ev){
+    ev.preventDefault();
+    navigator.clipboard.writeText(this.dataset.copy).then(function(){
+      var t=b.textContent;b.textContent='copied';setTimeout(function(){b.textContent=t},1500);
+    },function(){});
+  });});
+})();
+</script>""")
     h.append('</div></body></html>')
 
     OUT.mkdir(parents=True, exist_ok=True)
