@@ -315,6 +315,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
         approved_orphans = [
             i for i in allopen
             if any(l["name"] == "approved" for l in i["labels"])
+            and not any(l["name"] == "merged" for l in i["labels"])
             and str(i["number"]) not in seat_nums]
         for i in approved_orphans:
             h.append(f'<div class="block risk">APPROVED, NOT STARTED — '
