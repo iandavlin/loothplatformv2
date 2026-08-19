@@ -90,6 +90,34 @@ function is_( bool $c, string $m ): void { $c ? ok( $m ) : bad( $m ); }
 function section( string $t ): void { echo "\n$t\n"; }
 function note( string $t ): void { echo "  ..   $t\n"; }
 function cannot( string $why ): void { echo "CANNOT RUN: $why\n"; exit( 3 ); }
+/**
+ * The string a named function returns, reassembled from its literals.
+ *
+ * The member-facing copy is written as concatenated literals across several
+ * source lines, so comparing it against raw source would only ever match the
+ * first sentence — which is exactly the false green this gate exists to avoid.
+ * This reads what the function actually says.
+ */
+function literalsIn( string $file, string $fn ): string {
+    $t = token_get_all( (string) file_get_contents( $file ) );
+    $out = ''; $depth = 0; $inFn = false; $seen = false;
+    foreach ( $t as $i => $tok ) {
+        if ( is_array( $tok ) && $tok[0] === T_FUNCTION ) {
+            for ( $j = $i + 1; $j < $i + 4; $j++ ) {
+                if ( isset( $t[ $j ] ) && is_array( $t[ $j ] ) && $t[ $j ][0] === T_STRING && $t[ $j ][1] === $fn ) { $inFn = true; }
+            }
+            continue;
+        }
+        if ( ! $inFn ) { continue; }
+        if ( $tok === '{' ) { $depth++; $seen = true; continue; }
+        if ( $tok === '}' ) { $depth--; if ( $seen && $depth === 0 ) { break; } continue; }
+        if ( $depth > 0 && is_array( $tok ) && $tok[0] === T_CONSTANT_ENCAPSED_STRING ) {
+            $out .= stripcslashes( substr( $tok[1], 1, -1 ) );
+        }
+    }
+    return $out;
+}
+
 /** Source with comments and strings-in-comments removed, so prose can never satisfy an assertion. */
 function bare( string $file ): string {
     $t = token_get_all( (string) file_get_contents( $file ) );
@@ -213,6 +241,12 @@ $GLOBALS['PDO']->exec(
         patron_status TEXT, last_charge_status TEXT, last_charge_date TEXT, next_charge_date TEXT,
         will_pay_amount_cents INTEGER, currently_entitled_amount_cents INTEGER,
         pledge_cadence INTEGER, tier_label TEXT, synced_at TEXT )' );
+/* Door 2 resolves a bridged Stripe customer on its way out, so those two tables
+   have to exist or the leg dies before it reaches the assertion. Left EMPTY on
+   purpose: the members in this rig are Patreon-side, and a stray bridge row
+   would change which branch of the session builder runs. */
+$GLOBALS['PDO']->exec( 'CREATE TABLE wp_user_bridge (wp_user_id INTEGER, customer_id INTEGER)' );
+$GLOBALS['PDO']->exec( 'CREATE TABLE customers (id INTEGER PRIMARY KEY, email TEXT, stripe_customer_id TEXT, deleted_at TEXT)' );
 
 require_once $standingFile;
 require_once $standRest;
@@ -268,7 +302,8 @@ is_( ( $s103['active'] ?? null ) === false,    'a member who never linked Patreo
 is_( ( $s105['active'] ?? null ) === false,    'a declined patron is NOT paying — the charge did not land' );
 is_( ( $s104['active'] ?? null ) === true,
      'an active patron on a tier MISSING from lgpo_tier_map is still paying (no role, real charge)' );
-is_( ( $s104['tier'] ?? 'set' ) === null,      '...and is reported with no tier rather than a guessed one' );
+is_( array_key_exists( 'tier', $s104 ) && $s104['tier'] === null,
+     '...and is reported with no tier rather than a guessed one' );
 is_( ( $s101['patron_status'] ?? null ) === 'active_patron', 'the verdict carries the Patreon status it decided from' );
 is_( is_string( $s101['reason'] ?? null ) && $s101['reason'] !== '', 'every verdict carries a reason' );
 is_( ( $s103['reason'] ?? '' ) !== ( $s102['reason'] ?? '' ),
@@ -338,12 +373,17 @@ is_( stripos( $msg, 'cancel' ) !== false,  '...names the switch path: cancel on 
 is_( stripos( $msg, 'laps' ) !== false || stripos( $msg, 'already paid' ) !== false,
      '...and states the GAP — Patreon access runs to the end of the paid period' );
 
-$joinSrc = bare( $joinPage ) . bare( $mpConfig );
-$fragments = array_values( array_filter( array_map( 'trim', preg_split( '/(?<=[.!])\s+/', $msg ) ?: [] ) ) );
-$carried = 0;
-foreach ( $fragments as $frag ) { if ( $frag !== '' && str_contains( $joinSrc, $frag ) ) { $carried++; } }
-is_( $fragments !== [] && $carried === count( $fragments ),
-     sprintf( 'the join page carries the SAME copy, sentence for sentence (%d of %d)', $carried, count( $fragments ) ) );
+/* The join page cannot call the poller (it never boots WordPress), so the copy
+   exists twice. Compared for EQUALITY, in both directions: a sentence added to
+   one and not the other reddens here, which is the only thing keeping two doors
+   from describing two different ways to leave Patreon. */
+$joinCopy = literalsIn( $mpConfig, 'lg_membership_patreon_refusal_message' );
+is_( $joinCopy !== '' && $joinCopy === $msg,
+     'the join page carries the SAME copy, word for word' );
+if ( $joinCopy !== $msg ) {
+    note( 'poller: ' . $msg );
+    note( 'join  : ' . ( $joinCopy === '' ? '(no copy found)' : $joinCopy ) );
+}
 
 /* ─── §5 door 1 — the Slim checkout API ───────────────────────────────────── */
 
@@ -351,6 +391,7 @@ section( '[5] DOOR 1 — the Slim checkout API refuses a paying patron' );
 
 require_once $slimContract;
 require_once $slimGuard;
+require_once $slimCheckout;
 $rg = new ReflectionClass( 'LGSB\\Core\\DoublePayGuard' );
 is_( realpath( (string) $rg->getFileName() ) === realpath( $slimGuard ),
      'the decision unit under test is THIS worktree\'s, not the serve\'s' );

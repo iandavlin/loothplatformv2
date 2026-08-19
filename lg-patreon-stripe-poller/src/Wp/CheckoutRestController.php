@@ -36,6 +36,12 @@ use Throwable;
  *
  * Registered ONLY while lgms_stripe_lifecycle is ON — same OFF discipline
  * as the webhook route, gated by test-checkout-session-metadata.php §1.
+ *
+ * REFUSES A PAYING PATRON (#150, flag `lgms_double_pay_block`). Ian, 8/19:
+ * "We should disallow double payment source for the same user." With the flag
+ * off this route is byte-identical to what it was; gate 74 §6 asserts both
+ * states here, and asserts that a LAPSED patron still buys — they are exactly
+ * who the switch path is for.
  */
 final class CheckoutRestController
 {
@@ -99,6 +105,31 @@ final class CheckoutRestController
         $user = $uid > 0 ? get_user_by( 'id', $uid ) : false;
         if ( ! $user ) {
             return new \WP_REST_Response( [ 'error' => 'not logged in' ], 401 );
+        }
+
+        // ONE PAYMENT SOURCE PER MEMBER (Ian 2026-08-19, #150): a member whose
+        // membership is already being charged on Patreon does not get to buy it
+        // a second time here. Behind `lgms_double_pay_block`; with the flag off
+        // this block is not entered at all and the route behaves exactly as it
+        // did before. Keyed on real Patreon standing, never on the one-slot
+        // `payment_source` — see LGMS\Membership\PatreonStanding.
+        //
+        // This is the door the plan did not know about. The Slim API and
+        // /lgjoin/ were the two named in #150; this one creates a subscription
+        // session for a logged-in member and was just as Patreon-blind.
+        if ( \LGMS\Membership\PatreonStanding::flagOn() ) {
+            $standing = \LGMS\Membership\PatreonStanding::forUser( $uid );
+            if ( ! empty( $standing['active'] ) ) {
+                Log::line( sprintf(
+                    "[%s] checkout-session REFUSED for wp #%d: already paying via Patreon (%s)\n",
+                    gmdate( 'c' ), $uid, (string) $standing['reason'],
+                ) );
+                return new \WP_REST_Response( [
+                    'error'          => \LGMS\Membership\PatreonStanding::refusalMessage( $standing ),
+                    'patreon_active' => true,
+                    'manage_url'     => \LGMS\Membership\PatreonStanding::manageUrl(),
+                ], 409 );
+            }
         }
 
         // The stamp. From the session, never the body (the body is ignored

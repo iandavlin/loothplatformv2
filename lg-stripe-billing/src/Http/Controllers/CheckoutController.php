@@ -7,6 +7,7 @@ namespace LGSB\Http\Controllers;
 use InvalidArgumentException;
 use LGSB\Core\CheckoutService;
 use LGSB\Core\CustomerManager;
+use LGSB\Core\DoublePayGuard;
 use LGSB\Core\ReturnHandler;
 use LGSB\Domain\Repositories\BannedEmailsRepository;
 use LGSB\Domain\Repositories\EntitlementRepository;
@@ -25,6 +26,7 @@ final class CheckoutController
         private readonly SubscriptionRepository $subscriptions,
         private readonly EntitlementRepository  $entitlements,
         private readonly BannedEmailsRepository $bannedEmails,
+        private readonly DoublePayGuard         $doublePay,
     ) {}
 
     /**
@@ -105,6 +107,23 @@ final class CheckoutController
             return self::json($response, [
                 'error' => 'This email address is not eligible for new purchases.',
             ], 403);
+        }
+
+        // ONE PAYMENT SOURCE PER MEMBER (Ian 2026-08-19, #150): "We should
+        // disallow double payment source for the same user." The refusal below
+        // is Patreon's side of the same rule the active-subscription 409 a few
+        // lines down enforces for Stripe — that one has been Stripe-blind to
+        // Patreon since it was written, which is how a $5-a-month patron could
+        // walk through here and be charged a second time with no warning.
+        //
+        // It runs BEFORE the customer lookup and long before any Stripe call,
+        // so a refused buy costs nothing and creates nothing. Gifts are not
+        // asked about at all — buying for somebody else is not double-paying.
+        // An unknown answer (flag off, WordPress silent) lets the buyer
+        // through, which is today's behaviour exactly. See DoublePayGuard.
+        $patreonRefusal = $this->doublePay->refusalFor($emailArg, $isGift);
+        if ($patreonRefusal !== null) {
+            return self::json($response, $patreonRefusal, 409);
         }
 
         $giftDeferDays = 0;

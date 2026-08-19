@@ -260,6 +260,134 @@ function lg_membership_in_stripe_test_group(int $wpUserId): bool {
 }
 }
 
+/* ---------- one payment source per member (#150) ---------- *
+ * Ian, 2026-08-19, verbatim: "We should disallow double payment source for the
+ * same user." A member whose membership is already being charged on Patreon
+ * gets a banner and a pointer here instead of buy buttons.
+ *
+ * THIS IS THE THIRD READER OF ONE SWITCH. The poller reads
+ * `lgms_double_pay_block` with get_option(); the Slim billing app cannot read
+ * WordPress at all, so it asks the poller at a route that only exists while the
+ * flag is on; and this app reads the SAME wp_options row over SQL, the way it
+ * already reads lgms_stripe_testgroup_pages. One row, three readers, nothing to
+ * drift.
+ *
+ * The verdict logic below MIRRORS LGMS\Membership\PatreonStanding, because this
+ * app never boots WordPress and cannot call it. Kept honest by gate 74, which
+ * compares the member-facing copy sentence for sentence against the poller's
+ * and checks this file names the same option.
+ *
+ * NEVER `payment_source`: one slot, descriptive only, and the two rails
+ * overwrite each other in it (docs/domains/MEMBERSHIP.md). It is not read here.
+ */
+if (!function_exists('lg_membership_double_pay_block')) {
+function lg_membership_double_pay_block(): bool {
+    return lg_membership_wp_option('lgms_double_pay_block', '0') === '1';
+}
+}
+
+if (!function_exists('lg_membership_patreon_refusal_message')) {
+/** The copy the member reads. Byte-identical to PatreonStanding::refusalMessage(). */
+function lg_membership_patreon_refusal_message(): string {
+    return 'Your membership is already paid through Patreon, so buying here would charge you twice.'
+         . ' To move your billing to the site, cancel your pledge on Patreon first — your Patreon'
+         . ' membership keeps running to the end of the period you have already paid for — then come'
+         . ' back and join here once it lapses.';
+}
+}
+
+if (!function_exists('lg_membership_patreon_manage_url')) {
+function lg_membership_patreon_manage_url(): string {
+    $u = trim((string) (lg_membership_wp_option('lgpo_patreon_link', '') ?? ''));
+    return $u !== '' ? $u : 'https://www.patreon.com/';
+}
+}
+
+if (!function_exists('lg_membership_patreon_standing')) {
+/**
+ * Is this member being CHARGED by Patreon right now?
+ *
+ * @return array{active:bool,tier:?string,tier_label:?string,reason:string}
+ *
+ * Same three facts the sweep decides a role from: the Patreon link, the entitled
+ * tier through lgpo_tier_map, and the live patron_status snapshot. A tier that
+ * is missing from the map grants no role and still bills the member every
+ * month, so a positive entitled amount counts as paying on its own — the
+ * question here is whether money is moving, not what role it buys.
+ *
+ * `synced_at` is deliberately not consulted: it is last-CHANGED, not
+ * last-checked, so the steadiest patrons carry the oldest rows and a freshness
+ * test would unblock exactly the wrong members.
+ */
+function lg_membership_patreon_standing(int $wpUserId): array {
+    $none = ['active' => false, 'tier' => null, 'tier_label' => null, 'reason' => 'no_patreon_link'];
+    if ($wpUserId <= 0) return $none;
+
+    try {
+        $st = lg_membership_db()->prepare(
+            'SELECT meta_key, meta_value FROM ' . LG_MEMBERSHIP_TABLE_PREFIX . 'usermeta
+              WHERE user_id = ? AND meta_key IN (?, ?)'
+        );
+        $st->execute([$wpUserId, 'lgpo_patreon_user_id', 'lgpo_patreon_tier_id']);
+        $meta = [];
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) ?: [] as $r) {
+            $meta[(string) $r['meta_key']] = trim((string) $r['meta_value']);
+        }
+    } catch (Throwable $e) {
+        error_log('lgjoin patreon standing (usermeta): ' . $e->getMessage());
+        return $none;   // unknown is not a payment
+    }
+
+    if (($meta['lgpo_patreon_user_id'] ?? '') === '') return $none;
+
+    try {
+        $st = lg_membership_poller_db()->prepare(
+            'SELECT patron_status, currently_entitled_amount_cents, tier_label
+               FROM lg_patreon_members WHERE wp_user_id = ? LIMIT 1'
+        );
+        $st->execute([$wpUserId]);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        error_log('lgjoin patreon standing (snapshot): ' . $e->getMessage());
+        return $none;
+    }
+    if (!is_array($row) || $row === []) {
+        return ['active' => false, 'tier' => null, 'tier_label' => null, 'reason' => 'no_patreon_record'];
+    }
+
+    // A row that says NOTHING is not a row that says PAYING.
+    $status = ($row['patron_status'] ?? null) !== null ? (string) $row['patron_status'] : null;
+    $label  = ($row['tier_label'] ?? null) !== null ? (string) $row['tier_label'] : null;
+    if ($status !== 'active_patron') {
+        return ['active' => false, 'tier' => null, 'tier_label' => $label, 'reason' => 'not_active_patron'];
+    }
+
+    // lgpo_tier_map is a WordPress array option, so it is PHP-SERIALIZED in the
+    // table. Reading it as JSON silently finds nothing, which here would read as
+    // "no mapped tier" and lean on the amount alone.
+    $tier = null;
+    $rawMap = lg_membership_wp_option('lgpo_tier_map', null);
+    if (is_string($rawMap) && $rawMap !== '' && ($meta['lgpo_patreon_tier_id'] ?? '') !== '') {
+        $map = @unserialize($rawMap, ['allowed_classes' => false]);
+        if (is_array($map) && isset($map[$meta['lgpo_patreon_tier_id']])) {
+            $mapped = (string) $map[$meta['lgpo_patreon_tier_id']];
+            if ($mapped === 'looth2' || $mapped === 'looth3') $tier = $mapped;
+        }
+    }
+
+    $cents  = ($row['currently_entitled_amount_cents'] ?? null) !== null
+        ? (int) $row['currently_entitled_amount_cents'] : null;
+    $paying = $tier !== null || ($cents !== null && $cents > 0);
+
+    return [
+        'active'     => $paying,
+        'tier'       => $tier,
+        'tier_label' => $label,
+        'reason'     => $paying ? 'active_paid_patron' : 'active_patron_not_paying',
+    ];
+}
+}
+
 /* ---------- shared helpers ---------- */
 if (!function_exists('lg_membership_h')) {
 function lg_membership_h(string $s): string {

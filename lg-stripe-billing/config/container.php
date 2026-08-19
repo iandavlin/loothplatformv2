@@ -12,8 +12,11 @@ use LGSB\Adapters\PdoEntitlementRepository;
 use LGSB\Adapters\PdoGiftCodeRepository;
 use LGSB\Adapters\PdoPendingGiftRecipientsRepository;
 use LGSB\Adapters\PdoProductRepository;
+use LGSB\Adapters\HttpPatreonStandingProbe;
 use LGSB\Adapters\PdoSubscriptionRepository;
+use LGSB\Contracts\PatreonStandingProbe;
 use LGSB\Contracts\SettingsStore;
+use LGSB\Core\DoublePayGuard;
 use LGSB\Domain\Repositories\AdminActionLogRepository;
 use LGSB\Domain\Repositories\AffiliateRepository;
 use LGSB\Domain\Repositories\BannedEmailsRepository;
@@ -90,6 +93,19 @@ return [
 
     AffiliateRepository::class => fn (ContainerInterface $c): AffiliateRepository =>
         new PdoAffiliateRepository($c->get(PDO::class)),
+
+    /* One payment source per member (#150). Bound explicitly because the probe
+       is an INTERFACE and PHP-DI cannot autowire one — without these two lines
+       CheckoutController would fail to construct rather than fail open, which
+       is the loudest possible way for this to be wrong. The switch is not here:
+       it is the wp_option `lgms_double_pay_block`, which decides whether the
+       WordPress route the probe calls exists at all. */
+
+    PatreonStandingProbe::class => fn (ContainerInterface $c): PatreonStandingProbe =>
+        new HttpPatreonStandingProbe($c->get(SettingsStore::class)),
+
+    DoublePayGuard::class => fn (ContainerInterface $c): DoublePayGuard =>
+        new DoublePayGuard($c->get(PatreonStandingProbe::class)),
 
     /* Core services (CheckoutService, CustomerManager, EntitlementManager,
        ReturnHandler, WpSync, WpGiftMailer, BulkPricer) and HTTP controllers

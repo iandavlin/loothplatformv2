@@ -30,6 +30,15 @@ interface SettingsStore
     /** Shared secret for the X-LGMS-Token header. Empty string = disabled. */
     public function getSyncSharedSecret(): string;
 
+    /**
+     * URL of the WP plugin's patreon-standing REST endpoint (#150). Derived
+     * from the sync URL when unset, so there is no second switch to forget —
+     * the FLAG is the wp_option `lgms_double_pay_block`, which decides whether
+     * that route exists at all. Empty string = the probe is disabled outright
+     * (an emergency valve, not the flag).
+     */
+    public function getPatreonStandingUrl(): string;
+
     /** Stripe webhook signing secret (whsec_…). Empty string = signature check skipped. */
     public function getWebhookSecret(): string;
 
