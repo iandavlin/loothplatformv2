@@ -622,3 +622,23 @@ if (!function_exists('lg_notif_quickreply_enabled')) {
         return (bool) LG_NOTIF_QUICKREPLY_ENABLED;
     }
 }
+
+/**
+ * hub-anon-excerpts (#81, Ian 8/19): short teasers for logged-out hub viewers
+ * so search engines credit the discussion's canonical landing page instead of
+ * the feed. Tracked default OFF; gitignored .local.php beside it wins per-key
+ * (the weekly-front pattern — dev2 flips without a tracked edit, live is
+ * protected by absence).
+ */
+function lg_hub_anon_excerpts_on(): bool
+{
+    static $on = null;
+    if ($on !== null) return $on;
+    $cfg = @include __DIR__ . '/../platform/config/hub-anon-excerpts.php';
+    $on  = is_array($cfg) && !empty($cfg['enabled']);
+    $loc = @include __DIR__ . '/../platform/config/hub-anon-excerpts.local.php';
+    if (is_array($loc) && array_key_exists('enabled', $loc)) {
+        $on = ($loc['enabled'] === true);
+    }
+    return $on;
+}
