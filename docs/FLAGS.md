@@ -5,6 +5,11 @@ Started 2026-08-09 (Ian: "how are we keeping track of all these flags?").
 file IN THE SAME COMMIT — keeper refuses the merge otherwise.** States below are
 as-verified on 2026-08-09; live = commit `021ff38` unless noted.
 
+**Issue rule (Ian 8/19): closed = live to members.** Flipping a flag ON for
+live closes its GitHub issue in the same breath; unflagged work (bug fixes,
+docs, tooling) closes at live deploy. An issue is never closed at mere merge —
+merged is not shipped here.
+
 ## Member-facing feature flags (tracked config — flip by commit + pull)
 
 | Flag | Lives in | Repo default | dev2 | live | State |

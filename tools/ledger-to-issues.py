@@ -30,7 +30,21 @@ CLOSED_RX = re.compile(
 OPEN_RX = re.compile(
     r"(awaiting|flag (off|OFF)|OWED|UNOWNED|blocked|in flight|remaining|"
     r"needs?:|→ lane|fix BUILT|BUILT,)", re.I)
-ID_RX = re.compile(r"(\d+(?:\.\d+)?)")
+# Heading ids are ANCHORED and never followed by a digit or dash — so the year
+# in "## 2026-07-29 — ..." can't read as a ledger id (Ian's catch, 8/19).
+HEAD_ID_RX = re.compile(r"^##\s*(?:[✅⚠️🔴🟡]\s*)*(\d+(?:\.\d+)?)(?![\d-])")
+# built = merged/built but NOT live to members (one flag-flip from done).
+BUILT_RX = re.compile(
+    r"(fix BUILT|BUILT as|BUILT,|MERGED TO main|MERGED \d+/\d+|"
+    r"FLIPPED ON dev2|exists on origin|MERGED 8/)")
+# Ian's explicit rulings, 8/19 reply to the dry run.
+RULINGS = {
+    "3.9": ("OPEN", [], "ruled OPEN by Ian 8/19 — live stall, UNOWNED"),
+    "18":  ("OPEN", [], "ruled OPEN by Ian 8/19 — intent, not completion"),
+    "3.8": ("OPEN", ["built"],
+            "ruled by check 8/19: merged, dev2-only override ON, live flag "
+            "OFF — built, not live"),
+}
 
 
 def token():
@@ -83,48 +97,102 @@ def parse():
                     items.setdefault("_grave_unnumbered", {"n": 0})["n"] = \
                         items.get("_grave_unnumbered", {"n": 0})["n"] + 1
             continue
-        m = ID_RX.search(head)
+        m = HEAD_ID_RX.match(head)
         if not m:
+            # a real section with no ledger id (e.g. the 2026-07-29 dated
+            # heading) — flagged unnumbered, proposed to migrate without a
+            # ledger label rather than vanish or mislabel
+            t = head.lstrip("#✅⚠ ").strip()
+            items.setdefault("_unnumbered", []).append(
+                {"title": t, "section": body})
             continue
         it = items.setdefault(m.group(1), {})
         it["section"] = body
         it["head"] = head
 
-    # 3. status per item — default OPEN, strong markers close, conflicts flag
+    # 3. status per item — default OPEN, strong markers close, conflicts flag,
+    #    Ian's explicit rulings override everything
     for iid, it in items.items():
+        if iid.startswith("_"):
+            continue
         basis = (it.get("head", "") + " " + it.get("index_line", ""))
-        closed = bool(CLOSED_RX.search(basis)) or it.get("graveyard", False)
-        openish = bool(OPEN_RX.search(basis))
-        if closed and openish and not it.get("graveyard"):
-            it["status"], it["why"] = "OPEN", (
-                "AMBIGUOUS — closed marker AND open-leaning phrasing; "
-                "defaulted OPEN for your eyes")
-        elif closed:
-            it["status"], it["why"] = "CLOSED", "strong closed marker"
+        if iid in RULINGS:
+            it["status"], it["extra_labels"], it["why"] = RULINGS[iid]
         else:
-            it["status"], it["why"] = "OPEN", ""
-        title_src = it.get("index_line") or it.get("head", "")
-        title = re.sub(r"^[#✅\s]*", "", title_src)
-        title = re.sub(r"^\d+(\.\d+)?[.\s]+", "", title).strip()
-        it["title"] = f"{iid} — {title[:90]}"
+            closed = bool(CLOSED_RX.search(basis)) or it.get("graveyard", False)
+            openish = bool(OPEN_RX.search(basis))
+            if closed and openish and not it.get("graveyard"):
+                it["status"], it["why"] = "OPEN", (
+                    "AMBIGUOUS — closed marker AND open-leaning phrasing; "
+                    "defaulted OPEN for your eyes")
+            elif closed:
+                it["status"], it["why"] = "CLOSED", "strong closed marker"
+            else:
+                it["status"], it["why"] = "OPEN", ""
+            it["extra_labels"] = []
+            if it["status"] == "OPEN" and BUILT_RX.search(basis):
+                it["extra_labels"].append("built")
+        if "★" in basis and "built" not in it["extra_labels"]:
+            it["extra_labels"].append("vision")
+        it["title"] = f"{iid} — {clean_title(it)}"
     return items
+
+
+def clean_title(it):
+    """Short, readable, never cut mid-word (Ian's blocker, 8/19): strip the
+    id, cut at the first arrow/em-dash boundary past a minimum, then cap at a
+    word boundary."""
+    raw = it.get("index_line") or it.get("head", "")
+    t = re.sub(r"^[#✅⚠️🔴🟡*\s]*", "", raw)
+    t = re.sub(r"^\d+(\.\d+)?(\s*\+\s*\d+(\.\d+)?)?[.\s—:]+", "", t)
+    t = t.replace("**", "").strip()
+    # " → " is sometimes CONTENT ("post → hub BACK NAV") and sometimes a
+    # status/owner separator ("→ ✅ BUILT", "→ recap-read-timer") — cut only
+    # the latter, by looking at what follows the arrow.
+    t = re.split(r" → (?=✅|BUILT|MERGED|CLOSED|RULED|LIVE|ROOT-CAUSED|fix |"
+                 r"[a-z0-9]+(?:-[a-z0-9]+)+\b)", t)[0]
+    cuts = [p for p in (t.find(sep, 12) for sep in (" — ", " ⚠", ". "))
+            if p > 0]
+    if cuts:
+        t = t[:min(cuts)]
+    t = t.replace("✅", "").strip()
+    if len(t) > 70:
+        t = t[:70].rsplit(" ", 1)[0].rstrip(",;:.") + "…"
+    return t.strip().rstrip(",;:.")
 
 
 def preview(items):
     grave_n = items.pop("_grave_unnumbered", {"n": 0})["n"]
+    unnumbered = items.pop("_unnumbered", [])
     open_i = {k: v for k, v in items.items() if v["status"] == "OPEN"}
     closed_i = {k: v for k, v in items.items() if v["status"] == "CLOSED"}
+    built_i = {k: v for k, v in items.items() if "built" in v["extra_labels"]}
     amb = {k: v for k, v in items.items() if "AMBIGUOUS" in v.get("why", "")}
-    out = ["# Ledger → Issues — DRY RUN preview (nothing created)", ""]
-    out.append(f"**THE SPLIT: {len(items)} items — {len(open_i)} would arrive "
-               f"OPEN, {len(closed_i)} CLOSED, and {len(amb)} are AMBIGUOUS "
-               f"(defaulted OPEN, listed first for your ruling).**")
+    out = ["# Ledger → Issues — DRY RUN preview v2 (nothing created)", ""]
+    out.append(f"**THE SPLIT: {len(items)} numbered items — {len(open_i)} "
+               f"arrive OPEN ({len(built_i)} of them `built`: merged/built "
+               f"but not live to members), {len(closed_i)} CLOSED, "
+               f"{len(amb)} still AMBIGUOUS. Ian's three 8/19 rulings are "
+               f"applied (3.9 open · 18 open · 3.8 open+built by check: "
+               f"live flag OFF, dev2-only override ON).**")
     out.append("")
     if amb:
-        out.append("## Ambiguous — your eyes, per your ruling")
+        out.append("## Still ambiguous — your eyes")
         out.append("")
         for iid in sorted(amb, key=lambda x: float(x)):
             out.append(f"- **{amb[iid]['title']}** — {amb[iid]['why']}")
+        out.append("")
+    if unnumbered:
+        out.append(f"## Unnumbered sections ({len(unnumbered)}) — NOT migrated")
+        out.append("")
+        out.append("Several read as intake notes or continuation headings for "
+                   "items that already have index lines — auto-creating them "
+                   "would duplicate. They stay in the frozen archive; anything "
+                   "here that is really live work gets a hand-made issue on "
+                   "your word:")
+        out.append("")
+        for u in unnumbered:
+            out.append(f"- {u['title'][:90]}")
         out.append("")
     out.append("## Full mapping (proposed)")
     out.append("")
@@ -133,6 +201,8 @@ def preview(items):
     for iid in sorted(items, key=lambda x: float(x)):
         it = items[iid]
         mark = it["status"] + (" ⚠" if "AMBIGUOUS" in it.get("why", "") else "")
+        if it["extra_labels"]:
+            mark += " +" + "+".join(it["extra_labels"])
         out.append(f"| {iid} | {mark} | {it['title'].replace('|', '·')} |")
     out.append("")
     out.append(f"**One question for you:** the shipped graveyard holds "
@@ -158,8 +228,18 @@ def gh(method, path, data=None):
 
 
 def create(items):
+    items.pop("_grave_unnumbered", None)
+    unnumbered = items.pop("_unnumbered", [])
     frozen_url = ("https://github.com/iandavlin/loothplatformv2/blob/main/"
                   "docs/BACKLOG.md")
+    for name, color, desc in (
+            ("built", "7fa8d9", "merged/built but NOT live to members — one flip from done"),
+            ("vision", "c9a0dc", "direction, not work — does not sit in the bug queue")):
+        try:
+            gh("POST", "/labels", {"name": name, "color": color,
+                                   "description": desc})
+        except Exception:
+            pass  # already exists
     mapping = []
     for iid in sorted(items, key=lambda x: float(x)):
         it = items[iid]
@@ -169,13 +249,19 @@ def create(items):
         issue = gh("POST", "/issues", {
             "title": it["title"],
             "body": body[:60000],
-            "labels": [f"ledger:{iid}"]})
+            "labels": [f"ledger:{iid}"] + it["extra_labels"]})
         if it["status"] == "CLOSED":
             gh("PATCH", f"/issues/{issue['number']}",
                {"state": "closed", "state_reason": "completed"})
         mapping.append(f"| {iid} | #{issue['number']} | {it['status']} | "
                        f"{it['title'].replace('|', '·')} |")
         print(f"created #{issue['number']} <- ledger {iid} ({it['status']})")
+    # Unnumbered sections are NOT migrated (likely intake notes / continuation
+    # headings for numbered items — auto-creating would duplicate). They live
+    # on in the frozen archive; hand-made issues on Ian's word only.
+    if unnumbered:
+        print(f"skipped {len(unnumbered)} unnumbered section(s) — frozen "
+              f"archive keeps them")
     out = ["# Ledger → Issue map (permanent cross-reference)", "",
            "| ledger id | issue | arrived | title |", "|---|---|---|---|"]
     out += mapping

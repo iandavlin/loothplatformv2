@@ -1,4 +1,10 @@
-# Backlog
+# Backlog — FROZEN 2026-08-19
+
+> **This file is an archive. Do not edit it.** The ledger migrated to GitHub
+> Issues (Ian's ruling, handoff 5): 53 numbered items, cross-referenced in
+> `docs/LEDGER-ISSUE-MAP.md`. New work becomes an issue, never a line here.
+> Unnumbered sections below were deliberately NOT migrated (intake notes /
+> continuation headings — duplicates waiting to happen); this file keeps them.
 
 Items Ian has asked for that no lane owns yet. When a lane picks one up, move the
 line into that lane's charter and note the lane name here.
