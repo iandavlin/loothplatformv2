@@ -259,6 +259,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
         iss = issue_by_num.get(num) if num.isdigit() else None
         if iss:
             seat += (f'<br><a href="{html.escape(iss["html_url"])}" '
+                     f'target="_blank" rel="noopener" '
                      f'class="dim" style="color:#7fa8d9">#{iss["number"]} '
                      f'{html.escape(iss["title"][:60])}</a>')
             plan = None
@@ -274,6 +275,9 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
                          f'plan</summary><div style="white-space:pre-wrap;'
                          f'font-size:12.5px">{html.escape(plan[:5000])}</div>'
                          f'</details>')
+        if l.get("riders"):
+            seat += ('<br><span class="dim">riders: '
+                     + " ".join(f'#{r}' for r in l["riders"]) + '</span>')
         seat_line = (f'/home/ubuntu/{l["folder"]}  (branch {l["branch"]})')
         seat += "<br>" + copy_btn("copy path+branch", seat_line)
         h.append(f'<tr><td>{seat}</td>'
@@ -293,6 +297,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
         for i in approved_orphans:
             h.append(f'<div class="block risk">APPROVED, NOT STARTED — '
                      f'<a href="{html.escape(i["html_url"])}" '
+                     f'target="_blank" rel="noopener" '
                      f'style="color:#e8e6df">#{i["number"]} '
                      f'{html.escape(i["title"][:70])}</a></div>')
     unnumbered_seats = [l["branch"] for l in table

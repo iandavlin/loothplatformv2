@@ -50,20 +50,42 @@ ISSUE="${LANE%%-*}"
 [[ "$ISSUE" =~ ^[0-9]+$ ]] || { echo "spin-lane: lane name must start with its issue number (<issue>-<slug>) — plan-mode wall" >&2; exit 1; }
 TOKEN="$(grep '^LG_GITHUB_ISSUES_TOKEN=' /etc/looth/env | cut -d= -f2)"
 [[ -n "$TOKEN" ]] || { echo "spin-lane: no GitHub token in /etc/looth/env — cannot verify approval, refusing" >&2; exit 1; }
-GATE="$(curl -s -m 15 -H "Authorization: Bearer $TOKEN" \
-    "https://api.github.com/repos/iandavlin/loothplatformv2/issues/$ISSUE" \
-  | python3 -c '
+
+# check_approved <n> → "yes <labels-csv>" or "no (reason)". One wall for the
+# primary AND every rider (#141): a single unapproved number refuses the whole
+# spawn. Labels feed the domain-dossier prepend (#142).
+check_approved() {
+    curl -s -m 15 -H "Authorization: Bearer $TOKEN" \
+        "https://api.github.com/repos/iandavlin/loothplatformv2/issues/$1" \
+      | python3 -c '
 import json, sys
 try:
     d = json.load(sys.stdin)
     labels = [l["name"] for l in d.get("labels", [])]
     ok = "approved" in labels and d.get("state") == "open"
-    print("yes" if ok else "no (state=%s labels=%s)" % (d.get("state"), ",".join(labels) or "none"))
+    print(("yes " + ",".join(labels)) if ok else "no (state=%s labels=%s)" % (d.get("state"), ",".join(labels) or "none"))
 except Exception:
     print("no (API unreadable)")
-')"
-[[ "$GATE" == "yes" ]] || { echo "spin-lane: issue #$ISSUE is not an open, approved issue — $GATE — the wall holds" >&2; exit 1; }
-echo "spin-lane: issue #$ISSUE carries 'approved' — the door opens"
+'
+}
+
+# riders (#141): --riders 139,140 anywhere in the args
+RIDERS=""
+prev=""
+for a in "$@"; do
+    [[ "$prev" == "--riders" ]] && RIDERS="${a//,/ }"
+    prev="$a"
+done
+
+GATE="$(check_approved "$ISSUE")"
+[[ "$GATE" == yes* ]] || { echo "spin-lane: issue #$ISSUE is not an open, approved issue — $GATE — the wall holds" >&2; exit 1; }
+ISSUE_LABELS="${GATE#yes }"
+for r in $RIDERS; do
+    RG="$(check_approved "$r")"
+    [[ "$RG" == yes* ]] || { echo "spin-lane: rider #$r is not open+approved — $RG — one bad rider refuses the whole train" >&2; exit 1; }
+    ISSUE_LABELS="$ISSUE_LABELS,${RG#yes }"
+done
+echo "spin-lane: issue #$ISSUE${RIDERS:+ (+ riders ${RIDERS// /, })} approved — the door opens"
 WT="$HOME/worktrees/${LANE}"
 CLAUDE="${CLAUDE_BIN:-$HOME/.local/bin/claude}"
 MODEL="${LANE_MODEL:-opus[1m]}"
@@ -94,13 +116,44 @@ BRANCH="$(git -C "$WT" rev-parse --abbrev-ref HEAD)"
 git -C "$WT" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1 \
   || { echo "spin-lane: pushing $LANE to origin (work exists in two places from the first commit)"; git -C "$WT" push -u origin "$LANE"; }
 
+# riders recorded on the worktree (lanes-status reads this for the page) and
+# on each rider issue's own record
+if [[ -n "$RIDERS" ]]; then
+    git -C "$WT" config --worktree lane.riders "$RIDERS"
+    for r in $RIDERS; do
+        curl -s -o /dev/null -m 15 -X POST -H "Authorization: Bearer $TOKEN" \
+            -d "{\"body\":\"keeper: riding seat $LANE (batched under #$ISSUE per the rider mechanism).\"}" \
+            "https://api.github.com/repos/iandavlin/loothplatformv2/issues/$r/comments" || true
+    done
+fi
+
 cd "$WT"
-# LANE-RULES.md rides ahead of every charter, from the lane's own checkout, so the
-# rules an agent reads are the rules its code version was cut with.
+# Prompt assembly, in reading order: LANE-RULES (law) → domain dossiers (#142:
+# the accumulated knowledge for this issue's domain labels, so a fresh worker
+# starts warm) → the charter → rider plans (#141), fetched from each rider
+# issue's plan-ready comment.
+PROMPT=""
 RULES="$WT/LANE-RULES.md"
 if [[ -f "$RULES" ]]; then
-    exec "$CLAUDE" --dangerously-skip-permissions --model "$MODEL" "$(cat "$RULES")"$'\n\n---\n\n'"$(cat "$CHARTER")"
+    PROMPT="$(cat "$RULES")"$'\n\n---\n\n'
 else
-    echo "spin-lane: WARN — no LANE-RULES.md in this worktree (pre-rules cut); spawning with charter alone" >&2
-    exec "$CLAUDE" --dangerously-skip-permissions --model "$MODEL" "$(cat "$CHARTER")"
+    echo "spin-lane: WARN — no LANE-RULES.md in this worktree (pre-rules cut)" >&2
 fi
+for dom in email page stripe profile infra; do
+    if [[ ",$ISSUE_LABELS," == *",$dom,"* && -f "$WT/docs/domains/${dom^^}.md" ]]; then
+        PROMPT+="$(cat "$WT/docs/domains/INDEX.md" 2>/dev/null)"$'\n\n'"$(cat "$WT/docs/domains/${dom^^}.md")"$'\n\n---\n\n'
+    fi
+done
+PROMPT+="$(cat "$CHARTER")"
+for r in $RIDERS; do
+    RPLAN="$(curl -s -m 15 -H "Authorization: Bearer $TOKEN" \
+        "https://api.github.com/repos/iandavlin/loothplatformv2/issues/$r/comments?per_page=50" \
+      | python3 -c '
+import json, sys
+cs = json.load(sys.stdin)
+plans = [c["body"] for c in cs if "Files I expect to touch" in c.get("body", "")]
+print(plans[-1] if plans else "")
+')"
+    PROMPT+=$'\n\n---\n\n'"RIDER ISSUE #$r (approved; work it after the primary, same branch, close separately):"$'\n'"${RPLAN:-(no plan comment found — read the issue itself)}"
+done
+exec "$CLAUDE" --dangerously-skip-permissions --model "$MODEL" "$PROMPT"

@@ -74,7 +74,7 @@ while IFS= read -r line; do
         "worktree "*) folder="${line#worktree }" ;;
         "detached")
             scr=false; [[ "$folder" != /home/ubuntu/* ]] && scr=true
-            ROWS+="999999|${folder#/home/ubuntu/}|(detached)|-|-|-|detached — investigate|NR|detached|$scr|false"$'\n' ;;
+            ROWS+="999999|${folder#/home/ubuntu/}|(detached)|-|-|-|detached — investigate|NR|detached|$scr|false|"$'\n' ;;
         "branch refs/heads/"*)
             branch="${line#branch refs/heads/}"
             scr=false; [[ "$folder" != /home/ubuntu/* ]] && scr=true
@@ -84,7 +84,7 @@ while IFS= read -r line; do
             mm=false; [[ "$(basename "$folder")" != "$branch" ]] && mm=true
             if [[ "$branch" == "main" ]]; then
                 # the parent checkout is not a seat; the deploy line covers it
-                ROWS+="-1|${folder#/home/ubuntu/}|main|0|0|0|— (parent checkout)|0|parent|false|false"$'\n'
+                ROWS+="-1|${folder#/home/ubuntu/}|main|0|0|0|— (parent checkout)|0|parent|false|false|"$'\n'
                 continue
             fi
             lr=$(git -C "$REPO" rev-list --left-right --count "origin/main...$branch" 2>/dev/null | tr '\t' ' ' || true)
@@ -112,7 +112,8 @@ while IFS= read -r line; do
             elif [[ "$push" != "0" ]]; then SHOW_PUSH=1; fi
             [[ "$scr" == false ]] && SEATS_USED=$((SEATS_USED + 1))
             [[ "$scr" == false && "$unique" =~ ^[0-9]+$ && "$unique" -gt 0 ]] && COLL_BRANCHES+=" $branch"
-            ROWS+="$behind|${folder#/home/ubuntu/}|$branch|$behind|$unique|$cell|$status|${push/NO REMOTE/NR}|$slug|$scr|$mm"$'\n' ;;
+            rid="$(git -C "$folder" config --worktree lane.riders 2>/dev/null || true)"
+            ROWS+="$behind|${folder#/home/ubuntu/}|$branch|$behind|$unique|$cell|$status|${push/NO REMOTE/NR}|$slug|$scr|$mm|$rid"$'\n' ;;
     esac
 done < <(git -C "$REPO" worktree list --porcelain)
 
@@ -186,15 +187,16 @@ if [[ $JSON -eq 1 ]]; then
     done <<<"$PARKED"
     printf '],\n  "lanes": [\n'
     first=1
-    while IFS='|' read -r _ f b behind unique _ _ rawpush slug scratch mismatch; do
+    while IFS='|' read -r _ f b behind unique _ _ rawpush slug scratch mismatch riders; do
         [[ -z "$f" ]] && continue
         [[ $first -eq 0 ]] && printf ',\n'
         first=0
         bh="null"; [[ "$behind" =~ ^[0-9]+$ ]] && bh="$behind"
         un="null"; [[ "$unique" =~ ^[0-9]+$ ]] && un="$unique"
         if [[ "$rawpush" == "NR" ]]; then up="null"; nr="true"; else up="$rawpush"; nr="false"; fi
-        printf '    {"folder": "%s", "branch": "%s", "behind": %s, "unique": %s, "unpushed": %s, "no_remote": %s, "status": "%s", "scratch": %s, "mismatch": %s}' \
-            "$f" "$b" "$bh" "$un" "$up" "$nr" "$slug" "$scratch" "$mismatch"
+        rjson=""; for rr in $riders; do rjson+="$rr, "; done
+        printf '    {"folder": "%s", "branch": "%s", "behind": %s, "unique": %s, "unpushed": %s, "no_remote": %s, "status": "%s", "scratch": %s, "mismatch": %s, "riders": [%s]}' \
+            "$f" "$b" "$bh" "$un" "$up" "$nr" "$slug" "$scratch" "$mismatch" "${rjson%, }"
     done < <(printf '%s' "$ROWS" | sort -t'|' -k1,1n)
     printf '\n  ]\n}\n'
     exit 0
@@ -234,7 +236,7 @@ if [[ $SHOW_PUSH -eq 1 ]]; then
 else
     printf "%-34s %-24s %7s %7s  %s\n" "FOLDER" "BRANCH" "BEHIND" "UNIQUE" "STATUS"
 fi
-printf '%s' "$ROWS" | sort -t'|' -k1,1n | while IFS='|' read -r _ f b behind unique cell status _ _ scratch mismatch; do
+printf '%s' "$ROWS" | sort -t'|' -k1,1n | while IFS='|' read -r _ f b behind unique cell status _ _ scratch mismatch _; do
     [[ -z "$f" ]] && continue
     # scratch worktrees (outside /home/ubuntu) are noise on every run — hidden
     # unless --all; JSON always carries them, flagged, for machines to filter
