@@ -184,10 +184,17 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
         h.append('<div class="block gap">GitHub unreadable — the "needs you" '
                  'state is UNKNOWN right now, not necessarily empty</div>')
     import datetime as _dt
+    import hmac as _hmac
+    import hashlib as _hl
     for i in needs:
         upd = _dt.datetime.fromisoformat(i["updated_at"].replace("Z", "+00:00"))
         days = max(0, (_dt.datetime.now(_dt.timezone.utc) - upd).days)
         pointer = f'Re issue #{i["number"]} — your plan-ready plan. Question: '
+        # #139: per-day HMAC nonce for the one-verb approve endpoint. Derived
+        # from the token server-side; only the digest ships to the browser.
+        nonce = _hmac.new(_token().encode(),
+                          f'approve:{i["number"]}:{_dt.datetime.now(_dt.timezone.utc):%Y-%m-%d}'.encode(),
+                          _hl.sha256).hexdigest()
         h.append(
             f'<details class="block" style="background:#3a3320;border:2px '
             f'solid #e0b64f"><summary style="font-weight:700;font-size:16px;'
@@ -195,8 +202,12 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
             f'<span class="dim">· waiting {days}d</span></summary>'
             f'<div style="white-space:pre-wrap;font-size:13.5px;margin:10px 0">'
             f'{html.escape(i["_plan"][:6000])}</div>'
-            f'<a href="{html.escape(i["html_url"])}" style="color:#9db668;'
-            f'font-weight:700">Approve on GitHub &#8599;</a>'
+            f'<button class="copybtn apprbtn" style="background:#2a3a20;'
+            f'color:#9db668;margin-left:0" data-issue="{i["number"]}" '
+            f'data-nonce="{nonce}">Approve ✓</button>'
+            f'<a href="{html.escape(i["html_url"])}" target="_blank" '
+            f'rel="noopener" style="color:#9db668;font-weight:700;'
+            f'margin-left:10px">on GitHub &#8599;</a>'
             f'{copy_btn("Copy for keeper", pointer)}'
             f'{copy_btn("Copy plan", i["_plan"][:6000])}'
             f'</details>')
@@ -328,13 +339,31 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;}
     h.append("""<script>
 (function(){
   var btns=document.querySelectorAll('.copybtn');
-  if(!navigator.clipboard){btns.forEach(function(b){b.style.display='none'});return;}
-  btns.forEach(function(b){b.addEventListener('click',function(ev){
-    ev.preventDefault();
-    navigator.clipboard.writeText(this.dataset.copy).then(function(){
-      var t=b.textContent;b.textContent='copied';setTimeout(function(){b.textContent=t},1500);
-    },function(){});
-  });});
+  if(!navigator.clipboard){btns.forEach(function(b){
+    if(!b.classList.contains('apprbtn'))b.style.display='none';});}
+  btns.forEach(function(b){
+    if(b.classList.contains('apprbtn')){
+      b.addEventListener('click',function(ev){
+        ev.preventDefault();
+        if(!confirm('Approve #'+b.dataset.issue+'?'))return;
+        b.disabled=true;b.textContent='approving…';
+        var d=new URLSearchParams();d.set('issue',b.dataset.issue);d.set('nonce',b.dataset.nonce);
+        fetch('/lanes-approve.php',{method:'POST',credentials:'same-origin',
+          headers:{'Content-Type':'application/x-www-form-urlencoded'},body:d.toString()})
+        .then(function(r){return r.json()}).then(function(j){
+          if(j&&j.ok){b.textContent='approved ✓';}
+          else{b.disabled=false;b.textContent='Approve ✓';alert(j&&j.error?j.error:'failed');}
+        }).catch(function(){b.disabled=false;b.textContent='Approve ✓';alert('failed');});
+      });
+      return;
+    }
+    b.addEventListener('click',function(ev){
+      ev.preventDefault();
+      navigator.clipboard.writeText(this.dataset.copy).then(function(){
+        var t=b.textContent;b.textContent='copied';setTimeout(function(){b.textContent=t},1500);
+      },function(){});
+    });
+  });
 })();
 </script>""")
     h.append('</div></body></html>')
