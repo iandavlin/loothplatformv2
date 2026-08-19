@@ -218,3 +218,258 @@ add_action('init', function () {
     }
     register_taxonomy_for_object_type('shared_category', 'topic');
 }, 20);
+
+/* ══════════════════════════════════════════════════════════ the applier ═════
+ *
+ * ONE implementation, THREE callers: the composer (via the REST route below),
+ * `wp lg-recat` (Ian's hand tool), and any supervised LLM batch driving that same
+ * command. Plan v2 called this "a single motion", and it has to be one function or
+ * the three callers drift.
+ *
+ * ⚠️ WHY THIS IS SIX STEPS AND NOT ONE — TWO MEASURED FACTS
+ *
+ * 1. A bbPress topic stores its forum in TWO places: `post_parent` AND the
+ *    `_bbp_forum_id` meta. So does every one of its replies — measured on dev2,
+ *    5,128 of 5,130 replies carry `_bbp_forum_id`, and the mirror's `reply` table
+ *    has its own `forum_id` column. Move a topic and leave the replies and you get
+ *    a thread whose posts claim to live in a forum the topic left.
+ *
+ * 2. IT IS RECORDED THAT A CHANGE WHICH DOES NOT BUMP `post_modified_gmt` NEVER
+ *    REACHES THE FORUM MIRROR — confirmed specifically for the replies of a topic
+ *    moved between forums, which is exactly this operation. A meta_update alone
+ *    does not touch post_modified_gmt, so the bump is explicit here.
+ *
+ * Together those mean a version of this that "worked" in MySQL would leave the Hub
+ * showing the old forum indefinitely. Verify a run by reading `forums.topic` /
+ * `forums.reply` in POSTGRES, never the MySQL rows it just wrote.
+ */
+
+/**
+ * Assign Content Topics to a discussion and re-home it to the mapped forum.
+ *
+ * @param int   $topic_id
+ * @param array $slugs   shared_category term slugs
+ * @param array $opts    forum:int|null explicit override · no_forum:bool leave it put
+ *                       · append:bool (default true) · dry_run:bool · reason:string
+ * @return array|WP_Error
+ */
+function lg_ccl_apply(int $topic_id, array $slugs, array $opts = [])
+{
+    $append  = (bool)($opts['append']  ?? true);
+    $dry     = (bool)($opts['dry_run'] ?? false);
+    $reason  = (string)($opts['reason'] ?? '');
+
+    $topic = get_post($topic_id);
+    if (!$topic || $topic->post_type !== 'topic') {
+        return new WP_Error('lg_ccl_not_topic', "#$topic_id is not a discussion");
+    }
+    if (!taxonomy_exists('shared_category')) {
+        return new WP_Error('lg_ccl_no_taxonomy', 'shared_category is not registered (flag OFF?)');
+    }
+
+    /* Validate EVERY slug before writing ANYTHING. All-or-nothing: a batch that
+       half-applied would be worse than one that refused, because nothing downstream
+       could tell which half. */
+    $terms = [];
+    foreach (array_unique(array_filter(array_map('strval', $slugs))) as $slug) {
+        $t = get_term_by('slug', $slug, 'shared_category');
+        if (!$t || is_wp_error($t)) {
+            return new WP_Error('lg_ccl_bad_term', "no such Content Topic: \"$slug\"");
+        }
+        $terms[$slug] = (int)$t->term_id;
+    }
+
+    $cur_forum = (int)$topic->post_parent;
+    $target    = null;
+    if (!empty($opts['no_forum'])) {
+        $target = null;
+    } elseif (!empty($opts['forum'])) {
+        $target = (int)$opts['forum'];
+        if (!lg_ccl_forum_postable($target)) {
+            return new WP_Error('lg_ccl_forum_not_postable',
+                "forum #$target is not postable (category, closed, has sub-forums, or excluded)");
+        }
+    } else {
+        $target = lg_ccl_forum_for_terms(array_keys($terms));
+    }
+    $move = ($target && $target !== $cur_forum) ? $target : null;
+
+    $replies = get_posts([
+        'post_type'        => 'reply',
+        'post_parent'      => $topic_id,
+        'post_status'      => ['publish', 'private', 'pending', 'spam', 'trash'],
+        'posts_per_page'   => -1,
+        'fields'           => 'ids',
+        'suppress_filters' => true,
+    ]);
+
+    $plan = [
+        'topic_id'    => $topic_id,
+        'title'       => get_the_title($topic_id),
+        'terms'       => array_keys($terms),
+        'from_forum'  => $cur_forum,
+        'to_forum'    => $move,
+        'replies'     => count($replies),
+        'append'      => $append,
+        'dry_run'     => $dry,
+    ];
+    if ($dry) return $plan;
+
+    /* 1 — the terms. */
+    $set = wp_set_object_terms($topic_id, array_values($terms), 'shared_category', $append);
+    if (is_wp_error($set)) return $set;
+
+    /* 2 — the move, both stores WordPress owns. */
+    if ($move) {
+        wp_update_post(['ID' => $topic_id, 'post_parent' => $move]);
+        update_post_meta($topic_id, '_bbp_forum_id', $move);
+
+        foreach ($replies as $rid) {
+            update_post_meta($rid, '_bbp_forum_id', $move);
+            lg_ccl_touch_modified((int)$rid);          // else the mirror never hears
+            bb_mirror_sync_dispatch_safe('reply', (int)$rid);
+        }
+
+        /* Counters on BOTH forums, or the old one keeps claiming the topic. */
+        if (function_exists('bbp_update_forum')) {
+            bbp_update_forum(['forum_id' => $move]);
+            if ($cur_forum) bbp_update_forum(['forum_id' => $cur_forum]);
+        }
+    }
+
+    /* 3 — the topic's own bump + dispatch, after the move so the mirror reads the
+           new parent. */
+    lg_ccl_touch_modified($topic_id);
+    bb_mirror_sync_dispatch_safe('topic', $topic_id);
+
+    /* 4 — an audit trail, so a later reader can tell Ian's hand call from a
+           supervised LLM suggestion. */
+    $log = (array)get_post_meta($topic_id, '_lg_ccl_log', true);
+    $log[] = [
+        'at'     => gmdate('c'),
+        'user'   => get_current_user_id(),
+        'terms'  => array_keys($terms),
+        'moved'  => $move ? [$cur_forum, $move] : null,
+        'reason' => $reason,
+    ];
+    update_post_meta($topic_id, '_lg_ccl_log', $log);
+
+    $plan['applied'] = true;
+    return $plan;
+}
+
+/**
+ * Bump post_modified_gmt so the mirror sees the row as changed.
+ *
+ * Direct $wpdb because a meta-only edit leaves post_modified alone, and that is
+ * precisely the recorded failure: a change that does not bump post_modified_gmt
+ * never reaches the forum mirror. clean_post_cache() after, or the object cache
+ * hands the sync the stale row it was told to re-read.
+ */
+function lg_ccl_touch_modified(int $post_id): void
+{
+    global $wpdb;
+    $now = current_time('mysql');
+    $gmt = current_time('mysql', true);
+    $wpdb->update($wpdb->posts,
+        ['post_modified' => $now, 'post_modified_gmt' => $gmt],
+        ['ID' => $post_id]);
+    clean_post_cache($post_id);
+}
+
+/** Dispatch only if the mirror plugin is actually loaded; never fatal on its absence. */
+function bb_mirror_sync_dispatch_safe(string $kind, int $id): void
+{
+    if (function_exists('bb_mirror_sync_dispatch')) {
+        bb_mirror_sync_dispatch($kind, $id, 'upsert');
+        return;
+    }
+    error_log("[lg-ccl] bb_mirror_sync_dispatch missing — $kind #$id not mirrored");
+}
+
+/* ═══════════════════════════════════════════════════════════════ REST ═══════
+ *
+ * Two routes, both behind the flag, both refusing anonymous callers.
+ *
+ * The term list is fetched ON INTENT — when "＋ Add topics" is first tapped — and
+ * NOT inlined into every Hub render. That is the craft standard (editors and
+ * composers load on intent, never eagerly for anon) and it is why this is a route
+ * at all: the hub app is a different FPM pool with no WordPress loaded, so it
+ * cannot read the taxonomy itself.
+ */
+add_action('rest_api_init', function () {
+    if (!lg_ccl_enabled()) return;
+
+    register_rest_route('lg-ccl/v1', '/topics', [
+        'methods'             => 'GET',
+        'permission_callback' => function () { return is_user_logged_in(); },
+        'callback'            => function () {
+            $out = [];
+            $tops = get_terms([
+                'taxonomy'   => 'shared_category',
+                'hide_empty' => false,
+                'parent'     => 0,
+                'orderby'    => 'count',
+                'order'      => 'DESC',
+            ]);
+            if (is_wp_error($tops)) return $tops;
+            foreach ($tops as $t) {
+                $kids = get_terms([
+                    'taxonomy'   => 'shared_category',
+                    'hide_empty' => false,
+                    'parent'     => $t->term_id,
+                    'orderby'    => 'count',
+                    'order'      => 'DESC',
+                ]);
+                $out[] = [
+                    'slug'     => $t->slug,
+                    'name'     => $t->name,
+                    'uses'     => (int)$t->count,
+                    'forum'    => lg_ccl_forum_label(lg_ccl_forum_for_terms([$t->slug])),
+                    'children' => array_map(function ($k) {
+                        return [
+                            'slug'  => $k->slug,
+                            'name'  => $k->name,
+                            'uses'  => (int)$k->count,
+                            'forum' => lg_ccl_forum_label(lg_ccl_forum_for_terms([$k->slug])),
+                        ];
+                    }, is_wp_error($kids) ? [] : $kids),
+                ];
+            }
+            $def = lg_ccl_default_forum_id();
+            return [
+                'default_forum' => ['id' => $def, 'title' => get_the_title($def) ?: 'the default forum'],
+                'topics'        => $out,
+            ];
+        },
+    ]);
+
+    register_rest_route('lg-ccl/v1', '/apply', [
+        'methods'             => 'POST',
+        'permission_callback' => function () { return is_user_logged_in(); },
+        'callback'            => function (WP_REST_Request $req) {
+            $topic_id = (int)$req->get_param('topic_id');
+            $slugs    = (array)$req->get_param('terms');
+
+            /* The composer's own post, or a moderator's. Same question the topic-edit
+               PUT asks — a member must not tag someone else's discussion. */
+            if (!current_user_can('edit_post', $topic_id)) {
+                return new WP_Error('lg_ccl_forbidden', 'not yours to categorize',
+                                    ['status' => 403]);
+            }
+            $r = lg_ccl_apply($topic_id, $slugs, ['append' => true, 'reason' => 'composer']);
+            if (is_wp_error($r)) {
+                $r->add_data(['status' => 400]);
+                return $r;
+            }
+            return $r;
+        },
+    ]);
+});
+
+/** "3D Printing (#3863)" for a mapped forum, null when a term maps nowhere. */
+function lg_ccl_forum_label(?int $forum_id): ?array
+{
+    if (!$forum_id) return null;
+    return ['id' => $forum_id, 'title' => get_the_title($forum_id)];
+}
