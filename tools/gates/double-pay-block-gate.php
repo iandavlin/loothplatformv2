@@ -49,6 +49,12 @@
  * under test was loaded from this file's tree. Without that a lane "verifying"
  * on dev2 is really testing main — a failure this repo has paid for twice.
  *
+ * ⚠️ NULL IS OFTEN THE VALUE UNDER TEST HERE — an unmapped tier, an absent
+ * message — and `$a['k'] ?? 'sentinel'` returns the SENTINEL for a key that
+ * exists and is null. Written the obvious way, two assertions in this file
+ * failed against correct code. Both now ask array_key_exists() and compare
+ * with ===. Do not "tidy" them back into a null-coalesce.
+ *
  * WHAT §5 DOES AND DOES NOT PROVE, stated rather than implied: the Slim
  * CheckoutController is typed against the CONCRETE final CheckoutService, which
  * cannot be stubbed, so the controller is not instantiated here. Instead the
@@ -362,11 +368,52 @@ $GLOBALS['ROUTES'] = [];
 is_( count( $GLOBALS['ROUTES'] ) === 1 && str_contains( (string) $GLOBALS['ROUTES'][0], 'patreon-standing' ),
      'flag ON: the route appears — so the absence above was a real absence, not a dead call' );
 
+/* ─── §3b the route the Slim app talks to ─────────────────────────────────── */
+
+$msgExpected = PatreonStanding::refusalMessage( PatreonStanding::forUser( 101 ) );
+
+section( '[3b] THE STANDING ROUTE — closed by default, and it answers about the MEMBER' );
+
+$GLOBALS['OPTS'][ PatreonStanding::FLAG ] = '1';
+
+/* An unconfigured secret must be CLOSED, not open. This is the direction that
+   costs something to get wrong: the route reports whether a named email is a
+   paying member, so an open one is a membership oracle for anyone who finds it. */
+unset( $GLOBALS['OPTS']['lgms_shared_secret'] );
+is_( \LGMS\Wp\PatreonStandingRestController::authSharedSecret( new WP_REST_Request( [], [ 'x_lgms_token' => '' ] ) ) === false,
+     'no shared secret configured: the route is CLOSED, not open' );
+
+$GLOBALS['OPTS']['lgms_shared_secret'] = 'the-real-secret';
+is_( \LGMS\Wp\PatreonStandingRestController::authSharedSecret( new WP_REST_Request( [], [ 'x_lgms_token' => 'guessed' ] ) ) === false,
+     'a wrong token is refused' );
+is_( \LGMS\Wp\PatreonStandingRestController::authSharedSecret( new WP_REST_Request( [], [ 'x_lgms_token' => 'the-real-secret' ] ) ) === true,
+     '...and the right one is accepted, so the refusal above was not blanket' );
+
+$resp = \LGMS\Wp\PatreonStandingRestController::standing( new WP_REST_Request( [ 'email' => 'patron@example.com' ] ) );
+$body = $resp instanceof WP_REST_Response ? (array) $resp->get_data() : [];
+is_( ( $body['active'] ?? null ) === true, 'a paying patron comes back active' );
+is_( is_string( $body['message'] ?? null ) && $body['message'] === $msgExpected,
+     '...carrying the WORDS, so the Slim app renders none of its own copy' );
+is_( ! empty( $body['manage_url'] ), '...and where to go to cancel' );
+
+$clean = \LGMS\Wp\PatreonStandingRestController::standing( new WP_REST_Request( [ 'email' => 'nobody@example.com' ] ) );
+$cbody = $clean instanceof WP_REST_Response ? (array) $clean->get_data() : [];
+is_( ( $cbody['active'] ?? null ) === false, 'a non-patron comes back inactive' );
+is_( array_key_exists( 'message', $cbody ) && $cbody['message'] === null
+     && array_key_exists( 'manage_url', $cbody ) && $cbody['manage_url'] === null,
+     '...with no message and no link — nothing for a caller to show them by mistake' );
+
+$blank = \LGMS\Wp\PatreonStandingRestController::standing( new WP_REST_Request( [ 'email' => '' ] ) );
+is_( $blank instanceof WP_REST_Response && $blank->get_status() === 400,
+     'an empty email is a 400, not a cheerful "not paying"' );
+
+unset( $GLOBALS['OPTS'][ PatreonStanding::FLAG ] );
+
 /* ─── §4 the refusal says how to leave ────────────────────────────────────── */
 
 section( '[4] THE REFUSAL NAMES THE WAY OUT — and every door says the same thing' );
 
-$msg = PatreonStanding::refusalMessage( PatreonStanding::forUser( 101 ) );
+$msg = $msgExpected;
 is_( stripos( $msg, 'patreon' ) !== false, 'the refusal names Patreon' );
 is_( stripos( $msg, 'twice' ) !== false,   '...says the member would be charged twice' );
 is_( stripos( $msg, 'cancel' ) !== false,  '...names the switch path: cancel on Patreon first' );
@@ -563,6 +610,12 @@ echo "        refusal tells the member how to switch rails.\n";
  *     → §6 "flag OFF … unchanged" RED (it refuses when it should not).
  * 12. lgjoin.php — move the standing check below the tier markup
  *     → §7 ordering RED.
+ * 13. authSharedSecret(): return true when the stored secret is empty
+ *     → §3b "no shared secret configured: the route is CLOSED" RED. This is
+ *       the expensive direction — the route answers whether a named email is
+ *       a paying member, so an open one is a membership oracle.
+ * 14. standing(): return the message even when inactive
+ *     → §3b "with no message and no link" RED.
  *
  * A NO-OP MUTATION FAILS LOUD, checked deliberately: renaming a local variable
  * inside forUser() reddens nothing, and reformatting refusalMessage()'s
