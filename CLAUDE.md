@@ -10,7 +10,7 @@ any other way, read it before touching anything.
 ## Domain dossiers — the accumulated knowledge, by area
 
 **`docs/domains/INDEX.md`** maps one dossier per domain (EMAIL, PAGE, INFRA,
-STRIPE, PROFILE): Ian's standing rulings, verified system maps, and the traps
+MEMBERSHIP, PROFILE): Ian's standing rulings, verified system maps, and the traps
 already paid for. **Read the matching dossier before working in its area** —
 it is cheaper than rediscovering any line in it. Issues wear matching labels;
 closing a domain-labeled issue updates that domain's file in the same commit.

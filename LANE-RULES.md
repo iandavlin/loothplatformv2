@@ -24,7 +24,7 @@ and it's how the tooling links your seat to your card.
 
 ## Domain knowledge — read before you touch
 
-`docs/domains/INDEX.md` maps the domain dossiers (EMAIL, PAGE, INFRA, STRIPE,
+`docs/domains/INDEX.md` maps the domain dossiers (EMAIL, PAGE, INFRA, MEMBERSHIP,
 PROFILE): the accumulated laws, traps, and verified maps for each area. Your
 spawn prompt already carries the dossiers matching your issue's domain labels —
 but if your work strays into another domain mid-lane, read that domain's file
