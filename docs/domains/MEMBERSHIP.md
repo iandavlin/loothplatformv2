@@ -1,4 +1,4 @@
-# STRIPE — membership/billing rail
+# MEMBERSHIP — roles, tiers, content gating, and both payment rails
 
 ## Laws (Ian's rulings, quotable)
 - **Dual-rail (8/15, permanent):** every member-facing flow fires for BOTH

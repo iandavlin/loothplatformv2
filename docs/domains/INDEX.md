@@ -8,5 +8,5 @@ wears a domain label updates that domain's file in the same commit.
   issue labeled `email`.
 - **PAGE.md** — the lanes status page, its timer, endpoints, and JSON. Label `page`.
 - **INFRA.md** — deploy machinery, nginx front door, boxes, guards. Label `infra`.
-- **STRIPE.md** — the membership/billing rail. Label `stripe`.
+- **MEMBERSHIP.md** — roles, tiers, content gating, and both payment rails (Patreon + Stripe). Label `membership`.
 - **PROFILE.md** — profiles, directory, location model. Label `profile`.

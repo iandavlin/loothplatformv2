@@ -139,7 +139,7 @@ if [[ -f "$RULES" ]]; then
 else
     echo "spin-lane: WARN — no LANE-RULES.md in this worktree (pre-rules cut)" >&2
 fi
-for dom in email page stripe profile infra; do
+for dom in email page membership profile infra; do
     if [[ ",$ISSUE_LABELS," == *",$dom,"* && -f "$WT/docs/domains/${dom^^}.md" ]]; then
         PROMPT+="$(cat "$WT/docs/domains/INDEX.md" 2>/dev/null)"$'\n\n'"$(cat "$WT/docs/domains/${dom^^}.md")"$'\n\n---\n\n'
     fi
