@@ -405,11 +405,68 @@ function bb_mirror_new_topic_modal(): void
       <a class="ntm-anon__link" href="<?= htmlspecialchars($login_url) ?>">Sign in</a>
     </div>
 
+<?php
+    /* ── #129 categorize-last: is the Where step gone for this request? ──────────
+       BOTH conditions, deliberately. lg_ccl_default_forum_ok() asks Postgres whether
+       the configured landing forum is actually a postable row in the MIRROR, because
+       a default forum WordPress knows about and the mirror does not is worse than no
+       feature: the picker, the hub's forum reads and the postable contract all read
+       Postgres, so posts would be filed at a forum row that does not exist. Measured
+       8/19: dev2's new "Discussions" (73564) is in WordPress and NOT in the mirror.
+       Failing back to the Where step is the loud, harmless answer. */
+    $ccl = function_exists('lg_ccl_enabled') && lg_ccl_enabled()
+        && function_exists('lg_ccl_default_forum_ok') && lg_ccl_default_forum_ok();
+
+    /* Where a new discussion lands. Context is honoured: composing from inside a
+       postable forum still posts THERE, which is today's behaviour and is not what
+       Ian ruled away — he removed the required CHOICE, not the context. Anywhere
+       else (the hub, a category page, a search) it is the configured default. */
+    $ccl_landing = 0; $ccl_landing_title = ''; $ccl_landing_slug = '';
+    if ($ccl) {
+        $ccl_by_id = [];
+        foreach ($forums as $f) { $ccl_by_id[(int)$f['id']] = $f; }
+        $ccl_landing = ($current_forum_id && isset($ccl_by_id[$current_forum_id]))
+            ? $current_forum_id
+            : lg_ccl_default_forum_id();
+        if (isset($ccl_by_id[$ccl_landing])) {
+            $ccl_landing_title = (string)$ccl_by_id[$ccl_landing]['title'];
+            $ccl_landing_slug  = (string)$ccl_by_id[$ccl_landing]['slug'];
+        } else {
+            /* The default is postable per lg_ccl_default_forum_ok() but absent from
+               $forums — it is on the explicit non-postable list, or the two queries
+               disagree. Do not guess: keep the Where step. */
+            $ccl = false; $ccl_landing = 0;
+        }
+    }
+?>
     <form class="ntm-form" id="ntm-form" novalidate hidden autocomplete="off"
           data-rest-base="<?= htmlspecialchars($rest_base) ?>"
           data-current-forum="<?= $current_forum_id ?>"
+<?php if ($ccl): ?>
+          data-ccl="1"
+          data-ccl-landing="<?= (int)$ccl_landing ?>"
+          data-ccl-landing-title="<?= htmlspecialchars($ccl_landing_title) ?>"
+<?php endif; ?>
           data-public-path="<?= htmlspecialchars(LG_BB_MIRROR_PUBLIC_PATH) ?>">
 
+<?php if ($ccl): ?>
+      <!-- #129 categorize-last: the Where step is GONE. This is not a deletion but a
+           PRE-MADE CHOICE — the same #ntm-forum radiogroup contract with exactly one
+           checked leaf, hidden. Everything that reads a forum out of this composer
+           keeps working untouched: ntmGetForum() in forums.js, the wizard's review
+           row, and hub-polish.js's own pre-submit check
+           (`if (!wForum.querySelector('input[name=forum_id]:checked'))`) which would
+           otherwise refuse every mobile post forever. Deleting the element would have
+           meant editing three readers to agree about its absence; satisfying the
+           contract means editing none of them. -->
+      <div class="ntm-forumlist" id="ntm-forum" role="radiogroup" aria-label="Forum" hidden>
+        <label class="ntm-fl__leaf">
+          <input type="radio" name="forum_id" value="<?= (int)$ccl_landing ?>"
+                 data-slug="<?= htmlspecialchars($ccl_landing_slug) ?>" checked>
+          <span class="ntm-fl__title"><?= htmlspecialchars($ccl_landing_title) ?></span>
+        </label>
+      </div>
+<?php else: ?>
       <span class="ntm-label" id="ntm-forum-label">Forum <span class="ntm-label__opt">(pick one)</span></span>
       <!-- Single-select forum list: category headers + leaf radio rows. Replaces the
            native <select> whose optgroup labels read as a second pickable level. The
@@ -433,6 +490,7 @@ function bb_mirror_new_topic_modal(): void
         endforeach;
         ?>
       </div>
+<?php endif; ?>
 
       <label class="ntm-label" for="ntm-title-in">Title</label>
       <input class="ntm-input" id="ntm-title-in" name="title" type="text" autocomplete="off"
@@ -456,6 +514,43 @@ function bb_mirror_new_topic_modal(): void
         <button type="button" class="ntm-qtag" data-tag="councilyes">+ councilyes</button>
         <button type="button" class="ntm-qtag" data-tag="weeklyyes">+ weeklyyes</button>
       </div>
+
+<?php if ($ccl): ?>
+      <!-- ── #129: THE TAG STEP (Ian ruled Option C, 8/19: "add in the tags and maybe
+               popping up a new modal with a decent heirarchical layout") ────────────
+           SERVER-RENDERED ONCE, USED BY BOTH SHAPES on purpose. The desktop wizard
+           MOVES this node into its Topics pane the same way it moves the title and
+           editor; the mobile flat form shows it exactly where it sits. One piece of
+           markup means the tag field cannot drift between the two composers — which
+           is the failure this codebase already has a scar from, when a hidden native
+           picker and hub-polish's own chip picker disagreed about how many forums you
+           were posting to.
+           Terms are NOT inlined here: the picker fetches them on intent from
+           /wp-json/lg-ccl/v1/topics the first time Add topics is tapped. Anon never
+           pays for the list, and the hub pool has no WordPress to read it with. -->
+      <div class="lgt" id="ntm-topics" data-endpoint="/wp-json/lg-ccl/v1/topics"
+           data-landing-title="<?= htmlspecialchars($ccl_landing_title) ?>">
+        <div class="lgt__head">
+          <span class="lgt__h">Add topics</span>
+          <span class="lgt__bonus">★ bonus points</span>
+        </div>
+        <p class="lgt__say">Optional — your post is ready either way. Tags help the
+          right people trip over it later.</p>
+        <div class="tagf tagf--empty" id="ntm-topics-field">
+          <p class="tagf__hint">No topics yet — that&rsquo;s fine.</p>
+          <button type="button" class="tagf__add" id="ntm-topics-add">&#65291; Add topics</button>
+        </div>
+        <div class="lgt__lands" id="ntm-topics-lands">
+          <span>Lands in</span>
+          <b id="ntm-topics-forum"><?= htmlspecialchars($ccl_landing_title) ?></b>
+          <span class="ar">&larr;</span>
+          <span class="lgt__why" id="ntm-topics-why">the default. Add a topic and it moves itself.</span>
+        </div>
+        <!-- Slugs the member picked, comma-separated. Read by the submit handler,
+             which sends them to /wp-json/lg-ccl/v1/apply after the topic exists. -->
+        <input type="hidden" id="ntm-topics-input" value="">
+      </div>
+<?php endif; ?>
 
       <!-- Post anonymously (anon-rebuild lane): per-post toggle. Sends _lg_anon
            with the topic write; the post renders as "Anonymous" to members

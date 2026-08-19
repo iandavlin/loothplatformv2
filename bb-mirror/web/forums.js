@@ -1974,7 +1974,7 @@
       // a question they are not changing. Step 2 is the one they came for. Every other
       // step stays reachable — the rail jumps back freely, and forward through valid
       // steps, both of which hold here because forum and title are pre-filled.
-      if (ntmWiz) ntmWiz.goTo(2);
+      if (ntmWiz) ntmWiz.goTo(ntmForm.dataset.ccl === '1' ? 1 : 2);
 
       // ── the authoritative payload ──────────────────────────────────────────────
       // Same endpoint and same reasoning as the composer sheet's edit door: the page
@@ -2018,7 +2018,7 @@
           });
           if (d.forum_id) ntmSetForum(d.forum_id);      // the stored forum beats the caller's
           ntmSetTags(d.tags || []);
-          if (ntmWiz) ntmWiz.goTo(2);                   // stay on Write after the refill
+          if (ntmWiz) ntmWiz.goTo(ntmForm.dataset.ccl === '1' ? 1 : 2);   // stay on Write after the refill
         })
         .catch(function () {
           if (ntmEditId !== want) return;
@@ -2141,12 +2141,31 @@
       if (!ntmForm || !ntmForumList || !dialog) return null;
       ntmOverlay.classList.add('ntm-wizard');
 
-      var STEPS = [
+      /* #129 categorize-last. _chrome.php sets data-ccl only when the flag is ON
+         AND the configured landing forum is a postable row in the MIRROR — so this
+         is false whenever the feature cannot work, and the Where step stays. */
+      var ccl = (ntmForm.dataset.ccl === '1');
+
+      /* Same four steps either way, which is the point: the required first step
+         becomes an OPTIONAL last one. Write is where you land, Topics is the new
+         end-of-flow step, and nothing is required until Post. */
+      var STEPS = ccl ? [
+        { n: 1, label: 'Write' },
+        { n: 2, label: 'Photos' },
+        { n: 3, label: 'Topics', opt: true },
+        { n: 4, label: 'Review' },
+      ] : [
         { n: 1, label: 'Where' },
         { n: 2, label: 'Write' },
         { n: 3, label: 'Photos' },
         { n: 4, label: 'Review' },
       ];
+      /* Which pane each role lives in. Read these instead of literals so the two
+         layouts cannot drift apart. */
+      var P_WRITE  = ccl ? 1 : 2;
+      var P_PHOTOS = ccl ? 2 : 3;
+      var P_TOPICS = ccl ? 3 : 0;
+      var P_REVIEW = 4;
       var cur = 1;
       var tagsIn = document.getElementById('ntm-tags');
       var anonChk = document.getElementById('ntm-anon-check');
@@ -2176,7 +2195,7 @@
       //   hide together with it in the loading / signed-out states —
       var rail = mk('div', 'lgw-rail');
       STEPS.forEach(function (s) {
-        var d = mk('button', 'lgw-rail__step',
+        var d = mk('button', 'lgw-rail__step' + (s.opt ? ' is-opt' : ''),
           '<span class="lgw-rail__num">' + s.n + '</span>' +
           '<span class="lgw-rail__lbl">' + s.label + '</span>');
         d.type = 'button';
@@ -2202,6 +2221,11 @@
       ntmForm.appendChild(foot);
 
       // STEP 1 — Where: filter + colour-coded category accordion + selection line.
+      // ⚠️ UNDER ccl THIS WHOLE STEP IS NOT BUILT. The nodes it reads still exist —
+      // _chrome.php renders #ntm-forum with one pre-checked hidden leaf — so
+      // ntmGetForum(), the review row and hub-polish's pre-submit check all keep
+      // working; there is simply no picker UI to assemble. `filter` stays a real
+      // element rather than null so applyFilter()/focusStep() need no guards.
       var filter = mk('input', 'lgw-filter'); filter.type = 'search';
       filter.setAttribute('placeholder', 'Filter forums…');
       filter.setAttribute('aria-label', 'Filter forums');
@@ -2332,12 +2356,12 @@
 
       // STEP 2 — Write: title + body editor (image button hidden via CSS; photos
       // have their own step). Move the existing nodes in reading order.
-      if (titleLabel) panes[2].appendChild(titleLabel);
-      panes[2].appendChild(ntmTitleIn);
-      if (bodyLabel) panes[2].appendChild(bodyLabel);
-      panes[2].appendChild(ntmEditorEl);
-      if (contentFb) panes[2].appendChild(contentFb);
-      if (pasteHint) panes[2].appendChild(pasteHint);
+      if (titleLabel) panes[P_WRITE].appendChild(titleLabel);
+      panes[P_WRITE].appendChild(ntmTitleIn);
+      if (bodyLabel) panes[P_WRITE].appendChild(bodyLabel);
+      panes[P_WRITE].appendChild(ntmEditorEl);
+      if (contentFb) panes[P_WRITE].appendChild(contentFb);
+      if (pasteHint) panes[P_WRITE].appendChild(pasteHint);
 
       // STEP 3 — Photos & details: a dedicated photo control (same upload tray),
       // then tags + quick-tags + the anonymous toggle.
@@ -2351,11 +2375,18 @@
       photoWrap.appendChild(addBtn);
       photoWrap.appendChild(trayMount);
       photoWrap.appendChild(pNote);
-      panes[3].appendChild(photoWrap);
-      if (tagsLabel) panes[3].appendChild(tagsLabel);
-      if (tagsIn) panes[3].appendChild(tagsIn);
-      if (quickTags) panes[3].appendChild(quickTags);
-      if (anonToggle) panes[3].appendChild(anonToggle);
+      panes[P_PHOTOS].appendChild(photoWrap);
+      if (tagsLabel) panes[P_PHOTOS].appendChild(tagsLabel);
+      if (tagsIn) panes[P_PHOTOS].appendChild(tagsIn);
+      if (quickTags) panes[P_PHOTOS].appendChild(quickTags);
+      if (anonToggle) panes[P_PHOTOS].appendChild(anonToggle);
+
+      /* STEP 3 (ccl only) — TOPICS. The node is server-rendered by _chrome.php and
+         MOVED here, exactly as the title and editor are moved above. Moving rather
+         than rebuilding is what lets the mobile flat form use the very same markup:
+         there is one tag field in the codebase, not one per composer. */
+      var cclTopicsNode = document.getElementById('ntm-topics');
+      if (ccl && cclTopicsNode) panes[P_TOPICS].appendChild(cclTopicsNode);
 
       // STEP 4 — Review: read-only summary with per-row "Edit" jump-backs.
       var review = mk('div', 'lgw-review');
@@ -2378,41 +2409,80 @@
         var leaf = checked && checked.closest('.ntm-fl__leaf');
         var sec = checked && checked.closest('.lgw-acc');
         var fTitle = leaf ? (leaf.querySelector('.ntm-fl__title') || leaf).textContent.trim() : '—';
-        var chip = mk('span', 'lgw-chip', fTitle);
-        if (sec) chip.dataset.catColor = sec.dataset.catColor;
-        review.appendChild(rvRow('Forum', chip, 1));
 
-        review.appendChild(rvRow('Title', ntmTitleIn.value.trim() || '—', 2));
+        /* Under ccl the TOPIC row comes first — it is the thing the member just did
+           — and the Forum row becomes a consequence rather than a choice. Its Edit
+           jumps to Topics, because that is now the only control that moves a post,
+           and an Edit that jumped to a step which no longer exists would be a dead
+           button. */
+        if (ccl) {
+          /* NAMES, not slugs: "shop-orginization" is a store key, not something to
+             show a member — and that particular slug carries a typo, so printing it
+             would look like a bug in the review. */
+          var picked = cclTopics ? cclTopics.tags() : [];
+          var tv;
+          if (picked.length) {
+            tv = mk('span', 'lgw-rv__tags');
+            picked.forEach(function (t) { tv.appendChild(mk('span', 'lgw-chip', t.name)); });
+          } else {
+            tv = 'None — that’s fine';
+          }
+          review.appendChild(rvRow('Topic', tv, P_TOPICS));
+          var fchip = mk('span', 'lgw-chip', fTitle);
+          review.appendChild(rvRow('Forum', fchip, P_TOPICS));
+        } else {
+          var chip = mk('span', 'lgw-chip', fTitle);
+          if (sec) chip.dataset.catColor = sec.dataset.catColor;
+          review.appendChild(rvRow('Forum', chip, 1));
+        }
+
+        review.appendChild(rvRow('Title', ntmTitleIn.value.trim() || '—', P_WRITE));
 
         var bodyTxt = ntmGetContent().replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
         if (bodyTxt.length > 220) bodyTxt = bodyTxt.slice(0, 220) + '…';
-        review.appendChild(rvRow('Body', bodyTxt || 'No body text', 2));
+        review.appendChild(rvRow('Body', bodyTxt || 'No body text', P_WRITE));
 
         var nPhotos = ntmMediaIds.length + (ntmEditId ? ntmKeepMedia.length : 0);
-        review.appendChild(rvRow('Photos', nPhotos ? (nPhotos + (nPhotos === 1 ? ' photo' : ' photos')) : 'None', 3));
+        review.appendChild(rvRow('Photos', nPhotos ? (nPhotos + (nPhotos === 1 ? ' photo' : ' photos')) : 'None', P_PHOTOS));
 
         var tg = (tagsIn && tagsIn.value.trim()) || '';
-        review.appendChild(rvRow('Tags', tg || 'None', 3));
+        review.appendChild(rvRow('Tags', tg || 'None', P_PHOTOS));
 
-        review.appendChild(rvRow('Visibility', (anonChk && anonChk.checked) ? 'Anonymous — name & avatar hidden' : 'Posted as you', 3));
+        review.appendChild(rvRow('Visibility', (anonChk && anonChk.checked) ? 'Anonymous — name & avatar hidden' : 'Posted as you', P_PHOTOS));
       }
 
       // — Footer wiring: Cancel · status · Back / Next / Post —
       if (ntmStatus) footStatus.appendChild(ntmStatus);   // status visible across all steps
       if (ntmCancel) footBtns.appendChild(ntmCancel);
       footBtns.appendChild(btnBack);
+      /* "Optional" needs a control, not just a rail label: Skip jumps straight to
+         Review, so a member who does not want to categorize spends one tap. Built
+         HERE rather than beside its click handler further down, because the footer
+         is assembled at this point — a button created after this line is a real
+         element that never reaches the DOM. */
+      var btnSkip = null;
+      if (ccl) {
+        btnSkip = mk('button', 'lgw-btn lgw-btn--link', 'Skip this');
+        btnSkip.type = 'button';
+        footBtns.appendChild(btnSkip);
+      }
       footBtns.appendChild(btnNext);
       if (ntmSubmit) footBtns.appendChild(ntmSubmit);     // type=submit → existing handler
       if (row && row.parentNode) row.parentNode.removeChild(row);   // drop the emptied .ntm-row
 
       function msg(t) { if (ntmStatus) ntmStatus.textContent = t || ''; }
       function stepValid(step) {
+        /* Under ccl the ONLY requirement in the whole flow is a title. Photos and
+           Topics are both optional, which is the entire ruling: nothing is required
+           until Post. */
+        if (ccl) return (step === P_WRITE) ? !!ntmTitleIn.value.trim() : true;
         if (step === 1) return !!ntmGetForum();
         if (step === 2) return !!ntmTitleIn.value.trim();
         return true;
       }
       function canLeave(step) {
         if (stepValid(step)) return true;
+        if (ccl) { msg('Add a title to continue.'); ntmTitleIn.focus(); return false; }
         if (step === 1) { msg('Pick a forum to continue.'); var ss = selectedSection(); filter.focus(); }
         else if (step === 2) { msg('Add a title to continue.'); ntmTitleIn.focus(); }
         return false;
@@ -2423,9 +2493,14 @@
         btnNext.style.display = last ? 'none' : '';
         if (ntmSubmit) ntmSubmit.style.display = last ? '' : 'none';
         btnNext.disabled = !stepValid(cur);
+        if (btnSkip) btnSkip.style.display = (cur === P_TOPICS) ? '' : 'none';
       }
       function focusStep() {
         if (ntmForm.hidden) return;
+        if (ccl) {
+          if (cur === P_WRITE) ntmTitleIn.focus();
+          return;   // Photos and Topics both lead with a button; leave focus free
+        }
         if (cur === 1) filter.focus();
         else if (cur === 2) ntmTitleIn.focus();
         else if (cur === 3 && tagsIn) { /* leave focus free — photo button is primary */ }
@@ -2448,6 +2523,8 @@
         setTimeout(focusStep, 30);
       }
 
+      if (btnSkip) btnSkip.addEventListener('click', function () { goTo(P_REVIEW); });
+
       btnNext.addEventListener('click', function () { if (canLeave(cur)) goTo(cur + 1); });
       btnBack.addEventListener('click', function () { goTo(cur - 1); });
       // Rail: jump back freely; jump forward only through valid steps.
@@ -2458,7 +2535,7 @@
         for (var i = cur; i < n; i++) { if (!canLeave(i)) { goTo(i); return; } }
         goTo(n);
       });
-      ntmTitleIn.addEventListener('input', function () { if (cur === 2) updateNav(); });
+      ntmTitleIn.addEventListener('input', function () { if (cur === P_WRITE) updateNav(); });
 
       // Enter advances instead of submitting, except on the final step. Textareas
       // and the Quill editor keep Enter for newlines.
@@ -2472,9 +2549,11 @@
       // Each open rewinds to Step 1 (covers fresh posts, "Post here", ?compose, and
       // edit-mode — which pre-fills fields then calls ntmShowOverlay).
       function onOpen() {
-        filter.value = '';
-        applyFilter();
-        reflectSelection();
+        if (!ccl) {
+          filter.value = '';
+          applyFilter();
+          reflectSelection();
+        }
         goTo(1);
       }
 
@@ -2482,6 +2561,291 @@
       return { onOpen: onOpen, focusCurrent: function () { setTimeout(focusStep, 0); }, goTo: goTo };
     }
     ntmWiz = buildNtmWizard();   // null on mobile → flat form served unchanged
+
+    /* ══════════════════════════════════════════════════════════════════════════
+       #129 — TOPIC TAGS + THE HIERARCHICAL PICKER (ledger 44, Ian's Option C)
+       ─────────────────────────────────────────────────────────────────────────
+       Ian, 8/19: "add in the tags and maybe popping up a new modal with a decent
+       heirarchical layout." Drawn at /mockups/composer-v2/ first.
+
+       ONE controller for BOTH composers. #ntm-topics is server-rendered by
+       _chrome.php, so the desktop wizard moves the node into its Topics pane while
+       the mobile flat form shows it in place — and this code does not care which
+       happened. That is deliberate: the last time the two composers each owned
+       their own picker they disagreed about how many forums you were posting to.
+
+       Null when the flag is OFF, because then _chrome.php renders no #ntm-topics
+       at all and every method below is unreachable.
+       ══════════════════════════════════════════════════════════════════════════ */
+    var cclTopics = (function () {
+      var host = document.getElementById('ntm-topics');
+      if (!host) return null;
+
+      var field   = document.getElementById('ntm-topics-field');
+      var addBtn  = document.getElementById('ntm-topics-add');
+      var hidden  = document.getElementById('ntm-topics-input');
+      var forumEl = document.getElementById('ntm-topics-forum');
+      var whyEl   = document.getElementById('ntm-topics-why');
+      var landing = host.dataset.landingTitle || 'the default forum';
+      var endpoint = host.dataset.endpoint || '/wp-json/lg-ccl/v1/topics';
+
+      var data = null;        // the fetched hierarchy
+      var sel  = {};          // slug -> { name, forum, depth, parent }
+      var ov   = null;        // the picker overlay, built once
+      var openParent = null;  // which parent's children the right pane is showing
+
+      function slugs() { return Object.keys(sel); }
+
+      /* The forum a post with these tags lands in. MOST SPECIFIC WINS — "3D
+         Printing" is a better answer than "Tools, Spaces, Robots and Widgets".
+         The mapping itself is resolved SERVER-SIDE and arrives on each term as
+         .forum, so this never re-implements it; a second implementation in JS is
+         exactly how the client and the CLI would drift. */
+      function mapped() {
+        var best = null, bd = -1;
+        slugs().forEach(function (sl) {
+          var t = sel[sl];
+          if (!t || !t.forum) return;
+          if (t.depth > bd) { best = t.forum; bd = t.depth; }
+        });
+        return best;
+      }
+
+      function renderField() {
+        if (!field) return;
+        Array.prototype.slice.call(field.querySelectorAll('.tag')).forEach(function (n) {
+          n.parentNode.removeChild(n);
+        });
+        var list = slugs();
+        var hint = field.querySelector('.tagf__hint');
+        if (hint) hint.hidden = list.length > 0;
+        field.classList.toggle('tagf--empty', list.length === 0);
+        list.forEach(function (sl) {
+          var t = sel[sl];
+          var el = document.createElement('span');
+          el.className = 'tag' + (t.depth === 0 ? ' tag--parent' : '');
+          el.appendChild(document.createTextNode(t.name));
+          var x = document.createElement('button');
+          x.type = 'button'; x.className = 'tag__x'; x.textContent = '×';
+          x.setAttribute('aria-label', 'Remove ' + t.name);
+          x.addEventListener('click', function () { delete sel[sl]; sync(); });
+          el.appendChild(x);
+          field.insertBefore(el, hint || addBtn);
+        });
+        if (addBtn) addBtn.textContent = list.length ? '＋ Add another' : '＋ Add topics';
+      }
+
+      function renderLands() {
+        var m = mapped();
+        if (forumEl) forumEl.textContent = m ? m.title : landing;
+        if (whyEl) {
+          whyEl.textContent = m
+            ? 'from your tags, not a choice you had to make'
+            : 'the default. Add a topic and it moves itself.';
+        }
+      }
+
+      function sync() {
+        if (hidden) hidden.value = slugs().join(',');
+        renderField();
+        renderLands();
+        if (ov) paintPicker();
+      }
+
+      /* ── the picker ─────────────────────────────────────────────────────── */
+      function ensureOverlay() {
+        if (ov) return ov;
+        ov = document.createElement('div');
+        ov.className = 'lgtp';
+        ov.hidden = true;
+        ov.setAttribute('role', 'dialog');
+        ov.setAttribute('aria-modal', 'true');
+        ov.setAttribute('aria-label', 'Add topics');
+        ov.innerHTML =
+          '<div class="lgtp__bd"></div>' +
+          '<div class="lgtp__card">' +
+            '<div class="lgtp__grab"></div>' +
+            '<div class="lgtp__top">' +
+              '<h4 class="lgtp__h">Add topics</h4>' +
+              '<span class="lgtp__count"></span>' +
+              '<button type="button" class="lgtp__x" aria-label="Close">✕</button>' +
+            '</div>' +
+            '<input type="search" class="lgtp__search" placeholder="Search topics…" ' +
+                   'aria-label="Search topics" autocomplete="off">' +
+            '<div class="lgtp__panes"><div class="lgtp__l"></div><div class="lgtp__r"></div></div>' +
+            '<div class="lgtp__acc"></div>' +
+            '<div class="lgtp__foot"><button type="button" class="lgtp__done">Done</button></div>' +
+          '</div>';
+        /* Appended to <body>, not into the form: the form lives inside an overlay
+           that scrolls and clips, and a picker parented there would be trapped by
+           its ancestor's overflow. */
+        document.body.appendChild(ov);
+        ov.querySelector('.lgtp__bd').addEventListener('click', close);
+        ov.querySelector('.lgtp__x').addEventListener('click', close);
+        ov.querySelector('.lgtp__done').addEventListener('click', close);
+        ov.querySelector('.lgtp__search').addEventListener('input', paintPicker);
+        /* Escape must close THIS and not the composer under it. */
+        ov.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape') { e.stopPropagation(); close(); }
+        });
+        return ov;
+      }
+
+      function matches(t, q) {
+        return !q || t.name.toLowerCase().indexOf(q) !== -1;
+      }
+
+      function pcRow(t, depth, parentName) {
+        var on = Object.prototype.hasOwnProperty.call(sel, t.slug);
+        var lab = document.createElement('label');
+        lab.className = 'lgtp-pc' + (on ? ' is-on' : '');
+        lab.innerHTML =
+          '<span class="lgtp-pc__box">' + (on ? '✓' : '') + '</span>' +
+          '<span class="lgtp-pc__n"></span>' +
+          '<span class="lgtp-pc__k">' + (t.uses ? t.uses : '—') + '</span>';
+        lab.querySelector('.lgtp-pc__n').textContent = t.name;
+        lab.addEventListener('click', function (e) {
+          e.preventDefault();
+          if (on) delete sel[t.slug];
+          else sel[t.slug] = { name: t.name, forum: t.forum, depth: depth, parent: parentName || '' };
+          sync();
+        });
+        return lab;
+      }
+
+      function paintPicker() {
+        if (!ov || !data) return;
+        var q = (ov.querySelector('.lgtp__search').value || '').trim().toLowerCase();
+        var n = slugs().length;
+        ov.querySelector('.lgtp__count').textContent = n ? (n + ' chosen') : 'none yet';
+
+        var L = ov.querySelector('.lgtp__l');
+        var R = ov.querySelector('.lgtp__r');
+        var A = ov.querySelector('.lgtp__acc');
+        L.innerHTML = ''; R.innerHTML = ''; A.innerHTML = '';
+
+        var tops = data.topics.filter(function (t) {
+          return matches(t, q) || t.children.some(function (k) { return matches(k, q); });
+        });
+        if (!openParent || tops.indexOf(openParent) === -1) openParent = tops[0] || null;
+
+        /* DESKTOP — parents left, the open parent's children right. */
+        tops.forEach(function (t) {
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'lgtp-pt' + (t === openParent ? ' is-sel' : '')
+            + (hasTagIn(t) ? ' has-tag' : '');
+          b.innerHTML = '<span class="lgtp-pt__n"></span><span class="lgtp-pt__k">'
+            + (t.children.length ? t.children.length : '—') + '</span>';
+          b.querySelector('.lgtp-pt__n').textContent = t.name;
+          b.addEventListener('click', function () { openParent = t; paintPicker(); });
+          L.appendChild(b);
+        });
+        if (openParent) {
+          var rh = document.createElement('p');
+          rh.className = 'lgtp__rh';
+          rh.textContent = openParent.name + ' · '
+            + (openParent.children.length ? openParent.children.length + ' sub-topics' : 'no sub-topics');
+          R.appendChild(rh);
+          /* Tagging the PARENT itself is a real choice, and the row says so
+             plainly. It is also the row that makes ruling (b) visible: two of the
+             big parents have no forum to land in, so this can legitimately leave
+             the post in the default. */
+          var all = pcRow(openParent, 0, '');
+          all.classList.add('lgtp-pc--all');
+          all.querySelector('.lgtp-pc__n').textContent = 'Tag the whole area';
+          all.querySelector('.lgtp-pc__k').textContent = openParent.uses
+            ? openParent.uses + ' posts use this' : 'unused so far';
+          R.appendChild(all);
+          openParent.children.filter(function (k) { return matches(k, q) || matches(openParent, q); })
+            .forEach(function (k) { R.appendChild(pcRow(k, 1, openParent.name)); });
+        }
+
+        /* MOBILE — the same tree as an accordion. buildNtmWizard() never runs
+           below 641px, so on a phone this is the only shape the picker has. */
+        tops.forEach(function (t) {
+          var h = document.createElement('button');
+          h.type = 'button';
+          h.className = 'lgtp-acch' + (t === openParent ? ' is-open' : '');
+          h.innerHTML = '<span class="lgtp-acch__n"></span><span class="lgtp-acch__k">'
+            + (t.children.length ? t.children.length : '—')
+            + '</span><span class="lgtp-acch__c">▸</span>';
+          h.querySelector('.lgtp-acch__n').textContent = t.name;
+          h.addEventListener('click', function () {
+            openParent = (openParent === t) ? null : t; paintPicker();
+          });
+          A.appendChild(h);
+          if (t === openParent) {
+            var body = document.createElement('div');
+            body.className = 'lgtp__accb';
+            var a2 = pcRow(t, 0, '');
+            a2.classList.add('lgtp-pc--all');
+            a2.querySelector('.lgtp-pc__n').textContent = 'Tag the whole area';
+            body.appendChild(a2);
+            t.children.forEach(function (k) { body.appendChild(pcRow(k, 1, t.name)); });
+            A.appendChild(body);
+          }
+          var sep = document.createElement('div'); sep.className = 'lgtp__sep';
+          A.appendChild(sep);
+        });
+      }
+
+      function hasTagIn(t) {
+        if (Object.prototype.hasOwnProperty.call(sel, t.slug)) return true;
+        return t.children.some(function (k) {
+          return Object.prototype.hasOwnProperty.call(sel, k.slug);
+        });
+      }
+
+      function open() {
+        ensureOverlay();
+        ov.hidden = false;
+        var search = ov.querySelector('.lgtp__search');
+        if (data) { paintPicker(); search.focus(); return; }
+
+        /* ON INTENT, not on page load. The craft standard says editors and
+           composers load on intent and never eagerly for anon, and the hub pool
+           has no WordPress to read the taxonomy with anyway. */
+        var panes = ov.querySelector('.lgtp__panes');
+        panes.innerHTML = '<p class="lgtp__err">Loading topics…</p>';
+        fetch(endpoint, { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
+          .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+          .then(function (j) {
+            data = j && j.topics ? j : null;
+            if (!data) throw new Error('shape');
+            if (j.default_forum && j.default_forum.title) landing = j.default_forum.title;
+            panes.innerHTML = '<div class="lgtp__l"></div><div class="lgtp__r"></div>';
+            paintPicker(); renderLands(); search.focus();
+          })
+          .catch(function (e) {
+            /* A failure here must not block the post — the whole step is optional. */
+            panes.innerHTML = '<p class="lgtp__err">Couldn’t load topics just now. '
+              + 'You can post without them.</p>';
+            try { console.warn('[lg-ccl] topic list failed', e); } catch (_) {}
+          });
+      }
+
+      function close() {
+        if (ov) ov.hidden = true;
+        if (addBtn) addBtn.focus();
+      }
+
+      if (addBtn) addBtn.addEventListener('click', open);
+      sync();
+
+      return {
+        slugs:   slugs,
+        /* {slug,name} pairs, so callers can SHOW a topic without re-deriving its
+           display name from the slug. */
+        tags:    function () {
+          return slugs().map(function (sl) { return { slug: sl, name: sel[sl].name }; });
+        },
+        forumId: function () { var m = mapped(); return m ? m.id : 0; },
+        open:    open,
+        reset:   function () { sel = {}; openParent = null; sync(); },
+        node:    host,
+      };
+    })();
 
     if (ntmOpen) ntmOpen.addEventListener('click', function () { ntmShowOverlay(null); });
     ntmCancel.addEventListener('click', ntmHideOverlay);
@@ -2575,6 +2939,19 @@
       if (ntmEditLoading) { ntmStatus.textContent = 'Still loading this post…'; return; }
       var forum   = ntmGetForum();
       var forumId = forum && forum.id;
+
+      /* #129: a picked topic decides the forum, so send the MAPPED one as `parent`
+         and the post is created in the right place first time — no create-then-move,
+         and therefore none of the reply re-homing and mirror re-sync that moving a
+         topic drags in. On an EDIT the member's existing forum is left alone; only
+         `wp lg-recat` and an explicit re-home move an existing thread.
+         The mapping is resolved server-side and travels on the term, so this is a
+         lookup, not a second implementation. */
+      if (!ntmEditId && cclTopics) {
+        var mappedForum = cclTopics.forumId();
+        if (mappedForum) forumId = mappedForum;
+      }
+
       var title   = ntmTitleIn.value.trim();
       var content = ntmGetContent();
       if (!forumId) {
@@ -2654,6 +3031,26 @@
             // Stash the dest FIRST so the mobile overlay (hub-polish status-watcher)
             // navigates to the SAME target instead of bare /hub/.
             var newId   = res.j && res.j.id;
+
+            /* #129: attach the Content Topics to the topic that now exists.
+               DELIBERATELY AFTER, AND DELIBERATELY NOT AWAITED. The step is
+               optional, so a failure here must never cost the member their post —
+               worst case the discussion is uncategorized and `wp lg-recat` can fix
+               it later. The forum is already correct (set as `parent` above), so
+               this call only writes terms; it is not what puts the post in place. */
+            if (cclTopics && newId) {
+              var pickedSlugs = cclTopics.slugs();
+              if (pickedSlugs.length) {
+                fetch('/wp-json/lg-ccl/v1/apply', {
+                  method: 'POST', credentials: 'same-origin',
+                  headers: { 'Content-Type': 'application/json', 'X-WP-Nonce': ntmNonce },
+                  body: JSON.stringify({ topic_id: newId, terms: pickedSlugs }),
+                }).catch(function (e) {
+                  try { console.warn('[lg-ccl] topics not attached', e); } catch (_) {}
+                });
+              }
+              cclTopics.reset();
+            }
             var pubPath = ntmForm.dataset.publicPath || FORUM_BASE;
             var postedAnon = !!(ntmAnonChk && ntmAnonChk.checked);
             var dest = pubPath + '/?sort=new';
