@@ -940,9 +940,14 @@ html[data-lguser-theme="dark"] .lg-fm-meter__next b{color:var(--lg-charcoal)}
           <input type="checkbox" id="lg-featcard-cb" <?= $lg_fmOptIn ? 'checked' : '' ?> aria-label="Yes, include me as a possible featured member">
           <span class="lg-featcard__lbl">Yes — include me as a possible featured member.</span>
         </label>
-        <?php if ($lg_fmConsentOn): /* #107 — what ticking actually permits */ ?>
+<?php /* #107 — what ticking actually permits. The <?php tags start at COLUMN 0
+        on purpose: PHP eats the newline after `?>` but NOT the whitespace before
+        `<?php`, so an indented pair emits its own indent even when the branch is
+        skipped. Measured — indented, flag OFF served 8 bytes MORE than main. A
+        no-op flag has to be a no-op in bytes, not just on screen. */ ?>
+<?php if ($lg_fmConsentOn): ?>
         <p class="lg-featcard__p">Ticking this lets your one-line &ldquo;what you do&rdquo; appear on that public front-page card &mdash; even if you keep it members-only on your profile. Nothing else you have set to members-only is affected, and it only ever appears there while you are the featured member.</p>
-        <?php endif; /* /lg_fmConsentOn: informed-consent sentence */ ?>
+<?php endif; /* /lg_fmConsentOn */ ?>
         <?php if ($lg_fmOptIn && $lg_fmOptInAt): ?>
         <p class="lg-featcard__meta">In the pool since <b><?= looth_h(date('j F Y', strtotime((string)$lg_fmOptInAt))) ?></b>. You can untick at any time — if you are on the front page when you do, you come off it straight away.</p>
         <?php else: ?>
