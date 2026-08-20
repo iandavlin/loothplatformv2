@@ -38,8 +38,13 @@ import subprocess
 import sys
 
 WP_PATH = "/var/www/dev"
-LICENSES = "/home/ubuntu/worktrees/frontend-compose/lg-layout-v2/src/Licenses.php"
-LAYOUT_UPGRADE = "/home/ubuntu/worktrees/frontend-compose/lg-layout-v2/src/LayoutUpgrade.php"
+# Resolve from the repo THIS gate runs in — never another lane's desk. The old
+# absolute paths pointed into the long-deleted frontend-compose worktree; the
+# gate threw on import, run-all read that as RED, and its early-exit skipped
+# TWENTY later gates for every lane (#153; found by lanes 148 and 150, 8/20).
+_REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+LICENSES = os.path.join(_REPO, "lg-layout-v2/src/Licenses.php")
+LAYOUT_UPGRADE = os.path.join(_REPO, "lg-layout-v2/src/LayoutUpgrade.php")
 
 
 class CannotRun(Exception):
