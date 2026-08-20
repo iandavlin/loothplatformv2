@@ -120,7 +120,12 @@ while IFS= read -r line; do
             # #144: a seat is a desk, not a worker — probe tmux for the worker
             ag="none"; sess="$(basename "$folder")"
             if tmux has-session -t "$sess" 2>/dev/null; then
-                if tmux capture-pane -p -t "$sess" 2>/dev/null | grep -q "esc to interrupt"; then ag="working"; else ag="parked"; fi
+                # Two working signatures: the old CLI printed "esc to interrupt" beside the
+                # spinner; the 8/20 CLI update dropped it — the live spinner now reads
+                # "Verbing… (17m 57s · ↓ 23.6k tokens)". A finished turn collapses to
+                # "Verbed for 17m" with no token parenthesis, so the paren+tokens shape
+                # only exists while a turn is actually running.
+                if tmux capture-pane -p -t "$sess" 2>/dev/null | grep -qE "esc to interrupt|s · ↓ [0-9.,]+k? tokens\)"; then ag="working"; else ag="parked"; fi
             fi
             ROWS+="$behind|${folder#/home/ubuntu/}|$branch|$behind|$unique|$cell|$status|${push/NO REMOTE/NR}|$slug|$scr|$mm|$rid|$ag"$'\n' ;;
     esac
