@@ -773,15 +773,32 @@ def section_f3_predictor_tracks_resolver():
 #       members-only glance from a logged-out viewer. Measured against the real
 #       served page, not asserted from source.
 #
-# ⚠️ A LEAK §G7 DELIBERATELY DOES NOT FAIL ON, because it predates this lane and
-# reddening main for it would block every seat. Measured on dev2 2026-08-20: a
-# profile's <meta name="description">, og:description and twitter:description
-# carry at_a_glance VERBATIM to logged-out visitors, crawlers and link unfurls,
-# even when the header block correctly withholds it from the rendered body — 28
-# public members site-wide, including four of the eight in the featured pool.
-# G7 therefore asserts the BODY, which is the surface this ruling reasoned
-# about. The meta tags are a separate, pre-existing decision for Ian — filed as
-# #166 (42 members on LIVE, 28 on dev2), see docs/domains/PROFILE.md.
+# THE LEAK §G7 USED TO STEP AROUND IS FIXED — #166, gate 83, 2026-08-20.
+# This block used to say that a profile's <meta name="description">,
+# og:description and twitter:description carried at_a_glance VERBATIM to
+# logged-out visitors and crawlers even while the body withheld it (42 members
+# on LIVE, 28 on dev2), and that G7 therefore asserted only the BODY because
+# reddening main for a pre-existing leak would block every seat.
+#
+# u.php and p.php now apply Block::headerCeiling() / practiceHeaderCeiling() to
+# the head as well, so the head and the body finally agree. G7's scope is
+# UNCHANGED and still correct: it asserts the rendered body, which is the
+# surface #107's ruling reasoned about. The head is asserted by gate 83 §A/§D,
+# and gate 83 §E is the head-side half of THIS fence — an opted-in member with
+# a members-only one-liner must be withheld from the head too, because #107's
+# consent covers the featured card and a tick is not permission to put the line
+# in Google. The two gates close the surface between them; neither is redundant.
+#
+# ⚠️ G7'S LIVENESS MARKER IS WEAKER THAN IT LOOKS, and is left alone on purpose.
+# `"lg-idrow" not in body` is checked against the FULL response, and lg-idrow
+# appears TWELVE times in this page's <head> as CSS rules (.lg-idrow{...}) and
+# ZERO times in the body of a members-only profile seen anonymously — where the
+# body is the join gate. So "the page rendered" is currently proven by a
+# stylesheet rather than by a render. It is not wrong today (a styled 403 would
+# not carry the profile's CSS either), but it is the assertion class that
+# passes for the wrong reason. Reported on #166 rather than changed here:
+# tightening it to `lg-gate` belongs to whoever owns this fence, not to a lane
+# passing through. Gate 83 uses lg-gate for exactly this reason.
 
 G_ROLE_HARNESS = """<?php
 require %(fns)s;
