@@ -164,14 +164,23 @@ def issues_fixture(loud_failure=False, empty=False):
     }
 
 
-def render(tmp, lanes_json, issues_json, tag):
+def render(tmp, lanes_json, issues_json, tag, repo=None, ref=None):
     lp = tmp / f"lanes-{tag}.json"
     ip = tmp / f"issues-{tag}.json"
     op = tmp / f"out-{tag}"
     lp.write_text(json.dumps(lanes_json))
     ip.write_text(json.dumps(issues_json))
-    r = sh([sys.executable, str(PAGE), "--json-file", str(lp),
-            "--issues-file", str(ip), "--out", str(op)])
+    cmd = [sys.executable, str(PAGE), "--json-file", str(lp),
+           "--issues-file", str(ip), "--out", str(op)]
+    # #172: the TEST-URL records live partly in commit bodies, so the git source
+    # is nameable. Every leg that does not care still points at a throwaway repo
+    # rather than the real box — a gate that reads keeper's live history would
+    # go red or green for reasons that are nobody's diff.
+    if repo:
+        cmd += ["--repo", str(repo)]
+    if ref:
+        cmd += ["--history-ref", ref]
+    r = sh(cmd)
     if r.returncode != 0:
         return None, r.stderr
     return (op / "index.html").read_text(), ""
@@ -272,10 +281,15 @@ def leg_render(tmp):
           "Answer 901-handraise" in b and "it asked:" in b)
     check("#155 a plan-ready issue becomes a Say GO bullet with the Approve button",
           "Say GO on" in b and 'class="actbtn apprbtn"' in b)
+    # #172 rewrote the card: the bullet leads with an ACTION and the family
+    # meaning moved to its own line. Asserted as SHAPE rather than as wording,
+    # so the next wording pass does not redden a gate about behaviour
+    # (feedback-gate-reads-the-flag-not-a-hardcoded-state).
     check("#155 a merged issue becomes a phone check",
-          re.search(r'Try .*?</b> — it&rsquo;s merged', b) is not None)
+          re.search(r'<b>Take a look — [^<]+</b>', b) is not None
+          and "merged; your look is the last thing left." in b)
     check("#155 a built issue becomes a flip decision",
-          "Say GO to switch on" in b)
+          re.search(r'<b>Say GO to switch it on — [^<]+</b>', b) is not None)
     check("#155 a bullet carries the lane's verbatim park reason when it has one",
           "the lane said:" in b and "merged as abc123, awaiting phone check" in b)
     check("#155 titles are plainised — no ledger prefix, no SHOUTING",
@@ -610,9 +624,394 @@ def leg_poke(tmp):
           "re-alarming on a handled poke is how an alert channel gets ignored")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# [6] #172 — every item is an action with a door, and the page is a snapshot
+# ─────────────────────────────────────────────────────────────────────────────
+# Ian 8/20 on the shipped list: "the list for me isn't super useful. Can we get
+# links and copy and paste so I can talk to you about them?… This is hard for me
+# to parse or get started with." Measured before the build: 12 bullets, 11 of
+# them the word "Try" followed by a raw issue title, one control each.
+#
+# Two things this leg guards that nothing else can:
+#   · PROSE MUST NOT COUNTERFEIT A RECORD. The parser reads issue comments and
+#     commit bodies — text that discusses the convention as often as it uses it.
+#     The commit that added this feature quoted an example record in its own
+#     message and, under a first-token reading, handed #172 a door pointing at
+#     the join page. That is feedback-red-first-that-stays-green arriving from
+#     the input side rather than the assertion side.
+#   · THE LOUD LAYER MUST NOT BE COLLAPSIBLE. A collapsed AT RISK is a hidden AT
+#     RISK, and this page's whole warrant is that silence only ever means
+#     healthy. Asserted by walking <details> depth, not by looking for a string.
+#
+# No browser here, deliberately — see this file's header. The clipboard BUTTON
+# was driven for real once during the build (CDP, permission granted, read back
+# with clipboard.readText) and is reported in the lane's handoff; putting a
+# headless Chrome in this gate would buy that one check at the price of the
+# property that makes the other 80 trustworthy under load.
+
+RECORD_REPO = None          # a throwaway repo, built once, carrying commit records
+
+
+def records_repo():
+    """A per-run repo whose commit BODIES carry records (see
+    feedback-gate-probe-must-be-per-run). Never keeper's real history: a gate
+    that reads the live box goes red for reasons that are nobody's diff."""
+    global RECORD_REPO
+    if RECORD_REPO:
+        return RECORD_REPO
+    root = pathlib.Path.home() / f".gate77-rec-{os.getpid()}"
+    if root.exists():
+        shutil.rmtree(root)
+    root.mkdir(parents=True)
+    env = dict(os.environ, GIT_AUTHOR_NAME="g77", GIT_AUTHOR_EMAIL="g@77",
+               GIT_COMMITTER_NAME="g77", GIT_COMMITTER_EMAIL="g@77")
+
+    def git(*a):
+        return subprocess.run(["git", "-C", str(root)] + list(a),
+                              capture_output=True, text=True, env=env)
+    git("init", "-q", "-b", "main")
+    (root / "f").write_text("x")
+    git("add", "f")
+    # 1. explicit #n, the form a batched merge or a rider needs
+    git("commit", "-q", "-m", "seed one\n\nTEST-URL #862: /from-commit/\n")
+    # 2. attribution from "merge #n:" in the SUBJECT, with no #n on the record
+    (root / "f").write_text("y")
+    git("commit", "-qam", "merge #863: a thing\n\nTEST-URL: /subject-hash/\n")
+    # 3. attribution from a leading "<n>:" in the subject
+    (root / "f").write_text("z")
+    git("commit", "-qam", "864: close — a thing\n\nTEST-URL: /subject-plain/\n")
+    # 4. ⚠ THE SUBJECT IS NOT SCANNED FOR RECORDS, only for the number — this
+    #    subject is a sentence ABOUT the convention. Kept as evidence, but see
+    #    the note at the assertion: the rule is belt-and-braces and cannot be
+    #    made to fail, so it is not claimed as a proved assertion.
+    (root / "f").write_text("w")
+    git("commit", "-qam", "865: add TEST-URL: /from-subject/ parsing\n\nnothing here\n")
+    # 4b. a record NOBODY can attribute — no #n on the line, none in the
+    #     subject. It must be dropped, never guessed onto a nearby issue.
+    (root / "f").write_text("t")
+    git("commit", "-qam", "notes with no number at all\n\nTEST-URL: /unattributed/\n")
+    # 5. a commit record for an issue that ALSO has a comment record — without
+    #    this the "a comment outranks a commit body" check has nothing to
+    #    outrank and passes on any precedence order at all.
+    (root / "f").write_text("u")
+    git("commit", "-qam", "853: notes\n\nTEST-URL: /the-commit-one/\n")
+    # 6. prose that mentions the convention, in a body, for issue 866
+    (root / "f").write_text("v")
+    git("commit", "-qam", "866: notes\n\n"
+        "TEST-URL: /real-door/ — try it signed out\n"
+        "TEST-URL: the convention\n"
+        "ACTION: no\n")
+    RECORD_REPO = root
+    return root
+
+
+def todo_fixture(**over):
+    """Issues shaped to exercise one record rule each. Numbers are far from the
+    other legs' so a cross-wired assertion cannot pass by accident."""
+    def iss(n, title, labels, body="", comments=None):
+        i = issue(n, title, labels)
+        i["body"] = body
+        i["_comments"] = comments or []
+        return i
+    f = {
+        "needs": [], "investigating": [], "ok": True,
+        "allopen": [
+            # ── sources and precedence ───────────────────────────────────────
+            iss(850, "Door from a comment", ["merged"],
+                comments=["chat\n\nTEST-URL: /from-comment/\n"]),
+            iss(851, "Door from the body", ["merged"],
+                body="prose\n\nTEST-URL: /from-body/\nACTION: Look at the body door\n"),
+            iss(852, "Comment beats body", ["merged"],
+                body="TEST-URL: /the-body-one/\n",
+                comments=["TEST-URL: /the-comment-one/\n"]),
+            iss(862, "Door from a commit body", ["merged"]),
+            iss(853, "Comment beats a commit", ["merged"],
+                comments=["TEST-URL: /the-comment-one/\n"]),
+            iss(863, "Attributed by the subject hash", ["merged"]),
+            iss(864, "Attributed by a leading number", ["merged"]),
+            iss(865, "The subject is never a record", ["merged"]),
+            iss(866, "Prose cannot counterfeit a record", ["merged"]),
+            iss(867, "Door from a park reason", ["merged"]),
+            # ── the href is untrusted input ──────────────────────────────────
+            iss(870, "A javascript url", ["merged"],
+                body="TEST-URL: javascript:alert(1)\n"),
+            iss(871, "A protocol-relative url", ["merged"],
+                body="TEST-URL: //evil-two.example/x\n"),
+            iss(872, "An off-site url", ["merged"],
+                body="TEST-URL: https://evil-three.example/x\n"),
+            # ── the card ────────────────────────────────────────────────────
+            iss(880, "44 — A MERGED THING", ["merged"]),
+            iss(881, "A built thing", ["built"]),
+            iss(882, "An ACTION record wins", ["merged"],
+                body="ACTION: Post a discussion — the Where step should be gone\n"),
+            # ── the fifth family: no Ian action ─────────────────────────────
+            iss(890, "Keeper tooling that landed", ["merged", "infra"]),
+            iss(891, "Infra that is also BUILT", ["merged", "built", "infra"]),
+            # the seat whose needs-you is the RENDERER's, not the lane's
+            iss(892, "Merged, and it has a live seat", ["merged", "infra"]),
+            # ⚠ THE LIVENESS HALF of "no loud block is inside an accordion":
+            # approved with no seat anywhere renders APPROVED, NOT STARTED, and
+            # without one in the fixture that assertion is true of a page with
+            # nothing loud on it at all.
+            iss(899, "Nobody ever started this one", ["approved"]),
+        ],
+    }
+    f.update(over)
+    return f
+
+
+def todo_lanes(**over):
+    lf = lanes_fixture()
+    lf["parked"] = [{"branch": "867-parkdoor", "days": 1, "behind": 2,
+                     "expired": False,
+                     "reason": "merged; TEST-URL: /from-park/"}]
+    lf["lanes"] = [
+        # a REAL hand-raise: the lane wrote this itself
+        lane("901-handraise", agent="parked", state="needs-you",
+             lane_state="QUESTION", reason="Ian: $5 or $11 for the second tier?"),
+        # a seat whose issue merely wears `merged` — the renderer upgrades it
+        lane("892-labelled", agent="parked", state="needs-keeper"),
+    ]
+    lf.update(over)
+    return lf
+
+
+def acc_regions(h):
+    """(depth-0 text, [accordion bodies]) — a real walk over <details> nesting,
+    because the plan blocks inside cards are themselves <details> and a regex
+    that ignores nesting reports whatever it likes."""
+    depth, out_top, cur, bodies = 0, [], [], []
+    for tok in re.split(r'(<details\b[^>]*>|</details>)', h):
+        if tok.startswith("<details"):
+            depth += 1
+            if depth == 1:
+                cur = []
+                continue
+        elif tok == "</details>":
+            depth -= 1
+            if depth == 0:
+                bodies.append("".join(cur))
+                continue
+        (cur if depth > 0 else out_top).append(tok)
+    return "".join(out_top), bodies, depth
+
+
+def leg_todo(tmp):
+    print("\n[6] #172 — an action, a door and a reply on every item")
+    repo = records_repo()
+    h, err = render(tmp, todo_lanes(), todo_fixture(), "todo",
+                    repo=repo, ref="main")
+    if h is None:
+        cannot_run(f"the renderer failed on the #172 fixture: {err[:300]}")
+    b = body_only(h)
+
+    # LIVENESS FIRST — every absence below is trivially true of an empty file.
+    if not check("the #172 fixture rendered a list (liveness)",
+                 '<h2>Your list</h2>' in b and b.count('class="todo"') >= 10,
+                 f'{b.count(chr(34)+"todo"+chr(34))} bullets'):
+        cannot_run("the #172 fixture produced no checklist to assert against")
+
+    doors = set(re.findall(r'class="dobtn" href="([^"]+)"', b))
+
+    # ── A. the three sources, and precedence between them ────────────────────
+    check("#172 a record in an issue COMMENT opens a door",
+          "/from-comment/" in doors)
+    check("#172 a record in the issue BODY opens a door",
+          "/from-body/" in doors)
+    check("#172 a COMMENT outranks the issue BODY",
+          "/the-comment-one/" in doors and "/the-body-one/" not in doors)
+    check("#172 a record in a COMMIT BODY opens a door",
+          "/from-commit/" in doors)
+    check("#172 a COMMENT outranks a commit body",
+          "/the-comment-one/" in doors and "/the-commit-one/" not in doors,
+          "#853 carries a record in BOTH places; the comment is the correctable "
+          "one, so it has to win")
+    # A park reason is ONE line, so the record rides at its end — the one place
+    # the line-start rule is relaxed, and only because that source has no other
+    # shape available to it.
+    check("#172 a record in a PARK REASON opens a door", "/from-park/" in doors)
+    check("#172 an unnumbered record is attributed by '#n' in the subject",
+          "/subject-hash/" in doors)
+    check("#172 …and by a leading number in the subject",
+          "/subject-plain/" in doors)
+    # ⚠ HONEST NOTE, because a gate that overclaims is worse than one that
+    # claims less. "The subject is never scanned for records" is real design and
+    # it is what the code does — but it CANNOT be made to fail, so red-first
+    # cannot prove it and it is not counted as proved. Scanning the subject
+    # would be inert anyway: a record must own its line and carry no spaces, and
+    # a subject that satisfied both would then be unattributable. The rule below
+    # is the one that actually does work at this seam, and it IS falsifiable.
+    check("#172 the SUBJECT is never scanned for records, only for the number",
+          "/from-subject/" not in doors,
+          "belt-and-braces; see the note above — not red-first provable")
+    check("#172 a record nobody can attribute is DROPPED, never guessed",
+          "/unattributed/" not in doors,
+          "no #n on the line and no number in the subject; guessing an owner "
+          "would put a door on the wrong bullet")
+
+    # ── B. prose cannot counterfeit a record ─────────────────────────────────
+    check("#172 a value with prose after it is NOT a record",
+          "/real-door/" not in doors,
+          "'TEST-URL: /real-door/ — try it signed out' must be inert; this is "
+          "the exact shape that handed #172 a door in the build")
+    check("#172 a value that is not reachable is NOT a record",
+          not any("convention" in d for d in doors))
+    check("#172 …and issue 866 therefore has NO door at all (liveness for both)",
+          re.search(r'<b>Take a look — Prose cannot counterfeit[^<]*</b>.*?'
+                    r'no test link yet', b, re.S) is not None)
+
+    # ── C. the href is untrusted input ───────────────────────────────────────
+    # ⚠ THREE DISTINCT HOSTS. "//evil.example/x" is a substring of
+    # "https://evil.example/x", so with a shared host the off-site URL rendering
+    # reddened the protocol-relative check as well and neither one was measuring
+    # the rule it named.
+    for tag, bad in (("javascript:", "javascript:alert(1)"),
+                     ("protocol-relative", "//evil-two.example/x"),
+                     ("off-site", "https://evil-three.example/x")):
+        check(f"#172 a {tag} record never reaches an href",
+              bad not in h and bad not in doors)
+    check("#172 …and a legitimate path DOES (liveness for the three above)",
+          "/from-body/" in doors,
+          "with nothing ever reaching an href, the three checks are vacuous")
+
+    # ── D. the absent door says so, and never substitutes GitHub ─────────────
+    check("#172 no record ⇒ the card says there is no test link",
+          "no test link yet" in b)
+    ghhrefs = set(re.findall(r'class="dobtn" href="([^"]*github[^"]*)"', b))
+    check("#172 the GitHub link is NEVER substituted as the door", not ghhrefs,
+          f"found {sorted(ghhrefs)} — Ian's spec point 2 forbids exactly this")
+
+    # ── E. the card ──────────────────────────────────────────────────────────
+    leads = re.findall(r'<div class="todo"><span class="ic">[^<]*</span>'
+                       r'<span class="why"><b>([^<]*)</b>', b)
+    check("#172 every bullet leads with a bold ACTION",
+          len(leads) >= 10, f"{len(leads)} action-led bullets")
+    verbs = ("Take a look", "Say GO", "Post ", "Answer ", "Write ", "Pick ",
+             "Look at the", "Try ")
+    bad_leads = [l for l in leads if not l.startswith(verbs)]
+    check("#172 …and every one of them starts with a verb, never a bare title",
+          not bad_leads, f"not action-led: {bad_leads[:3]}")
+    check("#172 a built issue leads with the flip decision",
+          any(l.startswith("Say GO to switch it on — ") for l in leads),
+          "the instruction has to be complete before the dash; the title is a "
+          "label after it, never the object of the verb")
+    check("#172 an ACTION record outranks the derived verb",
+          "Post a discussion — the Where step should be gone" in leads,
+          f"leads were: {leads[:6]}")
+    check("#172 titles are still plainised inside the action",
+          "44 —" not in b and "A MERGED THING" not in b)
+
+    # replies + the clipboard payload, which is the thing he pastes at keeper
+    check("#172 the suggested replies are printed on the card",
+          '<div class="says">say: ' in b
+          and "&ldquo;GO on 881&rdquo;" in b and "&ldquo;hold 881&rdquo;" in b)
+    check("#172 a merged card's replies are its own number",
+          "&ldquo;880 good&rdquo;" in b and "&ldquo;880 not right&rdquo;" in b)
+    payloads = re.findall(r'class="copybtn" data-copy="([^"]*)"', b)
+    want = ("Re #881 Say GO to switch it on — A built thing — "
+            "[GO on 881 / hold 881]")
+    check("#172 Copy for keeper carries 'Re #n <action> — ' plus the replies",
+          any(html_unescape(p) == want for p in payloads),
+          f"none of {len(payloads)} payloads matched; first: "
+          f"{html_unescape(payloads[0]) if payloads else 'NONE'!r}")
+
+    # ── F. on GitHub is demoted to fine print (spec point 5) ─────────────────
+    todo_html = "\n".join(re.findall(r'<div class="todo">.*?</div></div>', b, re.S)
+                          or re.findall(r'<div class="todo">.*', b))
+    check("#172 'on GitHub' is fine print on a bullet, not its control",
+          'class="ghfine"' in b and 'class="ghlink"' not in todo_html)
+
+    # ── G. the fifth family — no-Ian-action items ────────────────────────────
+    check("#172 merged + infra + not built is NOT a bullet",
+          not any("Keeper tooling that landed" in l for l in leads))
+    check("#172 …it drops to the quiet line instead of vanishing",
+          "landed, nothing for you to do" in b and "#890" in b,
+          "Ian's ruling 8/20: a wrong quiet line is recoverable, a wrong "
+          "disappearance is not")
+    check("#172 merged WITHOUT infra is still a bullet (liveness)",
+          any("A merged thing" in l for l in leads),
+          "if nothing merged is ever a bullet the rule above proves nothing")
+    check("#172 infra that is ALSO built is still a bullet",
+          any("Infra that is also" in l for l in leads),
+          "the rule is merged+infra+NOT built; the built half must matter")
+
+    # ── H. #138's shape: a label-derived needs-you is not a hand-raise ───────
+    check("#172 a label-derived 'needs you' seat is not an 'it asked' bullet",
+          "Answer 892-labelled" not in b,
+          "the renderer wrote that reason; attributing it to the lane is a lie")
+    check("#172 …and a REAL .lane-state question still is (liveness)",
+          "Answer 901-handraise" in b and "it asked:" in b)
+    check("#172 …and its issue still reaches the family that classifies it",
+          "#892" in b,
+          "the #138 shape: swallowed by family 1, it never reached the quiet line")
+    check("#172 the seat CARD keeps the needs-you chip and its reason (#159)",
+          re.search(r'seat 892-labelled', b) is not None
+          and "merged — waiting on your check" in b,
+          "only the checklist looks past the upgrade; the card is #159's")
+
+    # ── H2. a read that FAILED never renders as an answer ───────────────────
+    hb, _ = render(tmp, todo_lanes(), todo_fixture(ok=False), "todo-blind",
+                   repo=repo, ref="main")
+    bb = body_only(hb or "")
+    check("#172 a FAILED read says the link is UNKNOWN, not that there is none",
+          "test link unknown" in bb and "no test link yet" not in bb,
+          "\"there isn't one\" and \"I could not look\" must never render alike")
+    check("#172 …and the list still rendered while blind (liveness)",
+          '<h2>Your list</h2>' in bb)
+
+    # ── I. the accordions ────────────────────────────────────────────────────
+    top, bodies, bal = acc_regions(h)
+    check("#172 the <details> tags balance", bal == 0, f"depth ended at {bal}")
+    accs = re.findall(r'<details class="acc" data-acc="([^"]+)"( open)?>', h)
+    ids = [a for a, _ in accs]
+    check("#172 every section is an accordion with its own id",
+          {"your-list", "seats", "landed", "cleanup"} <= set(ids),
+          f"found: {ids}")
+    check("#172 each summary carries the section name AND a live count",
+          all(re.search(r'data-acc="%s"[^>]*><summary><h2>[^<]+</h2>'
+                        r'<span class="acccount">[^<]+</span>' % re.escape(i), h)
+              for i in ids), f"ids: {ids}")
+    # Two different counts off the same fixture: a constant cannot be right
+    # twice. One seat has an open issue (892) and one does not (901), so the
+    # fixture splits exactly one each way.
+    check("#172 the counts are the real ones, not a constant",
+          re.search(r'<h2>Seats</h2><span class="acccount">1 seat</span>', h)
+          is not None
+          and re.search(r'<h2>Old desks</h2><span class="acccount">1 desk</span>',
+                        h) is not None,
+          "expected 'Seats — 1 seat' and 'Old desks — 1 desk' from this fixture")
+    open_ids = [a for a, o in accs if o]
+    check("#172 Your list opens by default and nothing else does",
+          open_ids == ["your-list"], f"open by default: {open_ids}")
+
+    # ⚠ THE ONE THAT MATTERS MOST. A collapsed AT RISK is a hidden AT RISK.
+    loud = re.findall(r'class="block (?:risk|gap)"|APPROVED, NOT STARTED',
+                      "".join(bodies))
+    check("#172 NO loud block is inside an accordion", not loud,
+          f"{len(loud)} loud marker(s) collapsed out of sight")
+    top_loud = re.findall(r'class="block (?:risk|gap)"|APPROVED, NOT STARTED', top)
+    check("#172 …and the loud blocks DO render at the top level (liveness)",
+          len(top_loud) > 0,
+          "with nothing ever loud, the assertion above is vacuous")
+
+    # ── J. the remembered open state ─────────────────────────────────────────
+    check("#172 open state is stored per section, keyed by that section",
+          "'lg-lanes-acc:'+d.getAttribute('data-acc')" in h
+          and "localStorage.setItem(k,d.open?'1':'0')" in h)
+    check("#172 …and it OVERRIDES the server default in both directions",
+          "if(v==='1')d.open=true;else if(v==='0')d.open=false;" in h,
+          "one-directional restore leaves a section he closed flashing open")
+
+
+def html_unescape(x):
+    import html as _h
+    return _h.unescape(x)
+
+
 def main():
     print("=" * 74)
-    print("GATE 77 — the lanes page cannot lie about a lane (#151/#155/#156/#159/#160)")
+    print("GATE 77 — the lanes page cannot lie about a lane "
+          "(#151/#155/#156/#159/#160/#164/#172)")
     print("=" * 74)
     for f in (STATUS, PAGE, POKE_PHP, WORKER, WATCHDOG):
         if not f.exists():
@@ -626,6 +1025,9 @@ def main():
         leg_tmux()
         leg_git(tmp)
         leg_poke(tmp)
+        leg_todo(tmp)
+    if RECORD_REPO and RECORD_REPO.exists():
+        shutil.rmtree(RECORD_REPO, ignore_errors=True)
     print("\n" + "-" * 74)
     if FAILS:
         print(f"GATE 77 RED — {len(FAILS)} of {CHECKS} checks failed:")

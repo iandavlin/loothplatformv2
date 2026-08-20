@@ -19,6 +19,22 @@ dashboard second:
                  the table below it; the answer is that they never should have
                  been two things (#160).
 
+#172 — EVERY ITEM IS AN ACTION WITH A DOOR, AND THE PAGE IS A SNAPSHOT. Ian on
+8/20, looking at the shipped list: "the list for me isn't super useful. Can we
+get links and copy and paste so I can talk to you about them?… This is hard for
+me to parse or get started with." And minutes later: "I'd also like to collapse
+the sections into accordions so I can get a snapshot easier." Measured before
+building: 12 bullets, 11 of them the word "Try" followed by a raw issue title,
+one control on each (on GitHub), no door and no way to reply.
+
+So a bullet now leads with a plain-words ACTION, carries a Do-it link to the
+dev2 URL where that action happens, prints the one-word replies he can send
+back, and hands the whole thing to the clipboard ready to paste at keeper. The
+door and the words come from TEST-URL / ACTION records — see the block above
+build_todo, which is the one place that convention is defined. And every
+section is a details/summary whose closed line is name + live count, so the
+default view of this page is now the snapshot he asked for.
+
 FOUR CHIPS, and only four (#159, Ian's ruling — a six-state taxonomy was
 considered and rejected: fewer states that are always true beat rich states
 that are sometimes wrong, which is #151's law). working · needs you ·
@@ -236,6 +252,39 @@ def git_words(l):
     return out
 
 
+def plural(n, word, many=None):
+    return f"{n} {word if n == 1 else (many or word + 's')}"
+
+
+def acc(h, sid, title, count_words, open_=False):
+    """#172, Ian's second ask verbatim: "I'd also like to collapse the sections
+    into accordions so I can get a snapshot easier." details/summary, no
+    framework — the same pattern the plan text already uses on this page.
+
+    ⚠ THE LOUD LAYER IS NEVER INSIDE ONE. A collapsed AT RISK is a hidden AT
+    RISK, and this page's oldest rule is that silence may only ever mean
+    healthy. The deploy gap, AT RISK, UNBACKED, COLLISION, the
+    GitHub-unreadable banner and APPROVED-NOT-STARTED therefore render outside
+    every accordion, and gate 77 asserts that structurally rather than by eye.
+
+    Default collapsed, except Your list — his list is the reason the page
+    exists, so it opens. The remembered state overrides the server-rendered
+    default in the browser rather than replacing it, so a section he keeps open
+    does not flash shut on every redraw.
+
+    The <h2> stays INSIDE the summary: it is still the section's heading, a
+    summary may legally carry heading content, and every assertion that already
+    reads this page by its headings keeps working."""
+    h.append(f'<details class="acc" data-acc="{html.escape(sid, quote=True)}"'
+             f'{" open" if open_ else ""}><summary><h2>{title}</h2>'
+             f'<span class="acccount">{html.escape(count_words)}</span>'
+             f'</summary><div class="accbody">')
+
+
+def acc_end(h):
+    h.append('</div></details>')
+
+
 def fetch_issue_state(fixture=None):
     """Needs-you (plan-ready without approved, with embedded plan text) and all
     open issues (to match seats by branch number, and to read the `merged` /
@@ -280,37 +329,350 @@ def days_since(iso):
     return max(0, (datetime.datetime.now(datetime.timezone.utc) - d).days)
 
 
-def build_todo(seats, needs, allopen, parked_reason=None):
+# ─────────────────────────────────────────────────────────────────────────────
+# TEST-URL / ACTION records — the door and the words on every bullet (#172)
+# ─────────────────────────────────────────────────────────────────────────────
+# ⚠ THE CONVENTION IS DEFINED HERE AND NOWHERE ELSE. It did not exist before
+# #172: a grep of every branch and of every commit body on main returned zero
+# hits. Ian, 8/20, looking at the shipped list: "the list for me isn't super
+# useful. Can we get links and copy and paste so I can talk to you about them?…
+# This is hard for me to parse or get started with."
+#
+# A RECORD is one line, written by a lane or by keeper in the ordinary course of
+# work. Two keys, both optional:
+#
+#     TEST-URL: /lgjoin/                the dev2 door where the thing happens
+#     TEST-URL #148: /lgjoin/           explicit — for a batched merge or a rider
+#     ACTION #148: Look at the join page — three tiers and their prices
+#
+# READ FROM, first hit wins, newest first inside each source:
+#   1. the issue's own COMMENTS, then its BODY — live, so a correction reaches
+#      him on the next 5-minute redraw with nothing to merge;
+#   2. COMMIT BODIES ON MAIN — deliberately NOT --first-parent, so a LANE can
+#      write the record in its own commit at build time and not only keeper at
+#      merge time. Attributed by, in order: an explicit #n; the first #n in the
+#      commit SUBJECT ("merge #170: …"); a leading number ("170: close — …").
+#      The SUBJECT is never scanned for records, only for that number: a subject
+#      is one line of prose and "172: add TEST-URL: parsing" is not a record.
+#   3. the PARK REASON — the lane's own last words, already on this page.
+#
+# DERIVED, NEVER HAND-MAINTAINED: there is no map of issue numbers in this file
+# and there must never be one. The four already-live doors were seeded as
+# records in a commit body, which is the same door every future record uses.
+#
+# NO RECORD IS NOT A GITHUB LINK (Ian's spec, point 2). The card says "no test
+# link yet"; substituting the issue link would answer a question he did not ask
+# with the very thing he said was not useful. And a source that FAILED TO READ
+# says so — "there isn't one" and "I could not look" must never render alike,
+# which is this page's oldest law.
+#
+# PROSE CANNOT COUNTERFEIT A RECORD, and that is the validator's job rather than
+# the regex's (feedback-red-first-that-stays-green: an assertion matching a
+# string that also lives in prose is the commonest way this goes wrong). A line
+# reading "TEST-URL: the convention" yields the value "the", which is not a
+# reachable path, so it is dropped as if it had never been written.
+
+RECORD_RE = re.compile(
+    r'^[\s>*\-]*(TEST-URL|ACTION)\s*(?:#(\d+))?\s*:\s*(\S.*?)\s*$',
+    re.M | re.I)
+
+# ⚠ THE PARK REASON IS ONE LINE, so the line-start rule above would make that
+# source unusable: a lane writes "merged as c879589, dev2 flag ON pending Ian's
+# join-page look" and has nowhere to put a record. This variant lets the record
+# ride at the END of such a line — and it is used for the park reason ONLY.
+#
+# The two rules differ because their SOURCES differ, not for convenience. A
+# commit body and an issue comment are long prose that discusses this convention
+# as often as it uses it, so there a record must own its whole line. A park
+# reason is one short deliberate sentence a lane writes about its own work; the
+# same strictness there would buy nothing and cost the source entirely.
+RECORD_TAIL_RE = re.compile(
+    r'(?:^|[\s;,(\[])(TEST-URL|ACTION)\s*(?:#(\d+))?\s*:\s*(\S.*?)\s*$',
+    re.M | re.I)
+
+# The href allow-list. A record arrives from an issue comment or a commit body
+# and lands in an anchor, so it is UNTRUSTED INPUT: same-site paths and our own
+# hosts only. javascript:, data:, protocol-relative //evil and any third-party
+# host are dropped exactly as a malformed line is — the card then honestly says
+# there is no door rather than offering a poisoned one.
+SAFE_HOSTS = ("dev2.loothgroup.com", "loothgroup.com", "www.loothgroup.com")
+
+
+def safe_url(u):
+    u = (u or "").strip()
+    if len(u) > 300 or any(c in u for c in ' "\'<>\\'):
+        return None
+    if u.startswith("//"):
+        return None
+    if u.startswith("/"):
+        return u
+    m = re.match(r'^https://([A-Za-z0-9.\-]+)(/.*)?$', u)
+    if m and m.group(1).lower() in SAFE_HOSTS:
+        return u
+    return None
+
+
+def _record_lines(text, default_issue=None, tail=False):
+    """Every record in one blob of text, as (issue, key, value) triples.
+
+    `tail=True` is the park-reason form — see RECORD_TAIL_RE."""
+    out = []
+    for m in (RECORD_TAIL_RE if tail else RECORD_RE).finditer(text or ""):
+        key = m.group(1).upper()
+        num = m.group(2) or (str(default_issue) if default_issue else None)
+        if not num:
+            continue                       # unattributable — silently useless
+        val = m.group(3).strip()
+        if key == "TEST-URL":
+            # ⚠ THE WHOLE REMAINDER IS THE VALUE, never its first token, and
+            # safe_url() rejects anything containing a space. So a record is a
+            # STRUCTURED LINE and nothing else: "TEST-URL: /lgjoin/" is one,
+            # "TEST-URL: /lgjoin/ — try it signed out" is not. This commit's own
+            # parent is the proof it is needed — its message quotes an example
+            # record inline, and a first-token reading would have handed #172 a
+            # door pointing at the join page. Prose that mentions the convention
+            # must stay inert (feedback-red-first-that-stays-green).
+            # Trailing SENTENCE punctuation only. ')' and '>' were in this
+            # set and mangled a legitimate value — a record reading
+            # "TEST-URL: javascript:alert(1)" arrived as "javascript:alert(1",
+            # which is still a poisoned href and merely one the assertion
+            # against it could no longer recognise. Anything '>' could have
+            # caught, safe_url rejects outright.
+            val = safe_url(val.rstrip('.,;'))
+        else:
+            val = re.sub(r"\s+", " ", val)[:120].rstrip(" .")
+            if len(val) < 6:
+                val = None                 # too short to be an action sentence
+        if val:
+            out.append((num, key, val))
+    return out
+
+
+def _absorb(records, triples):
+    """First writer wins. Call order IS the precedence order."""
+    for num, key, val in triples:
+        records.setdefault(num, {}).setdefault(key, val)
+
+
+def _subject_issue(subject):
+    """Which issue a commit is about, from its subject alone."""
+    m = re.search(r'#(\d+)', subject or "")
+    if m:
+        return m.group(1)
+    m = re.match(r'\s*(\d+)\s*[:.]', subject or "")
+    return m.group(1) if m else None
+
+
+def commit_records(repo, days=45, ref="main"):
+    """Records in commit bodies on main. NOT --first-parent — see the note above.
+    A repo that cannot be read yields nothing, which the card reports honestly.
+
+    `ref` exists for ONE reason: a lane's seed lives on its own branch until the
+    merge, and a worktree's `main` is keeper's main, not the lane's. Without a
+    way to name the branch, a lane could only verify its own records AFTER they
+    were already in front of Ian. Default stays `main` — the serving renderer
+    never passes this."""
+    out = []
+    try:
+        txt = run(["git", "-C", str(repo), "log", ref,
+                   f"--since={days} days ago", "--format=%x1e%s%x00%b"])
+    except Exception:
+        return out
+    for chunk in txt.split("\x1e"):
+        if not chunk.strip():
+            continue
+        subj, _, body = chunk.partition("\x00")
+        out.extend(_record_lines(body, _subject_issue(subj)))
+    return out
+
+
+def park_records(parked):
+    out = []
+    for p in parked or []:
+        n = p.get("branch", "").split("-")[0]
+        if n.isdigit():
+            out.extend(_record_lines(p.get("reason") or "", n, tail=True))
+    return out
+
+
+def gather_records(issues, parked, repo, live=True, ref="main"):
+    """(records, ok). ok is False when a source READ FAILED, which is the one
+    thing a missing door must never be confused with."""
+    records, ok = {}, True
+    for i in issues:
+        texts = []
+        if live and i.get("comments"):
+            try:
+                for c in reversed(_gh(i["comments_url"])):
+                    texts.append(c.get("body") or "")
+            except Exception:
+                ok = False
+        else:
+            texts.extend(reversed(i.get("_comments") or []))
+        texts.append(i.get("body") or "")
+        for t in texts:
+            _absorb(records, _record_lines(t, i["number"]))
+    _absorb(records, commit_records(repo, ref=ref))
+    _absorb(records, park_records(parked))
+    return records, ok
+
+
+def gh_fine(issue):
+    """#172, spec point 5: `on GitHub` is DEMOTED to fine print. It was the only
+    control on every bullet, and it is the one place he said he did not want to
+    have to go — the door and the copy button are the controls now."""
+    return (f'<a href="{html.escape(issue["html_url"])}" target="_blank" '
+            f'rel="noopener" class="ghfine">#{issue["number"]} on GitHub '
+            f'&#8599;</a>')
+
+
+def door_html(rec, records_ok, quiet_when_absent=False):
+    """The Do-it link (#172, spec point 2), or the honest absence of one.
+
+    `quiet_when_absent` is for the question family: the answer to "what should
+    the second tier cost?" is a sentence, and telling him to go ask keeper for a
+    test link — when keeper is the very party he is answering — is noise on the
+    one card that is already a conversation."""
+    u = rec.get("TEST-URL")
+    if u:
+        return (f'<a class="dobtn" href="{html.escape(u, quote=True)}" '
+                f'target="_blank" rel="noopener">Do it &#8599;</a>'
+                f'<span class="doorpath">{html.escape(u)}</span>')
+    if not records_ok:
+        # The one inversion of quiet-when-healthy, applied to the door: a read
+        # that failed must never render as an answer. Loud even on a question
+        # card, because "I could not look" is never noise.
+        return ('<span class="nodoor">test link unknown &mdash; a GitHub read '
+                'failed, so this is not &ldquo;there isn&rsquo;t one&rdquo;</span>')
+    if quiet_when_absent:
+        return ''
+    return ('<span class="nodoor">no test link yet &mdash; ask keeper for '
+            'one</span>')
+
+
+# The suggested one-word replies (#172, spec point 4 — "the chat-list voice Ian
+# liked"). Derived from the FAMILY and the issue number, never from the words of
+# the issue: a reply built from a number is always true, and a reply guessed
+# from a title is only usually true.
+def replies_for(family, n):
+    if family == "flip":
+        return [f"GO on {n}", f"hold {n}"]
+    if family == "look":
+        return [f"{n} good", f"{n} not right"]
+    return [f"GO on {n}", "not yet"]
+
+
+def says_html(reps):
+    return ('<div class="says">say: ' + ' &middot; '.join(
+        f'&ldquo;{html.escape(r)}&rdquo;' for r in reps) + '</div>')
+
+
+def action_for(family, issue, rec):
+    """The plain-words ACTION every card leads with (#172, spec point 1).
+
+    An `ACTION:` record wins. Failing that the FAMILY supplies a real verb and
+    the plainised title becomes its object, so an un-recorded card still leads
+    with something to do rather than with a title. What it must never be is the
+    bare title, which is what Ian was looking at when he said the list was hard
+    to get started with."""
+    if rec.get("ACTION"):
+        return rec["ACTION"]
+    what = plainize(issue["title"])
+    # ⚠ THE INSTRUCTION IS COMPLETE BEFORE THE DASH, and the title is a LABEL
+    # after it. The first cut wrote "Look at " + the title, which reads
+    # "Look at Checkout is Patreon-blind: a live Patreon member can…" — the verb
+    # swallowing a sentence-shaped title, which is Ian's original complaint
+    # wearing a verb. Seen by looking at the rendered page, not by reading the
+    # code. This form cannot come out ungrammatical whatever the title is,
+    # because the title is never the object of the verb.
+    if family == "flip":
+        return f"Say GO to switch it on — {what}"
+    if family == "look":
+        return f"Take a look — {what}"
+    return f"Say GO on the plan — {what}"
+
+
+def copy_payload(n, action, reps):
+    """#172, spec point 3, verbatim: 'Re #<n> <plain name> — ' plus the card's
+    suggested replies, ready to paste into keeper chat with the wrong one
+    deleted."""
+    tail = " / ".join(reps)
+    return f"Re #{n} {action} — " + (f"[{tail}]" if tail else "")
+
+
+def build_todo(seats, needs, allopen, parked_reason=None,
+               records=None, records_ok=True):
     """#155, Ian's ask verbatim: 'plain-words bullets of what waits on HIM —
     phone checks to run, flips to say GO on, questions owed a sentence'. One
     bullet, one action, derived from state and never hand-maintained.
 
     Four families, ordered by what they unblock: a lane stopped dead asking him
     a question, then a lane that cannot start without his GO, then a finished
-    thing one flip from members, then a merged thing awaiting his eyes."""
-    todo, seen = [], set()
+    thing one flip from members, then a merged thing awaiting his eyes.
+
+    #172 gave every one of them an ACTION to lead with, a DOOR to walk through
+    and a REPLY to send back. Returns (todo, quiet) — `quiet` is the fifth
+    family, the things that landed with nothing in them for him.
+    """
+    todo, quiet, seen = [], [], set()
     parked_reason = parked_reason or {}
+    records = records or {}
+    by_num = {i["number"]: i for i in allopen}
+
+    def rec_for(n):
+        return records.get(str(n), {})
 
     def because(num):
         """#159's ruling: the VERBATIM park reason where one exists. A lane that
         wrote 'merged as X, awaiting phone check' has already said the true
         thing better than any wording derived from a label could."""
         r = parked_reason.get(str(num))
-        return (f' <span class="dim">&mdash; the lane said: &ldquo;'
+        # Its own line: after a full stop, " — the lane said:" read as a
+        # fragment glued to the sentence before it.
+        return (f'<br><span class="dim">the lane said: &ldquo;'
                 f'{html.escape(r[:160])}&rdquo;</span>') if r else ''
+
+    def card(i, family, icon, meta):
+        n = i["number"]
+        rec = rec_for(n)
+        action = action_for(family, i, rec)
+        reps = replies_for(family, n)
+        return {"icon": icon, "family": family, "issue": n, "action": action,
+                "text": f'<b>{html.escape(action)}</b>',
+                "meta": meta + because(n),
+                "door": door_html(rec, records_ok),
+                "says": says_html(reps),
+                "url": rec.get("TEST-URL"),
+                "buttons": copy_btn("Copy for keeper",
+                                    copy_payload(n, action, reps)),
+                "gh": gh_fine(i)}
 
     # 1. a lane raised its hand and named him (its chip reads 'needs you', and
     #    #159's ruling says every one of those is mirrored here with its action)
     for l in seats:
-        if l.get("state") != "needs-you" or not l.get("reason"):
-            continue
+        if (l.get("state") != "needs-you" or not l.get("reason")
+                or l.get("state_from_label")):
+            continue                       # see the note at the upgrade site
         seat = l["branch"]
+        num = seat.split("-")[0]
+        iss = by_num.get(int(num)) if num.isdigit() else None
+        # A question's answer is a sentence, not a word, so this family gets no
+        # suggested replies — the copy button hands him the opening instead.
+        name = plainize(iss["title"]) if iss else seat
         todo.append({
             "icon": "💬",
+            "family": "question",
+            "issue": iss["number"] if iss else None,
+            "action": f"Answer the {name} lane",
             "text": (f'<b>Answer {html.escape(seat)}</b> — it asked: '
                      f'&ldquo;{html.escape(l["reason"][:200])}&rdquo;'),
-            "buttons": copy_btn("Copy for keeper",
-                                f'Re {seat}: answering its question — '),
+            "door": door_html(rec_for(num) if num.isdigit() else {}, records_ok,
+                              quiet_when_absent=True),
+            "buttons": copy_btn(
+                "Copy for keeper",
+                (f"Re #{num} {name} — answering: " if iss
+                 else f"Re {seat}: answering its question — ")),
+            "gh": gh_fine(iss) if iss else "",
         })
 
     # 2. a plan is ready and only his GO is missing
@@ -320,42 +682,42 @@ def build_todo(seats, needs, allopen, parked_reason=None):
         waited = ("waiting since this morning" if d == 0
                   else f"waiting {d} day{'s' if d != 1 else ''}")
         plan = i.get("_plan") or "(no plan text found)"
-        todo.append({
-            "icon": "✅",
-            "text": (f'<b>Say GO on {html.escape(plainize(i["title"]))}</b> — '
-                     f'the plan is ready, {waited}.'),
-            "detail": plan[:6000],
-            "buttons": (
-                f'<button class="actbtn apprbtn" data-issue="{i["number"]}" '
-                f'data-nonce="{nonce("approve", i["number"])}">Approve ✓</button>'
-                + gh_link(i) + copy_btn("Copy plan", plan[:6000])),
-        })
+        c = card(i, "plan", "✅", f'the plan is ready, {waited}.')
+        c["detail"] = plan[:6000]
+        c["buttons"] = (
+            f'<button class="actbtn apprbtn" data-issue="{i["number"]}" '
+            f'data-nonce="{nonce("approve", i["number"])}">Approve ✓</button>'
+            + c["buttons"] + copy_btn("Copy plan", plan[:6000]))
+        todo.append(c)
 
     # 3 + 4. built = one flip from members seeing it; merged = awaiting his look
+    #
+    # 5 (#172, spec point 5). NO-IAN-ACTION CARDS ARE EXCLUDED. The only rule
+    # derivable without guessing at what a thing is: merged + `infra` + NOT
+    # `built` is keeper's own tooling — there is no member-facing surface to look
+    # at and no flag to say GO to. Ian's ruling 8/20 when I put the two options
+    # to him: it drops to ONE QUIET LINE rather than vanishing, because silently
+    # dropping something from his list is the one failure this page must not
+    # have. If the rule is ever wrong, a wrong quiet line is recoverable and a
+    # wrong disappearance is not.
     for i in allopen:
         if i["number"] in seen:
             continue
         lab = labels_of(i)
         if "built" in lab:
             seen.add(i["number"])
-            todo.append({
-                "icon": "🎚",
-                "text": (f'<b>Say GO to switch on '
-                         f'{html.escape(plainize(i["title"]))}</b> — built and '
-                         f'merged; one flag flip from members seeing it.'
-                         + because(i["number"])),
-                "buttons": gh_link(i),
-            })
+            todo.append(card(i, "flip", "🎚",
+                             "built and merged; one flag flip from members "
+                             "seeing it."))
         elif "merged" in lab:
             seen.add(i["number"])
-            todo.append({
-                "icon": "📱",
-                "text": (f'<b>Try {html.escape(plainize(i["title"]))}</b> — '
-                         f'it&rsquo;s merged; your look is the last thing left.'
-                         + because(i["number"])),
-                "buttons": gh_link(i),
-            })
-    return todo
+            if "infra" in lab:
+                quiet.append(i)
+                continue
+            todo.append(card(i, "look", "📱",
+                             "merged; your look is the last thing left."))
+    return todo, quiet
+
 
 
 def main():
@@ -363,8 +725,18 @@ def main():
     ap.add_argument("--json-file", help="read lanes JSON from a file instead of running `lanes --json`")
     ap.add_argument("--issues-file", help="read GitHub state from a fixture instead of the API")
     ap.add_argument("--out", help="write index.html + lanes.json here (default /var/www/dev/lanes)")
+    # #172: the TEST-URL records are read from commit bodies on main, so the
+    # repo has to be nameable — that is what lets a lane verify its own seed
+    # BEFORE the merge that puts it on keeper's main, and what lets gate 77
+    # exercise the git source in a throwaway repo instead of the real box.
+    ap.add_argument("--repo", help="read git history here (default %s)" % REPO)
+    ap.add_argument("--history-ref", default="main",
+                    help="the ref whose commit bodies carry TEST-URL records "
+                         "(default main; a lane names its own branch to check "
+                         "its seed before the merge)")
     args = ap.parse_args()
     out_dir = pathlib.Path(args.out) if args.out else OUT
+    repo = args.repo or REPO
 
     if args.json_file:
         data = json.loads(pathlib.Path(args.json_file).read_text())
@@ -373,13 +745,13 @@ def main():
     dep = data["deploy"]
 
     merged = [b.strip().lstrip("+* ") for b in run(
-        ["git", "-C", REPO, "branch", "--merged", "main"]).splitlines()]
+        ["git", "-C", repo, "branch", "--merged", "main"]).splitlines()]
     merged = [b for b in merged if b and b != "main"]
     backups = [b for b in run(
-        ["git", "-C", REPO, "for-each-ref", "--format=%(refname:short)",
+        ["git", "-C", repo, "for-each-ref", "--format=%(refname:short)",
          "refs/heads"]).splitlines() if b.endswith("-backup")]
     shipped = [l for l in run(
-        ["git", "-C", REPO, "log", "--first-parent", "main",
+        ["git", "-C", repo, "log", "--first-parent", "main",
          "--since=7 days ago", "--format=%ad|%s",
          "--date=format:%m/%d"]).splitlines() if l][:20]
 
@@ -427,6 +799,17 @@ def main():
         iss = issue_for(l)
         if iss and l.get("state") != "working" and labels_of(iss) & {"merged", "built"}:
             l["state"] = "needs-you"
+            # ⚠ #172: MARK IT AS OURS. This upgrade is derived from a label, so
+            # the words below are the RENDERER'S, not the lane's — and the todo
+            # list's first family exists for a lane that raised its hand and
+            # named him. Untagged, this seat printed "Answer 138-phase-b — it
+            # asked: 'merged — waiting on your check'", which attributes a
+            # sentence nobody said to a lane that never asked, AND swallowed the
+            # issue before the merged/built families could class it (#138 is the
+            # one item that should have dropped to the quiet line and did not).
+            # The SEAT CARD still shows this state and this reason — that is
+            # #159's design and unchanged. Only the checklist looks past it.
+            l["state_from_label"] = True
             if not l.get("reason"):
                 l["reason"] = ("merged — waiting on your check"
                                if "merged" in labels_of(iss)
@@ -470,6 +853,38 @@ h2{font-size:13px;color:#9aa3ad;text-transform:uppercase;letter-spacing:.06em;ma
 .why{color:#e8e6df;font-size:13px;}
 .agent{background:#1b1f26;border:1px solid #2a2f38;border-radius:8px;
   padding:8px 12px;margin-bottom:6px;font-size:14px;}
+/* #172 — the accordions. The summary IS the snapshot line, so it has to read
+   as one row: heading, then its live count, and a marker that says which way
+   it opens. */
+details.acc{border-top:1px solid #2a2f38;margin:0 0 2px;}
+details.acc>summary{cursor:pointer;list-style:none;padding:10px 2px;
+  display:flex;align-items:baseline;gap:10px;}
+details.acc>summary::-webkit-details-marker{display:none;}
+/* ⚠ A LITERAL GLYPH, NOT A CSS ESCAPE. "\\25B8" here is read by PYTHON first,
+   where \\25 is an OCTAL escape, so the browser received a control character
+   followed by the text "B8" and every closed section wore a mojibake bullet.
+   Caught by looking at the rendered page; no markup assertion would have. */
+details.acc>summary::before{content:"▸";color:#9aa3ad;font-size:11px;
+  transition:transform .12s;}
+details.acc[open]>summary::before{transform:rotate(90deg);}
+details.acc>summary h2{display:inline;margin:0;}
+details.acc>summary:hover h2{color:#e8e6df;}
+.acccount{color:#9aa3ad;font-size:12.5px;margin-left:auto;}
+.accbody{padding:2px 0 12px;}
+/* #172 — the card's own furniture: a door, a starter and demoted fine print. */
+.dobtn{display:inline-block;background:#2a3a20;color:#9db668;
+  border:1px solid #3a4049;border-radius:6px;padding:2px 10px;font-size:12px;
+  font-weight:700;text-decoration:none;}
+.doorpath{color:#9aa3ad;font-size:12px;margin-left:8px;}
+.nodoor{color:#9aa3ad;font-size:12.5px;font-style:italic;}
+.says{color:#9aa3ad;font-size:12.5px;margin-top:6px;}
+.ghfine{color:#6f7681;font-size:11.5px;text-decoration:none;}
+.ghfine:hover{color:#9aa3ad;}
+.fine{margin-top:6px;}
+.quietlanded{color:#9aa3ad;font-size:12.5px;padding:6px 2px 0;}
+.todo .meta{color:#9aa3ad;font-size:12.5px;margin-top:3px;}
+.shipline{font-size:13px;color:#9aa3ad;padding:2px 0;}
+.shipline b{color:#e8e6df;font-weight:600;}
 </style></head><body><div class="wrap"><h1>lanes</h1>""")
 
     # 0. capacity — one glance, no counting rows (Ian's item 1)
@@ -545,17 +960,45 @@ h2{font-size:13px;color:#9aa3ad;text-transform:uppercase;letter-spacing:.06em;ma
                  'is UNKNOWN right now, not necessarily nothing</div>')
     parked_reason = {p["branch"].split("-")[0]: p["reason"] for p in parked
                      if p["branch"].split("-")[0].isdigit() and p.get("reason")}
-    todo = build_todo(seats, needs, allopen, parked_reason)
+    # #172: the doors and the action words. Only the issues that can reach the
+    # list are read, so this is a bounded handful of API calls, not a sweep.
+    todo_candidates = [i for i in allopen
+                       if labels_of(i) & {"merged", "built", "plan-ready"}]
+    records, records_ok = gather_records(
+        todo_candidates, parked, repo, live=not args.issues_file,
+        ref=args.history_ref)
+    # A GitHub read that already failed cannot be trusted to say "no door"
+    # either — the two failures are the same failure.
+    records_ok = records_ok and gh_ok
+    todo, quiet = build_todo(seats, needs, allopen, parked_reason,
+                             records, records_ok)
     if todo:
-        h.append('<h2>Your list</h2>')
+        acc(h, "your-list", "Your list", plural(len(todo), "item"), open_=True)
         for t in todo:
             h.append(f'<div class="todo"><span class="ic">{t["icon"]}</span>'
                      f'<span class="why">{t["text"]}</span>')
+            if t.get("meta"):
+                h.append(f'<div class="meta">{t["meta"]}</div>')
             if t.get("detail"):
                 h.append(f'<details><summary>read the plan</summary>'
                          f'<div class="plan">{html.escape(t["detail"])}</div>'
                          f'</details>')
-            h.append(f'<div class="acts">{t["buttons"]}</div></div>')
+            h.append(f'<div class="acts">{t.get("door", "")}{t["buttons"]}</div>')
+            if t.get("says"):
+                h.append(t["says"])
+            if t.get("gh"):
+                h.append(f'<div class="fine">{t["gh"]}</div>')
+            h.append('</div>')
+        # The fifth family: merged keeper tooling with nothing in it for him.
+        # One line, never a bullet, never silence (Ian's ruling 8/20).
+        if quiet:
+            names = " &middot; ".join(
+                f'<a href="{html.escape(i["html_url"])}" target="_blank" '
+                f'rel="noopener" class="ghfine">#{i["number"]} '
+                f'{html.escape(plainize(i["title"], 44))}</a>' for i in quiet)
+            h.append(f'<div class="quietlanded">landed, nothing for you to do: '
+                     f'{names}</div>')
+        acc_end(h)
 
     # 3a. AGENTS (#164) — the WORKERS view. Ian: "I guess we need an agent
     # section and what they are working like - agent 1 - 146 edit button thing."
@@ -565,7 +1008,9 @@ h2{font-size:13px;color:#9aa3ad;text-transform:uppercase;letter-spacing:.06em;ma
     # saying what it waits for is the whole point. Absent when nobody is home.
     live_agents = [l for l in seats if l.get("agent", "none") != "none"]
     if live_agents:
-        h.append('<h2>Agents</h2>')
+        working_now = sum(1 for l in live_agents if l.get("state") == "working")
+        acc(h, "agents", "Agents",
+            f'{plural(len(live_agents), "agent")} · {working_now} working')
         for n, l in enumerate(live_agents, 1):
             iss = issue_for(l)
             what = (f'<a href="{html.escape(iss["html_url"])}" target="_blank" '
@@ -576,12 +1021,13 @@ h2{font-size:13px;color:#9aa3ad;text-transform:uppercase;letter-spacing:.06em;ma
             colour = "#9db668" if l.get("state") == "working" else "#9aa3ad"
             h.append(f'<div class="agent"><b>Agent {n}</b> &mdash; {what} '
                      f'&mdash; <span style="color:{colour}">{doing}</span></div>')
+        acc_end(h)
 
     # 3b. in motion (no seat) — active investigations (#137): keeper working,
     # nothing needed from Ian yet. Explicitly labeled only; absent when none.
     if investigating:
-        h.append('<div class="strip"><b>In motion (no seat)</b> <span '
-                 'class="dim">— investigations keeper is actively working</span>')
+        acc(h, "in-motion", "In motion (no seat)",
+            plural(len(investigating), "investigation"))
         for i in investigating:
             hrs = max(0, int((datetime.datetime.now(datetime.timezone.utc)
                               - datetime.datetime.fromisoformat(
@@ -592,7 +1038,7 @@ h2{font-size:13px;color:#9aa3ad;text-transform:uppercase;letter-spacing:.06em;ma
                      f'target="_blank" rel="noopener" style="color:#c9a0dc">'
                      f'#{i["number"]} {html.escape(plainize(i["title"], 70))}</a> '
                      f'<span class="dim">· running {age}</span></div>')
-        h.append('</div>')
+        acc_end(h)
 
     # 4. SEATS — one card each (#160). The Building strip and the seats table
     # were the same seats described twice; Ian asked what the difference was,
@@ -600,7 +1046,7 @@ h2{font-size:13px;color:#9aa3ad;text-transform:uppercase;letter-spacing:.06em;ma
     desks = [l for l in seats if not issue_for(l)]        # no open issue -> old desk
     cards = [l for l in seats if issue_for(l)]
     if cards:
-        h.append('<h2>Seats</h2>')
+        acc(h, "seats", "Seats", plural(len(cards), "seat"))
     for l in cards:
         iss = issue_for(l)
         state = l.get("state", "needs-keeper")
@@ -634,11 +1080,13 @@ h2{font-size:13px;color:#9aa3ad;text-transform:uppercase;letter-spacing:.06em;ma
         h.append(f'<div class="acts">{poke_btn(l["branch"])}'
                  f'{copy_btn("copy path+branch", where)}</div>')
         h.append('</div>')
+    if cards:
+        acc_end(h)
 
     # 4b. old desks — a seat whose branch answers to no open issue. Ian asked
     # for these grouped rather than mixed in with the work (#160).
     if desks:
-        h.append('<h2>Old desks</h2>')
+        acc(h, "old-desks", "Old desks", plural(len(desks), "desk"))
         for l in desks:
             state = l.get("state", "needs-keeper")
             label, color = CHIPS.get(state, CHIPS["needs-keeper"])
@@ -650,6 +1098,7 @@ h2{font-size:13px;color:#9aa3ad;text-transform:uppercase;letter-spacing:.06em;ma
                         if l.get("reason") else '')
                      + f'</div><div class="meta">{git_words(l)}</div>'
                      f'<div class="acts">{poke_btn(l["branch"])}</div></div>')
+        acc_end(h)
 
     # 5. reconciliation — absent when clean. Approved-with-no-seat is the one
     # that matters: "I said go and nothing started" must never look identical
@@ -669,7 +1118,8 @@ h2{font-size:13px;color:#9aa3ad;text-transform:uppercase;letter-spacing:.06em;ma
     # chips as a seat (#159): a parked branch whose issue is waiting on Ian says
     # needs you; everything else deliberately set down says retired.
     if parked:
-        h.append('<h2>Parked — branch kept, seat freed</h2>')
+        acc(h, "parked", "Parked — branch kept, seat freed",
+            plural(len(parked), "branch", "branches"))
         for p in parked:
             n = p["branch"].split("-")[0]
             iss = issue_by_num.get(n) if n.isdigit() else None
@@ -685,23 +1135,29 @@ h2{font-size:13px;color:#9aa3ad;text-transform:uppercase;letter-spacing:.06em;ma
                      f'<span class="why">{html.escape(p["reason"])}</span></div>'
                      f'<div class="meta">parked {p["days"]}d &middot; '
                      f'{p["behind"]} behind main{exp}</div></div>')
+        acc_end(h)
 
     # 7. cleanup footnote — names, not counts (a count isn't actionable)
     free_names = " · ".join(
         f'{l["folder"].removeprefix("worktrees/")}'
         + (f' ({l["branch"]})' if l["mismatch"] else '')
         for l in freeable) or "none"
-    h.append(f'<div class="foot">cleanup: {len(merged)} merged branch(es) '
+    acc(h, "cleanup", "Cleanup",
+        f'{plural(len(merged), "merged branch", "merged branches")} deletable')
+    h.append(f'<div class="foot">{len(merged)} merged branch(es) '
              f'deletable &middot; {len(backups)} backup branch(es) held for '
              f'review &middot; finished &amp; freeable: {html.escape(free_names)}</div>')
+    acc_end(h)
 
     # 8. shipped, last 7 days — self-clearing; where an unflipped flag shows up
     if shipped:
-        h.append('<div class="strip"><b>Landed on main, last 7 days</b>')
+        acc(h, "landed", "Landed on main, last 7 days",
+            f'{plural(len(shipped), "merge")} in 7 days')
         for line in shipped:
-            d, _, s = line.partition("|")
-            h.append(f'<div><b>{html.escape(d)}</b> {html.escape(s[:100])}</div>')
-        h.append('</div>')
+            d, _, sj = line.partition("|")
+            h.append(f'<div class="shipline"><b>{html.escape(d)}</b> '
+                     f'{html.escape(sj[:100])}</div>')
+        acc_end(h)
 
     h.append(f'<div class="foot">generated {now.strftime("%H:%M")} &middot; '
              f'redraws every 5 minutes — an old timestamp means the timer is '
@@ -737,6 +1193,16 @@ h2{font-size:13px;color:#9aa3ad;text-transform:uppercase;letter-spacing:.06em;ma
     b.addEventListener('click',function(ev){ev.preventDefault();
       post('/lanes-poke.php',{seat:b.dataset.seat,nonce:b.dataset.nonce},
            b,'poking…','keeper told ✓');});});
+  /* #172 — open state per section. The server already rendered the default
+     (collapsed, except Your list), so this only ever OVERRIDES it; a section he
+     keeps open therefore does not flash shut on each 5-minute redraw. A browser
+     with localStorage refused keeps the defaults and says nothing. */
+  document.querySelectorAll('details.acc').forEach(function(d){
+    var k='lg-lanes-acc:'+d.getAttribute('data-acc');
+    try{var v=localStorage.getItem(k);
+        if(v==='1')d.open=true;else if(v==='0')d.open=false;}catch(e){}
+    d.addEventListener('toggle',function(){
+      try{localStorage.setItem(k,d.open?'1':'0');}catch(e){}});});
   var rf=document.getElementById('lg-refresh');
   if(rf){rf.addEventListener('click',function(){
     rf.disabled=true;rf.textContent='refreshing…';
@@ -758,6 +1224,12 @@ h2{font-size:13px;color:#9aa3ad;text-transform:uppercase;letter-spacing:.06em;ma
     # The JSON is for machines, so it gets the words and not the markup —
     # entities unescaped too, or a consumer reads "it&rsquo;s merged".
     data["todo"] = [html.unescape(re.sub("<[^>]+>", "", t["text"])) for t in todo]
+    # #172: the structured form, so a consumer gets the action and the door
+    # without parsing prose. The flat list above is kept as it was — a shape
+    # change is a broken consumer, and nothing on this box asked for one.
+    data["todo_cards"] = [
+        {"issue": t.get("issue"), "family": t.get("family"),
+         "action": t.get("action"), "test_url": t.get("url")} for t in todo]
     (out_dir / "lanes.json").write_text(json.dumps(data, indent=1), encoding="utf-8")
 
 
