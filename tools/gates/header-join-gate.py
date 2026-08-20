@@ -338,6 +338,34 @@ def leg_a():
           re.search(r"\$join_external\s*=.*preg_match.*https\?://", code) is not None
           and "$join_external ?" in code)
 
+    # ── #170: THE TESTER PILL MUST INHERIT THE ANON PILL'S PRESENTATION ─────
+    # Same class is NOT by itself evidence — a class can be styled only in a
+    # context the new copy is not in, and then the control renders looking like
+    # nothing, wearing a class with no rule that applies
+    # (trap-class-name-assertion-passes-on-the-defect). So assert the property
+    # that actually matters: every stylesheet that styles .lg-chrome__join does
+    # it with an UNSCOPED selector, with no combinator tying it to the anon
+    # cluster's siblings. §D already measures that one pill's real presentation
+    # in a browser; this is what makes that measurement transfer to the other.
+    scoped = []
+    for root, _dirs, files in os.walk(REPO):
+        if "/.git" in root: continue
+        for fn in files:
+            if not fn.endswith(".css"): continue
+            fp = os.path.join(root, fn)
+            try: css = open(fp, encoding="utf-8", errors="replace").read()
+            except OSError: continue
+            for m in re.finditer(r"([^{}\n,;]*\.lg-chrome__join[^{},]*)\s*[,{]", css):
+                sel = m.group(1).strip()
+                # a bare .lg-chrome__join, optionally with pseudo-classes, is fine;
+                # a descendant/sibling combinator in front of it is not.
+                if re.search(r"[+~>]\s*\.lg-chrome__join", sel) or re.match(
+                        r".*\S\s+\.lg-chrome__join", sel):
+                    scoped.append(f"{os.path.relpath(fp, REPO)}: {sel}")
+    check("no stylesheet scopes .lg-chrome__join to the anon cluster",
+          not scoped,
+          "; ".join(scoped[:3]) or "the tester's copy inherits the same rules")
+
     # The PWA sheet is the phone's Join, and it must obey the same rule.
     js = js_code(f"{REPO}/{BOTTOM}")
     check("bottom-nav's anon sheet reads the header's Join href (no second flag)",
