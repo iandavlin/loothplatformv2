@@ -928,6 +928,35 @@
     // (Destination links removed from the You sheet — the Nav tray is the sole
     // mobile menu now; no duplicate menus. Ian 2026-06-24.)
 
+    // #170 — THE ONE EXCEPTION TO THE LINE ABOVE, and it is not a duplicate.
+    //
+    // In the header-join-stripe 'allowlist' state the header draws a Join pill
+    // for a signed-in Stripe soft-launch tester. At ≤640 on the hub the entire
+    // header aside is display:none!important (bb-mirror/web/forums.css) — the
+    // account menu with it — and the Nav tray carries no account entries, so
+    // without this row a tester on a phone has NO door to /lgjoin/ at all. That
+    // is the presence-is-not-reachability trap, and it has already cost this
+    // repo three findings; the pill would be in the DOM the whole time.
+    //
+    // Read from the header rather than from a flag, exactly as buildAnonSheet
+    // reads its own Join: this row therefore EXISTS only when the header drew
+    // the pill (allowlist + tester) and points wherever the header points, so
+    // the two copies of this control cannot disagree and this file needs no
+    // knowledge of the cohort. Same href-derived tab rule as both other copies
+    // — an internal page must never open a new tab, which would eject a member
+    // from the installed PWA (display:standalone) to buy a membership in a
+    // browser.
+    var testerJoinHref = hdrHref('.lg-chrome__join', null);
+    if (testerJoinHref) {
+      var joinRow2 = document.createElement('a');
+      joinRow2.className = 'lt-sheet__row lt-sheet__row--join';
+      joinRow2.style.cssText = 'display:flex;align-items:center;gap:10px';
+      joinRow2.href = testerJoinHref;
+      if (/^https?:\/\//i.test(testerJoinHref)) { joinRow2.target = '_blank'; joinRow2.rel = 'noopener'; }
+      joinRow2.innerHTML = '<svg class="lt-row-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg><span>Join</span>';
+      sheet.appendChild(joinRow2);
+    }
+
     // settings
     var setH = document.createElement('div'); setH.className = 'lt-sheet__sech'; setH.textContent = 'Settings';
     sheet.appendChild(setH);
