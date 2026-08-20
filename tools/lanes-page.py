@@ -851,7 +851,11 @@ details.acc{border-top:1px solid #2a2f38;margin:0 0 2px;}
 details.acc>summary{cursor:pointer;list-style:none;padding:10px 2px;
   display:flex;align-items:baseline;gap:10px;}
 details.acc>summary::-webkit-details-marker{display:none;}
-details.acc>summary::before{content:"\25B8";color:#9aa3ad;font-size:11px;
+/* ⚠ A LITERAL GLYPH, NOT A CSS ESCAPE. "\\25B8" here is read by PYTHON first,
+   where \\25 is an OCTAL escape, so the browser received a control character
+   followed by the text "B8" and every closed section wore a mojibake bullet.
+   Caught by looking at the rendered page; no markup assertion would have. */
+details.acc>summary::before{content:"▸";color:#9aa3ad;font-size:11px;
   transition:transform .12s;}
 details.acc[open]>summary::before{transform:rotate(90deg);}
 details.acc>summary h2{display:inline;margin:0;}
@@ -865,7 +869,6 @@ details.acc>summary:hover h2{color:#e8e6df;}
 .doorpath{color:#9aa3ad;font-size:12px;margin-left:8px;}
 .nodoor{color:#9aa3ad;font-size:12.5px;font-style:italic;}
 .says{color:#9aa3ad;font-size:12.5px;margin-top:6px;}
-.says::before{content:"";}
 .ghfine{color:#6f7681;font-size:11.5px;text-decoration:none;}
 .ghfine:hover{color:#9aa3ad;}
 .fine{margin-top:6px;}
