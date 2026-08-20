@@ -700,7 +700,7 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
           <span class="lg-chrome__badge" data-lg-conn-count hidden>0</span>
         </button>
 
-        <?php if ($join_pill_authed): /* #170 — the Stripe soft-launch tester's
+<?php if ($join_pill_authed): /* #170 — the Stripe soft-launch tester's
                  own door to /lgjoin/, and on live the ONLY one they have at a
                  phone width: at ≤640 the hub hides this entire aside, account
                  menu included (bb-mirror/web/forums.css), so webroot/bottom-nav.js
@@ -709,8 +709,16 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
                  invisibility separately; same href-derived tab rule, so an
                  internal page never ejects a member from the installed PWA. */ ?>
         <a class="lg-chrome__join" href="<?= $h($join_href) ?>"<?= $join_external ? ' target="_blank" rel="noopener"' : '' ?>>Join</a>
-        <?php endif; ?>
-
+<?php endif;
+      /* ⚠️ THE TAGS ABOVE SIT AT COLUMN 0 ON PURPOSE, and the blank line after
+         them is gone for the same reason. Indented `<?php if ?>` tags emit
+         their own leading spaces as inline HTML whether the branch is taken or
+         not, so the first draft of this block added 8 spaces and a newline — 9
+         bytes — to EVERY signed-in render in EVERY state, including 'off'.
+         Invisible on screen, invisible to every assertion about hrefs, and
+         caught only by gate 79 §C's byte-identity comparison against
+         origin/main, which is the leg that exists for exactly this. Do not
+         re-indent these two tags. */ ?>
         <!-- Account dropdown trigger -->
         <div class="lg-chrome__account-wrap" data-lg-account-wrap style="position:relative">
           <button class="lg-chrome__account" type="button"
