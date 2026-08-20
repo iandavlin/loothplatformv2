@@ -646,6 +646,19 @@ if ( ! is_readable( $msPage ) || ! is_readable( $msCss ) ) {
 
     is_( str_contains( bare( $mpConfig ), 'lg_membership_double_pay_block' ),
          'the notice is behind the SAME flag row as the three purchase doors' );
+
+    /* The Stripe-side lookup falls back to matching on EMAIL when a member has
+       no wp_user_bridge row. An empty email must not match — without the
+       non-empty guard the join degenerates and every member with any live
+       subscription in the table is told they are paying twice. Asserted here
+       because this gate has no database; the branch itself was exercised
+       against the real dev2 databases as the pool user (bridge match with a
+       wrong email, email match with no bridge, and empty-email -> null). */
+    $cfgBare = bare( $mpConfig );
+    is_( str_contains( $cfgBare, "wp_user_bridge" ) && str_contains( $cfgBare, "<> ''" ),
+         'the email fallback refuses an EMPTY address, so it cannot match everyone' );
+    is_( strpos( $cfgBare, 'wp_user_bridge' ) < strpos( $cfgBare, "c.email = ?" ),
+         '...and the bridge is tried FIRST — an email-only census under-reports' );
 }
 
 
