@@ -24,10 +24,23 @@
 -- resolver cannot call directly (Visibility is a profile-app class, not
 -- loaded in archive-poc's PHP process) but must still honour, since it is
 -- the same "not just is this a member" rule the charter names.
+-- featured_opt_in_at added 2026-08-20 (#107, Ian's "the tick is consent" ruling).
+-- The resolver must tell an INFORMED tick (made after the tickbox copy said the
+-- one-liner may be republished on the public card) from one made under the old
+-- wording, and that is the only column carrying it.
+--
+-- ⚠️ THIS ONE IS LOAD-BEARING AND FAILS SILENTLY IF MISSING. Measured on dev2
+-- before it was granted: `SELECT featured_opt_in_at` as "archive-poc" returns
+-- "permission denied for table users" — not a null, an EXCEPTION — and the
+-- resolver's call site is wrapped in a try/catch that degrades to "no band" so
+-- the front page cannot 500. The visible symptom of a missing grant is
+-- therefore the featured band vanishing for every visitor, with nothing to say
+-- why. Gate 39 §G2 asserts the role can really read it, for exactly that
+-- reason. Apply this file BEFORE flipping platform/config/featured-consent.php.
 GRANT SELECT (id, uuid, slug, display_name, avatar_url, at_a_glance, business_name,
               location_city, location_region, location_public_precision,
               location_members_precision, profile_visibility, featured_opt_in,
-              profile_layout)
+              featured_opt_in_at, profile_layout)
   ON public.users TO "archive-poc";
 
 -- The About section — read-only, and the CALLER (index.php) is responsible for
