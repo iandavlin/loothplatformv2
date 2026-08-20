@@ -1632,6 +1632,41 @@ echo "=== GATE 75: one payment source per member — no double-paying at any doo
 run "double-pay-block" php "$(dirname "$0")/double-pay-block-gate.php"
 echo
 
+echo "=== GATE 76: the Stripe rail grants the tier that was PAID for ==="
+# Ian, 8/19: "I've decided I want to be able to have multiple tiers." That
+# ruling REPLACES the 8/08 one — "move to ONE tier for the stripe memberships
+# and have ALL tiered content open to the one tier through stripe" — which was
+# implemented faithfully as a hardcoded constant and is still quoted verbatim
+# in StripeLifecycle's docblock.
+#
+# ⚠️ THE OBVIOUS ASSERTION IS A VACUOUS GREEN, and that is the single most
+# important thing to know before editing this gate. StripeLifecycle::TIER was
+# already the literal 'looth3', so "a PRO purchase grants looth3" PASSED on the
+# very defect — it cannot tell a RESOLVED looth3 from a CONSTANT one. Every tier
+# assertion here is therefore written against the tier the constant is NOT: the
+# one that bites is "a LITE purchase grants looth2"
+# (feedback-red-first-that-stays-green).
+#
+# The defect direction was also the opposite of the expected one. Nobody was
+# under-granted: a member buying Looth LITE at $5 was granted looth3 — Pro. And
+# it is not additive, because grantMembershipFromSubscription revokes by source
+# and re-inserts on any ref change, so the constant OVERWRITES the correctly-
+# resolved looth2 entitlement the Slim return path writes.
+#
+# OFF IS PROVEN, NOT ASSERTED. The lgms_multi_tier OFF leg runs against a
+# database with NO products or prices tables, so any price lookup on that path
+# is a hard SQL error rather than a quiet pass — an absence assertion with a
+# liveness assertion beside it (feedback-absence-assertion-needs-liveness).
+#
+# §8 asserts the join-page consequence rather than a row count: retiring a
+# superseded price must not make a member still billing on it VANISH from
+# lgjoin's already-subscribed lookup, which is the double-charge shape.
+#
+# RED-FIRST record is at the foot of the gate file. No DB, no browser, no
+# network — SQLite in memory only — so it cannot flake under load.
+run "stripe-multi-tier" php "$(dirname "$0")/stripe-multi-tier-gate.php"
+echo
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"
