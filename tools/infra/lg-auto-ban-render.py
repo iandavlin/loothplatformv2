@@ -205,15 +205,24 @@ def build(state, cf_nets, op_allow, now, max_entries):
 
 
 def render_conf(addresses, now, drops):
+    """The file's bytes are a pure function of the ADDRESS SET — nothing else.
+
+    ⚠️ NOTHING THAT MOVES WITH THE CLOCK MAY APPEAR HERE. write_if_changed()
+    compares these bytes to decide whether nginx is disturbed at all, so a render
+    timestamp or a drop tally in this header would differ on every run and the
+    5-minute expiry timer would `nginx -t` + reload FOREVER on a box with no bans
+    on it. Found by gate 84's red-first, as a harmless edit turning the
+    idempotence leg red. All of that metadata lives in the status file the
+    dashboard reads, where it costs nothing."""
     lines = [
         "# GENERATED — do not edit. tools/infra/lg-auto-ban-render.py rewrites this",
         "# file whenever /var/lib/lg-auto-ban/state.json changes and every 5 minutes",
         "# so bans expire on their own. Included INSIDE the $lg_ab_listed map in",
         "# conf.d/lg-auto-ban-maps.conf, so these are map entries, not directives.",
         "#",
-        f"# rendered: {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(now))}",
-        f"# entries:  {len(addresses)}",
-        f"# dropped:  " + ", ".join(f"{k}={v}" for k, v in sorted(drops.items()) if v),
+        "# When it was built, and what it refused, are in render-status.json beside",
+        "# the store — deliberately NOT here; see render_conf()'s docstring.",
+        f"# entries: {len(addresses)}",
         "",
     ]
     for a in addresses:

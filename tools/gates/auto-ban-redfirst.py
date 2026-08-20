@@ -75,9 +75,12 @@ MUTATIONS = [
     ("private addresses become bannable", MU,
      "\tif ( ! filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE ) ) {",
      "\tif ( false ) {", "C5"),
+    # ⚠️ EXPECTS C3b, NOT C3. C3's fixture peer is itself a Cloudflare address, so
+    # the structural refusal catches this mutation whatever the rule returns and
+    # C3 stayed green over a deleted rule. C3b asks the function directly.
     ("a vouched connection with no client header bans the edge", MU,
      "\treturn $cf !== '' ? $cf : '';",
-     "\treturn $cf !== '' ? $cf : $peer;", "C3"),
+     "\treturn $cf !== '' ? $cf : $peer;", "C3b"),
 
     # ── the renderer: the privilege boundary ────────────────────────────────
     ("bans stop expiring", REND,
@@ -100,7 +103,11 @@ MUTATIONS = [
      "    armed = True", "D6"),
     ("a rejected render is kept instead of rolled back", REND,
      '            if prev is not None:\n                write_if_changed(out_p, prev)',
-     '            if False:\n                write_if_changed(out_p, prev)', None),
+     '            if False:\n                write_if_changed(out_p, prev)', "D8b"),
+    ("the render time goes back into the file nginx compares", REND,
+     '        f"# entries: {len(addresses)}",',
+     '        f"# rendered: {time.strftime(\'%H:%M:%S\', time.gmtime(now))}",\n'
+     '        f"# entries: {len(addresses)}",', "D7"),
 
     # ── the dash ────────────────────────────────────────────────────────────
     ("Remove stops removing", MU,

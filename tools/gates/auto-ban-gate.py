@@ -147,8 +147,8 @@ def stuffing_mails(res):
 # ── driving the real renderer ────────────────────────────────────────────────
 
 def render(tmp, tag, state, *, op_allow=None, doors=True, maps=True,
-           max_entries=None, twice=False):
-    d = os.path.join(tmp, "render-" + tag)
+           max_entries=None, twice=False, nginx_test="", nginx_reload="", dirname=None):
+    d = os.path.join(tmp, "render-" + (dirname or tag))
     os.makedirs(d, exist_ok=True)
     sp, outp, stp = (os.path.join(d, n) for n in ("state.json", "list.conf", "status.json"))
     with open(sp, "w") as fh:
@@ -167,7 +167,8 @@ def render(tmp, tag, state, *, op_allow=None, doors=True, maps=True,
                LG_AB_STATE=sp, LG_AB_OUT=outp, LG_AB_STATUS=stp,
                LG_AB_OP_ALLOW=os.path.join(d, "allowlist.local"),
                LG_AB_DOORS=os.path.join(d, "doors"), LG_AB_MAPS=os.path.join(d, "maps"),
-               LG_AB_CF_RANGES=CF_LIST, LG_AB_NGINX_TEST="", LG_AB_NGINX_RELOAD="")
+               LG_AB_CF_RANGES=CF_LIST,
+               LG_AB_NGINX_TEST=nginx_test, LG_AB_NGINX_RELOAD=nginx_reload)
     if max_entries:
         env["LG_AB_MAX_ENTRIES"] = str(max_entries)
 
@@ -437,10 +438,18 @@ def run_sections(tmp):
           bool(st) and st[0].get("reported_ip") == BAD_V4, st)
 
     noheader = php_run(tmp, "C3-noheader", enabled=True, users=users5, attempts=burst,
-                       server={"REMOTE_ADDR": PEER_CF, "HTTP_USER_AGENT": "curl/8"})
+                       server={"REMOTE_ADDR": PEER_CF, "HTTP_USER_AGENT": "curl/8"},
+                       calls=[{"fn": "lg_ab_vouched_ip"}])
     check("C3 a Cloudflare connection with no client header bans NOBODY "
           "(never the edge — that is the whole-site outage)",
           not noheader["state_exists"], bans_of(noheader))
+    # ⚠️ C3 ALONE PROVED THE WRONG THING. Its fixture peer is itself a Cloudflare
+    # address, so the structural refusal catches it whatever lg_ab_vouched_ip()
+    # returns — the red-first found the rule silently deleted and C3 still green.
+    # This asks the function directly, which is the only way to see the rule.
+    check("C3b …because lg_ab_vouched_ip() itself returns nothing, not the edge",
+          noheader.get("calls", {}).get("lg_ab_vouched_ip:[]") == "",
+          noheader.get("calls"))
 
     cfclient = php_run(tmp, "C4-cf", enabled=True, users=users5, attempts=burst,
                        server={"REMOTE_ADDR": PEER_CF, "HTTP_CF_CONNECTING_IP": CF_EDGE,
@@ -525,6 +534,39 @@ def run_sections(tmp):
     d9 = render(tmp, "idem", fixture, twice=True)
     check("D7 a second run changes nothing, so nginx is not reloaded for nothing",
           d9["status"].get("changed") is False, d9["status"])
+    # The durable form of D7: the bytes nginx is handed must be a pure function of
+    # the address set. A render time or a drop tally in that header would differ
+    # every run and the 5-minute expiry timer would reload nginx forever on a box
+    # with no bans. The red-first found exactly that, as a harmless edit reddening
+    # D7 depending on which second the two runs landed in.
+    check("D7b nothing clock-shaped is written into the file whose bytes decide "
+          "whether nginx gets disturbed",
+          re.search(r"\d{2}:\d{2}:\d{2}", d9["body"]) is None,
+          [l for l in d9["body"].splitlines() if ":" in l][:3])
+
+    # ⚠️ ROLLBACK NEEDS SOMETHING TO ROLL BACK TO. Asserting an empty list after a
+    # refused render on a FRESH directory proves nothing — there was no previous
+    # file, so "deleted" and "restored" look identical, and the red-first caught
+    # this leg passing over a deleted rollback. So: land a good list first, then
+    # try to replace it with one nginx refuses, and require the GOOD ONE to still
+    # be in force afterwards.
+    d10a = render(tmp, "rollback", fixture, nginx_test="true", nginx_reload="true")
+    check("D8 a good render lands and nginx is told  [the setup for D8b]",
+          d10a["listed"] == [BAD_V4] and d10a["status"].get("reload") == "reloaded",
+          {"listed": d10a["listed"], "status": d10a["status"]})
+
+    replacement = {"version": 1, "allowlist": [], "bans": [
+        {"ip": BAD_V4B, "banned_at": now, "expires_at": now + 3600, "accounts": 5}]}
+    d10b = render(tmp, "rollback-2", replacement, dirname="rollback", nginx_test="false")
+    check("D8b a render nginx REFUSES is rolled back to the one already in force — "
+          "a bad blocklist must never be able to stop the site serving",
+          d10b["listed"] == [BAD_V4] and d10b["status"].get("reload") == "refused"
+          and d10b["status"].get("armed") is False,
+          {"listed": d10b["listed"], "status": d10b["status"]})
+    d10c = render(tmp, "rollback-3", replacement, dirname="rollback",
+                  nginx_test="true", nginx_reload="true")
+    check("D8c …and the same replacement lands once nginx accepts it  [liveness for D8b]",
+          d10c["listed"] == [BAD_V4B], d10c["listed"])
 
     # ── §E the dash ─────────────────────────────────────────────────────────
     section("§E  the dash can undo a mistake — and not without a nonce")
