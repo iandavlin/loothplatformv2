@@ -273,7 +273,7 @@ function lg_membership_in_stripe_test_group(int $wpUserId): bool {
  * drift.
  *
  * The verdict logic below MIRRORS LGMS\Membership\PatreonStanding, because this
- * app never boots WordPress and cannot call it. Kept honest by gate 74, which
+ * app never boots WordPress and cannot call it. Kept honest by gate 75, which
  * compares the member-facing copy sentence for sentence against the poller's
  * and checks this file names the same option.
  *

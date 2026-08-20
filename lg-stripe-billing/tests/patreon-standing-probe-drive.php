@@ -6,7 +6,7 @@
  *
  * Exit 0 pass, 1 a real defect, 3 cannot run.
  *
- * WHY THIS EXISTS BESIDE GATE 74. That gate exercises DoublePayGuard against a
+ * WHY THIS EXISTS BESIDE GATE 75. That gate exercises DoublePayGuard against a
  * STUBBED probe, deliberately: it must never touch the network, or it flakes
  * under load and blocks every lane. But the part of this feature most likely to
  * be wrong in production is exactly the part a stub cannot reach — what curl

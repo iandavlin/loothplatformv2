@@ -1,6 +1,6 @@
 <?php
 /**
- * GATE 74 — one payment source per member.
+ * GATE 75 — one payment source per member.
  *
  *   php tools/gates/double-pay-block-gate.php
  *

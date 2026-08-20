@@ -1556,7 +1556,7 @@ echo "=== GATE 73: the profile prints the address the MEMBER TYPED, ladder unmov
 #   make coarseText fall through    RED exit 1, 12 findings, ladder leak in all 3 states
 run "location-address" python3 "$(dirname "$0")/location-address-gate.py"
 
-echo "=== GATE 74: one payment source per member — no double-paying at any door ==="
+echo "=== GATE 75: one payment source per member — no double-paying at any door ==="
 # Ian, 8/19, verbatim: "We should disallow double payment source for the same
 # user." Before this, a member paying $5 or $11 on Patreon RIGHT NOW could walk
 # through checkout and be charged a second time with no warning anywhere. The

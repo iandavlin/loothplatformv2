@@ -40,7 +40,7 @@
   `POST /wp-json/lg-member-sync/v1/me/checkout-session`
   (Wp/CheckoutRestController.php) mints a subscription session for any
   logged-in member. All three were Patreon-blind; all three now ask
-  LGMS\Membership\PatreonStanding. Gate 74 asserts all three, so the
+  LGMS\Membership\PatreonStanding. Gate 75 asserts all three, so the
   third cannot go back to being the unwatched one.
 - **The Slim app cannot read WordPress. Measured, not assumed (8/19):** its
   DB user holds `ALL ON lg_membership` + `USAGE ON *.*` only, so wp_users
@@ -55,7 +55,7 @@
 
 ## State (8/19)
 - **#150 + #149 BUILT** on 150-double-pay-block, flag `lgms_double_pay_block`
-  defaulted OFF, gate 74. One wp_option row read three ways; the Slim app's
+  defaulted OFF, gate 75. One wp_option row read three ways; the Slim app's
   OFF state is the WordPress route not existing (404 ⇒ unknown ⇒ proceed),
   so there is no second switch. Fail-open by design: an unknown answer never
   blocks a sale. The unblockable reverse direction is surfaced BOTH ways: a

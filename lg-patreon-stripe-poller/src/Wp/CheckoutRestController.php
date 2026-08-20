@@ -39,7 +39,7 @@ use Throwable;
  *
  * REFUSES A PAYING PATRON (#150, flag `lgms_double_pay_block`). Ian, 8/19:
  * "We should disallow double payment source for the same user." With the flag
- * off this route is byte-identical to what it was; gate 74 §6 asserts both
+ * off this route is byte-identical to what it was; gate 75 §6 asserts both
  * states here, and asserts that a LAPSED patron still buys — they are exactly
  * who the switch path is for.
  */
