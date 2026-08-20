@@ -48,6 +48,11 @@ REPO = "/home/ubuntu/keeper-repo"
 OUT = pathlib.Path("/var/www/dev/lanes")
 API = "https://api.github.com/repos/iandavlin/loothplatformv2"
 
+# A possessive must never be lower-cased into "the ians-todo-list thing".
+# Named rather than inlined so the red-first harness can disable exactly this
+# guard and prove the assertion that covers it is not decoration.
+APOSTROPHES = ("'", "\u2019")
+
 # The four chips. Nothing else may render as a chip on this page.
 CHIPS = {
     "working":      ("● working",    "#9db668"),
@@ -158,7 +163,7 @@ def casual(title):
     t = plainize(title, 40)
     w = t.split()
     if (2 <= len(w) <= 3 and len(t) <= 34
-            and "'" not in t and "’" not in t
+            and not any(q in t for q in APOSTROPHES)
             and w[0][:1].isupper() and w[0][1:].islower()
             and all(x.islower() for x in w[1:])):
         return "the " + "-".join([w[0].lower()] + w[1:]) + " thing"

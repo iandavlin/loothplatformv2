@@ -1667,6 +1667,53 @@ echo "=== GATE 76: the Stripe rail grants the tier that was PAID for ==="
 run "stripe-multi-tier" php "$(dirname "$0")/stripe-multi-tier-gate.php"
 echo
 
+echo "=== GATE 77: the lanes page cannot lie about a lane ==="
+# #151/#155/#156/#159/#160/#164. The page's entire job is telling Ian the truth
+# about what is running, and on 8/19 it told him a lane that had been building
+# for 25 minutes was 'finished & freeable' AND 'APPROVED, NOT STARTED' at the
+# same time. All three misreads were ONE line: `unique == 0` meant done, so a
+# branch cut minutes ago read as finished, left the seats table, and its issue
+# then had no seat to be found at. A page that is wrong is worse than no page,
+# because he acts on it.
+#
+# ⚠️ ASSERTIONS MATCH MARKUP, NEVER PROSE. Grepping the rendered page for
+# "APPROVED, NOT STARTED" during this build reported a hit, and the hit was the
+# lane's own plan comment quoted inside a <details> block — a page that RENDERS
+# a plan mentioning a defect is not a page EXHIBITING it
+# (feedback-red-first-that-stays-green).
+#
+# EVERY ABSENCE IS PAIRED WITH A LIVENESS ASSERTION
+# (feedback-absence-assertion-needs-liveness): "the running lane is not
+# freeable" is trivially true if nothing is ever freeable, so a finished seat
+# is in the fixture and must STILL be offered; "no issue reads NOT STARTED" is
+# trivially true if that block never renders, so an issue with no seat anywhere
+# is in the fixture and must STILL be flagged. The red-first run caught two
+# assertions that were decoration for exactly this reason and they are fixed.
+#
+# Five legs: fixtures through the real renderer; the descriptor as a pure
+# function; quiet-when-healthy AND loud-when-blind; the worker probe against
+# the REAL tmux server in a per-run session; the seat classification against
+# REAL git in a throwaway repo under a per-run path
+# (feedback-gate-probe-must-be-per-run), which backdates a branch's reflog
+# because a fixture that cannot be old cannot prove the young-branch guard is a
+# guard and not a constant; and #156's endpoint with `msg` shimmed so the gate
+# never posts to the real board.
+#
+# The tmux leg is the one that earns its keep: the working-detector has now
+# drifted TWICE in a single day — 8/20 morning when the CLI dropped "esc to
+# interrupt", and 8/20 afternoon when a raised thinking effort began appending
+# " · thinking with xhigh effort" INSIDE the parens, so anchoring on "tokens\)"
+# read every deep-thinking lane as idle.
+#
+# Red-first: 26 mutations, each against a SNAPSHOT copy (never `git checkout --`,
+# feedback-mutation-harness-must-snapshot-not-checkout), each reddening its
+# NAMED assertion, plus two no-op mutations that must stay green.
+# No browser, no network, no DB, no writes to /var/www and no worktrees on the
+# real box, so it cannot flake under load and cannot go vacuously green behind
+# a locked-out browser.
+run "lanes-page-truth" python3 "$(dirname "$0")/lanes-page-truth-gate.py"
+echo
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"

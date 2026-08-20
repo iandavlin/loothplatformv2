@@ -109,8 +109,15 @@ def lanes_fixture():
         "resources": {},
         "unbacked": {"total": 0, "fetch_ok": True, "branches": []},
         "collisions": [],
-        "parked": [{"branch": "930-shipped", "reason": "merged as abc123, awaiting phone check",
-                    "days": 1, "behind": 12, "expired": False}],
+        "parked": [
+            {"branch": "930-shipped", "reason": "merged as abc123, awaiting phone check",
+             "days": 1, "behind": 12, "expired": False},
+            # ⚠ THIS ONE IS APPROVED AND *NOT* MERGED. Without it the parked
+            # branch rule was never under test: #930's `merged` label alone
+            # spared it from the NOT STARTED block, so the assertion passed
+            # while the rule it named did nothing.
+            {"branch": "905-setaside", "reason": "set down until the price ruling",
+             "days": 2, "behind": 30, "expired": False}],
         "lanes": [
             # the 8/19 lane: 25 minutes old, zero unique commits, agent MID-TURN
             # and thinking at a raised effort — every ingredient of all three lies
@@ -146,6 +153,7 @@ def issues_fixture(loud_failure=False, empty=False):
             issue(904, "Old finished thing", ["approved"]),
             issue(910, "Rider one", ["approved"]),
             issue(911, "Rider two", ["approved"]),
+            issue(905, "Set aside until the ruling", ["approved"]),
             issue(920, "Nobody ever started this", ["approved"]),
             issue(930, "Checkout is Patreon-blind", ["approved", "merged"]),
             issue(940, "15 — Mail-containment", ["built"]),
@@ -221,7 +229,8 @@ def leg_render(tmp):
           "910" not in ns and "911" not in ns,
           "four issues batched on one seat printed as four unstarted issues")
     check("#151 a PARKED branch's issue is never APPROVED, NOT STARTED",
-          "930" not in ns)
+          "905" not in ns,
+          "#905 is approved and NOT merged, so only the parked branch can save it")
     check("#151 a FINISHED seat's issue is never APPROVED, NOT STARTED",
           "904" not in ns,
           "the 8/19 shape: the seat was classified done, left the table, and its "
@@ -289,8 +298,9 @@ def leg_render(tmp):
     check("#164 an idle-but-alive agent says what it waits FOR, not 'parked'",
           "waiting for the keeper to merge" in agtxt)
     check("#164 a desk with no session is not listed as an agent",
-          "903-setdown" not in agtxt,
-          "a desk is not a worker")
+          ">#903</a>" not in agtxt,
+          "a desk is not a worker — and this looks for the ISSUE, because the "
+          "workers view never prints a branch name for the branch to be found by")
     check("#164 no seats, no branches, no git numbers in the workers view",
           "seat 900-running" not in agtxt and "behind main" not in agtxt
           and "commit" not in agtxt,
@@ -422,7 +432,8 @@ def leg_git(tmp):
         g("remote", "add", "origin", str(origin)); g("push", "-q", "origin", "main")
         g("fetch", "-q", "origin")
 
-        def seat(name, *, commits=0, subject=None, age_min=0, marker=None):
+        def seat(name, *, commits=0, subject=None, age_min=0, marker=None,
+                 push=True):
             p = root / "seats" / name
             g("worktree", "add", "-q", "-b", name, str(p), "origin/main")
             for i in range(commits):
@@ -440,10 +451,15 @@ def leg_git(tmp):
                 old = str(int(time.time()) - age_min * 60)
                 txt[0] = re.sub(r" \d{10} ([+-]\d{4})", f" {old} \\1", txt[0], count=1)
                 lg.write_text("\n".join(txt) + "\n")
-            g("push", "-q", "origin", name)
+            if push:
+                g("push", "-q", "origin", name)
             return p
 
         seat("g77-fresh")                                    # 0 unique, minutes old
+        # never pushed: one with work at stake, one with nothing at stake. Only
+        # the second may be spared, or "not flagged AT RISK" proves nothing.
+        seat("g77-empty-local", push=False)
+        seat("g77-work-local", commits=2, age_min=600, push=False)
         seat("g77-merged", age_min=600)                      # 0 unique, 10h old
         seat("g77-parked", commits=1, subject="PARKED: waiting on Ian", age_min=600)
         seat("g77-down", commits=1, subject="STOOD DOWN: superseded", age_min=600)
@@ -462,7 +478,7 @@ def leg_git(tmp):
                        f"rc={r.returncode} {r.stderr[-300:]}")
         rows = {l["branch"]: l for l in json.loads(r.stdout)["lanes"]}
         check("the fixture seats were all read (liveness)",
-              len([b for b in rows if b.startswith("g77-")]) == 6,
+              len([b for b in rows if b.startswith("g77-")]) == 8,
               f"saw {sorted(rows)}")
 
         # ── #151, the root cause: `unique == 0` did NOT mean finished ────────
@@ -472,9 +488,12 @@ def leg_git(tmp):
         check("…and a merged branch older than an hour still IS (liveness)",
               rows["g77-merged"]["status"] == "done",
               "if nothing is ever done, the assertion above proves nothing")
-        check("#151 a fresh empty branch is not flagged AT RISK either",
-              rows["g77-fresh"]["status"] != "at-risk",
+        check("#151 an unpushed branch with NOTHING in it is not flagged AT RISK",
+              rows["g77-empty-local"]["status"] != "at-risk",
               "'has 0 commit(s) on one disk only' is not a risk, it is a bug")
+        check("…and an unpushed branch WITH work still is (liveness for that rule)",
+              rows["g77-work-local"]["status"] == "at-risk",
+              "if nothing is ever at risk, the assertion above proves nothing")
 
         # ── #159: the four states, derived from real files and real commits ──
         for br, want, why in (
