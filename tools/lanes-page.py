@@ -408,8 +408,15 @@ def _record_lines(text, default_issue=None):
             continue                       # unattributable — silently useless
         val = m.group(3).strip()
         if key == "TEST-URL":
-            first = val.split()[0] if val.split() else ""
-            val = safe_url(first.rstrip('.,;)>'))
+            # ⚠ THE WHOLE REMAINDER IS THE VALUE, never its first token, and
+            # safe_url() rejects anything containing a space. So a record is a
+            # STRUCTURED LINE and nothing else: "TEST-URL: /lgjoin/" is one,
+            # "TEST-URL: /lgjoin/ — try it signed out" is not. This commit's own
+            # parent is the proof it is needed — its message quotes an example
+            # record inline, and a first-token reading would have handed #172 a
+            # door pointing at the join page. Prose that mentions the convention
+            # must stay inert (feedback-red-first-that-stays-green).
+            val = safe_url(val.rstrip('.,;)>'))
         else:
             val = re.sub(r"\s+", " ", val)[:120].rstrip(" .")
             if len(val) < 6:
@@ -434,12 +441,18 @@ def _subject_issue(subject):
     return m.group(1) if m else None
 
 
-def commit_records(repo, days=45):
+def commit_records(repo, days=45, ref="main"):
     """Records in commit bodies on main. NOT --first-parent — see the note above.
-    A repo that cannot be read yields nothing, which the card reports honestly."""
+    A repo that cannot be read yields nothing, which the card reports honestly.
+
+    `ref` exists for ONE reason: a lane's seed lives on its own branch until the
+    merge, and a worktree's `main` is keeper's main, not the lane's. Without a
+    way to name the branch, a lane could only verify its own records AFTER they
+    were already in front of Ian. Default stays `main` — the serving renderer
+    never passes this."""
     out = []
     try:
-        txt = run(["git", "-C", str(repo), "log", "main",
+        txt = run(["git", "-C", str(repo), "log", ref,
                    f"--since={days} days ago", "--format=%x1e%s%x00%b"])
     except Exception:
         return out
@@ -460,7 +473,7 @@ def park_records(parked):
     return out
 
 
-def gather_records(issues, parked, repo, live=True):
+def gather_records(issues, parked, repo, live=True, ref="main"):
     """(records, ok). ok is False when a source READ FAILED, which is the one
     thing a missing door must never be confused with."""
     records, ok = {}, True
@@ -477,7 +490,7 @@ def gather_records(issues, parked, repo, live=True):
         texts.append(i.get("body") or "")
         for t in texts:
             _absorb(records, _record_lines(t, i["number"]))
-    _absorb(records, commit_records(repo))
+    _absorb(records, commit_records(repo, ref=ref))
     _absorb(records, park_records(parked))
     return records, ok
 
@@ -676,6 +689,10 @@ def main():
     # BEFORE the merge that puts it on keeper's main, and what lets gate 77
     # exercise the git source in a throwaway repo instead of the real box.
     ap.add_argument("--repo", help="read git history here (default %s)" % REPO)
+    ap.add_argument("--history-ref", default="main",
+                    help="the ref whose commit bodies carry TEST-URL records "
+                         "(default main; a lane names its own branch to check "
+                         "its seed before the merge)")
     args = ap.parse_args()
     out_dir = pathlib.Path(args.out) if args.out else OUT
     repo = args.repo or REPO
@@ -893,7 +910,8 @@ details.acc>summary:hover h2{color:#e8e6df;}
     todo_candidates = [i for i in allopen
                        if labels_of(i) & {"merged", "built", "plan-ready"}]
     records, records_ok = gather_records(
-        todo_candidates, parked, repo, live=not args.issues_file)
+        todo_candidates, parked, repo, live=not args.issues_file,
+        ref=args.history_ref)
     # A GitHub read that already failed cannot be trusted to say "no door"
     # either — the two failures are the same failure.
     records_ok = records_ok and gh_ok

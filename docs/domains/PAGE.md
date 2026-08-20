@@ -13,6 +13,16 @@ UNBACKED / COLLISION · **Your list** · **Agents** · In motion (`investigating
 label) · **Seats** · old desks · reconciliation · parked · cleanup · 7-day
 shipped strip.
 
+Since #172 every *section* is a `<details class="acc" data-acc="…">` whose
+closed line is **name + live count**, so the default view of the page is a
+snapshot. Default collapsed except **Your list**; open state per section in
+`localStorage['lg-lanes-acc:<id>']`, applied over the server-rendered default so
+a section he keeps open does not flash shut on the 5-minute redraw. **The loud
+layer is never inside an accordion** — deploy gap, AT RISK, UNBACKED, COLLISION,
+the GitHub-unreadable banner and APPROVED-NOT-STARTED all render at
+accordion-depth zero, because a collapsed AT RISK is a hidden AT RISK. Gate 77
+asserts that by walking `<details>` depth, not by eye.
+
 ## Rules that are load-bearing
 - **Quiet-when-healthy**: sections are ABSENT when clean; silence only ever
   means healthy — failures render LOUD (UNKNOWN live read, GitHub unreadable).
@@ -76,6 +86,82 @@ Ian, so its seat says so, but **never over a live worker**.
   verb. An agent alive but at a prompt says what it waits FOR ("waiting for the
   keeper to merge"); *"parked"* is not information.
 
+## The TEST-URL convention (#172) — a door on every bullet
+
+Ian 8/20 on the shipped list: *"the list for me isn't super useful. Can we get
+links and copy and paste so I can talk to you about them?… This is hard for me
+to parse or get started with."* Measured before building: **12 bullets, 11 of
+them the word "Try" followed by a raw issue title**, one control each
+(`on GitHub`), no door and no way to reply.
+
+**A record is one line**, written by a lane or keeper in the ordinary course of
+work. Two keys, both optional:
+
+    TEST-URL: /lgjoin/                the dev2 door where the thing happens
+    TEST-URL #148: /lgjoin/           explicit — batched merge, or a rider
+    ACTION #148: Look at the join page — three tiers and their prices
+
+**Where the page looks**, first hit wins, newest first inside each source:
+1. the issue's own **comments**, then its **body** — live, so a correction
+   reaches him on the next redraw with nothing to merge;
+2. **commit bodies on main**, deliberately **not** `--first-parent`, so a lane
+   can write the record in its own commit at build time and not only keeper at
+   merge time. Attributed by an explicit `#n`, else the first `#n` in the
+   SUBJECT (`merge #170: …`), else a leading number (`170: close — …`). The
+   subject is never scanned for records, only for that number.
+3. the **park reason**.
+
+**The convention is defined in exactly one place** — the comment block above
+`build_todo` in `tools/lanes-page.py`. There is no map of issue numbers in that
+file and there must never be one; the four already-live doors were seeded as
+records in a commit body, which is the same door every future record uses.
+
+⚠ **Three rules that are load-bearing, each paid for:**
+- **A record is a STRUCTURED LINE, never prose with a path in it.** The whole
+  remainder after the colon is the value and `safe_url()` rejects any value
+  containing a space, so `TEST-URL: /lgjoin/` is a record and
+  `TEST-URL: /lgjoin/ — try it signed out` is not. This was found the honest
+  way: the commit that added the feature quotes an example record in its own
+  message, and a first-token reading handed **#172** a door pointing at the join
+  page.
+- **The href is untrusted input.** It arrives from an issue comment or a commit
+  body and lands in an anchor. Same-site paths and `dev2.loothgroup.com` /
+  `loothgroup.com` only; `javascript:`, `data:`, protocol-relative `//host` and
+  every third-party host are dropped exactly as a malformed line is.
+- **No record is not a GitHub link.** The card says "no test link yet — ask
+  keeper for one". And a source that FAILED to read says
+  *"test link unknown — a GitHub read failed"*: `records_ok` is ANDed with
+  `gh_ok`, because "there isn't one" and "I could not look" must never render
+  alike.
+
+**Keeper carries this forward at merge time** — one `TEST-URL:` line in the
+merge body and Ian gets a working door on that bullet, with no page edit.
+
+**Seeded 2026-08-20** (each verified against SOURCE, not an anon status code —
+two of the four answer anon with a 404/302 *by design* and a naive 200-check
+calls them broken): #148 `/lgjoin/` · #129 `/hub/?compose=1` · #93
+`/compose/?type=loothprint` (the path is `compose`, the type is the query arg;
+`/compose/loothprint/` is the CPT archive and 301s away) · #107
+`/wp-admin/admin.php?page=lg-featured-member`.
+
+## The card, and the fifth family (#172)
+
+Every bullet leads with a plain-words **ACTION** — an `ACTION:` record if one
+exists, else a real verb from the family with the plainised title as its object
+(`Say GO to switch on …` / `Look at …` / `Say GO on …`). **Never the bare
+title.** It carries the **Do-it** link, the **suggested one-word replies**
+derived from family + issue number (`GO on 81` · `hold 81`; `81 good` ·
+`81 not right`) so they are always true and never guessed from a title, and a
+**Copy for keeper** button whose payload is exactly
+`Re #<n> <action> — [reply / reply]`. `on GitHub` is demoted to fine print.
+
+**The fifth family — Ian's ruling 8/20.** `merged` + `infra` + NOT `built` is
+keeper's own tooling: no member-facing surface to look at, no flag to say GO to.
+Those drop out of the bullets to **one quiet line** (`landed, nothing for you to
+do: #138`) rather than vanishing. He was offered both and chose the quiet line:
+*a wrong quiet line is recoverable and a wrong disappearance is not.* Today the
+rule matches exactly #138 and nothing else.
+
 ## ⚠ The working-detector drifts, and it has bitten twice in one day
 The CLI's spinner shape is not stable. 2026-08-20 morning it dropped
 `esc to interrupt`; the same afternoon a raised thinking effort began appending
@@ -101,4 +187,7 @@ one is not.
 #143 resource strip + refresh button (all closed 8/19). Closed 8/20 by the
 155-page-train: #155 Your list · #151 chips that never lie · #156 poke keeper ·
 #159 the four chips · #160 spinner verb + one card per seat · #164 Agents.
-Gate 77 covers all six. Open: #145 (composer discussion input, scope from Ian).
+Closed 8/20 by 172-todo-v2: **#172** todo v2 + accordions (the TEST-URL
+convention, above). Gate 77 covers all seven — **no new number was minted, and
+`run-all.sh` was deliberately not touched** because two other lanes held it.
+Open: #145 (composer discussion input, scope from Ian).
