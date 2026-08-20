@@ -38,6 +38,7 @@ wrong code reports a missing environment as a finding and blocks every lane.
 """
 import json
 import os
+import signal
 import pathlib
 import shutil
 import subprocess
@@ -412,7 +413,22 @@ def leg_defaults(tmp):
           lane in spins, f"spins were {spins!r}")
 
 
+def _terminated(signum, _frame):
+    """Let a kill unwind the stack instead of stopping the world where it stands.
+
+    Without this, `timeout` (or a keeper cycling the suite) leaves behind the
+    temp dir AND — worse — leg 7's probe tmux session, which then sits in
+    `tmux list-sessions` looking like a lane to anyone reading the fleet by eye.
+    Measured: two orphaned /tmp/gate82-* dirs from two interrupted runs.
+    SystemExit raised in a handler unwinds normally, so the context manager and
+    every `finally` still run.
+    """
+    raise SystemExit(2)
+
+
 def main():
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, _terminated)
     print("GATE 82 — approval auto-spins PRE-STAGED work, and nothing else\n"
           f"watcher under test: {WATCHER}")
     if not WATCHER.exists():

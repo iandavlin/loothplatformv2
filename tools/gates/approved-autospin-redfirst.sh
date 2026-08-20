@@ -21,7 +21,9 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/gate82-redfirst-XXXXXX")"
-trap 'rm -rf "$WORK"' EXIT
+# INT and TERM as well as EXIT: a `timeout` or a Ctrl-C otherwise leaves the
+# snapshot tree behind, and this harness makes one per mutation.
+trap 'rm -rf "$WORK"' EXIT INT TERM
 pass=0; fail=0
 
 snapshot() {
