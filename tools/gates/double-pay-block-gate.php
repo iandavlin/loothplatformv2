@@ -716,10 +716,18 @@ echo "        refusal tells the member how to switch rails.\n";
  *     → §6 "flag OFF … unchanged" RED (it refuses when it should not).
  * 12. lgjoin.php — move the standing check below the tier markup
  *     → §7 ordering RED.
- * 13. authSharedSecret(): return true when the stored secret is empty
- *     → §3b "no shared secret configured: the route is CLOSED" RED. This is
- *       the expensive direction — the route answers whether a named email is
- *       a paying member, so an open one is a membership oracle.
+ * 13. authSharedSecret() — and the one worth reading carefully, because a
+ *     casual mutation here LOOKS like the gate is asleep and is not:
+ *       13a remove the expected-is-empty guard ONLY   → still green
+ *       13b remove the given-is-empty guard ONLY      → still green
+ *       13c remove BOTH                               → RED
+ *       13d return true outright                      → RED
+ *     Either guard alone closes the route, so removing one is genuinely not a
+ *     defect and the gate is right not to redden. That is defence in depth,
+ *     not a missing assertion — 13c and 13d prove the assertion is alive. This
+ *     is the expensive direction to get wrong: the route answers whether a
+ *     named email belongs to a paying member, so an open one is a membership
+ *     oracle for anyone who finds it.
  * 14. standing(): return the message even when inactive
  *     → §3b "with no message and no link" RED.
  *
