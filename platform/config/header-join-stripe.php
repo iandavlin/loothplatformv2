@@ -62,6 +62,22 @@
  * GET /lgjoin/ is not the stub. While it is OFF that leg reports and does not
  * assert, so it never reddens a lane that has nothing to do with it.
  *
+ * ⚠️ ── `php -l` THE .local.php BEFORE YOU PLACE IT ──────────────────────────
+ * The reader is defensive about every shape a wrong config can take — empty,
+ * non-array, missing key, returning nothing, unreadable — and gate 79 asserts
+ * each one falls back to today's behaviour. There is exactly ONE it cannot
+ * defend against: a PHP SYNTAX ERROR. `@` suppresses warnings, not parse
+ * errors, so a half-typed file is a hard fatal for the include.
+ *
+ * That is the house pattern's property, not this flag's defect — back-pill,
+ * frontend-compose and weekly-front all @include the same way, and inventing a
+ * bespoke guard here would make a third pattern where two already exist. But
+ * this partial renders on EVERY page of EVERY surface, so a typo in this
+ * particular override is a site-wide 500 rather than one feature going quiet.
+ * The mitigation is operational and takes two seconds:
+ *
+ *     php -l platform/config/header-join-stripe.local.php
+ *
  * ── OVERRIDES ARE FOR LANE PREVIEWS AND RED-FIRST LEGS ───────────────────────
  * LG_HEADER_JOIN_STRIPE is read from getenv() AND $_SERVER. A fastcgi_param
  * lands in $_SERVER but not reliably in the environment, so a getenv()-only
