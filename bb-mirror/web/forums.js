@@ -2808,7 +2808,12 @@
            has no WordPress to read the taxonomy with anyway. */
         var panes = ov.querySelector('.lgtp__panes');
         panes.innerHTML = '<p class="lgtp__err">Loading topics…</p>';
-        fetch(endpoint, { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
+        /* X-WP-Nonce is REQUIRED, not optional: the route's permission check is
+           is_user_logged_in(), and WP REST only recognizes a cookie login when
+           the nonce rides along — without it every real browser gets a 401 and
+           the picker dies to "Couldn't load topics" (Ian's phone, 8/20). The
+           submit and apply fetches below always sent it; this one now matches. */
+        fetch(endpoint, { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch', 'X-WP-Nonce': ntmNonce } })
           .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
           .then(function (j) {
             data = j && j.topics ? j : null;
