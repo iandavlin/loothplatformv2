@@ -122,7 +122,8 @@ Exit: 0 green, 1 a real defect, 2 CANNOT RUN.
 ELSE as RED, so a gate that exits 3 where it merely could not run turns the
 whole suite red for every lane (trap-gate-exit-code-3-blocks-every-lane).
 """
-import argparse, json, os, re, shutil, socket, subprocess, sys, tempfile, time, urllib.request
+import argparse
+import difflib, json, os, re, shutil, socket, subprocess, sys, tempfile, time, urllib.request
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 GATE_ENV = f"{REPO}/tools/gates/gate-env.sh"
@@ -250,21 +251,48 @@ def leg_a():
         cannot_run(f"{HEADER} not found under {REPO}")
     code = php_code(hdr_path)
 
-    # ONE anon join anchor. Two would mean two places to forget.
+    # TWO join anchors since #170, and exactly two: the anon one, and the one a
+    # signed-in soft-launch tester gets in the 'allowlist' state. A third would
+    # mean a third place to forget.
     anchors = re.findall(r'<a class="lg-chrome__join"[^>]*>', code)
-    check("the header emits exactly ONE anon join anchor", len(anchors) == 1,
+    check("the header emits exactly TWO join anchors (anon + tester)", len(anchors) == 2,
           f"found {len(anchors)}: {anchors}")
 
-    # The href on that anchor must be a PHP expression, not a literal. This is
-    # the assertion that catches "someone hardcoded /lgjoin/ and deleted the
-    # flag" — a change that would look like the feature working, on every page,
-    # for everybody, with no way back.
-    if anchors:
-        a = anchors[0]
-        check("its href is resolved at render time, not a literal URL",
+    # BOTH hrefs must be PHP expressions, not literals. This is the assertion
+    # that catches "someone hardcoded /lgjoin/ and deleted the flag" — a change
+    # that would look like the feature working, on every page, for everybody,
+    # with no way back. Asserted per-anchor rather than on the first, because
+    # the copy nobody is looking at is the one that rots.
+    for i, a in enumerate(anchors):
+        check(f"join anchor {i+1}: href resolved at render time, not a literal URL",
               "<?= $h($join_href) ?>" in a or "$join_href" in a, a[:160])
-        check("neither destination is written into the anchor itself",
+        check(f"join anchor {i+1}: neither destination written into the anchor itself",
               PATREON not in a and "lgjoin" not in a.lower(), a[:160])
+
+    # ── #170: the tester pill exists, and is CONFINED to 'allowlist' ─────────
+    # Without the first assertion the whole state is a no-op: measured on main
+    # before #170, .lg-chrome__join rendered for ANON ONLY, so swapping an href
+    # for "a test user" changed a control no test user could see. Without the
+    # second, `on` would start changing signed-in headers too and every #165
+    # authed byte-identity proof would quietly stop meaning anything.
+    check("the tester pill is gated on $join_pill_authed",
+          len(re.findall(r"if\s*\(\s*\$join_pill_authed\s*\)", code)) == 1,
+          "exactly one guarded copy")
+    m = re.search(r"\$join_pill_authed\s*=\s*\(([^;]*)\);", code)
+    check("$join_pill_authed is confined to 'allowlist' AND a tester",
+          m is not None and "'allowlist'" in m.group(1) and "$stripe_tester" in m.group(1),
+          m.group(1).strip() if m else "assignment not found")
+
+    # THE COHORT IS READ ONCE, ELSEWHERE. A second definition of "a test user"
+    # is how the two ends of a fence drift apart — the header must keep asking
+    # the capability the poller already computes, never the option itself.
+    check("the header defines NO second cohort list",
+          "lgms_stripe_lifecycle_allowlist" not in code
+          and "inCohort" not in code
+          and "get_option" not in code,
+          "it must read $caps['stripe_testgroup'], which rides whoami")
+    check("the allowlist branch keys on the EXISTING stripe_testgroup capability",
+          "$caps['stripe_testgroup']" in code and "$stripe_tester" in code)
 
     # The reader. Each clause has its own scar attached in the config docblock.
     check("the reader reads the tracked config",
@@ -272,8 +300,30 @@ def leg_a():
     check("the reader honours the gitignored .local.php box override",
           "header-join-stripe.local.php" in code)
     check("the .local override wins only on an EXPLICIT boolean true",
-          re.search(r"array_key_exists\(\s*'enabled'\s*,\s*\$local\s*\)", code) is not None
-          and re.search(r"\$local\['enabled'\]\s*===\s*true", code) is not None)
+          re.search(r"array_key_exists\(\s*'enabled'\s*,\s*\$cfg\s*\)", code) is not None
+          and re.search(r"\$cfg\['enabled'\]\s*===\s*true", code) is not None,
+          "the strict half of the shared resolver, applied to the .local file")
+
+    # ── #170: three states, and the reader knows exactly three ───────────────
+    check("the reader returns a STATE, not a boolean",
+          "function lg_shared_header_join_stripe_state(): string" in code)
+    check("and the three states are the only three",
+          re.search(r"\$valid\s*=\s*array\(\s*'off'\s*,\s*'allowlist'\s*,\s*'on'\s*\)", code)
+          is not None)
+    check("an unrecognised state word falls to 'off', never to a guess",
+          re.search(r"in_array\(\s*\$s\s*,\s*\$valid\s*,\s*true\s*\)\s*\?\s*\$s\s*:\s*'off'", code)
+          is not None)
+
+    # ⚠️ THE MIGRATION IS LOAD-BEARING, NOT LEFTOVERS. dev2's hand-placed
+    # .local.php says `enabled => true` and lives in the SERVING CHECKOUT, which
+    # no lane may edit. A tidy-up that dropped the legacy key would revert
+    # dev2's header to patreon.com on the next `pull --ff-only`, with nobody
+    # having flipped anything and nothing in any diff to explain it. §B proves
+    # the behaviour; this proves the intent is written down where it is deleted.
+    check("the legacy 'enabled' key is still read (dev2's .local.php depends on it)",
+          re.search(r"array_key_exists\(\s*'enabled'\s*,\s*\$cfg\s*\)", code) is not None)
+    check("the back-compat boolean shim is still exported",
+          "function lg_shared_header_join_stripe_enabled(): bool" in code)
     # A fastcgi_param lands in $_SERVER but not reliably in the environment, so
     # a getenv()-only reader serves the OFF path on the very preview URL built
     # for Ian to click (trap-fastcgi-param-not-in-getenv).
@@ -288,6 +338,34 @@ def leg_a():
           re.search(r"\$join_external\s*=.*preg_match.*https\?://", code) is not None
           and "$join_external ?" in code)
 
+    # ── #170: THE TESTER PILL MUST INHERIT THE ANON PILL'S PRESENTATION ─────
+    # Same class is NOT by itself evidence — a class can be styled only in a
+    # context the new copy is not in, and then the control renders looking like
+    # nothing, wearing a class with no rule that applies
+    # (trap-class-name-assertion-passes-on-the-defect). So assert the property
+    # that actually matters: every stylesheet that styles .lg-chrome__join does
+    # it with an UNSCOPED selector, with no combinator tying it to the anon
+    # cluster's siblings. §D already measures that one pill's real presentation
+    # in a browser; this is what makes that measurement transfer to the other.
+    scoped = []
+    for root, _dirs, files in os.walk(REPO):
+        if "/.git" in root: continue
+        for fn in files:
+            if not fn.endswith(".css"): continue
+            fp = os.path.join(root, fn)
+            try: css = open(fp, encoding="utf-8", errors="replace").read()
+            except OSError: continue
+            for m in re.finditer(r"([^{}\n,;]*\.lg-chrome__join[^{},]*)\s*[,{]", css):
+                sel = m.group(1).strip()
+                # a bare .lg-chrome__join, optionally with pseudo-classes, is fine;
+                # a descendant/sibling combinator in front of it is not.
+                if re.search(r"[+~>]\s*\.lg-chrome__join", sel) or re.match(
+                        r".*\S\s+\.lg-chrome__join", sel):
+                    scoped.append(f"{os.path.relpath(fp, REPO)}: {sel}")
+    check("no stylesheet scopes .lg-chrome__join to the anon cluster",
+          not scoped,
+          "; ".join(scoped[:3]) or "the tester's copy inherits the same rules")
+
     # The PWA sheet is the phone's Join, and it must obey the same rule.
     js = js_code(f"{REPO}/{BOTTOM}")
     check("bottom-nav's anon sheet reads the header's Join href (no second flag)",
@@ -297,6 +375,25 @@ def leg_a():
           "an unconditional target='_blank' punts a member out of the installed PWA")
     check("bottom-nav no longer sets target unconditionally",
           re.search(r"joinRow\.href\s*=\s*joinHref;\s*joinRow\.target", js) is None)
+
+    # ── #170: the tester's phone door ────────────────────────────────────────
+    # At ≤640 on the hub the entire header aside is display:none!important and
+    # the Nav tray carries no account entries, so without this row a signed-in
+    # tester has NO path to /lgjoin/ at a phone width — the pill in the DOM the
+    # whole time. Route-agnostic contract, same as gate 12's: "a tester can
+    # reach Join", never "this pill is visible".
+    check("bottom-nav's AUTHED sheet mirrors the tester pill from the header",
+          "hdrHref('.lg-chrome__join', null)" in js
+          and "testerJoinHref" in js)
+    check("the tester row EXISTS only when the header drew a pill",
+          re.search(r"if\s*\(\s*testerJoinHref\s*\)", js) is not None,
+          "no flag of its own — it cannot drift from the control beside it")
+    check("the tester row derives target=_blank from the href too",
+          re.search(r"if\s*\(\s*/\^https\?:\\/\\//i\.test\(testerJoinHref\)\s*\)", js) is not None)
+    check("bottom-nav still reads NO flag and NO cohort list of its own",
+          "header-join-stripe" not in js.replace("header-join-stripe.php", "")
+          and "stripe_testgroup" not in js
+          and "lgms_stripe_lifecycle_allowlist" not in js)
 
     # ── EXECUTE the branch's rule, do not merely read it ────────────────────
     #
@@ -353,9 +450,18 @@ def leg_a():
 RENDER = r'''
 $file = $argv[1]; $mode = $argv[2];
 require $file;
-$ctx = $mode === 'authed'
-  ? ['authenticated'=>true,'tier'=>'pro','display_name'=>'probe','capabilities'=>['manage_options'=>false]]
-  : ['authenticated'=>false,'tier'=>'public'];
+/* FOUR VIEWERS, because #170's whole question is "which of them gets /lgjoin/".
+   'authed' is the not-listed member and keeps EXACTLY the ctx #165 proved
+   against, so its byte-identity legs still compare like for like. 'tester' adds
+   the one capability the poller computes for the cohort; 'admin' is in that
+   cohort by construction (manage_options || inCohort) and is how Ian clicks the
+   real button on live without adding himself to a list. */
+$caps = ['manage_options'=>false];
+if ($mode === 'tester') { $caps['stripe_testgroup'] = true; }
+if ($mode === 'admin')  { $caps['manage_options'] = true; $caps['stripe_testgroup'] = true; }
+$ctx = $mode === 'anon'
+  ? ['authenticated'=>false,'tier'=>'public']
+  : ['authenticated'=>true,'tier'=>'pro','display_name'=>'probe','capabilities'=>$caps];
 lg_shared_render_site_header($ctx);
 '''
 
@@ -379,13 +485,30 @@ def build_tree(dest, source, cfg):
     lp = f"{dest}/platform/config/header-join-stripe.local.php"
     for f in (p, lp):
         if os.path.exists(f): os.remove(f)
+    OFF, ALLOW, ON = ("<?php\nreturn array('state' => '%s');\n" % x
+                      for x in ("off", "allowlist", "on"))
+    LEG_ON  = "<?php\nreturn array('enabled' => true);\n"    # #165's spelling
+    LEG_OFF = "<?php\nreturn array('enabled' => false);\n"
     if cfg is False:
-        open(p, "w").write("<?php\nreturn array('enabled' => false);\n")
+        open(p, "w").write(OFF)
     elif cfg is True:
-        open(p, "w").write("<?php\nreturn array('enabled' => true);\n")
+        open(p, "w").write(ON)
     elif cfg == "local-true":
-        open(p, "w").write("<?php\nreturn array('enabled' => false);\n")
-        open(lp, "w").write("<?php\nreturn array('enabled' => true);\n")
+        open(p, "w").write(OFF); open(lp, "w").write(ON)
+    elif cfg == "allowlist":
+        open(p, "w").write(ALLOW)
+    elif cfg == "allowlist-local":
+        open(p, "w").write(OFF); open(lp, "w").write(ALLOW)
+    elif cfg == "legacy-on":
+        open(p, "w").write(LEG_ON)
+    elif cfg == "legacy-off":
+        open(p, "w").write(LEG_OFF)
+    elif cfg == "dev2":
+        # ⚠️ dev2's ACTUAL on-box shape, byte for byte: tracked false, a
+        # hand-placed .local.php saying `enabled => true`. It lives in the
+        # SERVING CHECKOUT, which no lane may edit, so this is the one config
+        # this gate cannot afford to get wrong.
+        open(p, "w").write(LEG_OFF); open(lp, "w").write(LEG_ON)
     return f"{dest}/lg-shared/site-header.php"
 
 def render(header_path, mode="anon", env=None):
@@ -409,21 +532,27 @@ def leg_bc(tmp):
 
     # Report the tracked default; assert all states regardless of it.
     cfg = open(f"{REPO}/{CONFIG}", encoding="utf-8").read() if os.path.isfile(f"{REPO}/{CONFIG}") else ""
-    default_on = re.search(r"'enabled'\s*=>\s*true", cfg) is not None
     if not cfg:
         cannot_run(f"{CONFIG} is missing — the flag has no tracked default")
-    report(f"tracked default: enabled = {str(default_on).lower()}",
-           "(asserted in all states either way)")
+    m = re.search(r"'state'\s*=>\s*'(off|allowlist|on)'", cfg)
+    tracked_state = m.group(1) if m else (
+        "on" if re.search(r"'enabled'\s*=>\s*true", cfg) else "off")
+    report(f"tracked default: state = {tracked_state}",
+           "(all three states asserted regardless — feedback-gate-reads-the-flag)")
 
     trees = {
         "absent":     build_tree(f"{tmp}/absent",     "WORKTREE", None),
         "off":        build_tree(f"{tmp}/off",        "WORKTREE", False),
+        "allowlist":  build_tree(f"{tmp}/allow",      "WORKTREE", "allowlist"),
+        "allow-local": build_tree(f"{tmp}/allow-loc", "WORKTREE", "allowlist-local"),
         "on":         build_tree(f"{tmp}/on",         "WORKTREE", True),
         "on-local":   build_tree(f"{tmp}/on-local",   "WORKTREE", "local-true"),
         "main":       build_tree(f"{tmp}/main",       "origin/main", None),
     }
-    anon = {k: render(v, "anon") for k, v in trees.items()}
+    anon   = {k: render(v, "anon")   for k, v in trees.items()}
     authed = {k: render(v, "authed") for k, v in trees.items()}
+    tester = {k: render(v, "tester") for k, v in trees.items()}
+    admin  = {k: render(v, "admin")  for k, v in trees.items()}
 
     for state in ("absent", "off"):
         a = join_anchor(anon[state])
@@ -439,6 +568,89 @@ def leg_bc(tmp):
         # a member out of the installed PWA to buy a membership in a browser.
         check(f"{state}: and does NOT open a new tab (it is our own page)",
               "target=" not in a and "rel=" not in a, a[:140])
+
+    # ── #170: THE THIRD STATE, executed ─────────────────────────────────────
+    # The assertion that BITES here is not "a tester gets /lgjoin/". It is that
+    # an ANONYMOUS visitor does not, in the same state, on the same box — that
+    # is the whole reason live can sit in this state during a soft launch.
+    for state in ("allowlist", "allow-local"):
+        a_anon = join_anchor(anon[state])
+        check(f"{state}: an ANONYMOUS visitor still goes to patreon.com",
+              f'href="{PATREON}"' in a_anon, a_anon[:140])
+        check(f"{state}: and still in a new tab — nothing about anon moved",
+              'target="_blank"' in a_anon and 'rel="noopener"' in a_anon, a_anon[:140])
+        check(f"{state}: a signed-in member NOT on the list gets no Join at all",
+              join_anchor(authed[state]) == "", join_anchor(authed[state])[:140])
+        for who, doc in (("tester", tester), ("admin", admin)):
+            a = join_anchor(doc[state])
+            check(f"{state}: a signed-in {who} gets Join -> {LGJOIN}",
+                  f'href="{LGJOIN}"' in a, a[:140] or "(no anchor rendered at all)")
+            check(f"{state}: {who}'s Join does NOT open a new tab (our page, inside the PWA)",
+                  a != "" and "target=" not in a and "rel=" not in a, a[:140])
+
+    # ⚠️ THE VACUITY GUARD, and the reason this gate is shaped this way.
+    # Implemented literally — "swap the href for a listed member" — this state
+    # would have rendered BYTE-IDENTICALLY to `off` for every viewer, because on
+    # main the Join pill rendered for ANON ONLY and a signed-in test user could
+    # never see it. That version passes every assertion above about anon and
+    # about not-listed members, and measures nothing.
+    check("allowlist ACTUALLY DIFFERS from off for a tester — not a silent no-op",
+          tester["allowlist"] != tester["off"],
+          f"{len(tester['allowlist'])} vs {len(tester['off'])} bytes")
+    # A real diff, not an index-by-index compare: the pill is INSERTED, so every
+    # line after it shifts and a positional compare reports the whole rest of
+    # the document as changed (it said 459). The claim is "one line added, none
+    # removed" — which is also the assertion that would catch this state
+    # quietly moving or dropping something else while it added its anchor.
+    diff = list(difflib.ndiff(tester["off"].splitlines(),
+                              tester["allowlist"].splitlines()))
+    added   = [l[2:] for l in diff if l.startswith("+ ")]
+    removed = [l[2:] for l in diff if l.startswith("- ")]
+    check("and it adds EXACTLY one line, removes none, and that line is the anchor",
+          len(added) == 1 and not removed and "lg-chrome__join" in added[0],
+          f"+{len(added)} / -{len(removed)}: {(added[0][:90] if added else '')}")
+
+    # CONFINED TO 'allowlist'. If `on` also grew a signed-in pill, every #165
+    # authed byte-identity proof would stop meaning anything with nothing going
+    # red to say so.
+    for who, doc in (("tester", tester), ("admin", admin)):
+        check(f"'on' gives a signed-in {who} no pill — the new markup is confined",
+              join_anchor(doc["on"]) == "", join_anchor(doc["on"])[:140])
+        check(f"'off' gives a signed-in {who} no pill either",
+              join_anchor(doc["off"]) == "", join_anchor(doc["off"])[:140])
+
+    # ── #170: THE MIGRATION — dev2's exact on-box shape ─────────────────────
+    # If this leg reddens, merging this branch reverts dev2's header to
+    # patreon.com on the next `pull --ff-only`, with nobody having flipped
+    # anything and nothing in any diff to explain it.
+    dev2 = build_tree(f"{tmp}/dev2", "WORKTREE", "dev2")
+    check("dev2's ACTUAL .local.php (`enabled => true`) still means 'on'",
+          f'href="{LGJOIN}"' in join_anchor(render(dev2, "anon")),
+          "tracked enabled=>false + hand-placed local enabled=>true")
+    check("a TRACKED `enabled => true` still means 'on'",
+          f'href="{LGJOIN}"' in join_anchor(
+              render(build_tree(f"{tmp}/legacy-on", "WORKTREE", "legacy-on"), "anon")))
+    check("a TRACKED `enabled => false` still means 'off'",
+          f'href="{PATREON}"' in join_anchor(
+              render(build_tree(f"{tmp}/legacy-off", "WORKTREE", "legacy-off"), "anon")))
+
+    # A typo in a hand-placed file is the likeliest way a wrong state reaches a
+    # box, and it must fall to today's behaviour rather than to the widest one.
+    t = build_tree(f"{tmp}/badword", "WORKTREE", None)
+    open(f"{os.path.dirname(os.path.dirname(t))}/platform/config/header-join-stripe.php",
+         "w").write("<?php\nreturn array('state' => 'everyone');\n")
+    check("an unrecognised state word falls CLOSED to patreon.com",
+          f'href="{PATREON}"' in join_anchor(render(t, "anon")))
+
+    # The preview override speaks the new vocabulary (lane previews and these
+    # legs only — never a deploy mechanism).
+    for word, expect in (("off", PATREON), ("allowlist", PATREON), ("on", LGJOIN)):
+        r = join_anchor(render(trees["off"], "anon", env={"LG_HEADER_JOIN_STRIPE": word}))
+        check(f"LG_HEADER_JOIN_STRIPE={word}: anon gets the right destination",
+              f'href="{expect}"' in r, r[:140])
+    r = join_anchor(render(trees["off"], "tester", env={"LG_HEADER_JOIN_STRIPE": "allowlist"}))
+    check("LG_HEADER_JOIN_STRIPE=allowlist: a signed-in tester gets /lgjoin/",
+          f'href="{LGJOIN}"' in r, r[:140])
 
     # The gitignored box override is the deploy mechanism for dev2, so it is
     # asserted to actually beat the tracked default rather than assumed to.
@@ -511,19 +723,35 @@ def leg_bc(tmp):
     log("")
 
     log("§C  OFF IS BYTE-IDENTICAL TO MAIN — compared, not argued")
-    for state in ("absent", "off"):
+    # 'allowlist' is in this list, and that is #170's central claim: the
+    # logged-out page must stay cacheable carrying the patreon href while a
+    # cohort is being tested behind it.
+    for state in ("absent", "off", "allowlist", "allow-local"):
         same = anon[state] == anon["main"]
         check(f"anon, {state}: byte-identical to origin/main's header",
               same, f"{len(anon[state])} bytes vs {len(anon['main'])}")
-    # The flag must not be able to reach a signed-in member AT ALL — in any
-    # state, including ON. The anon cluster is the only place Join renders, and
-    # this is what proves it stays that way.
-    for state in ("absent", "off", "on"):
+    check("THE CACHING LAW: anon in 'allowlist' is byte-identical to anon in 'off'",
+          anon["allowlist"] == anon["off"],
+          f"{len(anon['allowlist'])} vs {len(anon['off'])} bytes")
+    # A signed-in member NOT on the list is untouched in EVERY state, allowlist
+    # included. That is what makes a cohort a cohort.
+    for state in ("absent", "off", "allowlist", "allow-local", "on"):
         same = authed[state] == authed["main"]
-        check(f"authed, {state}: byte-identical to origin/main's header",
+        check(f"authed (not listed), {state}: byte-identical to origin/main's header",
               same, f"{len(authed[state])} bytes vs {len(authed['main'])}")
-    check("authed: no anon join anchor exists in any state",
+    check("authed (not listed): no join anchor exists in ANY state",
           all(join_anchor(authed[s]) == "" for s in trees))
+
+    # ⚠️ #165's ratchet read "the flag must not reach a signed-in member AT ALL,
+    # in any state, including ON". #170 NARROWS that to off/on — deliberately,
+    # because 'allowlist' exists precisely to reach one — and narrows it rather
+    # than deleting it: the two states that were proven stay proven, and the
+    # third is pinned by the exactly-one-line assertions in §B.
+    for who, doc in (("tester", tester), ("admin", admin)):
+        for state in ("absent", "off", "on"):
+            check(f"{who}, {state}: byte-identical to origin/main's header",
+                  doc[state] == doc["main"],
+                  f"{len(doc[state])} bytes vs {len(doc['main'])}")
 
     # Liveness beside the absence: "identical to main" is trivially true of two
     # empty strings, and of a render that died before reaching the anchor
@@ -531,6 +759,14 @@ def leg_bc(tmp):
     check("liveness: the baseline render actually produced the header",
           len(anon["main"]) > 5000 and 'class="lg-chrome__join"' in anon["main"],
           f"{len(anon['main'])} bytes")
+    # The same scar, one viewer over: every tester assertion above is an
+    # equality or an absence, and both are trivially true of a render that died
+    # before it reached the aside (feedback-absence-assertion-needs-liveness).
+    check("liveness: the tester render is a real header, and DOES carry the pill",
+          len(tester["allowlist"]) > 5000
+          and 'class="lg-chrome__account"' in tester["allowlist"]
+          and 'class="lg-chrome__join"' in tester["allowlist"],
+          f"{len(tester['allowlist'])} bytes")
 
     # And the ON state must differ from main by EXACTLY the one anchor — a
     # change that also moved something else would pass every assertion above.
@@ -541,7 +777,7 @@ def leg_bc(tmp):
           len(diffs) == 1 and "lg-chrome__join" in ol[diffs[0]],
           f"{len(diffs)} differing line(s)")
     log("")
-    return default_on
+    return tracked_state
 
 
 # ══════════════════════════════════════════════════════════════════════ §D
@@ -991,6 +1227,19 @@ def leg_d(base, browser):
                            "control ends up off the right edge")
             finally:
                 inc.close()
+
+    # ⚠️ WHAT THIS LEG DID NOT MEASURE, said out loud so a green §D is not read
+    # as covering it. Every width above was browsed ANONYMOUSLY, and #170's
+    # tester pill renders only for a signed-in member on the cohort list — a
+    # session this leg has no way to hold (and the one shared chrome profile on
+    # this box makes cookie-juggling its own class of false green:
+    # trap-shared-chrome-profile-duplicate-session-cookies). What carries the
+    # measurement across is §A's assertion that no stylesheet scopes
+    # .lg-chrome__join to the anon cluster, so the tester's copy inherits the
+    # presentation proven here rather than being assumed to.
+    report("the TESTER pill's in-browser reachability is not measured by this anon leg",
+           "click Join at 390px and at 900px signed in as a LISTED NON-ADMIN member; "
+           "the ≤640 hub answer is the PWA You-sheet row, which §A asserts structurally")
     log("")
 
 
@@ -999,6 +1248,61 @@ STUB = "This page isn't available yet"
 
 def leg_e(base, served):
     log("§E  THE COUPLING — the destination must ADMIT the visitor sent to it")
+
+    # ── #170: THE SECOND COUPLING, ONE COLUMN OVER ──────────────────────────
+    # 'on' has to pair with `lgms_stripe_pages_live` (below, and all of #165).
+    # 'allowlist' pairs with a DIFFERENT switch, and the two predicates are not
+    # the same shape — which is the whole trap:
+    #
+    #   the PILL   $caps['stripe_testgroup'] = manage_options || inCohort($uid)
+    #              ONE lock: the list.
+    #   the DOOR   lg_membership_in_stripe_test_group() = the pages flag
+    #              AND the list.  TWO locks.
+    #
+    # So with `lgms_stripe_testgroup_pages` off, a listed tester is handed a
+    # pill and refused at the door — presence-is-not-reachability again, in the
+    # one place it costs a sale. An admin would not notice: they pass both gates
+    # by manage_options, which is exactly who checks these things.
+    rp = f"{REPO}/membership-pages/web/router.php"
+    cp = f"{REPO}/membership-pages/config.php"
+    if not (os.path.isfile(rp) and os.path.isfile(cp)):
+        report("membership-pages sources not found — the allowlist coupling is unchecked",
+               "leg SKIPPED, not passed")
+    else:
+        router, mcfg = php_code(rp), php_code(cp)
+        check("the router still sends pre-launch /lgjoin/ through the Test Group gate",
+              re.search(r"'lgjoin'\s*=>\s*\[\s*'lgjoin\.php'\s*,\s*'testgroup'", router)
+              is not None
+              and "lg_membership_testgroup_gate_or_exit" in router)
+        check("the DOOR needs the pages flag AND the list — two locks, not one",
+              re.search(r"function lg_membership_in_stripe_test_group[^}]*"
+                        r"lg_membership_stripe_testgroup_pages\(\)[^}]*in_array", mcfg,
+                        re.S) is not None)
+        check("both ends read the SAME cohort option — no second list",
+              "lgms_stripe_lifecycle_allowlist" in mcfg)
+        # Reported, never asserted, and NOT because it is unimportant: it is
+        # unassertable HERE. This leg is anonymous, and 'allowlist' is by
+        # construction invisible to an anonymous observer (see below), so there
+        # is no served state for a §165-style "assert while ON" to key on. The
+        # operational check is a signed-in click by a listed member, and saying
+        # so plainly beats a green that measured nothing.
+        report("'allowlist' ALSO needs wp_option lgms_stripe_testgroup_pages ON",
+               "the pill has ONE lock (the list); the door has TWO (flag + list). "
+               "An admin passes both regardless — so the person most likely to "
+               "check is the one person who cannot see the failure. Verify by "
+               "clicking Join signed in as a LISTED NON-ADMIN member.")
+
+    # ⚠️ AN OUTSIDE OBSERVER CANNOT TELL 'off' FROM 'allowlist' HERE, and that
+    # is not a gap in this gate — it IS the caching law, observed from outside
+    # rather than argued: served_flag_state() reads the ANONYMOUS page, and the
+    # anonymous page is byte-identical in those two states by construction. If
+    # this ever started reporting 'allowlist', the logged-out render would be
+    # leaking a per-viewer decision into a cacheable page.
+    if served == "off":
+        report("the served anon header says patreon.com — 'off' OR 'allowlist'",
+               "indistinguishable to an anonymous observer BY DESIGN; §B and §C "
+               "prove the two are byte-identical for anon")
+
     try:
         with urllib.request.urlopen(base + LGJOIN, timeout=25) as r:
             code, body = r.status, r.read().decode("utf-8", "replace")
@@ -1108,11 +1412,11 @@ if __name__ == "__main__":
 # harness bug into ten false "the assertion is decoration" verdicts
 # (feedback-mutation-harness-must-snapshot-not-checkout).
 #
-# tools/gates/header-join-redfirst.sh drives it. RUN 2026-08-20: baseline green
-# at 43, twelve mutations each reddening its OWN named assertion, two no-ops
-# reddening nothing. 14 of 14 as expected.
+# tools/gates/header-join-redfirst.sh drives it. RUN 2026-08-20 (#170): baseline
+# green at 104, twenty-one mutations each reddening its OWN named assertion, two
+# no-ops reddening nothing. 23 of 23 as expected. (#165's run: 14 of 14 at 43.)
 #
-#    1  the ON href hardcoded into the anchor    -> "href is resolved at render time"
+#    1  the ON href hardcoded into the anchor    -> "href resolved at render time"
 #    2  reader forgets $_SERVER                  -> "read from getenv() AND $_SERVER"
 #    3  .local.php override dropped              -> "honours the .local.php box override"
 #    4  .local wins on any truthy, not === true  -> "wins only on an EXPLICIT boolean true"
@@ -1124,8 +1428,31 @@ if __name__ == "__main__":
 #   10  config defaults ON when unreadable       -> "falls back to today's behaviour"
 #   11  the FLAGS.md row deleted                 -> "FLAGS.md carries a row"
 #   12  the FLAGS row drops the coupling         -> "row names lgms_stripe_pages_live"
-#   A   rename a local in the reader             -> GREEN, 41 passed
-#   B   reflow the config docblock               -> GREEN, 41 passed
+#   13  tester pill escapes 'allowlist' into ON  -> "gives a signed-in tester no pill"
+#   14  the pill ignores the cohort entirely     -> "member NOT on the list gets no Join"
+#   15  anon leaks /lgjoin/ in allowlist         -> "THE CACHING LAW"
+#   16  the tester pill never renders            -> "allowlist ACTUALLY DIFFERS from off"
+#   17  the legacy `enabled` key tidied away     -> "dev2's ACTUAL .local.php"
+#   18  an unknown state word falls OPEN         -> "unrecognised state word falls CLOSED"
+#   19  the header grows its own cohort list     -> "defines NO second cohort list"
+#   20  bottom-nav drops the tester row          -> "tester row EXISTS only when..."
+#   21  the pill block re-indented (9 bytes)     -> "authed (not listed)"
+#   A   rename the reader's closure              -> GREEN, 103 passed
+#   B   reflow the config docblock               -> GREEN, 103 passed
+#
+# ⚠️ Mutation 16 is #170's mutation 7 — the one that proves the gate is worth
+# having. It is the version of this issue that reads correct on every line: the
+# three states resolve, the href logic is right, `allowlist` is wired to the
+# cohort capability... and the control renders for nobody, because on main the
+# Join pill was ANON-ONLY and a signed-in test user could never see it. It
+# passes every other assertion in this file. Only "allowlist ACTUALLY DIFFERS
+# from off for a tester" catches it.
+#
+# ⚠️ Mutation 21 is the defect this lane actually shipped into its own working
+# tree and §C caught: an indented `<?php if ?>` tag emits its own leading spaces
+# whether the branch is taken or not, so the tester block added 9 bytes to EVERY
+# signed-in render in EVERY state including 'off'. Same family as mutation 7,
+# found the same way, kept so it cannot return unseen.
 #
 # ⚠️ Mutation 7 is the one worth keeping. It is a pure-whitespace edit that
 # changes NO behaviour whatsoever, and it is caught only by the byte-identity

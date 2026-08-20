@@ -1718,11 +1718,18 @@ echo "=== GATE 76: the Stripe rail grants the tier that was PAID for ==="
 run "stripe-multi-tier" php "$(dirname "$0")/stripe-multi-tier-gate.php"
 echo
 
-echo "=== GATE 79: a logged-out visitor's Join goes to OUR join page, and can get there ==="
+echo "=== GATE 79: who the header's Join sends to OUR join page, and can they get there ==="
 # Ian, 2026-08-20, verbatim on #165: "can you Wire the header on Dev2 to have
 # the stripe menuing that a logged out user would see?" The anon header's Join
 # went straight to patreon.com — his own 6/12 ruling, right for a Patreon-only
-# world. Behind platform/config/header-join-stripe.php, default OFF.
+# world. Behind platform/config/header-join-stripe.php, default 'off'.
+#
+# THREE STATES since #170 — Ian 8/20: "We need the join button in the header to
+# still go to patreon unless a test user is there on live." 'off' = nobody,
+# 'allowlist' = the Stripe soft-launch cohort while signed in, 'on' = everybody.
+# The middle state is what makes live safe to arm, and it rides a per-viewer
+# capability an anonymous ctx never carries, so the logged-out page stays
+# byte-identical to 'off' and stays cacheable. Asserted by cmp, not argued.
 #
 # ⚠️ THE OBVIOUS ASSERTION IS NEARLY WORTHLESS HERE, which is the whole reason
 # this gate is shaped the way it is. "Flag ON means href=/lgjoin/" is TRUE of a

@@ -109,7 +109,7 @@ echo
 echo "── MUTATIONS: each must redden its OWN named assertion ───────────────────"
 
 mutate "1  the ON href is hardcoded into the anchor" \
-       "its href is resolved at render time" '
+       "href resolved at render time" '
 p="'"$HEADER"'"; s=open(p).read()
 s=s.replace("""href="<?= $h($join_href) ?>\"""", """href="/lgjoin/\"""")
 open(p,"w").write(s)'
@@ -131,8 +131,8 @@ open(p,"w").write(s)'
 mutate "4  the .local override wins on any TRUTHY value, not === true" \
        "wins only on an EXPLICIT boolean true" '
 p="'"$HEADER"'"; s=open(p).read()
-s=s.replace("""$on = ($local[\x27enabled\x27] === true);""",
-            """$on = (bool)$local[\x27enabled\x27];""")
+s=s.replace("""$on = $strict ? ($cfg[\x27enabled\x27] === true) : !empty($cfg[\x27enabled\x27]);""",
+            """$on = !empty($cfg[\x27enabled\x27]);""")
 open(p,"w").write(s)'
 
 mutate "5  the header opens our OWN page in a new tab (the PWA eject)" \
@@ -172,8 +172,8 @@ open(p,"w").write(s)'
 mutate "10 the tracked config defaults ON when it cannot be read" \
        "falls back to today" '
 p="'"$HEADER"'"; s=open(p).read()
-s=s.replace("""$on  = is_array($cfg) && !empty($cfg[\x27enabled\x27]);""",
-            """$on  = !is_array($cfg) || !empty($cfg[\x27enabled\x27]);""")
+s=s.replace("""    if ($state === null) $state = \x27off\x27;""",
+            """    if ($state === null) $state = \x27on\x27;""")
 open(p,"w").write(s)'
 
 mutate "11 the FLAGS.md row is deleted" \
@@ -188,20 +188,95 @@ p="'"$FLAGS"'"; s=open(p).read()
 s=s.replace("lgms_stripe_pages_live", "some_other_option")
 open(p,"w").write(s)'
 
+
+# ── #170: the third state ────────────────────────────────────────────────────
+
+mutate "13 the tester pill escapes allowlist and renders in ON too" \
+       "gives a signed-in tester no pill" '
+p="'"$HEADER"'"; s=open(p).read()
+s=s.replace("""$join_pill_authed = ($join_state === \x27allowlist\x27 && $stripe_tester);""",
+            """$join_pill_authed = ($join_state !== \x27off\x27 && $stripe_tester);""")
+open(p,"w").write(s)'
+
+mutate "14 the pill ignores the cohort — EVERY signed-in member gets one" \
+       "a signed-in member NOT on the list gets no Join at all" '
+p="'"$HEADER"'"; s=open(p).read()
+s=s.replace("""$join_pill_authed = ($join_state === \x27allowlist\x27 && $stripe_tester);""",
+            """$join_pill_authed = ($join_state === \x27allowlist\x27);""")
+open(p,"w").write(s)'
+
+# THE ONE THAT MATTERS MOST. A per-viewer decision leaking into the logged-out
+# render is the difference between a soft launch and an announcement.
+mutate "15 the ANON page leaks /lgjoin/ in allowlist (the caching law breaks)" \
+       "THE CACHING LAW" '
+p="'"$HEADER"'"; s=open(p).read()
+s=s.replace("""|| ($join_state === \x27allowlist\x27 && $stripe_tester);""",
+            """|| ($join_state === \x27allowlist\x27);""")
+open(p,"w").write(s)'
+
+# THE VERSION OF THIS ISSUE THAT WOULD HAVE SHIPPED without the measurement in
+# the plan: the href logic is right, the state exists, and the control the test
+# user was promised renders for nobody.
+mutate "16 the tester pill never renders — the naive, vacuous implementation" \
+       "allowlist ACTUALLY DIFFERS from off for a tester" '
+p="'"$HEADER"'"; s=open(p).read()
+s=s.replace("""$join_pill_authed = ($join_state === \x27allowlist\x27 && $stripe_tester);""",
+            """$join_pill_authed = (false && $join_state === \x27allowlist\x27 && $stripe_tester);""")
+open(p,"w").write(s)'
+
+mutate "17 the legacy enabled key is tidied away (dev2 silently reverts)" \
+       "ACTUAL .local.php" '
+p="'"$HEADER"'"; s=open(p).read()
+s=s.replace("""        if (array_key_exists(\x27enabled\x27, $cfg)) {""",
+            """        if (false) {""")
+open(p,"w").write(s)'
+
+mutate "18 an unrecognised state word falls OPEN instead of closed" \
+       "unrecognised state word falls CLOSED" '
+p="'"$HEADER"'"; s=open(p).read()
+s=s.replace("""return in_array($s, $valid, true) ? $s : \x27off\x27;""",
+            """return in_array($s, $valid, true) ? $s : \x27on\x27;""")
+open(p,"w").write(s)'
+
+mutate "19 the header grows its OWN cohort list (a second definition)" \
+       "defines NO second cohort list" '
+p="'"$HEADER"'"; s=open(p).read()
+s=s.replace("""$stripe_tester = ($caps[\x27stripe_testgroup\x27] ?? false) === true;""",
+            """$stripe_tester = in_array(1, (array) get_option(\x27lgms_stripe_lifecycle_allowlist\x27), true);""")
+open(p,"w").write(s)'
+
+mutate "20 bottom-nav drops the tester row (no phone door at all)" \
+       "tester row EXISTS only when the header drew a pill" '
+p="'"$BOTTOM"'"; s=open(p).read()
+s=s.replace("""    if (testerJoinHref) {""", """    if (false) {""")
+open(p,"w").write(s)'
+
+# THE DEFECT THIS LANE ACTUALLY MADE, kept as a mutation because it is the one
+# no reviewer would catch by eye: an indented <?php if ?> tag emits its own
+# leading spaces whether or not the branch is taken, adding 9 bytes to EVERY
+# signed-in render in EVERY state.
+mutate "21 the pill block is re-indented (9 stray bytes in every authed render)" \
+       "authed (not listed)" '
+p="'"$HEADER"'"; s=open(p).read()
+s=s.replace("""\n<?php if ($join_pill_authed):""",
+            """\n        <?php if ($join_pill_authed):""")
+open(p,"w").write(s)'
+
 echo
 echo "── NO-OPS: each must redden NOTHING ──────────────────────────────────────"
 
-noop "A  rename the reader local variable (\$on -> \$stripe_join)" '
+noop "A  rename the reader closure (\$resolve -> \$readConfig)" '
 import re
 p="'"$HEADER"'"; s=open(p).read()
-head, sep, rest = s.partition("function lg_shared_header_join_stripe_enabled(): bool")
-body, sep2, tail = rest.partition("\n}\n}")
-body = re.sub(r"\$on\b", "$stripe_join", body)
-open(p,"w").write(head + sep + body + sep2 + tail)'
+assert "$resolve" in s, "no-op A has no target — it would prove nothing"
+s = re.sub(r"\$resolve\b", "$readConfig", s)
+open(p,"w").write(s)'
 
 noop "B  reflow the config docblock (prose only, no code)" '
 p="'"$CONFIG"'"; s=open(p).read()
-s=s.replace(" * ── WHAT IT SWITCHES ─────────────────────────────────────────────────────────",
+assert " * ── WHAT IT SWITCHES: THREE STATES (#170) ────────────────────────────────────" in s, \
+    "no-op B has no target — it would prove nothing"
+s=s.replace(" * ── WHAT IT SWITCHES: THREE STATES (#170) ────────────────────────────────────",
             " * ── WHAT IT SWITCHES (reflowed by the red-first no-op) ──────────────────────")
 open(p,"w").write(s)'
 

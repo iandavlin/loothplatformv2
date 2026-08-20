@@ -50,8 +50,36 @@ if (!function_exists('lg_shared_h')) {
 }
 
 /**
- * lg_shared_header_join_stripe_enabled — does the ANON header's Join point at
- * our own join page (/lgjoin/) instead of at patreon.com?  Issue #165.
+ * lg_shared_header_join_stripe_state — WHO does the header's Join send to our
+ * own join page (/lgjoin/) instead of to patreon.com?  Issues #165, #170.
+ *
+ * THREE STATES, not two (#170, Ian 2026-08-20: "We need the join button in the
+ * header to still go to patreon unless a test user is there on live."):
+ *
+ *   'off'        nobody. patreon.com for everyone, byte-for-byte his 6/12
+ *                ruling. The tracked default and what live serves today.
+ *   'allowlist'  the Stripe soft-launch cohort ONLY, and only while signed in.
+ *                Anonymous visitors — every one of them — still get
+ *                patreon.com, which is what makes this state safe to arm on
+ *                live. See THE CACHING LAW below.
+ *   'on'         everyone. The go-live state; dev2 runs it today.
+ *
+ * ── THE CACHING LAW, and why it is structural rather than careful ────────────
+ * The 'allowlist' swap keys on $caps['stripe_testgroup'] — a per-viewer
+ * capability an anonymous ctx never carries, and which fails closed to false.
+ * So the anonymous render in 'allowlist' is not merely *intended* to equal the
+ * anonymous render in 'off', it CANNOT differ: there is no anon input that
+ * reaches the branch. That is what keeps the logged-out page cacheable while a
+ * cohort is being tested behind it, and gate 79 proves it with cmp rather than
+ * trusting this paragraph.
+ *
+ * ── THE MIGRATION: 'enabled' => true STILL MEANS 'on' ────────────────────────
+ * dev2's hand-placed header-join-stripe.local.php says `enabled => true` and it
+ * lives in the SERVING CHECKOUT, which no lane may edit. If this reader stopped
+ * understanding the old key, dev2's header would revert to patreon.com on the
+ * next `pull --ff-only` with nobody having flipped anything and nothing in any
+ * diff to explain it. The legacy key is therefore read forever, and gate 79
+ * asserts it — this is not dead compatibility code.
  *
  * THE RULES AND THE COUPLING LIVE IN platform/config/header-join-stripe.php.
  * Read that file before changing this one; in particular, ON here is NOT
@@ -78,30 +106,72 @@ if (!function_exists('lg_shared_h')) {
  * Fails CLOSED: an unreadable or malformed config means patreon.com, which is
  * today's behaviour for everybody.
  */
-if (!function_exists('lg_shared_header_join_stripe_enabled')) {
-function lg_shared_header_join_stripe_enabled(): bool
+if (!function_exists('lg_shared_header_join_stripe_state')) {
+function lg_shared_header_join_stripe_state(): string
 {
-    $cfg = @include __DIR__ . '/../platform/config/header-join-stripe.php';
-    $on  = is_array($cfg) && !empty($cfg['enabled']);
+    $valid = array('off', 'allowlist', 'on');
+
+    /**
+     * One config array -> a state, or null for "this file decides nothing"
+     * (so the next source down still stands).
+     *
+     * $strict preserves #165's TWO different legacy readings rather than
+     * tidying them into one: the tracked file was read with !empty() and the
+     * .local.php with `=== true`. Unifying them here would be a silent
+     * behaviour change to a flag that is already placed on a box, which is
+     * exactly the kind of drive-by nobody would find in a diff.
+     */
+    $resolve = static function ($cfg, bool $strict) use ($valid) {
+        if (!is_array($cfg)) return null;
+        if (array_key_exists('state', $cfg)) {
+            $s = is_string($cfg['state']) ? strtolower(trim($cfg['state'])) : '';
+            /* An unrecognised word is 'off', never a guess: a typo'd state must
+               fail to today's behaviour, not to the widest one. */
+            return in_array($s, $valid, true) ? $s : 'off';
+        }
+        if (array_key_exists('enabled', $cfg)) {
+            /* THE MIGRATION (#170): true == 'on'. Read the docblock above
+               before deleting this — dev2 depends on it. */
+            $on = $strict ? ($cfg['enabled'] === true) : !empty($cfg['enabled']);
+            return $on ? 'on' : 'off';
+        }
+        return null;
+    };
+
+    $state = $resolve(@include __DIR__ . '/../platform/config/header-join-stripe.php', false);
+    if ($state === null) $state = 'off';   // absent / malformed = today's behaviour
 
     /* Per-box override, gitignored (platform/config/*.local.php). dev2 runs this
-       ON while the tracked default stays false, so a live pull cannot switch it
-       on unverified. Wins only on an explicit boolean true — a malformed or
+       ON while the tracked default stays 'off', so a live pull cannot switch it
+       on unverified. Wins only when it actually says something — a malformed or
        unreadable file leaves the tracked value standing. Sits BEFORE the env
        loop so a gate forcing a state still wins over the box. */
-    $local = @include __DIR__ . '/../platform/config/header-join-stripe.local.php';
-    if (is_array($local) && array_key_exists('enabled', $local)) {
-        $on = ($local['enabled'] === true);
-    }
+    $local = $resolve(@include __DIR__ . '/../platform/config/header-join-stripe.local.php', true);
+    if ($local !== null) $state = $local;
 
     /* BOTH getenv() and $_SERVER, deliberately: a fastcgi_param lands in
        $_SERVER but not reliably in the environment, so a getenv()-only reader
        serves the OFF path on the very preview URL built for Ian to click.
        Previews and gate red-first legs only — never a deploy mechanism. */
     foreach ([getenv('LG_HEADER_JOIN_STRIPE'), $_SERVER['LG_HEADER_JOIN_STRIPE'] ?? false] as $o) {
-        if ($o !== false && $o !== '') $on = ($o === '1' || $o === 'true');
+        if ($o === false || $o === '') continue;
+        $o = strtolower(trim((string) $o));
+        if (in_array($o, $valid, true))          $state = $o;
+        elseif ($o === '1' || $o === 'true')     $state = 'on';   // #165's spelling
+        else                                     $state = 'off';
     }
-    return $on;
+    return $state;
+}
+}
+
+/**
+ * Back-compat shim. #165 shipped a boolean and other code (and gate 79's
+ * red-first harness) names it; 'on' is the only state that ever meant true.
+ */
+if (!function_exists('lg_shared_header_join_stripe_enabled')) {
+function lg_shared_header_join_stripe_enabled(): bool
+{
+    return lg_shared_header_join_stripe_state() === 'on';
 }
 }
 
@@ -166,8 +236,17 @@ function lg_shared_render_site_header(array $ctx): void
     $stripe_tester = ($caps['stripe_testgroup'] ?? false) === true;
 
     /**
-     * ANON "Join" destination (#165, Ian 2026-08-20). See
+     * "Join" destination (#165, #170; Ian 2026-08-20). See
      * platform/config/header-join-stripe.php for the ruling and the coupling.
+     *
+     * WHO gets /lgjoin/ is the flag's whole job, and it is a THREE-way answer:
+     * 'on' means everyone, 'off' means nobody, and 'allowlist' means the Stripe
+     * soft-launch cohort only — which is knowable here ONLY for a signed-in
+     * viewer, because $stripe_tester is a per-viewer capability. An anonymous
+     * ctx carries no capabilities and fails closed to false, so 'allowlist'
+     * cannot change one byte of the logged-out page. That is the caching law:
+     * not a rule this code remembers to obey, but a branch anon input cannot
+     * reach.
      *
      * $join_external is derived from the href rather than from the flag, and
      * that is on purpose: "does this open a new tab" is a fact about the
@@ -177,10 +256,30 @@ function lg_shared_render_site_header(array $ctx): void
      * its copy of this control in the PWA account sheet, so the two cannot
      * disagree about a link they both draw.
      */
-    $join_href     = lg_shared_header_join_stripe_enabled()
+    $join_state    = lg_shared_header_join_stripe_state();
+    $join_stripe   = ($join_state === 'on')
+                     || ($join_state === 'allowlist' && $stripe_tester);
+    $join_href     = $join_stripe
                      ? '/lgjoin/'
                      : 'https://www.patreon.com/c/theloothgroup/membership';
     $join_external = (bool) preg_match('#^https?://#i', $join_href);
+
+    /**
+     * DOES A SIGNED-IN VIEWER GET A JOIN PILL AT ALL?  Measured on main before
+     * #170 was designed: no — .lg-chrome__join lives in the anon branch of the
+     * aside and renders for exactly nobody who is logged in, at any width. So
+     * "the join button goes to patreon unless a test user is there" could not
+     * be delivered by swapping an href; the control has to EXIST for the tester
+     * first, or the state would render byte-identically to 'off' and its gate
+     * would be green having measured nothing.
+     *
+     * Confined to 'allowlist' ON PURPOSE. In 'off' and 'on' the signed-in
+     * header stays byte-for-byte what #165 proved it was, so every one of those
+     * proofs survives this change and the new markup exists only in the new
+     * state, only for a hand-picked cohort, only on a box where someone has
+     * deliberately armed a soft launch.
+     */
+    $join_pill_authed = ($join_state === 'allowlist' && $stripe_tester);
 
     // Tier pill label: Admin overrides paid-tier labels for manage_options users.
     $tier_label = match($tier) {
@@ -601,6 +700,25 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
           <span class="lg-chrome__badge" data-lg-conn-count hidden>0</span>
         </button>
 
+<?php if ($join_pill_authed): /* #170 — the Stripe soft-launch tester's
+                 own door to /lgjoin/, and on live the ONLY one they have at a
+                 phone width: at ≤640 the hub hides this entire aside, account
+                 menu included (bb-mirror/web/forums.css), so webroot/bottom-nav.js
+                 mirrors this pill into the "You" sheet by reading it from here.
+                 Same class as the anon pill, so it cannot be styled into
+                 invisibility separately; same href-derived tab rule, so an
+                 internal page never ejects a member from the installed PWA. */ ?>
+        <a class="lg-chrome__join" href="<?= $h($join_href) ?>"<?= $join_external ? ' target="_blank" rel="noopener"' : '' ?>>Join</a>
+<?php endif;
+      /* ⚠️ THE TAGS ABOVE SIT AT COLUMN 0 ON PURPOSE, and the blank line after
+         them is gone for the same reason. Indented `<?php if ?>` tags emit
+         their own leading spaces as inline HTML whether the branch is taken or
+         not, so the first draft of this block added 8 spaces and a newline — 9
+         bytes — to EVERY signed-in render in EVERY state, including 'off'.
+         Invisible on screen, invisible to every assertion about hrefs, and
+         caught only by gate 79 §C's byte-identity comparison against
+         origin/main, which is the leg that exists for exactly this. Do not
+         re-indent these two tags. */ ?>
         <!-- Account dropdown trigger -->
         <div class="lg-chrome__account-wrap" data-lg-account-wrap style="position:relative">
           <button class="lg-chrome__account" type="button"
