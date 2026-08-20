@@ -286,10 +286,10 @@ def leg_render(tmp):
     # so the next wording pass does not redden a gate about behaviour
     # (feedback-gate-reads-the-flag-not-a-hardcoded-state).
     check("#155 a merged issue becomes a phone check",
-          re.search(r'<b>Look at [^<]+</b>', b) is not None
+          re.search(r'<b>Take a look — [^<]+</b>', b) is not None
           and "merged; your look is the last thing left." in b)
     check("#155 a built issue becomes a flip decision",
-          "Say GO to switch on" in b)
+          re.search(r'<b>Say GO to switch it on — [^<]+</b>', b) is not None)
     check("#155 a bullet carries the lane's verbatim park reason when it has one",
           "the lane said:" in b and "merged as abc123, awaiting phone check" in b)
     check("#155 titles are plainised — no ledger prefix, no SHOUTING",
@@ -857,7 +857,7 @@ def leg_todo(tmp):
     check("#172 a value that is not reachable is NOT a record",
           not any("convention" in d for d in doors))
     check("#172 …and issue 866 therefore has NO door at all (liveness for both)",
-          re.search(r'<b>Look at Prose cannot counterfeit[^<]*</b>.*?'
+          re.search(r'<b>Take a look — Prose cannot counterfeit[^<]*</b>.*?'
                     r'no test link yet', b, re.S) is not None)
 
     # ── C. the href is untrusted input ───────────────────────────────────────
@@ -886,12 +886,15 @@ def leg_todo(tmp):
                        r'<span class="why"><b>([^<]*)</b>', b)
     check("#172 every bullet leads with a bold ACTION",
           len(leads) >= 10, f"{len(leads)} action-led bullets")
-    verbs = ("Look at", "Say GO", "Post ", "Answer ", "Write ", "Pick ", "Try ")
+    verbs = ("Take a look", "Say GO", "Post ", "Answer ", "Write ", "Pick ",
+             "Look at the", "Try ")
     bad_leads = [l for l in leads if not l.startswith(verbs)]
     check("#172 …and every one of them starts with a verb, never a bare title",
           not bad_leads, f"not action-led: {bad_leads[:3]}")
     check("#172 a built issue leads with the flip decision",
-          any(l.startswith("Say GO to switch on") for l in leads))
+          any(l.startswith("Say GO to switch it on — ") for l in leads),
+          "the instruction has to be complete before the dash; the title is a "
+          "label after it, never the object of the verb")
     check("#172 an ACTION record outranks the derived verb",
           "Post a discussion — the Where step should be gone" in leads,
           f"leads were: {leads[:6]}")
@@ -905,7 +908,8 @@ def leg_todo(tmp):
     check("#172 a merged card's replies are its own number",
           "&ldquo;880 good&rdquo;" in b and "&ldquo;880 not right&rdquo;" in b)
     payloads = re.findall(r'class="copybtn" data-copy="([^"]*)"', b)
-    want = "Re #881 Say GO to switch on A built thing — [GO on 881 / hold 881]"
+    want = ("Re #881 Say GO to switch it on — A built thing — "
+            "[GO on 881 / hold 881]")
     check("#172 Copy for keeper carries 'Re #n <action> — ' plus the replies",
           any(html_unescape(p) == want for p in payloads),
           f"none of {len(payloads)} payloads matched; first: "

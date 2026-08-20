@@ -578,11 +578,18 @@ def action_for(family, issue, rec):
     if rec.get("ACTION"):
         return rec["ACTION"]
     what = plainize(issue["title"])
+    # ⚠ THE INSTRUCTION IS COMPLETE BEFORE THE DASH, and the title is a LABEL
+    # after it. The first cut wrote "Look at " + the title, which reads
+    # "Look at Checkout is Patreon-blind: a live Patreon member can…" — the verb
+    # swallowing a sentence-shaped title, which is Ian's original complaint
+    # wearing a verb. Seen by looking at the rendered page, not by reading the
+    # code. This form cannot come out ungrammatical whatever the title is,
+    # because the title is never the object of the verb.
     if family == "flip":
-        return f"Say GO to switch on {what}"
+        return f"Say GO to switch it on — {what}"
     if family == "look":
-        return f"Look at {what}"
-    return f"Say GO on {what}"
+        return f"Take a look — {what}"
+    return f"Say GO on the plan — {what}"
 
 
 def copy_payload(n, action, reps):
@@ -620,7 +627,9 @@ def build_todo(seats, needs, allopen, parked_reason=None,
         wrote 'merged as X, awaiting phone check' has already said the true
         thing better than any wording derived from a label could."""
         r = parked_reason.get(str(num))
-        return (f' <span class="dim">&mdash; the lane said: &ldquo;'
+        # Its own line: after a full stop, " — the lane said:" read as a
+        # fragment glued to the sentence before it.
+        return (f'<br><span class="dim">the lane said: &ldquo;'
                 f'{html.escape(r[:160])}&rdquo;</span>') if r else ''
 
     def card(i, family, icon, meta):

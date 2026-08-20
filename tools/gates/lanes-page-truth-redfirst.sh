@@ -124,10 +124,10 @@ run red "the working chip stops carrying the verb" \
 run red "the Building strip comes back" \
     "#160 there is no separate Building strip" tools/lanes-page.py \
     "    if cards:
-        h.append('<h2>Seats</h2>')" \
+        acc(h, \"seats\", \"Seats\", plural(len(cards), \"seat\"))" \
     "    if cards:
         h.append('<b>Building</b>')
-        h.append('<h2>Seats</h2>')"
+        acc(h, \"seats\", \"Seats\", plural(len(cards), \"seat\"))"
 
 echo
 echo "the four chips (#159):"
@@ -153,9 +153,9 @@ echo "the checklist (#155) and the workers view (#164):"
 run red "the list renders even when nothing waits on him" \
     "nothing waiting on him ⇒ the list is ABSENT" tools/lanes-page.py \
     '    if todo:
-        h.append' \
+        acc(h, "your-list"' \
     '    if True:
-        h.append'
+        acc(h, "your-list"'
 run red "a GitHub failure goes quiet" \
     "GitHub unreadable ⇒ says so LOUDLY" tools/lanes-page.py \
     '    if not gh_ok:
@@ -164,7 +164,8 @@ run red "a GitHub failure goes quiet" \
         h.append'
 run red "a question stops being mirrored as a bullet" \
     "#155 a lane's question is mirrored as a bullet" tools/lanes-page.py \
-    '        if l.get("state") != "needs-you" or not l.get("reason"):' \
+    '        if (l.get("state") != "needs-you" or not l.get("reason")
+                or l.get("state_from_label")):' \
     '        if True:'
 run red "the workers view starts printing desks" \
     "#164 a desk with no session is not listed as an agent" tools/lanes-page.py \
@@ -250,7 +251,7 @@ run red "a failed read renders as an answer" \
     'records_ok = True'
 run red "the card leads with the title again, as it did on 8/20" \
     "#172 …and every one of them starts with a verb" tools/lanes-page.py \
-    'return f"Look at {what}"' \
+    'return f"Take a look — {what}"' \
     'return what'
 run red "the title stops being plainised inside the action" \
     "#172 titles are still plainised inside the action" tools/lanes-page.py \
