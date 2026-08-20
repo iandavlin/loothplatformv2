@@ -1073,8 +1073,10 @@ def section_g_consent_is_the_tick():
                     "confinement against — the pool cannot answer this today")
     else:
         slug, needle = out.split("|", 1)
-        status, body = _fetch_full("/u/%s/" % slug, os.environ.get("LG_GATE_HOST_HEADER",
-                                                                    "dev2.loothgroup.com"))
+        # run-all.sh already passes LG_GATE_HOST for this gate; honour it rather
+        # than inventing a second name that would silently drift from §E's.
+        status, body = _fetch_full("/u/%s/" % slug,
+                                   os.environ.get("LG_GATE_HOST") or "dev2.loothgroup.com")
         if status != 200:
             DEAD.append(f"[G7] could not fetch /u/{slug}/ as a logged-out viewer "
                         f"(HTTP {status}) — a styled 403 or a redirect reads identically to "
