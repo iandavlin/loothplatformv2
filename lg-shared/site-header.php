@@ -49,6 +49,62 @@ if (!function_exists('lg_shared_h')) {
     }
 }
 
+/**
+ * lg_shared_header_join_stripe_enabled — does the ANON header's Join point at
+ * our own join page (/lgjoin/) instead of at patreon.com?  Issue #165.
+ *
+ * THE RULES AND THE COUPLING LIVE IN platform/config/header-join-stripe.php.
+ * Read that file before changing this one; in particular, ON here is NOT
+ * sufficient on its own — /lgjoin/ refuses anonymous visitors until the
+ * wp_option `lgms_stripe_pages_live` is also on, and gate 79 leg E asserts that
+ * pairing whenever this flag is ON.
+ *
+ * WHY THE PARTIAL READS ITS OWN CONFIG rather than taking a ctx key. This file's
+ * own docblock says it is "intentionally dumb — it renders what it's handed",
+ * and that principle is right for anything that varies per VIEWER. This does
+ * not: it is one site-wide fact. Handing it in would mean teaching seven
+ * independent callers — bb-mirror, archive-poc, events, profile-app,
+ * membership-pages, lg-layout-v2 and a docroot script — the same thing, and the
+ * one that was missed would keep serving the old href while looking fixed
+ * everywhere else. One reader in the one place the markup lives cannot drift.
+ *
+ * WHY __DIR__ RESOLVES CORRECTLY, checked by execution rather than assumed:
+ * callers require '/srv/lg-shared/site-header.php', and /srv/lg-shared is a
+ * symlink into the serving checkout. PHP resolves symlinks for __FILE__/__DIR__,
+ * so __DIR__ is <checkout>/lg-shared and the config path below lands on the
+ * tracked file. (This is the same resolution that breaks a docroot script's
+ * __DIR__-relative require of wp-load.php — here it is what makes it work.)
+ *
+ * Fails CLOSED: an unreadable or malformed config means patreon.com, which is
+ * today's behaviour for everybody.
+ */
+if (!function_exists('lg_shared_header_join_stripe_enabled')) {
+function lg_shared_header_join_stripe_enabled(): bool
+{
+    $cfg = @include __DIR__ . '/../platform/config/header-join-stripe.php';
+    $on  = is_array($cfg) && !empty($cfg['enabled']);
+
+    /* Per-box override, gitignored (platform/config/*.local.php). dev2 runs this
+       ON while the tracked default stays false, so a live pull cannot switch it
+       on unverified. Wins only on an explicit boolean true — a malformed or
+       unreadable file leaves the tracked value standing. Sits BEFORE the env
+       loop so a gate forcing a state still wins over the box. */
+    $local = @include __DIR__ . '/../platform/config/header-join-stripe.local.php';
+    if (is_array($local) && array_key_exists('enabled', $local)) {
+        $on = ($local['enabled'] === true);
+    }
+
+    /* BOTH getenv() and $_SERVER, deliberately: a fastcgi_param lands in
+       $_SERVER but not reliably in the environment, so a getenv()-only reader
+       serves the OFF path on the very preview URL built for Ian to click.
+       Previews and gate red-first legs only — never a deploy mechanism. */
+    foreach ([getenv('LG_HEADER_JOIN_STRIPE'), $_SERVER['LG_HEADER_JOIN_STRIPE'] ?? false] as $o) {
+        if ($o !== false && $o !== '') $on = ($o === '1' || $o === 'true');
+    }
+    return $on;
+}
+}
+
 if (!function_exists('lg_shared_render_site_header')) {
 /**
  * Render the shared site header.
@@ -108,6 +164,23 @@ function lg_shared_render_site_header(array $ctx): void
      * menu, which is today's behaviour for everybody.
      */
     $stripe_tester = ($caps['stripe_testgroup'] ?? false) === true;
+
+    /**
+     * ANON "Join" destination (#165, Ian 2026-08-20). See
+     * platform/config/header-join-stripe.php for the ruling and the coupling.
+     *
+     * $join_external is derived from the href rather than from the flag, and
+     * that is on purpose: "does this open a new tab" is a fact about the
+     * DESTINATION, not about which branch chose it. Written the other way, a
+     * later change of destination would keep whichever tab behaviour the flag
+     * happened to imply. webroot/bottom-nav.js applies the identical rule to
+     * its copy of this control in the PWA account sheet, so the two cannot
+     * disagree about a link they both draw.
+     */
+    $join_href     = lg_shared_header_join_stripe_enabled()
+                     ? '/lgjoin/'
+                     : 'https://www.patreon.com/c/theloothgroup/membership';
+    $join_external = (bool) preg_match('#^https?://#i', $join_href);
 
     // Tier pill label: Admin overrides paid-tier labels for manage_options users.
     $tier_label = match($tier) {
@@ -622,13 +695,20 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
       <?php else: ?>
 
         <a class="lg-chrome__signin" href="/wp-login.php">Sign in</a>
-        <?php /* Join goes STRAIGHT to Patreon (Ian 2026-06-12) — joining and
+        <?php /* Join went STRAIGHT to Patreon (Ian 2026-06-12) — joining and
                  connecting are two different things; /connect-your-patreon/ is
                  the on-site instruction page for patrons linking an account
                  (visible at ALL widths — it's the only anon door to it).
-                 Canonical URL also lives in wp_options lgpo_patreon_link. */ ?>
+                 Canonical URL also lives in wp_options lgpo_patreon_link.
+
+                 Since #165 (Ian 8/20) the JOIN half follows a flag: OFF is that
+                 2026-06-12 anchor byte-for-byte, ON sends a logged-out visitor
+                 to our own two-tier /lgjoin/ instead — where both rails are on
+                 offer, so the dual-rail founding law is served by the page
+                 rather than by the button. Connect Patreon is untouched in both
+                 states. See platform/config/header-join-stripe.php. */ ?>
         <a class="lg-chrome__connect" href="/connect-your-patreon/">Connect Patreon</a>
-        <a class="lg-chrome__join" href="https://www.patreon.com/c/theloothgroup/membership" target="_blank" rel="noopener">Join</a>
+        <a class="lg-chrome__join" href="<?= $h($join_href) ?>"<?= $join_external ? ' target="_blank" rel="noopener"' : '' ?>>Join</a>
 
       <?php endif; ?>
 
