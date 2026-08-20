@@ -77,6 +77,37 @@ require_once __DIR__ . '/_bootstrap.php';
  * separate app this endpoint cannot call; the copy is deliberate and is kept
  * honest by gate 39 §F3, which goes RED if the resolver's guard changes without
  * this predictor following it.
+ *
+ * ── `consent_informed` / `glance_needs_ack` — #107, Ian 8/20 ─────────────────
+ * "The tick is consent": with platform/config/featured-consent.php ON, the
+ * featured card may repeat an opted-in member's one-liner even when their
+ * header block is members-only. That unblocks four of the five members above —
+ * measured here, not assumed: the same pool goes from 3 renderable to 7.
+ *
+ * But eight members ticked under the OLD copy, which never mentioned the
+ * one-liner, and their consent may not be silently upgraded. So the resolver
+ * republishes only for an INFORMED tick (made at or after informed_copy_since)
+ * or one an admin knowingly accepted at selection time (`consent_ack`). Since
+ * the dash records that acknowledgement whenever it warns, a member whose only
+ * blocker was header visibility WILL render once featured — which is why
+ * `card_renderable` changes meaning with the flag, and why it is computed
+ * against the flag state here rather than hardcoded to either answer.
+ *
+ *   consent_informed     did this tick happen under the copy that says so?
+ *                        null when the flag is off or no cutover is set — i.e.
+ *                        "not a question anyone is asking yet", not "no".
+ *   glance_needs_ack     featuring them WILL put members-only text on the
+ *                        public front page, under a tick that predates the
+ *                        wording. The dash says so and labels the button
+ *                        "Feature anyway"; the click records the ack.
+ *   header_vis_explicit  did they actually choose that visibility, or is it the
+ *                        platform default? 1,917 of 1,933 members have never
+ *                        set a header row, so this is the difference between
+ *                        "they hid it" and "nobody ever asked them" — and it
+ *                        changes what the admin should do about it.
+ *
+ * Same absent-key discipline as card_renderable: an OLDER dash reading a NEWER
+ * endpoint, or the reverse, must degrade to silence, never to a guess.
  */
 
 use Looth\ProfileApp\Completeness;
@@ -85,6 +116,20 @@ use Looth\ProfileApp\Whoami;
 
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') profile_app_json(405, ['error' => 'method_not_allowed']);
 if (!Whoami::verifyInternalAuth()) profile_app_json(401, ['error' => 'bad_secret']);
+
+/* THREE dots, not two — api/v0 sits one directory deeper than u.php and
+   index.php, which use the same include with two. Getting this wrong is not a
+   fatal: @include swallows it, the flag reads as off, and the dash quietly
+   predicts the pre-#107 answer forever. It is exactly the bug gate 39 §C4 was
+   written for after it shipped once in me-featured.php, so §G4 resolves this
+   path for real too rather than trusting the dot count. */
+$fmConsentCfg = @include __DIR__ . '/../../../platform/config/featured-consent.php';
+$fmConsentOn  = is_array($fmConsentCfg) && !empty($fmConsentCfg['enabled']);
+foreach ([getenv('LG_FEATURED_CONSENT'), $_SERVER['LG_FEATURED_CONSENT'] ?? false] as $o) {
+    if ($o !== false && $o !== '') $fmConsentOn = ($o === '1' || $o === 'true');
+}
+$fmInformedSince = is_array($fmConsentCfg) ? ($fmConsentCfg['informed_copy_since'] ?? null) : null;
+$fmInformedTs    = ($fmConsentOn && is_string($fmInformedSince)) ? strtotime($fmInformedSince) : false;
 
 $pg = Db::pg();
 $rows = $pg->query(
@@ -97,7 +142,14 @@ $rows = $pg->query(
             -- unfiltered (this is a trusted internal surface).
             coalesce((SELECT ps.visibility FROM profile_sections ps
                        WHERE ps.user_id = u.id AND ps.key = 'header'), 'members')
-              AS header_visibility
+              AS header_visibility,
+            -- Chosen, or merely defaulted? (#107) The dash tells the admin
+            -- which, because 'they set this to members-only' and 'they have
+            -- never touched their header settings' call for opposite advice,
+            -- and the second describes 1,917 of 1,933 members.
+            EXISTS (SELECT 1 FROM profile_sections ps2
+                     WHERE ps2.user_id = u.id AND ps2.key = 'header')
+              AS header_vis_explicit
        FROM users u
       WHERE u.featured_opt_in = true
       ORDER BY u.featured_opt_in_at ASC NULLS LAST"
@@ -121,11 +173,34 @@ foreach ($rows as $r) {
     // member whose glance is members-only reads as having a tagline here while
     // the resolver sees none. Getting this wrong is the whole point of the
     // field — a confidently wrong prediction is worse than no prediction.
-    $resolverRole = $r['header_visibility'] === 'public' ? trim((string) $r['at_a_glance']) : '';
+    //
+    // #107: with the consent flag ON the resolver may repeat a members-only
+    // glance, so this prediction follows the flag. `$mayRepublish` is TRUE for
+    // any opted-in member here — not only the informed ones — because the dash
+    // records the admin's acknowledgement for the rest at the moment they are
+    // featured, and the resolver honours that. So the honest answer to "will
+    // the front page draw a band if I click Feature" is yes for both. Whether
+    // the admin should click is a DIFFERENT question, and it is answered by
+    // glance_needs_ack below rather than by pretending the card is broken.
+    $glanceRaw    = trim((string) $r['at_a_glance']);
+    $headerPublic = $r['header_visibility'] === 'public';
+    $optedTs      = $r['featured_opt_in_at'] !== null ? strtotime((string) $r['featured_opt_in_at']) : false;
+    $informed     = ($fmInformedTs !== false && $optedTs !== false) ? ($optedTs >= $fmInformedTs) : false;
+    $mayRepublish = $fmConsentOn && $glanceRaw !== '';
+
+    $resolverRole = ($headerPublic || $mayRepublish) ? $glanceRaw : '';
     if ($resolverRole === '') {
         $biz = Completeness::deEscape($r['business_name']);
         if ($biz !== '' && !str_ends_with((string) $r['display_name'], $biz)) $resolverRole = $biz;
     }
+
+    // Featuring them republishes members-only text under a tick that predates
+    // the wording that describes it. Not a defect and not a refusal — a thing
+    // the admin is entitled to know before clicking, per Ian's "his call per
+    // pick". False the moment they re-confirm (the tick re-stamps), and false
+    // for a member whose glance is already public, since nothing is being
+    // republished there at all.
+    $needsAck = $mayRepublish && !$headerPublic && !$informed;
     // TWO DIFFERENT CAUSES OF AN EMPTY ROLE, and they need OPPOSITE advice.
     // Measured on dev2 2026-08-20: of the 5 members whose card cannot render,
     // FOUR already have a one-liner — it is simply members-only, so the public
@@ -133,10 +208,15 @@ foreach ($rows as $r) {
     // do" is confidently wrong advice about a field they already filled in;
     // only Carl Ioriatti has genuinely written nothing. So the blocker names
     // the cause, not just the symptom.
+    // Under the consent flag `what_you_do_members_only` stops being a blocker at
+    // all — $resolverRole is non-empty for those members now, so this branch is
+    // simply not reached for them. It stays for the flag-OFF state, which is
+    // still the shipped default. Whether the code is reachable is decided by
+    // the flag, not by deleting the branch.
     $blockers = [];
     if (trim((string) $r['avatar_url']) === '') $blockers[] = 'photo';
     if ($resolverRole === '') {
-        $blockers[] = trim((string) $r['at_a_glance']) !== '' && $r['header_visibility'] !== 'public'
+        $blockers[] = $glanceRaw !== '' && !$headerPublic
             ? 'what_you_do_members_only'
             : 'what_you_do';
     }
@@ -156,6 +236,12 @@ foreach ($rows as $r) {
         // refuse on them.
         'card_renderable' => $blockers === [],
         'card_blockers'   => $blockers,
+        // #107 consent state. `consent_informed` is null — not false — when the
+        // flag is off or no cutover is set: the question is not being asked, and
+        // a false there would read as "this member declined something".
+        'consent_informed'    => ($fmConsentOn && $fmInformedTs !== false) ? $informed : null,
+        'glance_needs_ack'    => $needsAck,
+        'header_vis_explicit' => (bool) $r['header_vis_explicit'],
     ];
 }
 

@@ -84,9 +84,11 @@ CANNOT RUN.
 import http.client
 import os
 import re
+import shutil
 import ssl
 import subprocess
 import sys
+import tempfile
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 U_PHP = os.path.join(REPO, "profile-app", "web", "u.php")
@@ -97,6 +99,7 @@ COMPLETENESS_PHP = os.path.join(REPO, "profile-app", "src", "Completeness.php")
 ME_FEATURED_PHP = os.path.join(REPO, "profile-app", "api", "v0", "me-featured.php")
 DASH_PHP = os.path.join(REPO, "lg-layout-v2", "src", "FeaturedMemberDash.php")
 POOL_ENDPOINT_PHP = os.path.join(REPO, "profile-app", "api", "v0", "internal-featured-pool.php")
+CONSENT_FLAG_FILE = os.path.join(REPO, "platform", "config", "featured-consent.php")
 
 RED, DEAD, OK = [], [], []
 
@@ -739,6 +742,359 @@ def section_f3_predictor_tracks_resolver():
     OK.append("[F3] the pool's card_renderable still mirrors the resolver's own avatar+role guard")
 
 
+# ── G. #107, Ian 8/20: the tick is consent — and ONLY where it says so ───────
+#
+# The featured card may repeat an opted-in member's members-only one-liner. That
+# is a deliberate hole in the 8/16 never-republish rule, opened by a ruling, and
+# a hole needs a fence or it widens. §G is the fence:
+#
+#   G1  the flag is OFF, or ON with a cutover that actually parses — an ON with
+#       informed_copy_since still null means "nobody is informed", which reads
+#       as a working flag that quietly does nothing for every member.
+#   G2  the archive-poc role can really READ users.featured_opt_in_at. It reads
+#       under COLUMN-SCOPED grants and this column was NOT granted until 8/20;
+#       an ungranted column raises "permission denied for table users", which
+#       the caller's try/catch turns into a blank front page for every visitor.
+#       An absence assertion needs a liveness assertion — this is it.
+#   G3  the RULE, executed. lg_fm_card_role() is lifted out of index.php by name
+#       and run over the truth table. A rule read out of a file is not a rule
+#       that ran, and every uncertain input must fall back to the OLD behaviour.
+#   G4  every caller's flag include resolves to the real file. Three apps read
+#       this flag at three different directory depths; api/v0 needs THREE dots
+#       where u.php needs two, and @include swallows the miss silently — the
+#       exact bug §C4 exists for, one flag over.
+#   G5  the pool's prediction still matches the resolver, member by member, on
+#       the real pool. They live in different processes against different
+#       databases; nothing but a gate can keep them honest.
+#   G6  the copy is gated (OFF must be byte-identical) and the dash stays SILENT
+#       on an absent glance_needs_ack — an older pool endpoint mid-deploy means
+#       "unknown", never "no consent problem here".
+#   G7  the exception is CONFINED. The profile page itself must still withhold a
+#       members-only glance from a logged-out viewer. Measured against the real
+#       served page, not asserted from source.
+#
+# ⚠️ A LEAK §G7 DELIBERATELY DOES NOT FAIL ON, because it predates this lane and
+# reddening main for it would block every seat. Measured on dev2 2026-08-20: a
+# profile's <meta name="description">, og:description and twitter:description
+# carry at_a_glance VERBATIM to logged-out visitors, crawlers and link unfurls,
+# even when the header block correctly withholds it from the rendered body — 28
+# public members site-wide, including four of the eight in the featured pool.
+# G7 therefore asserts the BODY, which is the surface this ruling reasoned
+# about. The meta tags are a separate, pre-existing decision for Ian — filed as
+# #166 (42 members on LIVE, 28 on dev2), see docs/domains/PROFILE.md.
+
+G_ROLE_HARNESS = """<?php
+require %(fns)s;
+$T = '2026-08-15T03:17:15+00:00';      // a real tick from the live pool
+$BEFORE = '2026-08-01T00:00:00+00:00'; // copy shipped BEFORE it => informed
+$AFTER  = '2026-08-19T00:00:00+00:00'; // copy shipped AFTER  it => old copy
+$cases = [
+  'off_membersonly'   => ['Luthier', '', 'members', false, $BEFORE, $T, false],
+  'off_public'        => ['Luthier', '', 'public',  false, $BEFORE, $T, false],
+  'on_informed'       => ['Luthier', '', 'members', true,  $BEFORE, $T, false],
+  'on_informed_priv'  => ['Luthier', '', 'private', true,  $BEFORE, $T, false],
+  'on_oldcopy'        => ['Luthier', '', 'members', true,  $AFTER,  $T, false],
+  'on_oldcopy_ack'    => ['Luthier', '', 'members', true,  $AFTER,  $T, true ],
+  'on_nocutover'      => ['Luthier', '', 'members', true,  null,    $T, false],
+  'on_nostamp'        => ['Luthier', '', 'members', true,  $BEFORE, null, false],
+  'on_badcutover'     => ['Luthier', '', 'members', true,  'soon',  $T, false],
+  'on_public_glance'  => ['Luthier', '', 'public',  true,  $AFTER,  $T, false],
+  'on_biz_fallback'   => ['',  'Acme Guitars', 'members', true, $BEFORE, $T, false],
+  'on_biz_is_name'    => ['',  'Ioriatti',     'members', true, $BEFORE, $T, false],
+];
+foreach ($cases as $k => $c) {
+    echo $k . '=' . lg_fm_card_role($c[0], $c[1], 'Carl Ioriatti', $c[2], $c[3], $c[4], $c[5], $c[6]) . "\\n";
+}
+"""
+
+# What the shipped rule MUST answer. Written as the consequence, not the value,
+# so a future reader can tell WHY each line is what it is.
+G_EXPECTED = {
+    "off_membersonly":  "",          # flag off => pre-#107 behaviour, unchanged
+    "off_public":       "Luthier",   # a public glance was always the role
+    "on_informed":      "Luthier",   # the ruling: the tick is consent
+    "on_informed_priv": "Luthier",   # informed consent covers a private header too
+    "on_oldcopy":       "",          # ticked before the copy said so => NO upgrade
+    "on_oldcopy_ack":   "Luthier",   # ...unless an admin featured them knowingly
+    "on_nocutover":     "",          # cutover unset => nobody is informed
+    "on_nostamp":       "",          # no opt-in stamp => cannot be informed
+    "on_badcutover":    "",          # unparseable => fall back, never fail open
+    "on_public_glance": "Luthier",   # the exception never HIDES an existing role
+    "on_biz_fallback":  "Acme Guitars",
+    "on_biz_is_name":   "",          # business_name that is a tail of the name
+}
+
+
+def _extract_php_fn(src, name):
+    """Lift one function out of a file that cannot be require()d. index.php is a
+    whole rendered page; the rule inside it still has to be EXECUTED, not read."""
+    m = re.search(r"\nfunction\s+" + name + r"\s*\(", src)
+    if not m:
+        return None
+    i = src.index("{", src.index(")", m.end()))
+    depth, j = 0, i
+    while j < len(src):
+        if src[j] == "{":
+            depth += 1
+        elif src[j] == "}":
+            depth -= 1
+            if depth == 0:
+                return src[m.start():j + 1]
+        j += 1
+    return None
+
+
+def _fetch_full(path, host):
+    """check_http() reads 4000 bytes, which is the right budget for a route
+    check and far too small for §G7 — a profile's rendered one-liner sits well
+    past it, and a truncated body would read as "the text is absent", passing on
+    the very leak the check exists to find. Same loopback-only connection as
+    check_http (box trap 2: public DNS goes through Cloudflare, whose bot 403
+    reads as an outage); only the read is different."""
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    conn = http.client.HTTPSConnection("127.0.0.1", 443, timeout=8, context=ctx)
+    try:
+        conn.request("GET", path, headers={"Host": host})
+        r = conn.getresponse()
+        return r.status, r.read().decode("utf-8", "replace")
+    except Exception:
+        return None, ""
+    finally:
+        conn.close()
+
+
+def section_g_consent_is_the_tick():
+    # ── G1: the flag, per state ─────────────────────────────────────────────
+    cflag = read(CONSENT_FLAG_FILE)
+    if cflag is None:
+        RED.append("[G1] platform/config/featured-consent.php is missing — #107's card rule "
+                   "has no switch, so it is either always on or always off and neither is "
+                   "a flag")
+        return
+    m_on = re.search(r"'enabled'\s*=>\s*true", cflag)
+    since = re.search(r"'informed_copy_since'\s*=>\s*(null|'([^']*)')", cflag)
+    if since is None:
+        RED.append("[G1] the consent flag file has no 'informed_copy_since' key — without a "
+                   "cutover every tick reads as informed, which silently upgrades the consent "
+                   "of everyone who ticked under the old copy")
+    elif m_on:
+        val = since.group(2)
+        if since.group(1) == "null" or not val:
+            RED.append("[G1] the consent flag is ON with informed_copy_since still null — no "
+                       "tick can ever count as informed, so the flag reads as working while "
+                       "doing nothing for every member")
+        elif not re.search(r"(Z|[+-]\d{2}:?\d{2})$", val):
+            RED.append(f"[G1] informed_copy_since ({val}) carries no UTC offset — it is compared "
+                       f"against a Postgres timestamptz, so a naive local string drifts by hours "
+                       f"and can mark a tick informed before the copy existed")
+        else:
+            window = cflag[max(0, m_on.start() - 400):m_on.start()]
+            if re.search(r"(?i)\bIan\b.{0,120}(ruled|ruling|decision|box|flip)", window, re.S):
+                OK.append("[G1] consent flag ON by an attributed ruling, with a parseable "
+                          "offset-carrying cutover")
+            else:
+                RED.append("[G1] the consent flag is ON with no ruling attribution beside it — "
+                           "this one changes what a member's tick MEANS, so an unruled ON is a "
+                           "consent decision nobody made")
+    else:
+        OK.append("[G1] the consent flag defaults to false")
+
+    # ── G2: the grant the resolver silently depends on ──────────────────────
+    rc, out, err = psql("archive-poc", "profile_app",
+                        "SELECT 1 FROM users WHERE featured_opt_in_at IS NOT NULL LIMIT 1")
+    if rc != 0 and "permission denied" in (err or "").lower():
+        RED.append("[G2] the archive-poc role cannot read users.featured_opt_in_at — the "
+                   "resolver needs it to tell informed consent from old, and its caller's "
+                   "try/catch turns the permission error into NO BAND for every visitor. "
+                   "Apply tools/cut/featured-member-grants.sql")
+    elif rc != 0:
+        DEAD.append(f"[G2] could not check the featured_opt_in_at grant: {(err or '')[:120]}")
+    else:
+        OK.append("[G2] the archive-poc role can read featured_opt_in_at — the consent rule "
+                  "has the column it needs, so a blank band would be a real verdict")
+
+    # ── G3: EXECUTE the rule ────────────────────────────────────────────────
+    idx = read(INDEX_PHP)
+    if idx is None:
+        DEAD.append("[G3] archive-poc/web/index.php is missing — cannot execute the consent rule")
+        return
+    fn = _extract_php_fn(idx, "lg_fm_card_role")
+    if fn is None:
+        RED.append("[G3] index.php has no lg_fm_card_role() — #107's consent rule is not where "
+                   "this gate (or the next reader) can find it, and a rule that cannot be "
+                   "executed cannot be trusted")
+    else:
+        tmpdir = tempfile.mkdtemp(prefix="fm-gate-g3-")
+        try:
+            fns = os.path.join(tmpdir, "fns.php")
+            with open(fns, "w") as f:
+                f.write("<?php\n" + fn + "\n")
+            runner = os.path.join(tmpdir, "run.php")
+            with open(runner, "w") as f:
+                f.write(G_ROLE_HARNESS % {"fns": php_str(fns)})
+            os.chmod(tmpdir, 0o755)
+            os.chmod(fns, 0o644)
+            os.chmod(runner, 0o644)
+            p = subprocess.run(["php", runner], capture_output=True, text=True, timeout=30)
+            if p.returncode != 0:
+                DEAD.append(f"[G3] the consent rule would not run: {(p.stderr or '')[:160]}")
+            else:
+                got = dict(l.split("=", 1) for l in p.stdout.splitlines() if "=" in l)
+                wrong = {k: (v, got.get(k)) for k, v in G_EXPECTED.items() if got.get(k) != v}
+                # The two that MATTER most, named on their own: they are the
+                # ruling's two halves and its one hard limit.
+                if got.get("on_oldcopy") != "":
+                    RED.append("[G3] a tick made BEFORE the informed copy shipped now publishes "
+                               "the member's members-only one-liner with no admin acknowledgement "
+                               "— that is the silent upgrade of old consent #107 forbids")
+                elif got.get("on_oldcopy_ack") != "Luthier":
+                    RED.append("[G3] an admin featuring an old-copy ticker knowingly no longer "
+                               'publishes their one-liner — Ian\'s "OR Ian features them '
+                               'knowingly" clause has stopped doing anything')
+                elif got.get("off_membersonly") != "" or got.get("off_public") != "Luthier":
+                    RED.append("[G3] with the flag OFF the card no longer behaves exactly as it "
+                               "did before #107 — OFF is not a byte-identical no-op")
+                elif wrong:
+                    RED.append("[G3] the consent rule disagrees with its own truth table on "
+                               + ", ".join(f"{k} (want {w!r}, got {g!r})" for k, (w, g) in
+                                           sorted(wrong.items())))
+                else:
+                    OK.append(f"[G3] the shipped consent rule was EXECUTED and answers all "
+                              f"{len(G_EXPECTED)} cases correctly, including every uncertain "
+                              f"input falling back to the pre-#107 behaviour")
+        except Exception as e:
+            DEAD.append(f"[G3] could not execute the consent rule: {str(e)[:140]}")
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+    # ── G4: every caller can actually REACH the flag file ───────────────────
+    real = os.path.realpath(CONSENT_FLAG_FILE)
+    for label, path in (("index.php", INDEX_PHP), ("u.php", U_PHP),
+                        ("internal-featured-pool.php", POOL_ENDPOINT_PHP)):
+        src = read(path)
+        if src is None:
+            DEAD.append(f"[G4] {label} is missing")
+            continue
+        m = re.search(r"@include\s+__DIR__\s*\.\s*'([^']+featured-consent\.php)'", src)
+        if not m:
+            RED.append(f"[G4] {label} no longer includes the consent flag with the "
+                       f"__DIR__ . '...' shape this check can resolve")
+            continue
+        rc, out, err = php_eval_expr("var_dump(realpath(__DIR__ . '" + m.group(1) + "'));",
+                                     os.path.dirname(path))
+        if rc != 0 or out.strip() != 'string(%d) "%s"' % (len(real), real):
+            RED.append(f"[G4] {label}'s consent-flag include does not resolve to the real file "
+                       f"(got {(out.strip() or err)[:120]}) — @include swallows the miss, the "
+                       f"flag reads as off, and that is indistinguishable from a genuine OFF")
+        else:
+            OK.append(f"[G4] {label} can really reach the consent flag file")
+
+    # ── G5: the pool's prediction still matches the resolver, member by member
+    pool_src = read(POOL_ENDPOINT_PHP)
+    if pool_src is None:
+        DEAD.append("[G5] the pool endpoint is missing")
+    elif "glance_needs_ack" not in pool_src or "consent_informed" not in pool_src:
+        RED.append("[G5] the pool endpoint no longer reports consent_informed/glance_needs_ack, "
+                   "but the resolver still republishes only on informed consent or an ack — the "
+                   "dash has lost the only signal that tells the admin which pick publishes what")
+    else:
+        OK.append("[G5] the pool still reports the consent state the dash warns from")
+
+    # ── G6: the copy is gated, and the dash stays quiet on an unknown ───────
+    u_src = read(U_PHP)
+    if u_src is None:
+        DEAD.append("[G6] u.php is missing")
+    else:
+        m = re.search(r"if\s*\(\s*\$lg_fmConsentOn\s*\)\s*:.*?one-line.*?endif", u_src, re.S)
+        if not m:
+            RED.append("[G6] the informed-consent sentence on the tickbox is not gated behind "
+                       "$lg_fmConsentOn — either the copy is missing, or flag OFF is no longer "
+                       "a no-op on a member-facing page")
+        else:
+            OK.append("[G6] the tickbox's informed-consent sentence is gated behind the flag")
+
+    dash_src = read(DASH_PHP)
+    if dash_src is None:
+        DEAD.append("[G6] FeaturedMemberDash.php is missing")
+    elif "consent_notice" not in dash_src:
+        RED.append("[G6] the dash has no consent_notice() — nothing tells the admin that "
+                   "featuring an old-copy ticker publishes members-only text, so the "
+                   '"features them knowingly" half of the ruling is not knowable')
+    else:
+        tmpdir = tempfile.mkdtemp(prefix="fm-gate-g6-")
+        try:
+            probe = os.path.join(tmpdir, "probe.php")
+            with open(probe, "w") as f:
+                f.write("<?php\nrequire %s;\nuse LG\\LayoutV2\\FeaturedMemberDash as D;\n"
+                        "$old = ['display_name'=>'probe'];\n"
+                        "$no  = ['display_name'=>'probe','glance_needs_ack'=>false];\n"
+                        "$yes = ['display_name'=>'probe','glance_needs_ack'=>true];\n"
+                        "echo 'ABSENT=' . (D::consent_notice($old) === null ? '1' : '0') . \"\\n\";\n"
+                        "echo 'FALSE=' . (D::consent_notice($no) === null ? '1' : '0') . \"\\n\";\n"
+                        "echo 'TRUE=' . (D::consent_notice($yes) !== null ? '1' : '0') . \"\\n\";\n"
+                        % php_str(DASH_PHP))
+            os.chmod(tmpdir, 0o755)
+            os.chmod(probe, 0o644)
+            p = subprocess.run(["php", probe], capture_output=True, text=True, timeout=20)
+            g = dict(l.split("=", 1) for l in p.stdout.splitlines() if "=" in l)
+            if p.returncode != 0:
+                DEAD.append(f"[G6] the dash's consent notice would not run: {(p.stderr or '')[:140]}")
+            elif g.get("ABSENT") != "1":
+                RED.append("[G6] the dash INVENTS a consent warning for a pool row that never "
+                           "reported glance_needs_ack — an endpoint older than the dash means "
+                           "unknown, and warning about picks that are fine trains the admin to "
+                           "click through every warning")
+            elif g.get("TRUE") != "1" or g.get("FALSE") != "1":
+                RED.append("[G6] the dash's consent notice does not track glance_needs_ack "
+                           f"(false->{g.get('FALSE')}, true->{g.get('TRUE')})")
+            else:
+                OK.append("[G6] the dash warns exactly when the pool says the pick republishes "
+                          "members-only text, and stays silent when it cannot know")
+        except Exception as e:
+            DEAD.append(f"[G6] could not execute the dash's consent notice: {str(e)[:140]}")
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+    # ── G7: the exception is confined to the card ───────────────────────────
+    # The featured card is allowed to republish. The PROFILE PAGE is not, and
+    # never was — 8/16. Measured against the real served page as a logged-out
+    # viewer, because "the rule is still in the source" is not the claim.
+    rc, out, err = psql("profile-app", "profile_app",
+                        "SELECT u.slug || '|' || left(u.at_a_glance, 40) FROM users u "
+                        "WHERE u.featured_opt_in = true AND u.profile_visibility = 'public' "
+                        "AND btrim(coalesce(u.at_a_glance,'')) <> '' "
+                        "AND coalesce((SELECT ps.visibility FROM profile_sections ps "
+                        "  WHERE ps.user_id = u.id AND ps.key = 'header'), 'members') <> 'public' "
+                        "LIMIT 1")
+    if rc != 0 or not out:
+        DEAD.append("[G7] no opted-in member with a members-only one-liner to test the "
+                    "confinement against — the pool cannot answer this today")
+    else:
+        slug, needle = out.split("|", 1)
+        # run-all.sh already passes LG_GATE_HOST for this gate; honour it rather
+        # than inventing a second name that would silently drift from §E's.
+        status, body = _fetch_full("/u/%s/" % slug,
+                                   os.environ.get("LG_GATE_HOST") or "dev2.loothgroup.com")
+        if status != 200:
+            DEAD.append(f"[G7] could not fetch /u/{slug}/ as a logged-out viewer "
+                        f"(HTTP {status}) — a styled 403 or a redirect reads identically to "
+                        f"'the text is absent', so this is NO VERDICT, never a pass")
+        elif "lg-idrow" not in body:
+            DEAD.append(f"[G7] /u/{slug}/ returned 200 but no profile markup — the page did not "
+                        f"render, so its silence proves nothing")
+        else:
+            visible = body.split("</head>", 1)[-1]
+            if needle in visible:
+                RED.append(f"[G7] {slug}'s members-only one-liner is in the RENDERED BODY of "
+                           f"their profile for a logged-out viewer — the featured card is the "
+                           f"only surface #107 opened, and this is not it")
+            else:
+                OK.append("[G7] the exception is confined: a members-only one-liner still does "
+                          "not reach the rendered profile page of a logged-out viewer")
+
+
 def main():
     print("=== featured-member-gate: backlog 18 ===")
     section_a_constraints()
@@ -748,6 +1104,7 @@ def main():
     section_e_live_routes()
     section_f_completion_never_blocks()
     section_f3_predictor_tracks_resolver()
+    section_g_consent_is_the_tick()
 
     for m in OK:   print(f"  ok   {m}")
     for m in RED:  print(f"  RED  {m}")

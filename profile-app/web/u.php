@@ -177,6 +177,19 @@ $lg_fmOn  = is_array($lg_fmCfg) && !empty($lg_fmCfg['enabled']);
 foreach ([getenv('LG_FEATURED_MEMBERS'), $_SERVER['LG_FEATURED_MEMBERS'] ?? false] as $lg_fmO) {
     if ($lg_fmO !== false && $lg_fmO !== '') $lg_fmOn = ($lg_fmO === '1' || $lg_fmO === 'true');
 }
+// A SECOND flag, and the one that makes this consent INFORMED (#107, Ian
+// 2026-08-20: "the tick is consent"). With it on, the featured card may repeat
+// this member's one-line "what you do" on the public front page even while
+// their profile keeps it members-only — so the tickbox has to say that before
+// they tick. Consent that does not say what it covers is not consent.
+// OFF renders not one extra byte: the sentence is inside the flag check, so
+// the block is identical to before, and a member ticking under OFF is
+// correctly treated as an old-copy ticker by everything downstream.
+$lg_fmConsentCfg = @include __DIR__ . '/../../platform/config/featured-consent.php';
+$lg_fmConsentOn  = is_array($lg_fmConsentCfg) && !empty($lg_fmConsentCfg['enabled']);
+foreach ([getenv('LG_FEATURED_CONSENT'), $_SERVER['LG_FEATURED_CONSENT'] ?? false] as $lg_fmCO) {
+    if ($lg_fmCO !== false && $lg_fmCO !== '') $lg_fmConsentOn = ($lg_fmCO === '1' || $lg_fmCO === 'true');
+}
 if ($lg_fmOn && $isOwner) {
     $fmColChk = $pg->query("SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='featured_opt_in' LIMIT 1");
     if ($fmColChk && $fmColChk->fetchColumn()) {
@@ -927,6 +940,14 @@ html[data-lguser-theme="dark"] .lg-fm-meter__next b{color:var(--lg-charcoal)}
           <input type="checkbox" id="lg-featcard-cb" <?= $lg_fmOptIn ? 'checked' : '' ?> aria-label="Yes, include me as a possible featured member">
           <span class="lg-featcard__lbl">Yes — include me as a possible featured member.</span>
         </label>
+<?php /* #107 — what ticking actually permits. The <?php tags start at COLUMN 0
+        on purpose: PHP eats the newline after `?>` but NOT the whitespace before
+        `<?php`, so an indented pair emits its own indent even when the branch is
+        skipped. Measured — indented, flag OFF served 8 bytes MORE than main. A
+        no-op flag has to be a no-op in bytes, not just on screen. */ ?>
+<?php if ($lg_fmConsentOn): ?>
+        <p class="lg-featcard__p">Ticking this lets your one-line &ldquo;what you do&rdquo; appear on that public front-page card &mdash; even if you keep it members-only on your profile. Nothing else you have set to members-only is affected, and it only ever appears there while you are the featured member.</p>
+<?php endif; /* /lg_fmConsentOn */ ?>
         <?php if ($lg_fmOptIn && $lg_fmOptInAt): ?>
         <p class="lg-featcard__meta">In the pool since <b><?= looth_h(date('j F Y', strtotime((string)$lg_fmOptInAt))) ?></b>. You can untick at any time — if you are on the front page when you do, you come off it straight away.</p>
         <?php else: ?>
