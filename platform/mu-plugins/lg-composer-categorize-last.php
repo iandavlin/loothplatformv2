@@ -45,6 +45,12 @@ if (!defined('ABSPATH')) exit;
  * gate 35 red on a healthy box and 404'd /compose/ for an allowed admin after a
  * reboot, 8/15. One file on disk, every runtime reads the same truth.
  */
+/* Guarded: these three are DELIBERATELY declared in bb-mirror/config.php too
+   (the runtimes share no loader). auth.php loads BOTH worlds — the hub config
+   first, then WP with this mu-plugin — so unguarded copies here redeclare-fatal
+   there (found by Ian's phone check 8/20: 'Sign in to post' for a signed-in
+   admin, because auth.php 500'd). bb-mirror's copies are guarded; now both are. */
+if (!function_exists('lg_ccl_config')) {
 function lg_ccl_config(): array
 {
     static $cfg = null;
@@ -65,6 +71,7 @@ function lg_ccl_config(): array
     }
     return $cfg;
 }
+}
 
 /**
  * Is the feature on?
@@ -75,6 +82,7 @@ function lg_ccl_config(): array
  * path on the very preview URL built for Ian to click. A fastcgi_param can only be
  * set by an nginx conf, never by a query string, so this is not a visitor switch.
  */
+if (!function_exists('lg_ccl_enabled')) {
 function lg_ccl_enabled(): bool
 {
     static $on = null;
@@ -84,11 +92,14 @@ function lg_ccl_enabled(): bool
     }
     return $on = (lg_ccl_config()['enabled'] ?? false) === true;
 }
+}
 
 /** The forum an untagged discussion lands in. 0 = not configured (fail closed). */
+if (!function_exists('lg_ccl_default_forum_id')) {
 function lg_ccl_default_forum_id(): int
 {
     return (int)(lg_ccl_config()['default_forum_id'] ?? 0);
+}
 }
 
 /** taxonomy term slug => postable forum ID. */
