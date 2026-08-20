@@ -38,6 +38,16 @@ if ( ! class_exists( '\\LGMS\\Repos\\CustomerRepo', false ) ) {
 } elseif ( ! method_exists( '\\LGMS\\Repos\\CustomerRepo', 'mergeMetadata' ) ) {
     $absorb_testable = false;
 }
+// MUST be required from the worktree, and this is the FOURTH time this shape
+// has bitten (#148): the mu-plugin's composer autoloader maps LGMS\ into the
+// SERVING CHECKOUT, which does not carry a class added on a branch. So
+// StripeLifecycle loads from here while MultiTier would resolve over there and
+// not be found — every event reaching applyConfirmed then fatals into a 503
+// "processing failed", which reads like a lifecycle defect rather than a
+// missing require. (Production deploy is unaffected: a pull brings src/ with
+// it and PSR-4 finds the class.)
+require_once $BASE . '/src/Membership/MultiTier.php';
+require_once $BASE . '/src/Repos/ProductRepo.php';
 require_once $BASE . '/src/StripeLifecycle.php';
 require_once $BASE . '/src/Wp/WebhookRestController.php';
 
@@ -71,6 +81,11 @@ $GLOBALS['e2e_allowlist']     = [];   // armed with the fixture uid once it exis
 add_filter( 'pre_option_lgms_stripe_lifecycle',    static fn() => '1' );
 add_filter( 'pre_option_lgms_identity_gate',       static fn() => $GLOBALS['e2e_identity_gate'] );
 add_filter( 'pre_option_lgms_stripe_webhook_secret', static fn() => $WHSEC );
+// MULTI-TIER (#148). Default OFF for sections 1-6, which therefore keep
+// asserting the pre-multi-tier constant exactly as they always did; section 7
+// flips this global, never wp_options.
+$GLOBALS['e2e_multi_tier'] = false;
+add_filter( 'pre_option_lgms_multi_tier', static fn() => $GLOBALS['e2e_multi_tier'] ? '1' : false );
 // Soft-launch cohort, shadowed in-process like every other flag here (an
 // array short-circuits the pre_option filter fine; wp_options untouched).
 add_filter( 'pre_option_' . StripeLifecycle::ALLOWLIST_OPT, static fn() => $GLOBALS['e2e_allowlist'] );
@@ -112,10 +127,10 @@ $confirm = static function ( string $status ) use ( $sub_obj ): void {
     };
 };
 
-$uid = 0; $localCustomer = 0; $uidB = 0; $localCustomerB = 0;
-$cleanup = function () use ( $pdo, &$uid, &$localCustomer, &$uidB, &$localCustomerB, $cusId, $subId, $rand ) {
+$uid = 0; $localCustomer = 0; $uidB = 0; $localCustomerB = 0; $uidC = 0; $localCustomerC = 0;
+$cleanup = function () use ( $pdo, &$uid, &$localCustomer, &$uidB, &$localCustomerB, &$uidC, &$localCustomerC, $cusId, $subId, $rand ) {
     // Rows first (so the deleted_user fan-out finds nothing), users last.
-    foreach ( [ $localCustomer, $localCustomerB ] as $c ) {
+    foreach ( [ $localCustomer, $localCustomerB, $localCustomerC ] as $c ) {
         if ( $c > 0 ) {
             $pdo->prepare( 'DELETE FROM entitlements WHERE customer_id = ?' )->execute( [ $c ] );
             $pdo->prepare( 'DELETE FROM subscriptions WHERE customer_id = ?' )->execute( [ $c ] );
@@ -123,14 +138,14 @@ $cleanup = function () use ( $pdo, &$uid, &$localCustomer, &$uidB, &$localCustom
             $pdo->prepare( 'DELETE FROM customers WHERE id = ?' )->execute( [ $c ] );
         }
     }
-    foreach ( [ $uid, $uidB ] as $u ) {
+    foreach ( [ $uid, $uidB, $uidC ] as $u ) {
         if ( $u > 0 ) {
             $pdo->prepare( 'DELETE FROM lg_role_sources WHERE wp_user_id = ?' )->execute( [ $u ] );
             $pdo->prepare( 'DELETE FROM lg_lifecycle_journal WHERE wp_user_id = ?' )->execute( [ $u ] );
         }
     }
     $pdo->prepare( "DELETE FROM lg_processed_events WHERE event_id LIKE ?" )->execute( [ "evt_e2e_{$rand}%" ] );
-    foreach ( [ $uid, $uidB ] as $u ) {
+    foreach ( [ $uid, $uidB, $uidC ] as $u ) {
         if ( $u > 0 ) {
             require_once ABSPATH . 'wp-admin/includes/user.php';
             wp_delete_user( $u );
@@ -333,6 +348,114 @@ $note( $st->fetchColumn() === 'looth3', 'and grants looth3 — add-to-cohort is 
 clean_user_cache( $uidB );
 $uB = get_user_by( 'id', $uidB );
 $note( in_array( 'looth3', (array) $uB->roles, true ), 'REAL wp_capabilities carries looth3 for the added member', implode( ',', (array) $uB->roles ) );
+
+// --- 7. MULTI-TIER: the tier granted is the tier PAID for (#148) ------------
+echo "\n[7] multi-tier — the REAL catalogue decides the tier, on the real stack\n";
+
+// Prices come from the REAL dev2 catalogue, resolved at runtime. A hardcoded
+// price id would rot the first time the dash sets a new one, and would then
+// fail as if the feature were broken.
+$liteRow = $pdo->query(
+    "SELECT pr.stripe_price_id FROM prices pr
+       JOIN products p ON p.id = pr.product_id
+      WHERE p.ref = 'looth2' AND p.kind = 'membership' AND p.active = 1
+        AND p.region_tag IS NULL AND pr.type = 'recurring' AND pr.`interval` = 'month'
+      ORDER BY pr.id DESC LIMIT 1"
+)->fetchColumn();
+
+if ( $liteRow === false ) {
+    $note( false, 'the catalogue holds an active looth2 monthly price to test with',
+           'no looth2 price on this box — import the catalogue' );
+} else {
+    $cusIdC = "cus_e2g_{$rand}";
+    $subIdC = "sub_e2g_{$rand}";
+    $emailC = "e2e3-{$rand}@lifecycle-e2e.test";
+    $uidC   = wp_insert_user( [
+        'user_login' => "e2e_lc3_{$rand}",
+        'user_email' => $emailC,
+        'user_pass'  => wp_generate_password( 24, true, true ),
+        'role'       => 'looth1',
+    ] );
+    if ( is_wp_error( $uidC ) ) { throw new RuntimeException( 'fixture user C failed: ' . $uidC->get_error_message() ); }
+    $uidC = (int) $uidC;
+    $pdo->prepare( 'INSERT INTO customers (uuid, stripe_customer_id, email, name, metadata) VALUES (?,?,?,?,?)' )
+        ->execute( [ wp_generate_uuid4(), $cusIdC, $emailC, 'E2E Scratch C', json_encode( [ 'wp_user_id' => (string) $uidC ] ) ] );
+    $localCustomerC = (int) $pdo->lastInsertId();
+    // A LIST of ids, which is what StripeLifecycle::allowlist() normalizes: it
+    // iterates VALUES, so the [id => true] shape silently reads as an EMPTY
+    // cohort and every event below is skipped with a 200 that looks like a pass.
+    $GLOBALS['e2e_allowlist'] = [ $uid, $uidB, $uidC ];
+
+    $sub_objC = static function ( string $status, string $price ) use ( $subIdC, $cusIdC ): array {
+        return [
+            'id' => $subIdC, 'object' => 'subscription', 'customer' => $cusIdC, 'status' => $status,
+            'items' => [ 'data' => [ [ 'price' => [ 'id' => $price ] ] ] ],
+            'cancel_at_period_end' => false,
+            'current_period_start' => time() - 86400, 'current_period_end' => time() + 86400 * 29,
+            'canceled_at' => null,
+        ];
+    };
+    $confirmC = static function ( string $status, string $price ) use ( $sub_objC ): void {
+        StripeLifecycle::$confirmFactory = static fn(): object => new class( $sub_objC( $status, $price ) ) {
+            public function __construct( private array $sub ) {}
+            public function retrieveSubscription( string $id, array $expand = [] ): object {
+                if ( $id !== $this->sub['id'] ) { throw new RuntimeException( "no such sub {$id}" ); }
+                return json_decode( (string) json_encode( $this->sub ) );
+            }
+        };
+    };
+
+    // (a) FLAG OFF on a LITE price — the pre-#148 behaviour, reproduced on the
+    // real stack. This is the DEFECT: $5 Lite buys Pro. Asserting it here is
+    // what makes the ON leg below meaningful rather than merely green.
+    $GLOBALS['e2e_multi_tier'] = false;
+    $confirmC( 'active', (string) $liteRow );
+    $p7a = $evt( "evt_e2e_{$rand}_7a", 'customer.subscription.created', $sub_objC( 'active', (string) $liteRow ) );
+    $r7a = StripeLifecycle::ingest( $p7a, $sign( $p7a, $WHSEC ) );
+    $note( $r7a['status'] === 200, 'flag OFF: a LITE subscription is accepted', json_encode( $r7a ) );
+    clean_user_cache( $uidC );
+    $uC = get_user_by( 'id', $uidC );
+    $note( in_array( 'looth3', (array) $uC->roles, true ),
+           'flag OFF reproduces the defect: the LITE buyer really is granted looth3 (Pro)',
+           implode( ',', (array) $uC->roles ) );
+
+    // (b) FLAG ON, same member, same price — the tier follows the money.
+    $GLOBALS['e2e_multi_tier'] = true;
+    $confirmC( 'active', (string) $liteRow );
+    $p7b = $evt( "evt_e2e_{$rand}_7b", 'customer.subscription.updated', $sub_objC( 'active', (string) $liteRow ) );
+    $r7b = StripeLifecycle::ingest( $p7b, $sign( $p7b, $WHSEC ) );
+    $note( $r7b['status'] === 200, 'flag ON: the same event is accepted', json_encode( $r7b ) );
+
+    $st = $pdo->prepare( "SELECT tier FROM lg_role_sources WHERE wp_user_id = ? AND source = 'stripe'" );
+    $st->execute( [ $uidC ] );
+    $note( $st->fetchColumn() === 'looth2', 'lg_role_sources now says looth2 — resolved from the real catalogue' );
+
+    $st = $pdo->prepare( "SELECT ref FROM entitlements WHERE customer_id = ? AND kind = 'membership_tier' AND revoked_at IS NULL ORDER BY id DESC LIMIT 1" );
+    $st->execute( [ $localCustomerC ] );
+    $note( $st->fetchColumn() === 'looth2', 'the live entitlement is looth2, and the looth3 one was revoked' );
+
+    clean_user_cache( $uidC );
+    $uC = get_user_by( 'id', $uidC );
+    $note( in_array( 'looth2', (array) $uC->roles, true ),
+           'REAL wp_capabilities carries looth2 (the Arbiter ran on the real stack)',
+           implode( ',', (array) $uC->roles ) );
+    $note( ! in_array( 'looth3', (array) $uC->roles, true ),
+           '...and looth3 is GONE — the over-grant is corrected, not merely added to',
+           implode( ',', (array) $uC->roles ) );
+
+    // (c) An unmapped price must NEVER retract a paying member.
+    $confirmC( 'active', 'price_not_in_this_catalogue' );
+    $p7c = $evt( "evt_e2e_{$rand}_7c", 'customer.subscription.updated', $sub_objC( 'active', 'price_not_in_this_catalogue' ) );
+    $r7c = StripeLifecycle::ingest( $p7c, $sign( $p7c, $WHSEC ) );
+    $note( $r7c['status'] === 200, 'an unmapped price is still accepted', json_encode( $r7c ) );
+    clean_user_cache( $uidC );
+    $uC = get_user_by( 'id', $uidC );
+    $note( in_array( StripeLifecycle::TIER, (array) $uC->roles, true ),
+           'an unmapped price falls back to the constant — a payer is never demoted to looth1',
+           implode( ',', (array) $uC->roles ) );
+
+    $GLOBALS['e2e_multi_tier'] = false;
+}
 
 printf( "\n%d passed, %d failed\n", $pass, $fail );
 echo $fail === 0
