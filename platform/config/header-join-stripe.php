@@ -3,21 +3,64 @@
  * header-join-stripe — THE TRACKED CONFIG for where the anon header's "Join"
  * button goes. Issue #165, asked for by Ian 2026-08-20.
  *
- * ── WHAT IT SWITCHES ─────────────────────────────────────────────────────────
- * Ian 8/20: "can you Wire the header on Dev2 to have the stripe menuing that a
- * logged out user would see?"
+ * ── WHAT IT SWITCHES: THREE STATES (#170) ────────────────────────────────────
+ * Ian 8/20 on #165: "can you Wire the header on Dev2 to have the stripe menuing
+ * that a logged out user would see?"  Then, on #170, once that pointed at live:
  *
- *   OFF  Join → https://www.patreon.com/c/theloothgroup/membership, opened in a
- *        new tab. His own ruling of 2026-06-12, and correct for a Patreon-only
- *        world: joining and connecting are different things, so Join skipped the
- *        site entirely and went where the money was taken.
- *   ON   Join → /lgjoin/, in the SAME tab. Our own two-tier join page, which
- *        offers both worlds, so the dual-rail founding law is served by the
- *        destination rather than by the button.
+ *     "We need the join button in the header to still go to patreon unless a
+ *      test user is there on live."
  *
- * Nothing else moves in either state. "Connect Patreon" is untouched at every
+ * So the flag stopped being a switch and became an AUDIENCE:
+ *
+ *   'off'        Nobody gets /lgjoin/. Join → patreon.com, opened in a new tab.
+ *                His own ruling of 2026-06-12, and correct for a Patreon-only
+ *                world: joining and connecting are different things, so Join
+ *                skipped the site entirely and went where the money was taken.
+ *                THE TRACKED DEFAULT, and what live serves.
+ *
+ *   'allowlist'  The Stripe soft-launch cohort, and ONLY while they are signed
+ *                in. Everyone else — every anonymous visitor, and every
+ *                signed-in member not on the list — still goes to patreon.com.
+ *                This is the state live is meant to sit in during the soft
+ *                launch.
+ *
+ *   'on'         Everyone. Join → /lgjoin/, in the SAME tab. Our own two-tier
+ *                join page, which offers both worlds, so the dual-rail founding
+ *                law is served by the destination rather than by the button.
+ *                dev2 runs this today; live gets it at go-live.
+ *
+ * Nothing else moves in any state. "Connect Patreon" is untouched at every
  * width — it is the anon door to /connect-your-patreon/ and a patron linking an
  * existing pledge is not joining.
+ *
+ * ── 'allowlist' REUSES THE ONE COHORT LIST. THERE IS NO SECOND LIST ──────────
+ * "A test user" is already a solved question, and solving it twice is how the
+ * two ends of a fence drift apart. The cohort is the wp_option
+ * `lgms_stripe_lifecycle_allowlist` (WP user ids), written by LGMS\CohortAllowlist
+ * in the poller's admin dash. The header does not read it, and needs no user id:
+ * the poller already computes `$caps['stripe_testgroup'] = manage_options ||
+ * inCohort($uid)` (InternalRestController), it rides whoami to every consumer,
+ * and site-header.php has been reading it since the Test Group menu shipped.
+ * This flag simply gives that same capability a second job.
+ *
+ * Administrators are in the cohort by construction, so Ian can click the real
+ * button on live without being added to a list.
+ *
+ * ── WHY 'allowlist' IS SAFE ON A CACHED SITE ─────────────────────────────────
+ * It rides a per-viewer capability that an anonymous ctx never carries and which
+ * fails closed to false. The logged-out page therefore cannot differ by one byte
+ * between 'off' and 'allowlist' — not by intent, but because no anonymous input
+ * reaches the branch. Gate 79 proves it with cmp rather than by repeating this
+ * paragraph.
+ *
+ * ── WHAT 'allowlist' ADDS TO THE SIGNED-IN HEADER, AND WHY IT HAD TO ─────────
+ * Measured on main before #170 was designed: the Join pill renders for ANON
+ * ONLY — a signed-in viewer, tester or not, admin or not, gets no Join pill at
+ * any width. So "still go to patreon unless a test user is there" could not be
+ * delivered by swapping an href on a control the test user cannot see; in
+ * 'allowlist' the aside grows a Join pill for the cohort. Deliberately confined
+ * to that one state: in 'off' and 'on' the signed-in header stays byte-for-byte
+ * what #165 proved, so those proofs survive untouched.
  *
  * ── WHY A FLAG AT ALL: THE BLAST RADIUS ──────────────────────────────────────
  * lg-shared/site-header.php renders on EVERY page of EVERY strangler surface.
@@ -91,16 +134,24 @@
 return array(
 
 	/**
-	 * OFF until Ian has clicked the real thing on the dev2 serve, logged out.
+	 * 'off' until Ian has clicked the real thing on the dev2 serve, logged out.
 	 *
 	 * The house rule, for the ordinary reason: the serve runs main, so nothing
-	 * is verifiable there until it is merged, and OFF is what lets this arrive
-	 * harmlessly first. This one has an unusually strong claim to it — the
-	 * header is on every page, and the ON destination refuses anonymous
-	 * visitors until a SECOND switch is thrown (see the coupling above).
+	 * is verifiable there until it is merged, and 'off' is what lets this
+	 * arrive harmlessly first. This one has an unusually strong claim to it —
+	 * the header is on every page, and the /lgjoin/ destination refuses
+	 * anonymous visitors until a SECOND switch is thrown (see the coupling
+	 * above).
 	 *
-	 * Low blast radius when it does go on: it changes one href and drops one
-	 * target attribute. It writes nothing, deletes nothing, and grants nothing.
+	 * Low blast radius when it does move: 'allowlist' changes nothing for
+	 * anyone not on a hand-picked list, 'on' changes one href and drops one
+	 * target attribute. Neither writes anything, deletes anything, or grants
+	 * anything.
+	 *
+	 * ⚠️ `enabled => true` IS STILL READ, AND STILL MEANS 'on'. dev2's
+	 * hand-placed .local.php says exactly that and lives in the serving
+	 * checkout, which no lane may edit. The old key is permanent
+	 * compatibility, not leftovers — see lg_shared_header_join_stripe_state().
 	 */
-	'enabled' => false,
+	'state' => 'off',
 );
