@@ -205,6 +205,109 @@ run red "the watchdog stops advancing its watermark" \
     '      true'
 
 echo
+echo "#172 — the record parser, the card, the accordions:"
+run red "safe_url stops filtering, so a poisoned href renders" \
+    "#172 a javascript: record never reaches an href" tools/lanes-page.py \
+    "    m = re.match(r'^https://([A-Za-z0-9.\-]+)(/.*)?\$', u)
+    if m and m.group(1).lower() in SAFE_HOSTS:
+        return u
+    return None" \
+    "    return u"
+run red "a record is read as its FIRST TOKEN again (the build's own bug)" \
+    "#172 a value with prose after it is NOT a record" tools/lanes-page.py \
+    "val = safe_url(val.rstrip('.,;'))" \
+    "val = safe_url((val.split() or [''])[0].rstrip('.,;'))"
+run red "an unattributable record is guessed onto an issue" \
+    "#172 a record nobody can attribute is DROPPED" tools/lanes-page.py \
+    '        if not num:
+            continue                       # unattributable — silently useless' \
+    '        if not num:
+            num = "880"'
+run red "the issue BODY is read before its comments" \
+    "#172 a COMMENT outranks the issue BODY" tools/lanes-page.py \
+    'texts.append(i.get("body") or "")' \
+    'texts.insert(0, i.get("body") or "")'
+run red "the LAST writer wins instead of the first" \
+    "#172 a COMMENT outranks a commit body" tools/lanes-page.py \
+    'records.setdefault(num, {}).setdefault(key, val)' \
+    'records.setdefault(num, {})[key] = val'
+run red "a park reason loses its one usable record shape" \
+    "#172 a record in a PARK REASON opens a door" tools/lanes-page.py \
+    'out.extend(_record_lines(p.get("reason") or "", n, tail=True))' \
+    'out.extend(_record_lines(p.get("reason") or "", n))'
+run red "attribution by a leading number is dropped" \
+    "#172 …and by a leading number in the subject" tools/lanes-page.py \
+    "    m = re.match(r'\s*(\d+)\s*[:.]', subject or \"\")
+    return m.group(1) if m else None" \
+    "    return None"
+run red "a missing door falls back to the GitHub link" \
+    "#172 the GitHub link is NEVER substituted as the door" tools/lanes-page.py \
+    '"door": door_html(rec, records_ok),' \
+    '"door": door_html(rec or {"TEST-URL": i["html_url"]}, records_ok),'
+run red "a failed read renders as an answer" \
+    "#172 a FAILED read says the link is UNKNOWN" tools/lanes-page.py \
+    'records_ok = records_ok and gh_ok' \
+    'records_ok = True'
+run red "the card leads with the title again, as it did on 8/20" \
+    "#172 …and every one of them starts with a verb" tools/lanes-page.py \
+    'return f"Look at {what}"' \
+    'return what'
+run red "the title stops being plainised inside the action" \
+    "#172 titles are still plainised inside the action" tools/lanes-page.py \
+    '    what = plainize(issue["title"])' \
+    '    what = issue["title"]'
+run red "an ACTION record is ignored" \
+    "#172 an ACTION record outranks the derived verb" tools/lanes-page.py \
+    '    if rec.get("ACTION"):' \
+    '    if rec.get("ACTION") and False:'
+run red "the clipboard payload loses its replies" \
+    "#172 Copy for keeper carries" tools/lanes-page.py \
+    'return f"Re #{n} {action} — " + (f"[{tail}]" if tail else "")' \
+    'return f"Re #{n} {action} — "'
+run red "the suggested replies stop printing on the card" \
+    "#172 the suggested replies are printed on the card" tools/lanes-page.py \
+    '            if t.get("says"):' \
+    '            if t.get("says") and False:'
+run red "on GitHub is promoted back to a control" \
+    "#172 'on GitHub' is fine print on a bullet" tools/lanes-page.py \
+    'rel="noopener" class="ghfine">#{issue["number"]} on GitHub ' \
+    'rel="noopener" class="ghlink">#{issue["number"]} on GitHub '
+run red "keeper tooling becomes a bullet again" \
+    "#172 merged + infra + not built is NOT a bullet" tools/lanes-page.py \
+    '            if "infra" in lab:' \
+    '            if "infra" in lab and False:'
+run red "the quiet line vanishes instead of being quiet" \
+    "#172 …it drops to the quiet line instead of vanishing" tools/lanes-page.py \
+    '        if quiet:' \
+    '        if quiet and False:'
+run red "a label-derived needs-you is a hand-raise again (the #138 shape)" \
+    "#172 a label-derived 'needs you' seat is not an 'it asked' bullet" tools/lanes-page.py \
+    'l["state_from_label"] = True' \
+    'l["state_from_label"] = False'
+run red "a loud block is collapsed into an accordion" \
+    "#172 NO loud block is inside an accordion" tools/lanes-page.py \
+    "                         f'style=\"color:#e8e6df\">#{i[\"number\"]} '
+                         f'{html.escape(plainize(i[\"title\"], 70))}</a></div>')" \
+    "                         f'style=\"color:#e8e6df\">#{i[\"number\"]} '
+                         f'{html.escape(plainize(i[\"title\"], 70))}</a></div>')
+                h.insert(-1, '<details class=\"acc\" data-acc=\"z\"><summary>'
+                             '<h2>Z</h2><span class=\"acccount\">1 z</span>'
+                             '</summary><div class=\"accbody\">')
+                h.append('</div></details>')"
+run red "Your list defaults collapsed like everything else" \
+    "#172 Your list opens by default and nothing else does" tools/lanes-page.py \
+    'plural(len(todo), "item"), open_=True' \
+    'plural(len(todo), "item"), open_=False'
+run red "the section counts become a constant" \
+    "#172 the counts are the real ones, not a constant" tools/lanes-page.py \
+    'return f"{n} {word if n == 1' \
+    'return f"{n + 1} {word if n == 1'
+run red "the remembered open state restores one way only" \
+    "#172 …and it OVERRIDES the server default in both directions" tools/lanes-page.py \
+    "if(v==='1')d.open=true;else if(v==='0')d.open=false;" \
+    "if(v==='1')d.open=true;"
+
+echo
 echo "no-ops — these MUST stay green, or the gate is merely edit-sensitive:"
 run green "a comment added to the renderer" "" tools/lanes-page.py \
     'def git_words(l):' \
@@ -213,6 +316,13 @@ def git_words(l):'
 run green "whitespace reflowed in the status script" "" tools/lanes-status.sh \
     'SEAT_CEILING=6     # worktrees existing' \
     'SEAT_CEILING=6         # worktrees existing'
+run green "a comment added inside the #172 record parser" "" tools/lanes-page.py \
+    'def _absorb(records, triples):' \
+    '# changes nothing about which record wins
+def _absorb(records, triples):'
+run green "the accordion CSS reflowed" "" tools/lanes-page.py \
+    '.accbody{padding:2px 0 12px;}' \
+    '.accbody{ padding:2px 0 12px; }'
 
 echo
 echo "──────────────────────────────────────────────────────────────"

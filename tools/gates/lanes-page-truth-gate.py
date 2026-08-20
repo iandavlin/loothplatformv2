@@ -680,11 +680,22 @@ def records_repo():
     # 3. attribution from a leading "<n>:" in the subject
     (root / "f").write_text("z")
     git("commit", "-qam", "864: close — a thing\n\nTEST-URL: /subject-plain/\n")
-    # 4. ⚠ THE SUBJECT IS NOT SCANNED FOR RECORDS, only for the number. A subject
-    #    is one line of prose and this one is a sentence ABOUT the convention.
+    # 4. ⚠ THE SUBJECT IS NOT SCANNED FOR RECORDS, only for the number — this
+    #    subject is a sentence ABOUT the convention. Kept as evidence, but see
+    #    the note at the assertion: the rule is belt-and-braces and cannot be
+    #    made to fail, so it is not claimed as a proved assertion.
     (root / "f").write_text("w")
     git("commit", "-qam", "865: add TEST-URL: /from-subject/ parsing\n\nnothing here\n")
-    # 5. prose that mentions the convention, in a body, for issue 866
+    # 4b. a record NOBODY can attribute — no #n on the line, none in the
+    #     subject. It must be dropped, never guessed onto a nearby issue.
+    (root / "f").write_text("t")
+    git("commit", "-qam", "notes with no number at all\n\nTEST-URL: /unattributed/\n")
+    # 5. a commit record for an issue that ALSO has a comment record — without
+    #    this the "a comment outranks a commit body" check has nothing to
+    #    outrank and passes on any precedence order at all.
+    (root / "f").write_text("u")
+    git("commit", "-qam", "853: notes\n\nTEST-URL: /the-commit-one/\n")
+    # 6. prose that mentions the convention, in a body, for issue 866
     (root / "f").write_text("v")
     git("commit", "-qam", "866: notes\n\n"
         "TEST-URL: /real-door/ — try it signed out\n"
@@ -725,9 +736,9 @@ def todo_fixture(**over):
             iss(870, "A javascript url", ["merged"],
                 body="TEST-URL: javascript:alert(1)\n"),
             iss(871, "A protocol-relative url", ["merged"],
-                body="TEST-URL: //evil.example/x\n"),
+                body="TEST-URL: //evil-two.example/x\n"),
             iss(872, "An off-site url", ["merged"],
-                body="TEST-URL: https://evil.example/x\n"),
+                body="TEST-URL: https://evil-three.example/x\n"),
             # ── the card ────────────────────────────────────────────────────
             iss(880, "44 — A MERGED THING", ["merged"]),
             iss(881, "A built thing", ["built"]),
@@ -812,8 +823,9 @@ def leg_todo(tmp):
     check("#172 a record in a COMMIT BODY opens a door",
           "/from-commit/" in doors)
     check("#172 a COMMENT outranks a commit body",
-          "/subject-hash/" in doors and
-          re.search(r'#853 on GitHub', b) is not None)
+          "/the-comment-one/" in doors and "/the-commit-one/" not in doors,
+          "#853 carries a record in BOTH places; the comment is the correctable "
+          "one, so it has to win")
     # A park reason is ONE line, so the record rides at its end — the one place
     # the line-start rule is relaxed, and only because that source has no other
     # shape available to it.
@@ -822,9 +834,20 @@ def leg_todo(tmp):
           "/subject-hash/" in doors)
     check("#172 …and by a leading number in the subject",
           "/subject-plain/" in doors)
+    # ⚠ HONEST NOTE, because a gate that overclaims is worse than one that
+    # claims less. "The subject is never scanned for records" is real design and
+    # it is what the code does — but it CANNOT be made to fail, so red-first
+    # cannot prove it and it is not counted as proved. Scanning the subject
+    # would be inert anyway: a record must own its line and carry no spaces, and
+    # a subject that satisfied both would then be unattributable. The rule below
+    # is the one that actually does work at this seam, and it IS falsifiable.
     check("#172 the SUBJECT is never scanned for records, only for the number",
           "/from-subject/" not in doors,
-          "'865: add TEST-URL: /from-subject/ parsing' is a sentence, not a record")
+          "belt-and-braces; see the note above — not red-first provable")
+    check("#172 a record nobody can attribute is DROPPED, never guessed",
+          "/unattributed/" not in doors,
+          "no #n on the line and no number in the subject; guessing an owner "
+          "would put a door on the wrong bullet")
 
     # ── B. prose cannot counterfeit a record ─────────────────────────────────
     check("#172 a value with prose after it is NOT a record",
@@ -838,9 +861,13 @@ def leg_todo(tmp):
                     r'no test link yet', b, re.S) is not None)
 
     # ── C. the href is untrusted input ───────────────────────────────────────
+    # ⚠ THREE DISTINCT HOSTS. "//evil.example/x" is a substring of
+    # "https://evil.example/x", so with a shared host the off-site URL rendering
+    # reddened the protocol-relative check as well and neither one was measuring
+    # the rule it named.
     for tag, bad in (("javascript:", "javascript:alert(1)"),
-                     ("protocol-relative", "//evil.example/x"),
-                     ("off-site", "https://evil.example/x")):
+                     ("protocol-relative", "//evil-two.example/x"),
+                     ("off-site", "https://evil-three.example/x")):
         check(f"#172 a {tag} record never reaches an href",
               bad not in h and bad not in doors)
     check("#172 …and a legitimate path DOES (liveness for the three above)",
@@ -917,6 +944,16 @@ def leg_todo(tmp):
           re.search(r'seat 892-labelled', b) is not None
           and "merged — waiting on your check" in b,
           "only the checklist looks past the upgrade; the card is #159's")
+
+    # ── H2. a read that FAILED never renders as an answer ───────────────────
+    hb, _ = render(tmp, todo_lanes(), todo_fixture(ok=False), "todo-blind",
+                   repo=repo, ref="main")
+    bb = body_only(hb or "")
+    check("#172 a FAILED read says the link is UNKNOWN, not that there is none",
+          "test link unknown" in bb and "no test link yet" not in bb,
+          "\"there isn't one\" and \"I could not look\" must never render alike")
+    check("#172 …and the list still rendered while blind (liveness)",
+          '<h2>Your list</h2>' in bb)
 
     # ── I. the accordions ────────────────────────────────────────────────────
     top, bodies, bal = acc_regions(h)

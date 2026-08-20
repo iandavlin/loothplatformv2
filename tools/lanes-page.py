@@ -432,7 +432,13 @@ def _record_lines(text, default_issue=None, tail=False):
             # record inline, and a first-token reading would have handed #172 a
             # door pointing at the join page. Prose that mentions the convention
             # must stay inert (feedback-red-first-that-stays-green).
-            val = safe_url(val.rstrip('.,;)>'))
+            # Trailing SENTENCE punctuation only. ')' and '>' were in this
+            # set and mangled a legitimate value — a record reading
+            # "TEST-URL: javascript:alert(1)" arrived as "javascript:alert(1",
+            # which is still a poisoned href and merely one the assertion
+            # against it could no longer recognise. Anything '>' could have
+            # caught, safe_url rejects outright.
+            val = safe_url(val.rstrip('.,;'))
         else:
             val = re.sub(r"\s+", " ", val)[:120].rstrip(" .")
             if len(val) < 6:
