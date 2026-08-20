@@ -720,6 +720,7 @@ if (!function_exists('lg_notif_quickreply_enabled')) {
  * the member-identical hub (existing anonymizing unchanged). Tracked default
  * OFF; gitignored .local.php beside it wins per-key; live protected by absence.
  */
+if (!function_exists('lg_hub_feed_noindex_on')) {
 function lg_hub_feed_noindex_on(): bool
 {
     static $on = null;
@@ -731,4 +732,5 @@ function lg_hub_feed_noindex_on(): bool
         $on = ($loc['enabled'] === true);
     }
     return $on;
+}
 }
