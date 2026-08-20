@@ -170,10 +170,25 @@ final class FeaturedMemberDash
         return null;
     }
 
-    /** Blocker key => how the dash says it. Mirrors the pool's card_blockers. */
+    /* Blocker key => the CLAUSE the dash says, phrased as the state it is in
+       rather than as an instruction. An empty role has two causes needing
+       opposite advice, and the common one is NOT the obvious one: on dev2
+       2026-08-20, four of the five members whose card cannot render had
+       already written a one-liner and had it withheld as members-only. Telling
+       them to "add a one-line what you do" would be confident, specific and
+       wrong about a field they had filled in. */
     private const CARD_BLOCKER_LABELS = [
-        'photo'       => 'a photo',
-        'what_you_do' => 'a one-line “what you do”',
+        'photo'                    => 'has no photo',
+        'what_you_do'              => 'has no one-line “what you do”',
+        'what_you_do_members_only' => 'has their one-line “what you do” set to members-only, '
+                                    . 'so the public card may not repeat it',
+    ];
+
+    /** The short form for the pool table's Card column. */
+    private const CARD_BLOCKER_SHORT = [
+        'photo'                    => 'a photo',
+        'what_you_do'              => 'a one-line “what you do”',
+        'what_you_do_members_only' => 'their one-liner made public (it is members-only)',
     ];
 
     /* ── WILL THE FRONT PAGE ACTUALLY SHOW THIS PICK? ─────────────────────
@@ -200,12 +215,12 @@ final class FeaturedMemberDash
         foreach ($blockers as $b) {
             $parts[] = self::CARD_BLOCKER_LABELS[$b] ?? $b;
         }
-        $missing = $parts ? implode(' and ', $parts) : 'a photo or a one-line “what you do”';
-        $name = trim((string) ($member['display_name'] ?? 'This member'));
+        $name = trim((string) ($member['display_name'] ?? ''));
+        if ($name === '') $name = 'This member';
+        $why = $parts ? implode(', and ', $parts) : 'has no photo or no one-line “what you do”';
 
-        return 'Featured — but the front-page band will stay hidden until '
-             . ($name !== '' ? $name : 'this member') . ' adds ' . $missing . '. '
-             . 'The selection is saved and will appear the moment they do.';
+        return 'Featured — but the front-page band will stay hidden, because ' . $name . ' '
+             . $why . '. The selection is saved and the band appears the moment that changes.';
     }
 
     public static function handle_feature(): void
@@ -411,7 +426,7 @@ final class FeaturedMemberDash
                     // consequence stated at the point he makes it.
                     if ($cardWarn !== null) {
                         $missing = array_map(
-                            static fn($b) => self::CARD_BLOCKER_LABELS[$b] ?? $b,
+                            static fn($b) => self::CARD_BLOCKER_SHORT[$b] ?? $b,
                             is_array($p['card_blockers'] ?? null) ? $p['card_blockers'] : []
                         );
                         echo '<td style="color:#8a6d1f"><strong>Won’t show yet</strong><br>'

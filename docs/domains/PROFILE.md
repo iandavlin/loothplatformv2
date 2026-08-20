@@ -45,6 +45,16 @@ to no band. Cause: their header block is members-only (so the glance is
 withheld) and their `business_name` is a tail of their display name (so the
 fallback is skipped) — role resolves to `''`.
 
+**An empty role has TWO causes, and they need opposite advice.** Of the five
+members whose card cannot render, **four have already written a one-liner** —
+it is simply members-only. Only Carl Ioriatti has written nothing. So
+`card_blockers` names the cause (`what_you_do` vs `what_you_do_members_only`),
+and the dash says *"has their one-line 'what you do' set to members-only, so
+the public card may not repeat it"* for the four rather than telling them to
+add a field they already filled in. Getting this wrong would have been
+confident, specific, wrong advice about 4 of 5 — the same failure class as the
+"Ready" label it replaces.
+
 **Proven end to end, not inferred.** Featuring Rick through the real
 `admin-post.php` path returned *"Saved and pushed to archive-poc"* and took the
 band off the front page entirely: **74,456 → 72,838 bytes, zero `lg-fm__`

@@ -54,6 +54,10 @@ require_once __DIR__ . '/_bootstrap.php';
  *   card_ready       photo + what_you_do + LOCATION  (Completeness::CARD_ITEMS)
  *   card_renderable  photo + role, where `role` is at_a_glance ONLY IF the
  *                    member's header block is public, else business_name
+ * `card_blockers` names the CAUSE, because an empty role has two of them and
+ * they call for opposite advice: `what_you_do` (nothing written) vs
+ * `what_you_do_members_only` (written, but withheld from the public card).
+ * Four of the five affected members on dev2 are the SECOND kind.
  * Location is absent here on purpose (the card hides its own missing location),
  * and the header-visibility rule is absent from card_ready — which is why a
  * member can read card_ready:true and still resolve to no band.
@@ -122,9 +126,20 @@ foreach ($rows as $r) {
         $biz = Completeness::deEscape($r['business_name']);
         if ($biz !== '' && !str_ends_with((string) $r['display_name'], $biz)) $resolverRole = $biz;
     }
+    // TWO DIFFERENT CAUSES OF AN EMPTY ROLE, and they need OPPOSITE advice.
+    // Measured on dev2 2026-08-20: of the 5 members whose card cannot render,
+    // FOUR already have a one-liner — it is simply members-only, so the public
+    // card may not repeat it. Telling those four to "add a one-line what you
+    // do" is confidently wrong advice about a field they already filled in;
+    // only Carl Ioriatti has genuinely written nothing. So the blocker names
+    // the cause, not just the symptom.
     $blockers = [];
     if (trim((string) $r['avatar_url']) === '') $blockers[] = 'photo';
-    if ($resolverRole === '')                   $blockers[] = 'what_you_do';
+    if ($resolverRole === '') {
+        $blockers[] = trim((string) $r['at_a_glance']) !== '' && $r['header_visibility'] !== 'public'
+            ? 'what_you_do_members_only'
+            : 'what_you_do';
+    }
 
     $pool[] = [
         'uuid'          => $r['uuid'],
