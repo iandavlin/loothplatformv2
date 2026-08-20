@@ -83,3 +83,17 @@ head. lg-login-monitor then sends ONE stuffing summary (5 distinct accounts /
 accounts, list was outside-world breach spray (public surfaces leak no
 emails — scanned). An alert of this shape = the wall held; verify successes
 via wp_usermeta session_tokens before escalating.
+## Cloudflare challenges the whole standard WP API on live (verified 8/20)
+Path-scoped, not bot-heuristics: `/wp-json/` root and everything under
+`/wp-json/wp/v2/*` answer 403 `cf-mitigated: challenge` ("Just a moment…")
+to ANY non-browser caller — measured with the same UA+IP that
+`/wp-json/loothdev/v1/*` happily serves (real WP JSON, 401 on bad creds).
+So our own namespace is carved out; core's is challenged. Consequence:
+server-to-server calls (Apps Script, curl) can NEVER reach core endpoints
+like `POST /wp-json/wp/v2/media` through the front door — the showrunner
+sheet's image upload died on exactly this, 8/20 evening. The box's
+cf-api-token is R2-read-only (see login-door section); the rule lives in
+Ian's Cloudflare dashboard (same Security area as the 8/20 login rate
+limit). Fix shape: an exception for `POST /wp-json/wp/v2/media` (optionally
+scoped to ASN 15169 = Google, Apps Script's egress — seen live as
+107.178.193.205), or a loothdev-namespace upload door in a mu-plugin.
