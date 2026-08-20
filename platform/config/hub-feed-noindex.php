@@ -7,5 +7,5 @@
  * Gitignored .local.php beside this wins per-key; live protected by absence.
  */
 return array(
-	'enabled' => false,
+	'enabled' => true,   // Ian's GO, 8/20 verbatim: 'GO on 81' — live receives at his next lg-deploy
 );
