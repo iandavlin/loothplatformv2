@@ -48,7 +48,9 @@ namespace {
 if ( ! extension_loaded( 'pdo_sqlite' ) ) { fwrite( STDERR, "CANNOT RUN: pdo_sqlite missing\n" ); exit( 3 ); }
 
 $BASE = __DIR__ . '/../..';
-foreach ( [ '/src/StripeLifecycle.php', '/src/Wp/CheckoutRestController.php' ] as $f ) {
+foreach ( [ '/src/StripeLifecycle.php', '/src/Wp/CheckoutRestController.php',
+            '/src/StripePrice.php', '/src/Membership/MultiTier.php',
+            '/src/Membership/PatreonStanding.php' ] as $f ) {
     if ( ! is_readable( $BASE . $f ) ) { fwrite( STDERR, "CANNOT RUN (RED: build absent): missing {$f}\n" ); exit( 3 ); }
 }
 
@@ -89,6 +91,20 @@ class WP_REST_Response {
 }
 
 require_once $BASE . '/src/StripeLifecycle.php';
+// BOTH OF THESE WERE MISSING, AND THIS FILE HAS BEEN DEAD SINCE (found on
+// main, #148). Twice now a feature gave the door a new dependency and did not
+// update this require list: StripePrice when cadences arrived, then
+// PatreonStanding with the double-pay block (#150). Each time the run fataled —
+// "Class ... not found", exit 255, NO FAIL line printed — so the sections after
+// the fatal never executed and the silence read like nothing to report. The
+// file lives in deploy/remediation rather than tools/gates, so run-all.sh never
+// called it and nothing reported the silence either.
+require_once $BASE . '/src/StripePrice.php';
+require_once $BASE . '/src/Membership/PatreonStanding.php';
+// The door consults the multi-tier flag (#148). This test asserts the
+// SINGLE-tier behaviour, which is the flag's OFF state and stays the default —
+// so nothing below arms it, and every assertion here is unchanged.
+require_once $BASE . '/src/Membership/MultiTier.php';
 require_once $BASE . '/src/Wp/CheckoutRestController.php';
 
 use LGMS\StripeLifecycle;
