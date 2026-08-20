@@ -113,8 +113,9 @@ BRANCH="$(git -C "$WT" rev-parse --abbrev-ref HEAD)"
 [[ "$BRANCH" == "$LANE" ]] || { echo "spin-lane: worktree is on '$BRANCH', not '$LANE' — folder and branch must match (LANE-RULES.md). Re-cut the worktree from origin/main; don't rename or checkout." >&2; exit 1; }
 
 # 2. The branch exists on GitHub from the moment the lane opens.
-git -C "$WT" rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1 \
-  || { echo "spin-lane: pushing $LANE to origin (work exists in two places from the first commit)"; git -C "$WT" push -u origin "$LANE"; }
+UP="$(git -C "$WT" rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)"
+[[ "$UP" == "origin/$LANE" ]] \
+  || { echo "spin-lane: upstream is '${UP:-none}', not origin/$LANE — repointing (a bare push must NEVER target main; lanes 165+170 both caught this live)"; git -C "$WT" push -u origin "$LANE"; }
 
 # riders recorded on the worktree (lanes-status reads this for the page) and
 # on each rider issue's own record
