@@ -86,11 +86,22 @@ TM has-session -t "$SESSION" 2>/dev/null || { echo "lane-say: FAILED — no sess
 # record of an instruction somebody tried to give, and losing it silently is the very
 # failure this script exists to end.
 stranded() {
-    pane | awk '/^❯/{line=$0} END{
-        sub(/^❯[[:space:]]*/,"",line);
-        gsub(/[[:space:]]+$/,"",line);
-        print line
-    }'
+    # The CLI paints its next-prompt SUGGESTION into the input box in SGR-2 dim
+    # (measured 8/15; false-alarmed lane-say again 8/20 — "take the preview
+    # down" was never typed by anyone). A plain capture flattens dim to bytes
+    # identical to real typed input, so: capture WITH escapes, delete every
+    # dim span, strip the remaining SGR noise, and what survives after the
+    # prompt glyph is what somebody actually typed.
+    TM capture-pane -pe -t "$SESSION" 2>/dev/null | awk '
+        /❯/ { line=$0 }
+        END {
+            if (line == "") { print ""; exit }
+            sub(/^.*❯/, "", line)
+            gsub(/\033\[2m[^\033]*(\033\[(22|0)?m)?/, "", line)
+            gsub(/\033\[[0-9;]*m/, "", line)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+            print line
+        }'
 }
 
 PRIOR="$(stranded)"
