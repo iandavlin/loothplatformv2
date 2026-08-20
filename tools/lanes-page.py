@@ -376,6 +376,20 @@ RECORD_RE = re.compile(
     r'^[\s>*\-]*(TEST-URL|ACTION)\s*(?:#(\d+))?\s*:\s*(\S.*?)\s*$',
     re.M | re.I)
 
+# ⚠ THE PARK REASON IS ONE LINE, so the line-start rule above would make that
+# source unusable: a lane writes "merged as c879589, dev2 flag ON pending Ian's
+# join-page look" and has nowhere to put a record. This variant lets the record
+# ride at the END of such a line — and it is used for the park reason ONLY.
+#
+# The two rules differ because their SOURCES differ, not for convenience. A
+# commit body and an issue comment are long prose that discusses this convention
+# as often as it uses it, so there a record must own its whole line. A park
+# reason is one short deliberate sentence a lane writes about its own work; the
+# same strictness there would buy nothing and cost the source entirely.
+RECORD_TAIL_RE = re.compile(
+    r'(?:^|[\s;,(\[])(TEST-URL|ACTION)\s*(?:#(\d+))?\s*:\s*(\S.*?)\s*$',
+    re.M | re.I)
+
 # The href allow-list. A record arrives from an issue comment or a commit body
 # and lands in an anchor, so it is UNTRUSTED INPUT: same-site paths and our own
 # hosts only. javascript:, data:, protocol-relative //evil and any third-party
@@ -398,10 +412,12 @@ def safe_url(u):
     return None
 
 
-def _record_lines(text, default_issue=None):
-    """Every record in one blob of text, as (issue, key, value) triples."""
+def _record_lines(text, default_issue=None, tail=False):
+    """Every record in one blob of text, as (issue, key, value) triples.
+
+    `tail=True` is the park-reason form — see RECORD_TAIL_RE."""
     out = []
-    for m in RECORD_RE.finditer(text or ""):
+    for m in (RECORD_TAIL_RE if tail else RECORD_RE).finditer(text or ""):
         key = m.group(1).upper()
         num = m.group(2) or (str(default_issue) if default_issue else None)
         if not num:
@@ -469,7 +485,7 @@ def park_records(parked):
     for p in parked or []:
         n = p.get("branch", "").split("-")[0]
         if n.isdigit():
-            out.extend(_record_lines(p.get("reason") or "", n))
+            out.extend(_record_lines(p.get("reason") or "", n, tail=True))
     return out
 
 
