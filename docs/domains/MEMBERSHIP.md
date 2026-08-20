@@ -53,8 +53,10 @@
   defaulted OFF, gate 74. One wp_option row read three ways; the Slim app's
   OFF state is the WordPress route not existing (404 ⇒ unknown ⇒ proceed),
   so there is no second switch. Fail-open by design: an unknown answer never
-  blocks a sale. Read-only "Dual Payers" tab on Settings → LG Member Sync
-  surfaces the unblockable reverse direction.
+  blocks a sale. The unblockable reverse direction is surfaced BOTH ways: a
+  read-only "Dual Payers" tab on Settings → LG Member Sync for Ian, and a
+  notice on /manage-subscription/ for the member — so the first person to
+  notice a double charge is the one paying it. Never reconciled silently.
 - **Dual-payer census (read-only, 8/19). LIVE: ZERO.** 1,737 Patreon rows /
   1,221 paying patrons; 0 Stripe customers, 0 live subs, 0 bridge rows. The
   Stripe rail has never granted a live member, so enforcement can arm with
