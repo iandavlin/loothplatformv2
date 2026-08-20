@@ -23,7 +23,7 @@ use Throwable;
  *   billing"), a vestige of the single-source world, and a dual holder's value
  *   is whichever rail wrote last. Keying a payment block on it would let a
  *   paying patron through the moment anything stamped 'stripe' on them. So this
- *   class never reads it (docs/domains/STRIPE.md; gate 74 §2 asserts the
+ *   class never reads it (docs/domains/MEMBERSHIP.md; gate 74 §2 asserts the
  *   absence AND that mutating the field alone moves no verdict).
  *
  *   Instead: the Patreon LINK (`lgpo_patreon_user_id`), the entitled tier the

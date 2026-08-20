@@ -33,7 +33,7 @@
  *      is usually an assertion matching a comment.
  *   3. THE CHECK KEYS ON STANDING, NEVER ON `payment_source`. That field is one
  *      slot, descriptive only, and the two rails fight over it (dossier law,
- *      docs/domains/STRIPE.md). Mutating it alone must not move any verdict.
+ *      docs/domains/MEMBERSHIP.md). Mutating it alone must not move any verdict.
  *   4. A GIFT IS NOT A DOUBLE PAYMENT. A Patreon member buying a gift for
  *      somebody else is not paying twice, and must sail through in every state.
  *   5. THE MEMBER IS TOLD THE WAY OUT. A refusal that does not name the switch
@@ -587,6 +587,68 @@ if ( $live['code'] === 404 && str_contains( $live['body'], 'no such surface' ) )
     is_( $live['code'] < 500, sprintf( 'the join surface is ALIVE (%d) before anything is believed about it', $live['code'] ) );
 }
 
+/* ─── §8 the direction we cannot block ────────────────────────────────────── */
+
+section( '[8] THE MEMBER IS TOLD — the direction no code of ours can stop' );
+
+$msPage = $MP . '/web/manage-subscription.php';
+$msCss  = $MP . '/web/manage-subscription.css';
+if ( ! is_readable( $msPage ) || ! is_readable( $msCss ) ) {
+    bad( 'manage-subscription page/stylesheet missing' );
+} else {
+    $msBare = bare( $msPage );
+    is_( str_contains( $msBare, 'lg_membership_is_dual_payer' ),
+         'Manage Account asks whether this member is paying on BOTH rails' );
+    is_( str_contains( bare( $mpConfig ), 'lg_membership_dual_payer_message' ),
+         '...and has copy to show them, rather than only telling the admin' );
+
+    /* The block is one-directional by nature — a site-payer who then pledges on
+       patreon.com cannot be refused, because nothing of ours runs at Patreon's
+       door. So the ONLY remedy is telling them, and the wording has to do three
+       things: name the fact, leave the choice with them, and offer a way out. */
+    $dualMsg = literalsIn( $mpConfig, 'lg_membership_dual_payer_message' );
+    is_( $dualMsg !== '' && stripos( $dualMsg, 'twice' ) !== false,
+         'the notice says plainly that the account is paying twice' );
+    is_( stripos( $dualMsg, 'cancel' ) !== false && stripos( $dualMsg, 'whichever' ) !== false,
+         '...leaves the choice of WHICH to cancel with the member' );
+    is_( stripos( $dualMsg, 'refund' ) !== false,
+         '...and offers the overlap back, since we took it' );
+    is_( stripos( $dualMsg, 'sorry' ) === false && stripos( $dualMsg, 'error' ) === false,
+         '...without calling it their mistake or ours — it is neither' );
+    is_( str_contains( $msBare, 'request-refund' ),
+         'and the way out is a LINK, not an invitation to go find one' );
+
+    /* A modifier class with no rule behind it renders like an untouched element
+       while every "the class is present" assertion passes
+       (trap-class-name-assertion-passes-on-the-defect). This one tells a member
+       they are losing money, so it is the last place to allow that. */
+    $css = (string) file_get_contents( $msCss );
+    /* ⚠️ THE RULE MUST BE A LIGHT-MODE ONE. Written as a bare "does this class
+       appear before a {", this assertion was satisfied by the DARK-theme rule
+       alone: deleting the light rule left the member an unstyled pill and the
+       gate green. Caught by mutation, not by review. So each selector block is
+       read, and a block scoped to data-lguser-theme does not count. */
+    $blocks = [];
+    foreach ( explode( '}', $css ) as $chunk ) {
+        $bracePos = strpos( $chunk, '{' );
+        if ( $bracePos !== false ) { $blocks[] = substr( $chunk, 0, $bracePos ); }
+    }
+    foreach ( [ 'lg-manage-sub__card--dual', 'lg-manage-sub__status-pill--dual',
+                'lg-manage-sub__cta--secondary', 'lg-manage-sub__dual-actions' ] as $cls ) {
+        $lit = false;
+        foreach ( $blocks as $sel ) {
+            if ( str_contains( $sel, '.' . $cls ) && ! str_contains( $sel, 'data-lguser-theme' ) ) { $lit = true; break; }
+        }
+        is_( $lit, "the .$cls class has a light-mode rule behind it" );
+    }
+    is_( (bool) preg_match( '/data-lguser-theme="dark"\][^\n]*status-pill--dual/', $css ),
+         '...and the pill has a dark-theme ink of its own, not left to invert' );
+
+    is_( str_contains( bare( $mpConfig ), 'lg_membership_double_pay_block' ),
+         'the notice is behind the SAME flag row as the three purchase doors' );
+}
+
+
 echo "\n$pass passed, $fail failed\n";
 if ( $fail > 0 ) {
     echo "RED — the double-pay block is not holding.\n";
@@ -636,6 +698,30 @@ echo "        refusal tells the member how to switch rails.\n";
  *       a paying member, so an open one is a membership oracle.
  * 14. standing(): return the message even when inactive
  *     → §3b "with no message and no link" RED.
+ *
+ * 15. lgjoin.php — ungate the accepted-payment-methods bar
+ *     → §7 "a refused member is not sold to" RED. 16 does the same for the
+ *       free-trial pitch. Both were REAL: the first working build refused the
+ *       member and then showed them a payment-methods bar and a pre-filled
+ *       sign-up form, found by rendering the page rather than reading it.
+ * 17. manage-subscription.php — pin $is_dual_payer to false
+ *     → §8 "Manage Account asks whether this member is paying on BOTH rails" RED.
+ * 18. dual_payer_message(): open with "Sorry, an error occurred"
+ *     → §8 "without calling it their mistake or ours" RED. Being charged twice
+ *       is money to reclaim, not a fault to apologise for.
+ * 19. …drop the refund sentence
+ *     → §8 "offers the overlap back, since we took it" RED.
+ * 20. manage-subscription.css — delete the LIGHT .status-pill--dual rule
+ *     → §8 "has a light-mode rule behind it" RED. ⚠️ THIS ONE INITIALLY STAYED
+ *       GREEN and is why the assertion is written the way it is: a bare
+ *       "class appears before a {" was satisfied by the DARK rule alone, so
+ *       the member got an unstyled pill and the gate passed. The check now
+ *       reads selector blocks and ignores data-lguser-theme ones. Caught by
+ *       mutation, not by review — which is the entire argument for doing this.
+ * 21. …delete the dark-theme ink instead
+ *     → §8 "a dark-theme ink of its own" RED.
+ * 22. …point the refund link at "#"
+ *     → §8 "the way out is a LINK" RED.
  *
  * A NO-OP MUTATION FAILS LOUD, checked deliberately: renaming a local variable
  * inside forUser() reddens nothing, and reformatting refusalMessage()'s

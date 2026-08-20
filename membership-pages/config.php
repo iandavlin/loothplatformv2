@@ -388,6 +388,90 @@ function lg_membership_patreon_standing(int $wpUserId): array {
 }
 }
 
+/* ---------- the direction we cannot block (#149/#150) ---------- *
+ * A member paying here who then pledges on patreon.com cannot be stopped —
+ * nothing of ours runs at Patreon's door. Ian sees them on the Dual Payers
+ * admin tab; THIS is the other half of that ruling, the member's own copy, so
+ * the first person to notice the double charge is the person paying it and not
+ * an audit six weeks later.
+ *
+ * Behind the SAME `lgms_double_pay_block` row as everything else, so with the
+ * flag off nothing is queried and nothing is shown.
+ */
+if (!function_exists('lg_membership_active_stripe_sub_for_user')) {
+/**
+ * The member's live Stripe subscription, or null.
+ *
+ * Matched by wp_user_bridge FIRST and by email only as a fallback — the census
+ * for #149 found ELEVEN dual payers on dev2 through the bridge and ZERO by
+ * email, because a member's Stripe address need not be their WP address. An
+ * email-only lookup here would under-report the same way.
+ *
+ * @return array{customer_id:int,status:string,tier:?string,amount_cents:?int,interval:?string,matched_by:string}|null
+ */
+function lg_membership_active_stripe_sub_for_user(int $wpUserId, string $email): ?array {
+    if ($wpUserId <= 0) return null;
+    try {
+        $pdo = lg_membership_poller_db();
+        $st = $pdo->prepare(
+            "SELECT s.status, c.id AS customer_id, pr.unit_amount_cents, pr.`interval` AS itv,
+                    prod.ref AS tier,
+                    CASE WHEN b.wp_user_id IS NULL THEN 'email' ELSE 'bridge' END AS matched_by
+               FROM subscriptions s
+               JOIN customers  c    ON c.id = s.customer_id AND c.deleted_at IS NULL
+          LEFT JOIN wp_user_bridge b ON b.customer_id = c.id AND b.wp_user_id = ?
+          LEFT JOIN prices     pr   ON pr.stripe_price_id = s.stripe_price_id
+          LEFT JOIN products   prod ON prod.id = pr.product_id
+              WHERE s.status IN ('active','trialing','past_due')
+                AND ( b.wp_user_id IS NOT NULL OR (? <> '' AND c.email = ?) )
+           ORDER BY (b.wp_user_id IS NOT NULL) DESC, s.id DESC
+              LIMIT 1"
+        );
+        $st->execute([$wpUserId, $email, $email]);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        error_log('lg_membership_active_stripe_sub_for_user: ' . $e->getMessage());
+        return null;   // unknown is not a second payment
+    }
+    if (!is_array($row) || $row === []) return null;
+    return [
+        'customer_id'  => (int) $row['customer_id'],
+        'status'       => (string) $row['status'],
+        'tier'         => $row['tier'] !== null ? (string) $row['tier'] : null,
+        'amount_cents' => $row['unit_amount_cents'] !== null ? (int) $row['unit_amount_cents'] : null,
+        'interval'     => $row['itv'] !== null ? (string) $row['itv'] : null,
+        'matched_by'   => (string) $row['matched_by'],
+    ];
+}
+}
+
+if (!function_exists('lg_membership_is_dual_payer')) {
+/** True only when BOTH rails are actively charging this member. */
+function lg_membership_is_dual_payer(int $wpUserId, string $email): bool {
+    if (!lg_membership_double_pay_block()) return false;
+    if ($wpUserId <= 0) return false;
+    if (lg_membership_patreon_standing($wpUserId)['active'] !== true) return false;
+    return lg_membership_active_stripe_sub_for_user($wpUserId, $email) !== null;
+}
+}
+
+if (!function_exists('lg_membership_dual_payer_message')) {
+/**
+ * What we say to somebody paying twice.
+ *
+ * It leads with the fact, not with an apology, because the member's first
+ * question is "am I being charged twice" and the answer is yes. It does not
+ * pick which one they should cancel — that is theirs — and it promises no
+ * automatic refund, because none happens automatically.
+ */
+function lg_membership_dual_payer_message(): string {
+    return 'This account is paying for membership twice: there is an active pledge on Patreon AND'
+         . ' an active subscription here. You only need one of them. Cancel whichever you prefer and'
+         . ' your access carries on through the other — nothing is interrupted. If you would like the'
+         . ' overlap refunded, ask us and we will sort it out.';
+}
+}
+
 /* ---------- shared helpers ---------- */
 if (!function_exists('lg_membership_h')) {
 function lg_membership_h(string $s): string {
