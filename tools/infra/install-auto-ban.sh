@@ -75,7 +75,8 @@ report() {
     printf '   %-46s %s\n' "$DOORS (the login doors)"    "$([ -f "$DOORS" ] && echo present || echo ABSENT)"
     printf '   %-46s %s\n' "$LIST (the deny list)"       "$([ -f "$LIST" ] && echo "present, $(grep -c '^"' "$LIST" 2>/dev/null || echo 0) address(es)" || echo ABSENT)"
     for u in "${UNITS[@]}"; do
-        printf '   %-46s %s\n' "$u" "$(systemctl is-enabled "$u" 2>/dev/null || echo 'not installed')"
+        st="$(systemctl is-enabled "$u" 2>/dev/null | head -1)"
+        printf '   %-46s %s\n' "$u" "${st:-not installed}"
     done
     if [ -n "$VHOST" ]; then
         if grep -q 'include /etc/nginx/snippets/lg-auto-ban-\*\.conf;' "$VHOST"; then

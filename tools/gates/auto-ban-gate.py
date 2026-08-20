@@ -92,7 +92,7 @@ def note(msg):
 
 def php_run(tmp, tag, *, enabled=None, local_enabled=None, no_config=False,
             server=None, users=None, attempts=None, verbs=None, calls=None,
-            caps=None, options=None, render_page=False, state_seed=None):
+            caps=None, options=None, render_page=False, state_seed=None, get=None):
     """One scenario against the real plugin files. Returns the harness's JSON."""
     d = os.path.join(tmp, tag)
     cfg, state = os.path.join(d, "cfg"), os.path.join(d, "state")
@@ -117,7 +117,7 @@ def php_run(tmp, tag, *, enabled=None, local_enabled=None, no_config=False,
         "verbs": verbs or [], "calls": calls or [], # NOT `caps or [...]`: an EMPTY capability list is the whole point of the
         # E4 leg, and `[] or [x]` quietly hands it back its admin rights.
         "caps": ["manage_options"] if caps is None else caps,
-        "options": options or {}, "render_page": render_page,
+        "options": options or {}, "render_page": render_page, "get": get or {},
         "current_user": "ian",
     }
     sp = os.path.join(d, "scenario.json")
@@ -600,6 +600,20 @@ def run_sections(tmp):
     check("E4 a user without manage_options cannot remove a ban",
           e4["verbs"][0]["died"] == "Forbidden"
           and sorted(bans_of(e4)) == sorted([BAD_V4, BAD_V4B]), e4["verbs"][0])
+
+    # The Remove handler's redirect, then the page it lands on: the sentence Ian
+    # reads is the thing under test. The first cut put the whole sentence through
+    # the query string and it arrived as "45.83.64.10%20can%20sign%20in%20again."
+    redirect = e1["verbs"][0].get("redirect") or ""
+    check("E1b Remove hands back a known outcome and the address, not free text",
+          "lg_ab_done=removed" in redirect and "%20" not in redirect
+          and "%25" not in redirect, redirect)
+    e1p = php_run(tmp, "E1-page", enabled=True, state_seed=seed, render_page=True,
+                  options={"lg_login_monitor_log": []},
+                  get={"lg_ab_done": "removed", "lg_ab_ip": BAD_V4})
+    check("E1c …and the page turns that into a sentence, with no escape debris in it",
+          f"{BAD_V4} can sign in again." in html.unescape(e1p["page"] or ""),
+          (e1p["page"] or "")[:300])
 
     e5 = php_run(tmp, "E5-page", enabled=True, state_seed=seed, render_page=True,
                  options={"lg_login_monitor_log": []})

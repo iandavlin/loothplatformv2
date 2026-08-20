@@ -604,8 +604,13 @@ function lg_ab_render_page(): void {
 	echo '<div class="wrap"><h1><span class="dashicons dashicons-lock" style="font-size:1em;height:1em;width:1em"></span> Login bans</h1>';
 	echo '<p class="description">When one address fails the password login against several different members in a few minutes, it is put on this list and the sign-in form stops answering it for a day. Everything else stays open to them: they can still read the site, they stay signed in if they already were, and “Log in with Patreon” keeps working.</p>';
 
-	if ( ! empty( $_GET['lg_ab_done'] ) ) {
-		echo '<div class="notice notice-success is-dismissible"><p>' . esc_html( sanitize_text_field( wp_unslash( (string) $_GET['lg_ab_done'] ) ) ) . '</p></div>';
+	$done = isset( $_GET['lg_ab_done'] ) ? sanitize_key( (string) $_GET['lg_ab_done'] ) : '';
+	if ( $done !== '' ) {
+		$said = lg_ab_outcome_sentence( $done, isset( $_GET['lg_ab_ip'] ) ? (string) $_GET['lg_ab_ip'] : '' );
+		if ( $said !== '' ) {
+			$kind = in_array( $done, array( 'removed', 'allowed', 'unallowed' ), true ) ? 'success' : 'warning';
+			echo '<div class="notice notice-' . esc_attr( $kind ) . ' is-dismissible"><p>' . esc_html( $said ) . '</p></div>';
+		}
 	}
 
 	// ── Is it actually doing anything? Two independent keys, both reported. ──
@@ -718,34 +723,57 @@ function lg_ab_handle( string $verb ): void {
 	check_admin_referer( 'lg_ab' );
 	$ip = isset( $_POST['ip'] ) ? lg_ab_normalise_ip( sanitize_text_field( wp_unslash( (string) $_POST['ip'] ) ) ) : '';
 	if ( $ip === '' ) {
-		lg_ab_redirect( 'That is not an address this page recognises.' );
+		lg_ab_redirect( 'badip' );
 	}
 	$user = wp_get_current_user();
 	$who  = ( $user && $user->user_login ) ? $user->user_login : 'admin';
 
 	switch ( $verb ) {
 		case 'remove':
-			$ok = lg_ab_remove_ban( $ip );
-			lg_ab_redirect( $ok ? $ip . ' can sign in again.' : $ip . ' was not on the list.' );
+			lg_ab_redirect( lg_ab_remove_ban( $ip ) ? 'removed' : 'notlisted', $ip );
 			break;
 		case 'allow':
-			$ok = lg_ab_allow_ip( $ip, $who, 'added from the dashboard' );
-			lg_ab_redirect( $ok ? $ip . ' will never be blocked again, and can sign in now.' : 'Could not update the list — check the file is writable.' );
+			lg_ab_redirect( lg_ab_allow_ip( $ip, $who, 'added from the dashboard' ) ? 'allowed' : 'unwritable', $ip );
 			break;
 		case 'unallow':
-			$ok = lg_ab_unallow_ip( $ip );
-			lg_ab_redirect( $ok ? $ip . ' is no longer permanently allowed.' : $ip . ' was not permanently allowed.' );
+			lg_ab_redirect( lg_ab_unallow_ip( $ip ) ? 'unallowed' : 'notallowed', $ip );
 			break;
 	}
-	lg_ab_redirect( 'Nothing to do.' );
+	lg_ab_redirect( 'badip', $ip );
 }
 
-function lg_ab_redirect( string $message ): void {
-	wp_safe_redirect( add_query_arg(
-		array( 'page' => LG_AB_SLUG, 'lg_ab_done' => rawurlencode( $message ) ),
-		admin_url( 'admin.php' )
-	) );
+/**
+ * A CODE, NOT A SENTENCE.
+ *
+ * The first cut redirected with the whole message in the query string, and it
+ * came out as "45.83.64.10%20can%20sign%20in%20again." — rawurlencode() here and
+ * WordPress's own encoding on the way through, each doing its job, the pair
+ * double-encoding. Rather than pick which one to drop, nothing free-form travels
+ * in the URL at all: a known code and the address, and the sentence is composed
+ * on arrival.
+ */
+function lg_ab_redirect( string $code, string $ip = '' ): void {
+	$args = array( 'page' => LG_AB_SLUG, 'lg_ab_done' => $code );
+	if ( $ip !== '' ) {
+		$args['lg_ab_ip'] = $ip;
+	}
+	wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
 	exit;
+}
+
+/** The fixed vocabulary the codes above map to. An unknown code says nothing. */
+function lg_ab_outcome_sentence( string $code, string $ip ): string {
+	$ip = lg_ab_normalise_ip( $ip );
+	switch ( $code ) {
+		case 'removed':    return $ip . ' can sign in again.';
+		case 'notlisted':  return $ip . ' was not on the list.';
+		case 'allowed':    return $ip . ' will never be blocked again, and can sign in now.';
+		case 'unallowed':  return $ip . ' is no longer permanently allowed.';
+		case 'notallowed': return $ip . ' was not permanently allowed.';
+		case 'unwritable': return 'Could not update the list — check that the file is writable.';
+		case 'badip':      return 'That is not an address this page recognises.';
+	}
+	return '';
 }
 
 add_action( 'admin_post_lg_ab_remove',  static function () { lg_ab_handle( 'remove' ); } );

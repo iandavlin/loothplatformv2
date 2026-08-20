@@ -101,6 +101,7 @@ function add_query_arg($args, $url = '') {
     return $url . (strpos($url, '?') === false ? '?' : '&') . $q;
 }
 function sanitize_text_field($s) { return trim(strip_tags((string) $s)); }
+function sanitize_key($s) { return preg_replace('/[^a-z0-9_\-]/', '', strtolower((string) $s)); }
 function wp_unslash($s) { return is_string($s) ? stripslashes($s) : $s; }
 function esc_html($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); }
 function esc_attr($s) { return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8'); }
@@ -158,6 +159,7 @@ foreach ($scn['verbs'] ?? [] as $v) {
 }
 
 if (!empty($scn['render_page'])) {
+    foreach (($scn['get'] ?? []) as $k => $v) { $_GET[$k] = $v; }
     ob_start();
     try { lg_ab_render_page(); } catch (LgAbHalt $e) { /* wp_die */ }
     $result['page'] = ob_get_clean();

@@ -1,6 +1,13 @@
 [Unit]
 Description=Rebuild the nginx login-door blocklist from the auto-ban store (#162)
 After=network.target nginx.service
+# NO START RATE LIMIT. systemd's default (5 starts / 10s) would be tripped by a
+# burst of writes to the store and then REFUSE to start the unit for a while —
+# a blocklist that quietly stops updating during exactly the incident it exists
+# for. The render is idempotent and only reloads nginx when the rendered bytes
+# actually changed, so running it often is cheap and safe. (Lives in [Unit]:
+# [Service] is accepted only for compatibility, and warns.)
+StartLimitIntervalSec=0
 Documentation=file:///home/ubuntu/loothplatformv2-clean/tools/infra/lg-auto-ban-render.py
 
 [Service]
@@ -14,9 +21,3 @@ ExecStart=/home/ubuntu/loothplatformv2-clean/tools/infra/lg-auto-ban-render.py -
 Nice=10
 StandardOutput=journal
 StandardError=journal
-# NO START RATE LIMIT. systemd's default (5 starts / 10s) would be tripped by a
-# burst of writes to the store and then REFUSE to start the unit for a while —
-# which is a blocklist that quietly stops updating during exactly the incident it
-# exists for. The render is idempotent and only reloads nginx when the rendered
-# bytes actually changed, so running it often is cheap and safe.
-StartLimitIntervalSec=0
