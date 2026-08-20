@@ -45,6 +45,26 @@ final class EnvSettingsStore implements SettingsStore
         return self::env('LGMS_SHARED_SECRET');
     }
 
+    public function getPatreonStandingUrl(): string
+    {
+        $explicit = trim(self::env('LGMS_PATREON_STANDING_URL'));
+        if (strcasecmp($explicit, 'off') === 0) {
+            return '';   // emergency valve: stop probing without touching WordPress
+        }
+        if ($explicit !== '') {
+            return $explicit;
+        }
+        // Otherwise DERIVED, so no box needs an env edit for #150 to work: the
+        // two routes are siblings in the same REST namespace. Deriving is what
+        // keeps `lgms_double_pay_block` the only switch — an env var that had
+        // to be set per box would be a second one, free to disagree.
+        $sync = self::env('LGMS_SYNC_URL');
+        if ($sync === '' || !str_ends_with($sync, '/sync-customer')) {
+            return '';
+        }
+        return substr($sync, 0, -strlen('/sync-customer')) . '/patreon-standing';
+    }
+
     public function getWebhookSecret(): string
     {
         return self::env('STRIPE_WEBHOOK_SECRET');

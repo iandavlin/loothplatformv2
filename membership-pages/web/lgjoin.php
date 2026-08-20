@@ -66,14 +66,16 @@ function lg_ms_lookup_active_sub(string $email): ?array {
 $isLoggedIn = ($ctx['authenticated'] ?? false) === true;
 $emailValue = '';
 $nameValue  = '';
+$wpUserId   = 0;   // the Patreon standing check (#150) keys on the MEMBER, not their address
 foreach ($_COOKIE as $ck => $cv) {
     if (strpos($ck, 'wordpress_logged_in_') === 0) {
         $parts = explode('|', urldecode((string) $cv), 4);
         if (!empty($parts[0])) {
             try {
-                $st = lg_membership_db()->prepare("SELECT user_email, display_name, user_login FROM " . LG_MEMBERSHIP_TABLE_PREFIX . "users WHERE user_login = ? LIMIT 1");
+                $st = lg_membership_db()->prepare("SELECT ID, user_email, display_name, user_login FROM " . LG_MEMBERSHIP_TABLE_PREFIX . "users WHERE user_login = ? LIMIT 1");
                 $st->execute([$parts[0]]);
                 if ($u = $st->fetch(PDO::FETCH_ASSOC)) {
+                    $wpUserId   = (int) $u['ID'];
                     $emailValue = (string) $u['user_email'];
                     $nameValue  = trim((string) ($u['display_name'] ?: $u['user_login']));
                 }
@@ -95,6 +97,26 @@ if ($activeSub !== null && !headers_sent()) {
     header('Location: ' . lg_ms_home('/manage-subscription/'), true, 302);
     exit;
 }
+
+/* ---- one payment source per member (#150) ---- *
+ * Ian, 2026-08-19, verbatim: "We should disallow double payment source for the
+ * same user." The redirect just above is the SAME rule for the Stripe rail and
+ * has been Patreon-blind since it was written — which is how a member paying
+ * $5 a month on Patreon could reach this picker and be charged a second time.
+ *
+ * A banner INSTEAD OF the picker, not beside it: the tier markup below is not
+ * rendered at all in this state, so there is no buy button to find. The API
+ * refuses the same purchase independently (DoublePayGuard), so this is the
+ * courtesy, not the lock.
+ *
+ * Admins keep the picker, for the same reason they keep it while holding an
+ * active Stripe sub: Ian is building this surface and must be able to see it.
+ * With the flag off nothing here runs and the page is byte-identical to today.
+ */
+$patreonStanding = ( lg_membership_double_pay_block() && !$isAdmin && $isLoggedIn && $wpUserId > 0 )
+    ? lg_membership_patreon_standing($wpUserId)
+    : ['active' => false, 'tier' => null, 'tier_label' => null, 'reason' => 'not_checked'];
+$blockedByPatreon = ($patreonStanding['active'] ?? false) === true;
 
 /* ---- shortcode_atts() defaults (this surface takes no attributes) ---- */
 $atts = [
@@ -213,17 +235,30 @@ $asset_v = (string) (@filemtime(__DIR__ . '/lg-shortcodes.css') ?: '1');
                 <?php endif; ?>
             </header>
 
+<?php if ( ! $blockedByPatreon ) : ?>
             <div class="lg-join__trial-banner" data-lg-trial-banner hidden>
                 <span class="lg-join__trial-banner-inner">&#10003; 7-day free trial on all plans &mdash; no charge until day 8</span>
             </div>
+<?php endif; ?>
 
 
             <div class="lg-join__region-note" data-lg-region-note hidden></div>
 
+<?php if ( $blockedByPatreon ) : ?>
+            <div class="lg-join__patreon-block" role="status">
+                <h3>You are already a member through Patreon</h3>
+                <p><?php echo $h( lg_membership_patreon_refusal_message() ); ?></p>
+                <p class="lg-join__patreon-block-actions">
+                    <a class="lg-join__patreon-manage" href="<?php echo $h( lg_membership_patreon_manage_url() ); ?>" rel="noopener">Manage your pledge on Patreon</a>
+                </p>
+            </div>
+<?php else : ?>
             <div class="lg-join__tiers" data-lg-join-tiers>
                 <p class="lg-join__loading">Loading plans&hellip;</p>
             </div>
+<?php endif; ?>
 
+<?php if ( ! $blockedByPatreon ) : ?>
             <div class="lg-pay-methods lg-join__pay-methods-bar" aria-label="Accepted payment methods">
                 <span class="lg-pay-methods__label">Secure checkout &mdash; we accept</span>
                 <ul class="lg-pay-methods__list">
@@ -327,6 +362,7 @@ $asset_v = (string) (@filemtime(__DIR__ . '/lg-shortcodes.css') ?: '1');
                 </div>
             </div>
 
+<?php endif; ?>
             <div class="lg-pay-modal" data-lg-join-checkout-modal hidden role="dialog" aria-modal="true" aria-label="Secure checkout">
                 <div class="lg-pay-modal__backdrop" data-lg-join-checkout-close></div>
                 <div class="lg-pay-modal__card">
@@ -711,6 +747,14 @@ $asset_v = (string) (@filemtime(__DIR__ . '/lg-shortcodes.css') ?: '1');
             // appeared. Now it runs in the background and we re-fetch only if it
             // turns up a different country with actual regional pricing.
             async function loadProducts(){
+<?php if ( $blockedByPatreon ) : ?>
+                // #150: the member is already being charged on Patreon, so the
+                // server rendered a banner where the picker goes. Return before
+                // the catalogue fetch — with no [data-lg-join-tiers] element to
+                // write into, going on would throw, and there is nothing to
+                // show anyway. No products call is made on a blocked page.
+                if (!tiersEl) return;
+<?php endif; ?>
                 showError('');
                 await fetchAndRenderProducts(DETECTED_COUNTRY);
                 if (!COUNTRY_OVERRIDE) {

@@ -1595,6 +1595,43 @@ echo "=== GATE 73: the profile prints the address the MEMBER TYPED, ladder unmov
 #   make coarseText fall through    RED exit 1, 12 findings, ladder leak in all 3 states
 run "location-address" python3 "$(dirname "$0")/location-address-gate.py"
 
+echo "=== GATE 75: one payment source per member — no double-paying at any door ==="
+# Ian, 8/19, verbatim: "We should disallow double payment source for the same
+# user." Before this, a member paying $5 or $11 on Patreon RIGHT NOW could walk
+# through checkout and be charged a second time with no warning anywhere. The
+# Stripe side of that rule already existed ("starting a second subscription
+# would bill you twice") and had been Patreon-blind since the day it was written.
+#
+# THREE doors, not the two the plan named. Re-verification found a third:
+# POST /wp-json/lg-member-sync/v1/me/checkout-session minted subscription
+# sessions for logged-in members with no Patreon check at all. It is asserted
+# here so it cannot go back to being the unwatched one.
+#
+# ⚠️ IT ASSERTS BY REFLECTION THAT IT IS TESTING THIS BRANCH. lg-stripe-billing's
+# composer autoloader maps LGSB\ into the SERVING CHECKOUT, so a lane running
+# this on dev2 would otherwise be measuring main and calling it verified
+# (trap-harness-and-serve-answer-from-main). Source-level assertions run on
+# comment-stripped tokens, so prose can never satisfy one
+# (feedback-red-first-that-stays-green).
+#
+# Reads the flag rather than hardcoding a state: absent / OFF / ON are all
+# exercised, so flipping the default needs no edit here. OFF is asserted as a
+# real ABSENCE — the WordPress route does not exist — paired with the ON leg
+# beside it proving that absence was not a dead code path.
+#
+# The /lgjoin/ HTTP leg REPORTS rather than asserts while every membership-pages
+# surface on dev2 404s at the nginx door (an unrelated infra defect attributed on
+# issue #150). A dead surface must not pass as a green one
+# (trap-locked-out-browser-goes-vacuously-green).
+#
+# RED-FIRST: twelve mutations, listed at the foot of the gate file, each applied
+# against a file SNAPSHOT (never `git checkout --`) and each reddening its NAMED
+# assertion; two no-op mutations confirmed to redden nothing, so the copy
+# assertion compares words and not bytes. No DB, no browser, no network on the
+# asserting legs, so it cannot flake under load.
+run "double-pay-block" php "$(dirname "$0")/double-pay-block-gate.php"
+echo
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"

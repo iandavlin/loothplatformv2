@@ -7,6 +7,7 @@ namespace LGSB\Http\Controllers;
 use InvalidArgumentException;
 use LGSB\Core\CheckoutService;
 use LGSB\Core\CustomerManager;
+use LGSB\Core\DoublePayGuard;
 use LGSB\Core\ReturnHandler;
 use LGSB\Domain\Repositories\BannedEmailsRepository;
 use LGSB\Domain\Repositories\EntitlementRepository;
@@ -25,6 +26,7 @@ final class CheckoutController
         private readonly SubscriptionRepository $subscriptions,
         private readonly EntitlementRepository  $entitlements,
         private readonly BannedEmailsRepository $bannedEmails,
+        private readonly DoublePayGuard         $doublePay,
     ) {}
 
     /**
@@ -105,6 +107,29 @@ final class CheckoutController
             return self::json($response, [
                 'error' => 'This email address is not eligible for new purchases.',
             ], 403);
+        }
+
+        // ONE PAYMENT SOURCE PER MEMBER (Ian 2026-08-19, #150): "We should
+        // disallow double payment source for the same user."
+        //
+        // This is Patreon's side of the rule the active-subscription 409 further
+        // down already enforces for Stripe. That one has been PATREON-BLIND
+        // since it was written, which is how a member paying $5 a month on
+        // Patreon could walk through here and be charged a second time with no
+        // warning anywhere.
+        //
+        // Placement is deliberate. AFTER the email ban, because a banned address
+        // should hear that it is banned rather than that it is already paying.
+        // BEFORE the customer lookup and any Stripe call, so a refused purchase
+        // costs nothing and creates nothing.
+        //
+        // Gifts are not asked about at all — buying for somebody else is not
+        // double-paying — and an unknown answer (flag off, WordPress silent)
+        // lets the buyer through, which is today's behaviour exactly.
+        // See LGSB\Core\DoublePayGuard.
+        $patreonRefusal = $this->doublePay->refusalFor($emailArg, $isGift);
+        if ($patreonRefusal !== null) {
+            return self::json($response, $patreonRefusal, 409);
         }
 
         $giftDeferDays = 0;

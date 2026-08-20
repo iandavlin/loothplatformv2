@@ -64,6 +64,30 @@ if (!$is_anon && $wp_user_id === 0) {
 }
 
 $membership   = $wp_user_id > 0 ? lg_membership_load_patreon_membership($wp_user_id) : null;
+
+/* #150/#149 — the direction we cannot block. A member who pays here and then
+   pledges on patreon.com is charged twice and nothing of ours can stop them, so
+   the least we can do is be the one to tell them.
+   The flag is tested FIRST, before any lookup: an earlier version resolved the
+   member's email and only then asked whether the feature was on, which was
+   output-identical but put an extra wp_users query on every load of this page
+   for a switched-off feature. OFF has to mean the work does not happen. */
+$is_dual_payer = false;
+if (lg_membership_double_pay_block() && $wp_user_id > 0) {
+    // The Patreon snapshot already carries the address when it exists; the WP
+    // row is only consulted when it does not.
+    $dual_email = (string) ($membership['email'] ?? '');
+    if ($dual_email === '') {
+        try {
+            $st = lg_membership_db()->prepare(
+                "SELECT user_email FROM " . LG_MEMBERSHIP_TABLE_PREFIX . "users WHERE ID = ? LIMIT 1"
+            );
+            $st->execute([$wp_user_id]);
+            $dual_email = (string) ($st->fetchColumn() ?: '');
+        } catch (Throwable $e) { $dual_email = ''; }
+    }
+    $is_dual_payer = lg_membership_is_dual_payer($wp_user_id, $dual_email);
+}
 $status_label = lg_membership_format_status_label($membership['patron_status'] ?? null);
 $status_kind  = lg_membership_format_status_kind($membership['patron_status'] ?? null);
 $last_charge  = lg_membership_format_date($membership['last_charge_date'] ?? null);
@@ -89,6 +113,16 @@ $asset_v = (string)(@filemtime(__DIR__ . '/manage-subscription.css') ?: '1');
         <h1 class="lg-manage-sub__title">Manage Account</h1>
     </header>
 
+<?php if ($is_dual_payer): ?>
+    <section class="lg-manage-sub__card lg-manage-sub__card--dual" role="status">
+        <p class="lg-manage-sub__status-pill lg-manage-sub__status-pill--dual">Charged twice</p>
+        <p><?= $h(lg_membership_dual_payer_message()) ?></p>
+        <p class="lg-manage-sub__dual-actions">
+            <a class="lg-manage-sub__cta" href="<?= $h($patreon_link) ?>" target="_blank" rel="noopener">Manage your pledge on Patreon &rarr;</a>
+            <a class="lg-manage-sub__cta lg-manage-sub__cta--secondary" href="/request-refund/">Ask us about a refund &rarr;</a>
+        </p>
+    </section>
+<?php endif; ?>
     <?php if ($is_anon): ?>
 
         <section class="lg-manage-sub__card lg-manage-sub__card--anon">

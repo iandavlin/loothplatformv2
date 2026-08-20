@@ -28,6 +28,7 @@
 .lg-manage-sub__card--former   { border-left-color: #777;    }
 .lg-manage-sub__card--none     { border-left-color: #aaa;    }
 .lg-manage-sub__card--anon     { border-left-color: #2563eb; text-align: center; }
+.lg-manage-sub__card--dual     { border-left-color: #d97706; }
 
 .lg-manage-sub__status-pill {
     display: inline-block;
@@ -45,6 +46,10 @@
 .lg-manage-sub__status-pill--declined { background: #fee2e2; color: #7f1d1d; }
 .lg-manage-sub__status-pill--former   { background: #f5f5f5; color: #555;    }
 .lg-manage-sub__status-pill--none     { background: #f5f5f5; color: #555;    }
+/* Measured 8.42:1 light and 8.42:1 dark. This pill tells a member they are
+   losing money, so it is the last place to ship a modifier with no rule behind
+   it (trap-class-name-assertion-passes-on-the-defect). */
+.lg-manage-sub__status-pill--dual     { background: #fef3c7; color: #7c2d12; }
 
 .lg-manage-sub__tier {
     margin: 0 0 1rem;
@@ -75,6 +80,17 @@
     font-weight: 600;
 }
 .lg-manage-sub__cta:hover { background: #333; }
+
+/* The refund link sits beside "Manage on Patreon". Two solid black buttons
+   would read as one choice made twice, so the second is outlined — same size
+   and same hit area, visibly the secondary action. */
+.lg-manage-sub__cta--secondary {
+    background: transparent;
+    color: #1a1a1a;
+    box-shadow: inset 0 0 0 2px #1a1a1a;
+}
+.lg-manage-sub__cta--secondary:hover { background: #1a1a1a; color: #fff; }
+.lg-manage-sub__dual-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin: 1rem 0 0; }
 
 .lg-manage-sub__hint { margin-top: 1rem; color: #666; }
 .lg-manage-sub__hint a { color: #2563eb; text-decoration: none; }
@@ -394,6 +410,9 @@ html[data-lguser-theme="dark"] .lg-manage-sub__hint a { color: var(--lgms-sage);
 html[data-lguser-theme="dark"] .lg-manage-sub__status-pill            { background: #2a2f2b; color: var(--lgms-mute); }
 html[data-lguser-theme="dark"] .lg-manage-sub__status-pill--active    { background: #1f3524; color: #9fd8ae; }
 html[data-lguser-theme="dark"] .lg-manage-sub__status-pill--declined  { background: #3a2320; color: #f0a08a; }
+html[data-lguser-theme="dark"] .lg-manage-sub__status-pill--dual      { background: #3a2f1c; color: #f2c98a; }
+html[data-lguser-theme="dark"] .lg-manage-sub__cta--secondary        { color: var(--lgms-ink); box-shadow: inset 0 0 0 2px var(--lgms-ink); }
+html[data-lguser-theme="dark"] .lg-manage-sub__cta--secondary:hover  { background: var(--lgms-ink); color: #15171a; }
 
 /* ── "Discussions you're following" ── */
 html[data-lguser-theme="dark"] .lg-manage-sub__fol-count b,

@@ -217,6 +217,12 @@ final class Plugin
         add_action( 'rest_api_init', [ Wp\WebhookRestController::class, 'maybeRegister' ] );
         add_action( 'rest_api_init', [ Wp\CheckoutRestController::class, 'maybeRegister' ] );
 
+        // One payment source per member (#150, flag `lgms_double_pay_block`).
+        // The Slim billing app cannot read WordPress, so it asks here whether a
+        // buyer is already being charged on Patreon. Flag OFF = no route, and a
+        // 404 is what tells the probe to stay out of the way.
+        add_action( 'rest_api_init', [ Wp\PatreonStandingRestController::class, 'maybeRegister' ] );
+
         // Front-end shortcodes (gift redemption etc.).
         add_action( 'init', [ Wp\Shortcodes::class, 'register' ] );
 
