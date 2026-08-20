@@ -1,5 +1,5 @@
 [Unit]
-Description=Ring the bell when an issue gains the approved label (dev2 only)
+Description=#138 approved-watcher — ring the bell, and auto-spin PRE-STAGED lanes (dev2 only)
 
 [Service]
 Type=oneshot
