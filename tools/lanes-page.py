@@ -755,7 +755,9 @@ h2{font-size:13px;color:#9aa3ad;text-transform:uppercase;letter-spacing:.06em;ma
     data["cleanup"] = {"merged_deletable": len(merged),
                        "backups_held": len(backups),
                        "seats_freeable": len(freeable)}
-    data["todo"] = [re.sub("<[^>]+>", "", t["text"]) for t in todo]
+    # The JSON is for machines, so it gets the words and not the markup —
+    # entities unescaped too, or a consumer reads "it&rsquo;s merged".
+    data["todo"] = [html.unescape(re.sub("<[^>]+>", "", t["text"])) for t in todo]
     (out_dir / "lanes.json").write_text(json.dumps(data, indent=1), encoding="utf-8")
 
 
