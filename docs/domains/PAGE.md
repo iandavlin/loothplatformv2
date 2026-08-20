@@ -202,3 +202,13 @@ knowledge under a stylesheet audit. Recorded rather than silently relabelled: th
 domain rule says a domain-labelled issue updates that domain's file in the same
 commit, so this line IS that update, and the label itself is flagged to Ian for a
 ruling. Gate 80 covers the behaviour.
+
+## Trap: mirror rows store ABSOLUTE permalinks from sync time (8/21)
+A box cut from live carries the OTHER box's host in every pre-cut mirror
+row's stored URL — measured: 46/60 loothprint cards on dev2's hub linked
+live, silently shipping a signed-in member to a site where they are a
+stranger (read as "the edit button vanished" + "Sign in" header). Fix
+posture: same-site links go HOST-RELATIVE at render time
+(`lg_bb_self_relative_url()`, bb-mirror/config.php) — reload-proof; never
+"fix the data", a fresh cut reintroduces it. Foreign hosts pass untouched.
+If a surface shows stored URLs, check its emitter uses the helper.
