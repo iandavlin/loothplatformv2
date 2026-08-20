@@ -17,6 +17,16 @@
   a constant. **Tier CREATION stays the catalogue file + import command**
   (scope ruling, same day): the dash gains PER-TIER PRICING only, no
   tier-builder form. Behind `lgms_multi_tier`, default OFF; gate 76.
+- **THE JOIN BUTTON IS AN AUDIENCE, NOT A SWITCH (Ian 8/20, verbatim on #170):**
+  *"We need the join button in the header to still go to patreon unless a test
+  user is there on live."* This **refines** the ruling directly below rather
+  than reversing it: the destination still offers both rails, but WHO is sent
+  there is now a three-way answer — `off` (nobody), `allowlist` (the Stripe
+  soft-launch cohort, signed in), `on` (everybody). The middle state is what
+  lets live arm the Stripe join journey for hand-picked testers without
+  announcing it, and it is safe on a cached site because it rides a per-viewer
+  capability an anonymous ctx never carries. Behind `header-join-stripe`,
+  default `'off'`; gate 79.
 - **THE ANON FRONT DOOR IS A MEMBERSHIP SURFACE (Ian 8/20, verbatim):**
   *"can you Wire the header on Dev2 to have the stripe menuing that a logged
   out user would see?"* This **narrows** his 2026-06-12 ruling — *Join goes
@@ -170,6 +180,69 @@
   no FAIL line) because the door gained `StripePrice` and then
   `PatreonStanding` without either being added to its require list. Revived:
   20 assertions, including the *"body chooses NOTHING"* section.
+
+## State (8/20, #170 — three states for the header Join)
+- **#170 BUILT** on `170-live-header-allowlist`, flag `header-join-stripe`
+  three-state and defaulted `'off'`, gate **79** extended (157 assertions with
+  the browser leg, 104 without; red-first **23/23** — 21 mutations, 2 no-ops).
+- ⚠️ **THE HEADER'S JOIN PILL IS ANON-ONLY, AND THAT NEARLY MADE THIS ISSUE A
+  NO-OP.** Measured on main before designing, rendering the partial four ways:
+  `.lg-chrome__join` sits in the ANON branch of `.lg-chrome__aside`, so a
+  signed-in viewer gets **no Join pill at any width** — 1 for anon, **0 for a
+  member, 0 for a tester, 0 for an admin**. A signed-in tester's only
+  `/lgjoin/` door on main is the account-menu entry gated on the same
+  `$stripe_tester` capability. So "Patreon for anon and unlisted members,
+  /lgjoin/ for a listed member" — the obvious reading — would have rendered
+  **byte-identically to `off` for every viewer**, and its gate would have been
+  green having measured nothing. Ian chose to give the tester a real pill;
+  `allowlist` therefore ADDS one control to the signed-in aside, and only in
+  that state.
+- **REUSES THE ONE COHORT LIST — there is no second list, and there must never
+  be.** `lgms_stripe_lifecycle_allowlist` (WP user ids, written by
+  `LGMS\CohortAllowlist` in the poller dash) reaches the header already, as
+  `$caps['stripe_testgroup'] = manage_options || inCohort($uid)` computed in
+  `InternalRestController` and passed through `Whoami::capabilitiesFor()`. The
+  header needs no user id, no DB call and no option name; gate 79 asserts it
+  contains none of them. **Admins are in the cohort by construction**, so Ian
+  clicks the real button on live without adding himself to a list.
+- **THE CACHING LAW IS STRUCTURAL, NOT CAREFUL.** The `allowlist` branch keys on
+  a per-viewer capability an anonymous ctx never carries and which fails closed,
+  so the logged-out page **cannot** differ between `off` and `allowlist` — not
+  by intent, but because no anonymous input reaches the branch. cmp'd at 28,028
+  bytes, the same number #165 proved. A corollary worth knowing: **an anonymous
+  observer cannot tell `off` from `allowlist` from outside**, so gate 79's
+  served-state probe reads `allowlist` as `off` — that is the law working, not a
+  gap.
+- ⚠️ **`enabled => true` IS STILL READ AND STILL MEANS `'on'`.** dev2's
+  hand-placed `header-join-stripe.local.php` says exactly that and lives in the
+  **serving checkout**, which no lane may edit. A tidy-up dropping the legacy key
+  would revert dev2's header to patreon.com on the next `pull --ff-only`, with
+  nobody having flipped anything and nothing in any diff to explain it. Gated
+  against dev2's byte-exact on-box shape.
+- ⚠️ **THE SECOND COUPLING: `allowlist` NEEDS A DIFFERENT PARTNER FROM `on`.**
+  `on` pairs with `lgms_stripe_pages_live` (#165). `allowlist` pairs with
+  **`lgms_stripe_testgroup_pages`**, and the two predicates are **not the same
+  shape**: the header PILL has ONE lock (the cohort list, via the capability),
+  while the DOOR — `lg_membership_in_stripe_test_group()` — has TWO (that flag
+  AND the list). So a **listed non-admin** can be handed a pill and refused at
+  the door, while an **admin passes both and sees nothing wrong** — the person
+  most likely to check is the one person who cannot see the failure. Verify a
+  flip by clicking Join **signed in as a listed NON-ADMIN member**.
+- **The phone door is load-bearing.** At ≤640 on the hub `forums.css` hides the
+  entire aside — account menu included — and the authed "You" sheet carried no
+  destination links (Ian 6/24), so a signed-in tester had **no path to
+  `/lgjoin/` at a phone width at all**. `webroot/bottom-nav.js`'s You sheet now
+  mirrors the pill by reading the header, so it exists only when the header drew
+  one and cannot drift from it.
+- **A 9-byte whitespace leak was found in this lane's own work by gate 79 §C.**
+  An indented `<?php if ?>` tag emits its own leading spaces whether or not the
+  branch is taken, so the first draft of the tester block added 8 spaces and a
+  newline to EVERY signed-in render in EVERY state including `off` — invisible
+  on screen and to every href assertion. Kept as red-first mutation 21.
+- **Owed / open:** the 821–904px dead band below is unchanged and still Ian's
+  call; the three anon Patreon join CTAs #165 listed are still untouched; and
+  the dev2 `.local.php` needs no edit to keep working, though keeper may rewrite
+  it to `'state' => 'on'` for clarity once this merges.
 
 ## State (8/20, #165 — the go-live header)
 - **#165 BUILT** on `165-header-join`, flag `header-join-stripe` defaulted OFF,
