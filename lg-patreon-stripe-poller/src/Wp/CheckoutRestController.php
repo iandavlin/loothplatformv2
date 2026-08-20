@@ -75,25 +75,49 @@ final class CheckoutRestController
      */
     public static function createSession( $req )
     {
-        // ONE TIER, TWO CADENCES (Ian 2026-08-15: "We need a monthly and a
-        // yearly price etc."). The body may choose HOW OFTEN they pay — and
-        // nothing else.
+        // WHAT THE BODY MAY CHOOSE: which tier, and how often they pay.
         //
-        // NOTE WHAT IS STILL REFUSED: the body cannot name a price id. It names
-        // a cadence, which is looked up against the prices an admin actually
-        // configured. A member who posts a price id gets nothing, because the
-        // id never comes from them — that was the point of the original
-        // "the request body chooses nothing" rule and it survives intact.
+        // Cadence arrived first (Ian 2026-08-15: "We need a monthly and a yearly
+        // price etc."); tier followed (Ian 2026-08-19: "I've decided I want to
+        // be able to have multiple tiers"), behind LGMS\Membership\MultiTier.
+        //
+        // NOTE WHAT IS STILL REFUSED, because widening this body is exactly the
+        // change that could quietly undo it: the body cannot name a PRICE ID. It
+        // names a tier and a cadence, both looked up against the prices an admin
+        // actually configured. A member who posts a price id gets nothing —
+        // the id never comes from them. That was the point of the original
+        // "the request body chooses nothing" rule, and adding two named,
+        // validated, looked-up choices does not weaken it: nothing the member
+        // sends ever reaches Stripe, it only selects among what Ian has priced.
+        // Gate 76 §7 asserts the price-id-in-the-body case directly.
         $cadence = strtolower( trim( (string) ( $req->get_param( 'cadence' ) ?? '' ) ) );
+
+        // FLAG OFF ⇒ the tier parameter does not exist. Not "is ignored later":
+        // it is never read, so the OFF path is the single-tier code exactly as
+        // it was, and a body carrying a tier behaves identically to one without.
+        $tier = null;
+        if ( \LGMS\Membership\MultiTier::flagOn() ) {
+            $raw = strtolower( trim( (string) ( $req->get_param( 'tier' ) ?? '' ) ) );
+            if ( $raw !== '' ) {
+                // Refused, never guessed. An unknown tier that fell through to
+                // the default would sell the Pro price to somebody who asked
+                // for Lite — a wrong charge, arriving as a success.
+                if ( ! in_array( $raw, \LGMS\StripePrice::tiers(), true ) ) {
+                    return new \WP_REST_Response( [ 'error' => 'Unknown membership tier.' ], 400 );
+                }
+                $tier = $raw;
+            }
+        }
+
         if ( $cadence === '' ) {
-            $configured = \LGMS\StripePrice::configuredCadences();
+            $configured = \LGMS\StripePrice::configuredCadences( $tier );
             $cadence    = $configured[0] ?? 'month';   // one configured = no choice to make
         }
         if ( ! array_key_exists( $cadence, \LGMS\StripePrice::CADENCES ) ) {
             return new \WP_REST_Response( [ 'error' => 'Unknown billing cadence.' ], 400 );
         }
 
-        $price = \LGMS\StripePrice::currentPriceId( $cadence );
+        $price = \LGMS\StripePrice::currentPriceId( $cadence, $tier );
         if ( $price === '' ) {
             return new \WP_REST_Response(
                 [ 'error' => 'Stripe membership price not configured for that cadence.' ],

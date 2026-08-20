@@ -75,9 +75,17 @@ namespace LGMS {
         public static function line( string $m, string $n = 'tick.log' ): void { $GLOBALS['LOG'][] = rtrim( $m, "\n" ); }
     }
     class StripePrice {
+        // Signatures MIRROR the real class on purpose (#148 added the $tier
+        // argument). PHP tolerates an extra argument to a userland method, so a
+        // lagging stub would keep this gate green while silently discarding the
+        // very parameter the door now passes — the gate would look like it still
+        // exercised the door and would not.
         public const CADENCES = [ 'month' => 'Monthly', 'year' => 'Yearly' ];
-        public static function configuredCadences(): array { return [ 'month' ]; }
-        public static function currentPriceId( string $c ): string { return 'price_test_month'; }
+        public static function tiers(): array { return [ 'looth2', 'looth3' ]; }
+        public static function configuredCadences( ?string $tier = null ): array { return [ 'month' ]; }
+        public static function currentPriceId( string $c, ?string $tier = null ): string {
+            return $tier !== null && $tier !== 'looth3' ? 'price_test_' . $tier . '_' . $c : 'price_test_month';
+        }
     }
     class StripeLifecycle {
         public static function flagOn(): bool { return (bool) ( $GLOBALS['OPTS']['lgms_stripe_lifecycle'] ?? false ); }
@@ -210,6 +218,10 @@ $MP      = $ROOT . '/membership-pages';
 $standingFile = $POLLER . '/src/Membership/PatreonStanding.php';
 $standRest    = $POLLER . '/src/Wp/PatreonStandingRestController.php';
 $wpCheckout   = $POLLER . '/src/Wp/CheckoutRestController.php';
+// The door also consults the multi-tier flag (#148). This gate asserts the
+// double-pay refusal, which is orthogonal to tiering — but the class has to be
+// LOADABLE or createSession() fatals before reaching a single assertion.
+$multiTier    = $POLLER . '/src/Membership/MultiTier.php';
 $slimCheckout = $BILLING . '/src/Http/Controllers/CheckoutController.php';
 $slimContract = $BILLING . '/src/Contracts/PatreonStandingProbe.php';
 $slimGuard    = $BILLING . '/src/Core/DoublePayGuard.php';
@@ -218,7 +230,7 @@ $slimWiring   = $BILLING . '/config/container.php';
 $joinPage     = $MP . '/web/lgjoin.php';
 $mpConfig     = $MP . '/config.php';
 
-foreach ( [ $wpCheckout, $slimCheckout, $slimWiring, $joinPage, $mpConfig ] as $f ) {
+foreach ( [ $wpCheckout, $multiTier, $slimCheckout, $slimWiring, $joinPage, $mpConfig ] as $f ) {
     if ( ! is_readable( $f ) ) { cannot( 'missing pre-existing file ' . $f ); }
 }
 $built = [
@@ -498,6 +510,7 @@ is_( $callAt !== false && $sessAt !== false && $callAt < $sessAt,
 
 section( '[6] DOOR 2 — /wp-json/lg-member-sync/v1/me/checkout-session (found by this lane)' );
 
+require_once $multiTier;
 require_once $wpCheckout;
 \LGMS\Wp\CheckoutRestController::$clientFactory = static function () {
     return new class {

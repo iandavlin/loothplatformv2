@@ -6,6 +6,7 @@ namespace LGMS;
 
 use LGMS\Repos\CustomerRepo;
 use LGMS\Repos\EntitlementRepo;
+use LGMS\Repos\ProductRepo;
 use LGMS\Repos\SubscriptionRepo;
 use LGMS\Wp\IdentityMatcher;
 use PDO;
@@ -20,15 +21,35 @@ use Throwable;
  * to a commit. Its signature-verification property (audited CORRECT) is
  * kept: \Stripe\Webhook::constructEvent, 400 on SignatureVerificationException.
  *
- * THE TIER RULING (Ian, quote-grade, 8/08 handoff):
+ * THE TIER RULING — SUPERSEDED 2026-08-19, kept here because the shape of
+ * this class is still the shape the old ruling gave it.
+ *
+ * The old one (Ian, quote-grade, 8/08 handoff):
  *
  *   "move to ONE tier for the stripe memberships and have ALL tiered
  *    content open to the one tier through stripe."
  *
- * Stripe's single membership ALWAYS resolves looth3 (Pro). There is no
- * price→tier mapping in this class and there must never be a second Stripe
- * tier code path. Patreon's two tiers and login are untouched; the Arbiter's
- * max-of-sources already gives dual-holders the right answer.
+ * The current one (Ian, 2026-08-19, #148):
+ *
+ *   "I've decided I want to be able to have multiple tiers."
+ *
+ * So there IS a price→tier mapping in this class now — exactly one, in
+ * tierFor(), behind LGMS\Membership\MultiTier (`lgms_multi_tier`, default
+ * OFF). With the flag off the constant below is applied and no lookup
+ * happens at all, which is the byte-identical old behaviour.
+ *
+ * WORTH KNOWING WHICH WAY THE OLD RULING FAILED, because it is the opposite
+ * of the obvious guess: nobody was under-granted. self::TIER is 'looth3', so
+ * a member buying Looth LITE at $5 was granted PRO. And it does not merely
+ * add a wrong opinion — EntitlementRepo::grantMembershipFromSubscription
+ * revokes by source and re-inserts on any ref change, so the constant
+ * OVERWRITES a correctly-resolved looth2 entitlement written by the Slim
+ * return path. Turning the flag on is what makes the two Stripe code paths
+ * agree, which is this domain's founding law: "they both need to work
+ * together to produce a logical result."
+ *
+ * Patreon's two tiers and login are untouched; the Arbiter's max-of-sources
+ * already gives dual-holders the right answer.
  *
  * THE CONFIRM PATTERN (design doc §4): the mirror cannot be trusted — live
  * proved it (customer 7 'active' with current_period_end a month past) —
@@ -85,10 +106,19 @@ final class StripeLifecycle
     public const ALLOWLIST_OPT    = 'lgms_stripe_lifecycle_allowlist';
 
     /**
-     * THE single Stripe tier. A ruling, not a lookup — no ProductRepo, no
-     * price map, no second code path. (The frozen poll leg's EventHandler
-     * still carries the old multi-tier mapping; it is unreachable behind
-     * lgms_stripe_frozen and is flagged for retirement, not extended.)
+     * The DEFAULT Stripe tier, and the fallback when a price maps to nothing.
+     *
+     * It was THE single tier under the 8/08 ruling — a ruling, not a lookup.
+     * Since #148 it is the floor rather than the whole answer: tierFor()
+     * resolves a price to its catalogue tier when `lgms_multi_tier` is on, and
+     * returns this when the flag is off or the price is unknown to us.
+     *
+     * It stays looth3 (Pro) on purpose. Every member granted under the old
+     * ruling holds looth3, so any other default would silently re-tier them on
+     * the next sweep. (The frozen poll leg's EventHandler carries a SECOND
+     * price→tier mapping; it is unreachable behind lgms_stripe_frozen and is
+     * flagged for retirement, not extension — tierFor() is the one on the live
+     * path.)
      */
     public const TIER = 'looth3';
 
@@ -423,9 +453,10 @@ final class StripeLifecycle
             if ( ! self::inCohort( $wpUserId ) ) {
                 return self::journalCohortSkip( $customer, $wpUserId, $state, $eventId, $type );
             }
-            EntitlementRepo::grantMembershipFromSubscription( $customerId, self::TIER, (int) $subRow['id'] );
-            $out = self::applyOpinion( $customer, $wpUserId, self::TIER, $state, $eventId, $type );
-            return "{$type}: customer {$customerId} {$state} → " . self::TIER . " ({$out})";
+            $tier = self::tierFor( $priceId );
+            EntitlementRepo::grantMembershipFromSubscription( $customerId, $tier, (int) $subRow['id'] );
+            $out = self::applyOpinion( $customer, $wpUserId, $tier, $state, $eventId, $type );
+            return "{$type}: customer {$customerId} {$state} → {$tier} ({$out})";
         }
 
         if ( in_array( $status, self::STATUS_DEAD, true ) ) {
@@ -441,6 +472,65 @@ final class StripeLifecycle
         // Limbo — incomplete never paid, paused is not a death. Mirror only;
         // the reconcile leg revisits every opinion regardless.
         return "{$type}: customer {$customerId} status={$status}, mirror only";
+    }
+
+    /**
+     * The tier this subscription's PRICE grants.
+     *
+     * MULTI-TIER (Ian, 2026-08-19: "I've decided I want to be able to have
+     * multiple tiers"). This method is the whole of that ruling on the grant
+     * side: it is the seam where the tier stopped being a constant.
+     *
+     * FLAG OFF — the shipped default — returns self::TIER without touching the
+     * database, so the OFF path performs no price lookup whatsoever. That is not
+     * a claim, it is gated: gate 76 §3 runs the OFF leg against a database with
+     * NO products or prices tables, so any lookup would be a hard SQL error
+     * rather than a quiet pass.
+     *
+     * AN UNMAPPED PRICE FALLS BACK TO THE CONSTANT, AND SAYS SO. Returning null
+     * here would flow into applyOpinion as a RETRACTION — the same shape as a
+     * cancellation — and demote somebody who has just paid. The two failure
+     * modes are not symmetrical: over-granting is a support message and a
+     * corrected sweep, while wrongly demoting a paying member is the failure
+     * this domain has spent the most time cleaning up after (the NULL-shadow
+     * work, the orphan revoke runbook). So an unknown price keeps the
+     * membership it would have had before multi-tier existed, and the price id
+     * is NAMED in the log so the catalogue gap is findable rather than silent.
+     *
+     * An empty price id takes the same road: it means the confirmed
+     * subscription arrived with no line item we can read, which is a Stripe
+     * shape we do not understand, and guessing downward from it is the one
+     * thing we must not do.
+     */
+    private static function tierFor( string $priceId ): string
+    {
+        if ( ! \LGMS\Membership\MultiTier::flagOn() ) {
+            return self::TIER;
+        }
+
+        if ( $priceId !== '' ) {
+            try {
+                $resolved = ProductRepo::tierForPrice( $priceId );
+            } catch ( Throwable $e ) {
+                // The catalogue is unreadable. Same reasoning as an unmapped
+                // price: keep the membership, make the failure loud.
+                Log::line( sprintf(
+                    "[%s] multi-tier: catalogue unreadable for price %s (%s) — granting %s\n",
+                    gmdate( 'c' ), $priceId, $e->getMessage(), self::TIER,
+                ) );
+                return self::TIER;
+            }
+            if ( $resolved !== null && $resolved !== '' ) {
+                return $resolved;
+            }
+        }
+
+        Log::line( sprintf(
+            "[%s] multi-tier: price %s maps to NO tier in the catalogue — granting %s (the pre-multi-tier constant). "
+            . "Import the catalogue or add the price before selling it.\n",
+            gmdate( 'c' ), $priceId === '' ? '(none on the subscription)' : $priceId, self::TIER,
+        ) );
+        return self::TIER;
     }
 
     /**

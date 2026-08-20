@@ -9,6 +9,14 @@
 - **Dual-rail (8/15, permanent):** every member-facing flow fires for BOTH
   Patreon and Stripe; hooks key on membership activation, never one rail's
   events. Gate 34d asserts there is NO THIRD ROAD to a grant.
+- **MULTIPLE TIERS ON THE STRIPE RAIL (Ian 8/19, verbatim):** *"I've decided
+  I want to be able to have multiple tiers."* This **SUPERSEDES** his 8/08
+  ruling — *"move to ONE tier for the stripe memberships and have ALL tiered
+  content open to the one tier through stripe"* — which is still quoted
+  verbatim in `StripeLifecycle`'s docblock and was implemented faithfully as
+  a constant. **Tier CREATION stays the catalogue file + import command**
+  (scope ruling, same day): the dash gains PER-TIER PRICING only, no
+  tier-builder form. Behind `lgms_multi_tier`, default OFF; gate 76.
 - **One payment source per member (8/19, verbatim):** *"We should disallow
   double payment source for the same user."* Block at checkout, not warn.
   Enforcement keys on ACTUAL Patreon standing (lgpo_patreon_user_id +
@@ -24,6 +32,43 @@
   looth2/looth3; lg-stripe-billing EntitlementManager::activeTier() resolves
   a customer's ref (highest wins). Deployed multi-tier gating runs TODAY on
   the Patreon rail.
+- **THE STRIPE GRANT WAS A CONSTANT, AND IT OVER-GRANTED (#148, traced
+  8/20).** Two Stripe grant paths exist and only one was tier-aware:
+  **(a)** the path that actually runs today — Slim `ReturnHandler` →
+  `tierForPrice($priceId)` → entitlement → `Sync::customer` →
+  `RoleSourceWriter` → `Arbiter` — is **tier-correct end to end**; **(b)**
+  `StripeLifecycle::applyConfirmed()`, the designated production replacement
+  (flag `lgms_stripe_lifecycle`, OFF everywhere), read `$priceId` for the
+  subscription upsert and then **ignored it**, applying `self::TIER`.
+  ⚠️ **The direction is the opposite of the obvious guess: nobody was
+  under-granted.** `TIER` is `'looth3'`, so a member buying **Looth LITE at
+  $5 was granted Pro**. And it is not additive —
+  `grantMembershipFromSubscription` revokes by source and re-inserts on any
+  ref change, so the constant **OVERWRITES** path (a)'s correctly-resolved
+  looth2 entitlement. Fixed behind `lgms_multi_tier`: `tierFor()` resolves
+  the price, and an **unmapped price falls back to the constant and logs
+  loudly — never to null**, because null reaches `applyOpinion` as a
+  RETRACTION (the cancellation shape) and demotes somebody who just paid.
+- **The price options are now per-tier**: `lgms_stripe_price_<tier>_<cadence>`,
+  with a fallback chain to the legacy per-cadence option and then the original
+  single option — **closed to non-default tiers on purpose**, since both legacy
+  options were written when there was one tier and letting looth2 read them
+  would sell Looth LITE at the Pro price, silently, on a box that looked
+  correctly configured. `StripePrice::tiers()` derives the offered tiers from
+  the catalogue (active, non-regional, `kind='membership'`).
+- **A dash-set price now retires competing prices by RHYTHM, not by pointer.**
+  `lgjoin`'s `renderTiers` draws one button per active recurring price with no
+  dedup by cadence, so dev2's Looth PRO card was **photographed showing four
+  buttons — $11/mo AND $9/mo, $132/yr AND $99/yr**. Retiring only the price the
+  option names is not enough: dev2's options named prices 30/31 while 11/12 sat
+  active and unpointed. Safe for members still billing on a retired price, and
+  checked rather than assumed — `lg_ms_lookup_active_sub` joins `prices` with
+  **no active filter**, and both `tierForPrice` implementations filter on the
+  **product's** active flag, never the price row's.
+- **The join page needed NO change** — `renderTiers` already keys off
+  `products.length` and `singleTier` is a fact about the catalogue, not a mode.
+  Verified in-browser as an authenticated admin: two cards, Looth LITE and
+  Looth PRO, from the real catalogue.
 - Dual-holder trap (war-gamed in docs/atlas/STRIPE-IDENTITY-AND-LIFECYCLE-
   DESIGN.md §2, re-verified 8/19): sweep skip (class-lgpo-sync-engine.php
   :581) + reader skip (PatreonSourceReader.php:36) freeze a dual payer's
@@ -52,6 +97,25 @@
   database — which makes a direct read tempting and wrong: it would be a
   SECOND definition of "paying Patreon", keyed on email rather than on the
   member. One definition, owned by the poller.
+
+## State (8/20)
+- **#148 BUILT** on `148-multi-tier`, flag `lgms_multi_tier` defaulted OFF,
+  gate 76 (40 assertions, 10 mutations + 2 no-ops). Grant follows the price;
+  dash Stripe Price tab is tier × cadence; WP checkout door accepts a
+  validated `tier` and still refuses a price id from the body. Dash-only
+  pieces carry no flag, as stated in the charter.
+- ⚠️ **THE OBVIOUS GATE ASSERTION IS A VACUOUS GREEN** and cost a rewrite:
+  *"a PRO purchase grants looth3"* passed on the defect, because the constant
+  already WAS looth3 — it cannot distinguish a resolved value from a constant
+  one. The assertion that bites is *"a LITE purchase grants looth2"*.
+- **dev2 data cleanup still owed (not code):** price rows 11 ($11/mo) and 12
+  ($132/yr) under product 9 are active and unpointed. The new sweep clears
+  them the next time that tier+cadence is priced from the dash; nothing
+  cleans them up on its own. Live is unaffected — its catalogue is empty.
+- `test-checkout-session-metadata.php` was **dead on main** (fatal, exit 255,
+  no FAIL line) because the door gained `StripePrice` and then
+  `PatreonStanding` without either being added to its require list. Revived:
+  20 assertions, including the *"body chooses NOTHING"* section.
 
 ## State (8/19)
 - **#150 + #149 BUILT** on 150-double-pay-block, flag `lgms_double_pay_block`
@@ -84,10 +148,14 @@
 - Live catalogue EMPTY (planned 8/11 reset; zz_truncsnap_20260811 snapshots
   hold the old test rows). Dev2 registers Looth LITE ($5/$60) + Looth PRO
   (placeholder $11/$132). Registration at go-live gates on IAN'S PRICE
-  DECISION (dash: Settings → LG Member Sync, per-cadence options
-  lgms_stripe_price_month/_year — per-tier control is #148's plan).
-- Owed: over-tiered 3 held; card-retry grace follow-up (Aron); #148
-  multi-tier reconnection (plan-ready); the `lgms_*` runtime-option flag
+  DECISION (dash: Settings → LG Member Sync). Per-tier control is BUILT (#148):
+  the options are now lgms_stripe_price_<tier>_<cadence>, and the old
+  lgms_stripe_price_month/_year pair is a read-only fallback for the DEFAULT
+  tier only. Dev2's pair currently names PRO's $9/$99 — worth knowing when
+  reading "Dev2 registers ... PRO (placeholder $11/$132)" above: BOTH pairs
+  are active price rows on product 9, which is the duplicate-button defect.
+- Owed: over-tiered 3 held; card-retry grace follow-up (Aron); the dev2 price-row
+  cleanup noted in State (8/20); the `lgms_*` runtime-option flag
   family is INVISIBLE to gate 62 (it only scans `LG_*` symbols and
   `platform/config/*.php`), so registering those flags is a discipline here
   and not an enforced one.
