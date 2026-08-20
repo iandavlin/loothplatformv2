@@ -133,8 +133,36 @@ LGJOIN  = "/lgjoin/"
 # and the bottom bar's. A gate sampling only "desktop and phone" would have
 # passed on the day the 641-820 sign-in lockout shipped (gate 12's scar). If a
 # breakpoint moves, move these brackets with it.
-WIDTHS = [1440, 821, 820, 641, 640, 390]
+WIDTHS = [1440, 900, 821, 820, 700, 641, 640, 390]
 DARK_AT = [1440, 390]          # theme cannot change an href; it can change paint
+
+# ── THE BASELINE RATCHET, and why this gate has one ─────────────────────────
+#
+# §D measures the DEPLOYED origin, and the deployed origin is main — a lane's
+# own branch is deployed nowhere (trap-harness-and-serve-answer-from-main). So
+# any GEOMETRY failure §D sees is by construction a statement about main, not
+# about the branch under test. Asserting it outright would red this gate for
+# every lane over a defect none of them caused, which is precisely the harm a
+# gate is supposed to prevent.
+#
+# Dropping the width instead would hide a real defect. So: a named, measured,
+# SELF-EXPIRING allowance. Widths listed here are reported and not scored; every
+# OTHER width is a hard assertion, so the list cannot grow silently. And if a
+# listed width starts PASSING, that is a FAIL telling you to delete the entry —
+# an allowance that outlives its defect is how a gate quietly stops meaning
+# anything.
+KNOWN_MAIN_GAPS = {
+    821: ("MEASURED ON MAIN 2026-08-20, /hub/ at 821px: the anon Join pill sits at "
+          "x=845 w=59 in an 821px viewport — entirely past the right edge, with "
+          "document.scrollWidth 905. The nav collapses into the hamburger at <=820, "
+          "so 821 up to roughly 904 is a band where the full nav and the anon "
+          "cluster cannot share one row and Join is pushed out of view. Connect "
+          "Patreon (x=649..797) still fits; Join is last, so Join is what goes. "
+          "The front page is milder: clipped by ~23px but its centre is still in "
+          "the viewport. SAME CLASS as gate 12's 641-820 sign-in dead band, one "
+          "band over, and PRE-EXISTING — this lane changed one href and one "
+          "attribute and cannot move a layout. Reported to Ian on #165."),
+}
 
 PATH = "/hub/"   # keeps its query string — the front page's enterDiscover()
                  # replaceState wipes every param (trap-front-page-wipes-query-params)
@@ -619,7 +647,16 @@ PROBE = r"""
   };
   const join = document.querySelector('.lg-chrome__join');
   const anon = !!document.querySelector('.lg-chrome__signin, .lg-chrome__menu-signin a');
+  const aside = document.querySelector('.lg-chrome__aside');
   return {
+    // Is the header's anon cluster DISPLAYED at this width at all? On the hub at
+    // <=640, bb-mirror/web/forums.css hides the whole aside with
+    // display:none!important and the PWA sheet becomes the anon door. That is a
+    // design decision, not a defect, so the contract has to be route-agnostic:
+    // "an anon visitor can reach Join", never "this particular pill is visible".
+    asideShown: !!(aside && getComputedStyle(aside).display !== 'none'),
+    hOverflow: document.documentElement.scrollWidth > innerWidth,
+    scrollW: document.documentElement.scrollWidth,
     // LIVENESS. An absence assertion is vacuous without proof the chrome built
     // and that we are actually looking at an ANONYMOUS page. A locked-out
     // browser serves a styled 403 that is identical at every width.
@@ -788,15 +825,8 @@ def leg_d(base, browser):
                                "script text, so it is not an anon fingerprint.)")
 
                 j = r["join"]
-                ok = check(f"{label}: an anon visitor can SEE and TAP Join",
-                           bool(j and j["styled"] and j["sized"] and j["inView"] and j["hit"]),
-                           ("no .lg-chrome__join in the DOM at all" if not j else
-                            "styled=false" if not j["styled"] else
-                            "sized=false (0x0)" if not j["sized"] else
-                            "off-screen" if not j["inView"] else
-                            f"COVERED by {j['top']}"))
-                if ok:
-                    log(f"        {j['w']}x{j['h']} @{j['x']},{j['y']}  ->  {j['href']}")
+                # ---- what the FLAG controls. Asserted at every width, always,
+                #      because these are the facts this lane actually decides.
                 if j:
                     check(f"{label}: Join goes where the SERVED flag says",
                           j["href"] == want, f"want {want}, got {j['href']}")
@@ -804,25 +834,52 @@ def leg_d(base, browser):
                     check(f"{label}: new tab iff it leaves the site",
                           (j["target"] == "_blank") == ext,
                           f"href={j['href']} target={j['target']!r}")
+                else:
+                    check(f"{label}: the header carries an anon Join anchor", False,
+                          "no .lg-chrome__join in the DOM at all")
+
+                header_route = bool(j and j["styled"] and j["sized"] and j["inView"] and j["hit"])
+                if header_route:
+                    log(f"        header pill {j['w']}x{j['h']} @{j['x']},{j['y']}  ->  {j['href']}")
+                elif j:
+                    why = ("the aside is display:none at this width (by design on the hub)"
+                           if not r["asideShown"] else
+                           "styled=false" if not j["styled"] else
+                           "sized=false (0x0)" if not j["sized"] else
+                           f"OFF-SCREEN (x={j['x']} w={j['w']} in a {w}px viewport, "
+                           f"scrollWidth={r['scrollW']})" if not j["inView"] else
+                           f"COVERED by {j['top']}")
+                    log(f"        header pill not reachable: {why}")
+
+                if j and r["asideShown"]:
                     if theme == "dark":
-                        # The pill must actually be PAINTED in dark, not merely
-                        # present: gate 36 owns the ratio, this owns "it exists
-                        # as a visible control in this theme at all".
+                        # gate 36 owns the contrast ratio; this owns "it exists as
+                        # a visible control in this theme at all".
                         check(f"{label}: the Join pill is painted (not transparent)",
                               "rgba(0, 0, 0, 0)" not in j["paint"].split("|")[0],
                               f"background {j['paint'].split('|')[0]}")
 
-                    # The state the origin cannot serve.
+                    # ---- the state the origin cannot serve ----
+                    # Asserted as a DELTA, never as an absolute: at a width where
+                    # main already hides or overflows this control, "is it
+                    # hit-testable" answers about main and not about the flag.
+                    # What this lane must prove is that flipping the flag changes
+                    # NOTHING about reachability (trap-mock-theme-stamp: assert
+                    # the delta you caused, never the absolute value).
                     sw = p.ev(SWAP.replace("%OTHER%", other))
                     check(f"{label}: presentation does NOT depend on the href",
                           bool(sw and sw["same"]),
                           "a stylesheet styles this control by its href — the state "
-                          "the origin cannot serve may not be reachable")
-                    check(f"{label}: still hit-testable with the OTHER href",
-                          bool(sw and sw["hit"]),
-                          "flipping the flag would make Join unreachable at this width")
+                          "the origin cannot serve may not look the same")
+                    check(f"{label}: the OTHER href is exactly as reachable as this one",
+                          bool(sw) and sw["hit"] == header_route,
+                          f"reachable={header_route} with {j['href']}, "
+                          f"{sw['hit'] if sw else '?'} with the other — flipping the "
+                          "flag would change whether Join can be tapped")
 
-                # ---- the PWA sheet: the phone's Join ----
+                # ---- the PWA sheet: the phone's Join, and the only one at <=640
+                #      on the hub, where forums.css hides the header aside ----
+                sheet_route = None
                 if mobile:
                     op = p.ev(OPENER.replace("%SELS%", ACCOUNT_TAB))
                     if not op:
@@ -838,18 +895,51 @@ def leg_d(base, browser):
                                   f"rows: {s.get('rows')}")
                         else:
                             sj = s["join"]
+                            sheet_route = sj["styled"] and sj["sized"] and sj["hit"]
                             check(f"{label}: PWA sheet Join is visible and tappable",
-                                  sj["styled"] and sj["sized"] and sj["hit"],
+                                  sheet_route,
                                   f"covered by {sj['top']}" if not sj["hit"] else "")
                             check(f"{label}: PWA sheet Join mirrors the header's href",
                                   sj["href"] == want, f"want {want}, got {sj['href']}")
-                            # The scar: an unconditional target="_blank" throws a
-                            # member out of the installed PWA to buy a membership.
+                            # The scar this lane fixed: an unconditional
+                            # target="_blank" throws a member out of the installed
+                            # PWA to buy a membership in a browser tab.
                             sext = sj["href"].startswith("http")
                             check(f"{label}: PWA sheet Join opens a new tab iff it leaves the site",
                                   (sj["target"] == "_blank") == sext,
                                   f"href={sj['href']} target={sj['target']!r} — an internal "
                                   "page in a new tab leaves display:standalone behind")
+
+                # ---- THE CONTRACT, route-agnostic: can this person JOIN? ----
+                # Not "is this pill visible" — a redesign that moves Join into the
+                # drawer or the tray must still pass, because what is protected is
+                # the visitor's ability to join, not a particular div. Same shape
+                # as gate 12, and for the same reason.
+                reachable = header_route or bool(sheet_route)
+                route = "header pill" if header_route else "PWA account sheet" if sheet_route else None
+                if w in KNOWN_MAIN_GAPS:
+                    # Baseline ratchet — see KNOWN_MAIN_GAPS.
+                    if reachable:
+                        check(f"{label}: KNOWN_MAIN_GAPS[{w}] is STALE — delete it", False,
+                              f"Join is now reachable at {w}px via the {route}. The "
+                              f"allowance has outlived its defect; remove the {w} entry "
+                              "from KNOWN_MAIN_GAPS in this file so the width is asserted "
+                              "again.")
+                    else:
+                        report(f"{label}: NO reachable Join — PRE-EXISTING ON MAIN, not scored",
+                               KNOWN_MAIN_GAPS[w])
+                else:
+                    check(f"{label}: an anon visitor can reach Join by SOME route",
+                          reachable,
+                          "neither the header pill nor the PWA account sheet offers a "
+                          "reachable Join at this width")
+                    if reachable and theme == "light":
+                        log(f"        route: {route}")
+                if r["hOverflow"] and w not in KNOWN_MAIN_GAPS:
+                    report(f"{label}: the page scrolls HORIZONTALLY "
+                           f"(scrollWidth {r['scrollW']} > {w})",
+                           "not scored here — craft gate territory — but it is how a "
+                           "control ends up off the right edge")
             finally:
                 inc.close()
     log("")
