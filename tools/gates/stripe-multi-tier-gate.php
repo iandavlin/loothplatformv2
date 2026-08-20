@@ -212,6 +212,7 @@ function seed_catalogue( PDO $pdo ): void {
         ('prod_LITE', 'membership', 'looth2', NULL, 'Looth LITE', 1),
         ('prod_PRO',  'membership', 'looth3', NULL, 'Looth PRO',  1),
         ('prod_PRO_RA','membership','looth3','regional_a','Looth PRO — Regional A', 1),
+        ('prod_RONLY','membership', 'looth5', 'regional_a', 'Regional-only tier', 1),
         ('prod_OLD',  'membership', 'looth2', NULL, 'Retired LITE', 0)" );
     $pdo->exec( "INSERT INTO prices (product_id, stripe_price_id, type, \"interval\", unit_amount_cents, currency, active) VALUES
         (1, '" . LITE_MONTH . "', 'recurring', 'month',  500, 'usd', 1),
@@ -336,6 +337,16 @@ is_( $threw === '', 'the OFF path touches no products/prices table', $threw );
 is_( entitlement_ref() === StripeLifecycle::TIER,
      '...and grants exactly the constant it always did',
      'got ' . var_export( entitlement_ref(), true ) );
+// THE ASSERTION THAT ACTUALLY CATCHES A LOOKUP, and it is not the one above.
+// tierFor() wraps the catalogue read in a try/catch — deliberately, so an
+// unreadable catalogue keeps the membership instead of retracting it — which
+// means a lookup on the OFF path is SWALLOWED and "nothing threw" stays true.
+// Mutation M2 (flag guard removed) came back GREEN against exactly that.
+// The catch is not silent though: it logs. So the observable proof that the
+// OFF path never even TRIED is that it says nothing about multi-tier at all.
+is_( ! log_mentions( 'multi-tier' ),
+     '...and says nothing about multi-tier — it never even tried the lookup',
+     implode( ' | ', $GLOBALS['LOG'] ) );
 
 rig( false );
 $GLOBALS['OPTS']['lgms_multi_tier'] = '';   // present but empty reads OFF
@@ -424,6 +435,22 @@ is_( $tiers === [ 'looth2', 'looth3' ],
      json_encode( $tiers ) );
 is_( count( $tiers ) === count( array_unique( $tiers ) ),
      '...a regional variant does not appear as a SECOND looth3' );
+// THE ONE THAT ACTUALLY CATCHES A DROPPED region_tag FILTER. The query selects
+// DISTINCT ref, so a regional variant of a tier that ALSO has a standard
+// product collapses into the same row and the two assertions above stay green
+// with the filter removed — caught by mutation M10, which came back GREEN
+// against an earlier version of this section. `looth5` in the rig exists ONLY
+// as a regional product, so it can only appear if the filter is gone.
+is_( ! in_array( 'looth5', $tiers, true ),
+     '...and a tier that exists ONLY as a regional product is NOT offered',
+     json_encode( $tiers ) );
+// The sharper consequence of the same filter: tierProduct() must name exactly
+// one product, and including regional variants makes looth3 ambiguous.
+$tpErr = '';
+try { $tp = StripePrice::tierProduct( 'looth3' ); } catch ( Throwable $e ) { $tpErr = $e->getMessage(); $tp = []; }
+is_( $tpErr === '' && ( $tp['stripe_product_id'] ?? '' ) === 'prod_PRO',
+     '...and the STANDARD product is the one a price hangs off, unambiguously',
+     $tpErr !== '' ? $tpErr : (string) ( $tp['stripe_product_id'] ?? 'none' ) );
 
 price_rig();
 $GLOBALS['PDO']->exec( "INSERT INTO products (stripe_product_id, kind, ref, region_tag, name, active)
@@ -554,3 +581,61 @@ echo "GATE 76 GREEN\n";
 exit( 0 );
 
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * RED-FIRST RECORD
+ *
+ * FIRST RUN, before any fix (the whole reason this file was written first):
+ *
+ *   FAIL a LITE subscription grants a looth2 ENTITLEMENT      (got 'looth3')
+ *   FAIL ...and writes looth2 as the 'stripe' opinion          (got  looth3)
+ *   FAIL the YEARLY LITE price grants looth2 too
+ *   ok   a PRO subscription still grants looth3       <-- THE VACUOUS GREEN
+ *   FAIL ...and the unmapped price id is NAMED in the log
+ *   FAIL LITE's monthly option is the one that moved
+ *   FAIL ...and the price was created under LITE's product     (got prod_PRO)
+ *   FAIL ...a NON-default tier never borrows the legacy option
+ *   Fatal: StripePrice::tiers() does not exist
+ *
+ * That `ok` line is the finding, not a pass: StripeLifecycle::TIER was already
+ * the literal 'looth3', so the obvious assertion could not tell a RESOLVED
+ * looth3 from a CONSTANT one and sailed through the defect. Keep every tier
+ * assertion pointed at the tier the constant is NOT.
+ *
+ * MUTATION RUN — 10 mutations, each applied to a fresh SNAPSHOT COPY of the
+ * tree, never to the working tree and never reverted with `git checkout --`
+ * (feedback-mutation-harness-must-snapshot-not-checkout). Each reddened its
+ * NAMED assertion:
+ *
+ *   M1  grant reverted to the constant .......... §1 LITE legs
+ *   M2  flag guard removed from tierFor ......... §3 "says nothing about multi-tier"
+ *   M3  unmapped-price log line deleted ......... §2 "the price id is NAMED"
+ *   M4  unmapped price retracts to looth1 ....... §2 "grants the constant, not nothing"
+ *   M5  fallback chain opened to other tiers .... §5 "a NON-default tier never borrows it"
+ *   M6  per-tier option key collapsed ........... §4 cross-write legs
+ *   M7  superseded price no longer retired ...... §8 "exactly ONE monthly price" (got 2)
+ *   M8  door stops refusing an unknown tier ..... §7 "refused, not guessed"    (got 503)
+ *   M9  door reads tier with the flag OFF ....... §7 "flag OFF changes nothing"
+ *   M10 tiers() stops excluding regional ........ §6 regional-only tier leg
+ *
+ * TWO OF THOSE CAME BACK GREEN THE FIRST TIME AND WERE GATE HOLES, NOT
+ * HARNESS NOISE. Both are now closed, and both are worth knowing about
+ * before editing this file:
+ *
+ *   M10 — tiers() selects DISTINCT ref, so a regional variant of a tier that
+ *   ALSO has a standard product collapses into the same row: dropping the
+ *   `region_tag IS NULL` filter changed nothing the assertions could see. The
+ *   rig now carries `looth5`, which exists ONLY as a regional product, so the
+ *   filter's removal has somewhere to show up.
+ *
+ *   M2 — tierFor() wraps the catalogue read in a try/catch on purpose (an
+ *   unreadable catalogue must keep the membership, not retract it), which
+ *   means a lookup on the OFF path is SWALLOWED and "nothing threw" stays
+ *   true. The absence assertion was therefore unfalsifiable. The catch is not
+ *   silent though — it logs — so the OFF leg now asserts the log says nothing
+ *   about multi-tier at all: proof it never even tried.
+ *
+ * TWO NO-OP MUTATIONS confirmed to redden NOTHING, so the gate is neither
+ * always-red nor keyed on prose: a reworded comment (N1) and a renamed local
+ * variable (N2) both stay GREEN.
+ * ═══════════════════════════════════════════════════════════════════════════ */
