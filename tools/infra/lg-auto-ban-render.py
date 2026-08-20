@@ -60,8 +60,23 @@ DEF_MAX     = 500
 
 
 def env(name, default):
+    """For PATHS: an empty value is a mistake, so fall back to the default."""
     v = os.environ.get(name)
     return v if v not in (None, "") else default
+
+
+def env_cmd(name, default):
+    """For COMMANDS: an empty value is a DECISION — do not run it at all.
+
+    These two rules have to differ, and the difference is not academic: with the
+    path rule applied to commands there is no way to switch the nginx test and
+    reload off, so an offline render still shells out to the real `nginx -t`,
+    fails as a non-root caller, and rolls its own work back. Gate 84 found
+    exactly that on its first run, as six assertions about expiry, the allowlist
+    and the cap all going red for a reason none of them was about."""
+    if name in os.environ:
+        return os.environ[name].strip()
+    return default
 
 
 def read_cf_ranges(path):
@@ -264,8 +279,8 @@ def main():
     doors_p  = env("LG_AB_DOORS", DEF_DOORS)
     maps_p   = env("LG_AB_MAPS", DEF_MAPS)
     cf_p     = env("LG_AB_CF_RANGES", DEF_CF)
-    test_cmd = env("LG_AB_NGINX_TEST", "nginx -t")
-    load_cmd = env("LG_AB_NGINX_RELOAD", "systemctl reload nginx")
+    test_cmd = env_cmd("LG_AB_NGINX_TEST", "nginx -t")
+    load_cmd = env_cmd("LG_AB_NGINX_RELOAD", "systemctl reload nginx")
     try:
         max_entries = max(1, int(env("LG_AB_MAX_ENTRIES", str(DEF_MAX))))
     except ValueError:
