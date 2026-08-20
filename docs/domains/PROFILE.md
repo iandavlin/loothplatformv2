@@ -211,6 +211,34 @@ reachable publicly. **That is a ruling for Ian, not a lane decision** — either
 meta tags should honour header visibility, or the never-republish rule should be
 restated to mean the rendered page only.
 
+### One thing that CANNOT be verified until this merges, and why
+
+The consent path was proven link by link on real infrastructure — the rule
+executed over a truth table, the resolver against the real DB, the dash rendered
+against the branch's pool, and `consent_ack` round-tripped through the real
+`/archive-api/v0/_config` webhook. What could **not** be proven on dev2 is the
+whole chain through a real `admin-post.php` click.
+
+The reason is structural, not laziness: `FeaturedMemberDash::fetch_pool()` reads
+`https://127.0.0.1/profile-api/v0/internal/featured-pool`, and that route is
+served out of `~/loothplatformv2-clean` — i.e. **main**. A branch's dash always
+gets main's pool. Main's pool has no `glance_needs_ack` key, so `consent_notice()`
+correctly returns null (absent ≠ false), `consent_ack` is written false, and the
+consent-warned branch of the handler is never entered. A real click on dev2
+therefore re-proves the ordinary path and says nothing about the new one.
+
+The nearest honest substitute — used here — is WordPress's own
+`pre_http_request` filter to hand the shipped `render_page()` the branch's pool
+without touching a line of shipped code. That produced the 2/5/0 → 4-notice →
+6/1/0 matrix above.
+
+**So after this merges, one thing is still worth doing on the serve:** feature an
+old-copy ticker through the real dash and confirm `consent_ack: true` reaches
+`config.json` and the band renders. ⚠️ `config.json` is owned by `archive-poc`,
+so restoring it afterwards needs `sudo cp` — a plain `cp` fails with permission
+denied, and if you only diff the rendered page you will not notice, because the
+front page re-resolves live and looks identical either way.
+
 ### Traps this leaves behind
 
 - `informed_copy_since` **must carry an explicit UTC offset**. It is compared
