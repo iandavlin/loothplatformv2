@@ -187,7 +187,8 @@ one is not.
 #143 resource strip + refresh button (all closed 8/19). Closed 8/20 by the
 155-page-train: #155 Your list · #151 chips that never lie · #156 poke keeper ·
 #159 the four chips · #160 spinner verb + one card per seat · #164 Agents.
-Closed 8/20 by 172-todo-v2: **#172** todo v2 + accordions (the TEST-URL
-convention, above). Gate 77 covers all seven — **no new number was minted, and
-`run-all.sh` was deliberately not touched** because two other lanes held it.
-Open: #145 (composer discussion input, scope from Ian).
+Also closed 8/20, by 172-todo-v2: **#172** todo v2 + accordions — the TEST-URL
+convention and the card, both above. Gate 77 was EXTENDED for it: **no new
+number was minted, and `run-all.sh` was deliberately not touched**, because two
+other lanes held that file.
+Gate 77 covers all six. Open: #145 (composer discussion input, scope from Ian).
