@@ -1058,7 +1058,15 @@ html[data-lguser-theme='dark'] .lg-join__tier-tagline { color: var(--lg-mute, #a
 html[data-lguser-theme='dark'] .lg-join__buy {
     background: var(--lguser-bubble, #262b30);
     color: var(--lg-ink, #e5e7e1);
-    border-color: #3a4148;
+    /* #767c76, not a darker grey. The first pass used #3a4148 and gate 80's
+       boundary leg caught it at 1.56:1 against the #1e2124 card — the fill is
+       only 1.13:1, so on a plain (non-primary) button the BORDER is the entire
+       thing separating a control from the page, and WCAG 1.4.11 wants 3:1.
+       #767c76 is 3.79:1 and is the same dark-border ink gate 36's own fix-verify
+       CSS uses, so the funnel and the form fields agree. The .is-primary buttons
+       clear it on their amber edge (8.58:1) and were never at risk — which is
+       exactly why a boundary bar has to be measured per control and not sampled. */
+    border-color: #767c76;
     box-shadow: 0 1px 0 rgba(0,0,0,0.30), 0 2px 6px rgba(0,0,0,0.40);
 }
 html[data-lguser-theme='dark'] .lg-join__buy:hover {

@@ -1762,6 +1762,50 @@ echo "=== GATE 79: a logged-out visitor's Join goes to OUR join page, and can ge
 run "header-join" python3 "$(dirname "$0")/header-join-gate.py"
 echo
 
+echo "=== GATE 80: the front page drops its SECOND join, and the funnel reads in dark ==="
+# #169 + #171, both from Ian's logged-out walk of 2026-08-20. "The secondary join
+# on the front page at the top banner can go away" and "dark mode is sucking on
+# the patreon stuff."
+#
+# ⚠️ THE ISSUE NAMED THE WRONG CONTROL. #171 names the header Connect Patreon
+# pill in dark; measured, that pill is 11.34:1 in dark and has no dark defect at
+# all. Its outline DID fail — at 2.72:1, in LIGHT. So this gate grades BOTH
+# THEMES on every surface: shaped around the charter's hypothesis it would have
+# gone green on the phantom and missed the real thing one theme over.
+#
+# What was actually broken was /lgjoin — the page #165 wires anon Join to.
+# membership-pages/web/lg-shortcodes.css had ZERO dark rules (measured: the
+# string appeared no times), so all four Subscribe buttons rendered #e5e7e1 on
+# #ffffff = 1.25:1, invisible. That is the SAME defect class join.css already
+# fixed for /connect-your-patreon/, missed because the two pages render the same
+# .lg-join__* names from TWO DIFFERENT stylesheets — which is why §C asserts BOTH
+# copies carry the block.
+#
+# §B renders the real script rather than grepping it: a source grep for the flag
+# passes on a file that reads it into a variable nothing consumes. OFF is proven
+# byte-identical to origin/main (72,054 both ways) against a SNAPSHOT SIBLING,
+# never `git checkout --`. Every absence is paired with a liveness assertion —
+# "no banner" is trivially true of a 500 — and the MEMBER greeting sharing that
+# if/elseif is asserted present in BOTH states.
+#
+# §D adapts instead of assuming: it fetches the served stylesheet and compares it
+# to this worktree's, so it grades what the box serves once merged and injects
+# the branch's REAL FILE BYTES before that, saying which mode it is in. A browser
+# gate that silently graded main would be worse than none
+# (trap-harness-and-serve-answer-from-main).
+#
+# ⚠️ MOTION IS KILLED AS CSS, BEFORE THE PROBE WALKS. `transition: background
+# 0.15s` on .lg-join__buy means getComputedStyle can return an INTERPOLATED value
+# mid-fade that is nearly #ffffff — indistinguishable from the real defect. The
+# first version of this gate stopped motion after probing and reported four false
+# 1.25:1 findings on a working branch.
+#
+# Red-first: tools/gates/front-banner-patreon-dark-redfirst.sh — 11 mutations
+# each reddening its OWN named assertion plus 2 no-ops proven inert, every one
+# against a file SNAPSHOT restored by an EXIT trap.
+run "front-banner-patreon-dark" python3 "$(dirname "$0")/front-banner-patreon-dark-gate.py"
+echo
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"

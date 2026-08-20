@@ -207,6 +207,71 @@
   renders on every page — a typo there is a site-wide 500, not one quiet
   feature.
 
+## State (8/20, #169 + #171 — the front polish train)
+- **THE ANON JOIN FUNNEL HAD NO DARK MODE AT ALL, AND IT WAS THE PAGE #165 POINTS
+  AT.** `membership-pages/web/lg-shortcodes.css` — the whole stylesheet `/lgjoin`
+  loads — contained **zero** `data-lguser-theme` rules, measured. All four
+  Subscribe buttons rendered `#e5e7e1` on `#ffffff` = **1.25:1, invisible**;
+  "Most popular" 1.51:1; "Secure checkout" 3.71:1. Fixed on `169-front-polish`,
+  unflagged (every rule is NEW under the dark selector, so light is untouched by
+  construction), gate **80**.
+- **THE MECHANISM IS NOT THE OBVIOUS ONE, and it will bite the next member page
+  the same way.** `:root` in that file sets `--lg-ink:#292929`, but
+  `webroot/app-settings.js` sets `--lg-ink:#e5e7e1` as an **INLINE STYLE ON
+  `<html>`** — and an inline style on an element beats a stylesheet rule
+  targeting that same element. So in dark the ink flips near-white while every
+  hardcoded `background:#fff` beside it stays put. ⚠️ Note also `--lg-muted`
+  (this stylesheet's own token, `#5b6066`) is **never repointed** by app-settings:
+  the app's dark ink is `--lg-mute`, a different name one letter apart. "It uses a
+  token, so it must follow the theme" is false here.
+- **TWO STYLESHEETS RENDER THE SAME `.lg-join__*` CLASS NAMES**, and that is why
+  this bug survived a fix. `/connect-your-patreon/` loads `join.css`; `/lgjoin`
+  loads `lg-shortcodes.css`. join.css's dark block already described this exact
+  defect in its own comment and fixed it — for its page only. **Anything changed
+  on one of these pages must be checked on the other**; gate 80 §C asserts both,
+  plus the second (poller `assets/`) copy of lg-shortcodes.css, which is enqueued
+  by `Plugin.php` and had also gone dark-blind.
+- ⚠️ **GATE 36 WAS RED ON MAIN BECAUSE OF THIS, AND NO LANE CAUSED IT.** Its
+  `lgjoin` baseline of 0 was captured while every membership-pages surface 404'd
+  on dev2; that infra defect was fixed 8/20, `/lgjoin` began serving for the first
+  time, and the real page's debt appeared against a baseline recorded from a dead
+  page. Fixed rather than absorbed — lgjoin returns to 0 findings, so the baseline
+  is honoured and **not raised**. If a future lane sees gate 36 red on lgjoin,
+  suspect the page started serving something new, not that someone regressed it.
+- **THE ISSUE NAMED THE WRONG CONTROL, recorded so nobody re-chases it.** #171
+  named the header Connect Patreon pill *in dark*; measured, it is **11.34:1 in
+  dark** with a ~9:1 outline and has no dark defect. Its outline **did** fail — at
+  **2.72:1 in LIGHT**, under WCAG 1.4.11's 3:1, where the outline IS the control
+  because the pill has no fill. Darkened to `#6b7c52` (3.95:1) with a dark restore
+  so dark is byte-identical to before. Ian's call, 8/20.
+- **Three more defects found while in there**, all fixed: `.lg-join__buy.is-selected`
+  was `#fff` on `#ECB351` = **1.89:1 in LIGHT TOO** (no anon gate can ever see it —
+  the class only lands after a click); `.lg-join__cta`, the primary button on the
+  literal Patreon page, sat at a **1.05:1 BOUNDARY** against its own dark card
+  (its old comment said the pairing was fine, which was true of the TEXT and never
+  asked what the fill sits on — **gate 36 grades text; 1.4.11 grades boundaries**);
+  and `.lg-join__feature` / `.lg-join__tier-tagline`, which became defects **only
+  because darkening the card exposed them**.
+- **TWO OF THE EIGHT FINDINGS WERE PHANTOMS OF THE INSTRUMENT.** The AMEX and
+  Google Pay marks carry explicit `fill=` attributes in `lgjoin.php`, so what they
+  PAINT is brand-correct (5.03:1 and 6.05:1); only the inherited `color` was
+  near-white, and `color` is what a contrast reader sees. Their `color` is now
+  pinned to the value `fill` already uses — the DOM reports what it paints, and
+  rendering is unchanged. **Do not "fix" those marks' fills.**
+- **#169: the secondary front-page Join is retired** behind
+  `platform/config/front-signup-banner-retire.php`, default OFF. At 1440 logged
+  out there were THREE join doors above the fold — header pill, this strip, hero
+  button. Blast radius is exactly two URLs (`location = /` and `/front-page/` →
+  `archive-poc/web/index.php`), unlike the header partial's seven apps. **OFF is
+  byte-proven: 72,054 bytes both ways against `origin/main`.** ⚠️ The banner is
+  the `if` half of an if/elseif whose `elseif ($is_member)` renders the "Welcome
+  back" greeting — gating the wrong half deletes a member's greeting, so gate 80
+  asserts the authed render is byte-identical across flag states.
+- **Owed:** Ian's flip of `front-signup-banner-retire.local.php` on dev2 once he
+  has seen the front page without the strip. The 821–904px dead band from #165 is
+  still open and still his call — a contrast fix cannot move a layout.
+
+
 ## State (8/19)
 - **#150 + #149 BUILT** on 150-double-pay-block, flag `lgms_double_pay_block`
   defaulted OFF, gate 75. One wp_option row read three ways; the Slim app's
