@@ -31,6 +31,52 @@ require_once __DIR__ . '/_bootstrap.php';
  * trusted internal admin surface, same posture as Whoami's fuller internal
  * payloads. The PUBLIC card (built elsewhere, when a member is actually
  * selected) is what applies the public-facing visibility rules.
+ *
+ * ── `eligible` IS CONSENT + PRIVACY, AND NOTHING ELSE (#107, Ian 8/19) ───────
+ * "opted in only" — profile completion NEVER narrows the pool. Consent is the
+ * WHERE clause (featured_opt_in = true); `eligible` is the live privacy state
+ * and nothing more. Completeness travels beside it as INFORMATION for the
+ * admin's judgement, never as a wall. Verified unchanged for #107: card_ready
+ * has never leaked into `eligible` here, so the wall Ian overruled lived only
+ * in the dash.
+ *
+ * ── `card_renderable` — WHAT THE FRONT PAGE WILL ACTUALLY DO (#107) ──────────
+ * Dropping the dash's refusal turns a legible "no" into a SILENT one unless the
+ * dash can tell the admin what happens next, because the front-page resolver
+ * keeps a guard of its own: lg_resolve_featured_member (archive-poc/web/index.php)
+ * returns null — no band at all — when the avatar or the resolved role is empty,
+ * since the card's template renders both UNCONDITIONALLY and would otherwise
+ * ship an <img src=""> and a blank line to every visitor.
+ *
+ * So this reports that guard's own verdict, computed with the resolver's exact
+ * rule rather than with card_ready. The two are NOT the same test and must not
+ * be conflated:
+ *   card_ready       photo + what_you_do + LOCATION  (Completeness::CARD_ITEMS)
+ *   card_renderable  photo + role, where `role` is at_a_glance ONLY IF the
+ *                    member's header block is public, else business_name
+ * `card_blockers` names the CAUSE, because an empty role has two of them and
+ * they call for opposite advice: `what_you_do` (nothing written) vs
+ * `what_you_do_members_only` (written, but withheld from the public card).
+ * Four of the five affected members on dev2 are the SECOND kind.
+ * Location is absent here on purpose (the card hides its own missing location),
+ * and the header-visibility rule is absent from card_ready — which is why a
+ * member can read card_ready:true and still resolve to no band.
+ *
+ * THAT IS NOT HYPOTHETICAL. Measured on dev2 2026-08-20, the whole opted-in
+ * pool: 8 members, card_ready true for 7 — but card_renderable true for only 3.
+ * Rick Liftig, Stephen Martin, Eric Haskins and Karl Borum all read "Ready" in
+ * the dash, all had an ENABLED Feature button, and all four resolve to role ''
+ * and therefore to NO BAND, because their header block is members-only and
+ * their business_name is a tail of their display name. The header-visibility
+ * rule that causes it is correct and deliberate (index.php, 2026-08-16: a
+ * members-only glance must not be republished on the public front page) — what
+ * was missing is any surface that TOLD the admin. card_ready could not: it does
+ * not know about header visibility. Hence this field.
+ *
+ * ⚠️ THIS MIRRORS A RULE THAT LIVES IN ANOTHER PROCESS. archive-poc is a
+ * separate app this endpoint cannot call; the copy is deliberate and is kept
+ * honest by gate 39 §F3, which goes RED if the resolver's guard changes without
+ * this predictor following it.
  */
 
 use Looth\ProfileApp\Completeness;
@@ -42,11 +88,19 @@ if (!Whoami::verifyInternalAuth()) profile_app_json(401, ['error' => 'bad_secret
 
 $pg = Db::pg();
 $rows = $pg->query(
-    "SELECT id, uuid, slug, display_name, avatar_url, at_a_glance, business_name,
-            location_city, location_region, profile_visibility, featured_opt_in_at
-       FROM users
-      WHERE featured_opt_in = true
-      ORDER BY featured_opt_in_at ASC NULLS LAST"
+    "SELECT u.id, u.uuid, u.slug, u.display_name, u.avatar_url, u.at_a_glance,
+            u.business_name, u.location_city, u.location_region,
+            u.profile_visibility, u.featured_opt_in_at,
+            -- No row => Block::HEADER_DEFAULT ('members'), the same default the
+            -- resolver assumes. Read here so card_renderable can apply the
+            -- resolver's header-visibility rule; the tagline field above stays
+            -- unfiltered (this is a trusted internal surface).
+            coalesce((SELECT ps.visibility FROM profile_sections ps
+                       WHERE ps.user_id = u.id AND ps.key = 'header'), 'members')
+              AS header_visibility
+       FROM users u
+      WHERE u.featured_opt_in = true
+      ORDER BY u.featured_opt_in_at ASC NULLS LAST"
 )->fetchAll();
 
 $pool = [];
@@ -62,6 +116,31 @@ foreach ($rows as $r) {
     }
     $loc = trim(implode(', ', array_filter([$r['location_city'], $r['location_region']])));
 
+    // ── The resolver's OWN verdict, its rule reproduced exactly ──────────────
+    // Deliberately NOT $tagline above: that one ignores header visibility, so a
+    // member whose glance is members-only reads as having a tagline here while
+    // the resolver sees none. Getting this wrong is the whole point of the
+    // field — a confidently wrong prediction is worse than no prediction.
+    $resolverRole = $r['header_visibility'] === 'public' ? trim((string) $r['at_a_glance']) : '';
+    if ($resolverRole === '') {
+        $biz = Completeness::deEscape($r['business_name']);
+        if ($biz !== '' && !str_ends_with((string) $r['display_name'], $biz)) $resolverRole = $biz;
+    }
+    // TWO DIFFERENT CAUSES OF AN EMPTY ROLE, and they need OPPOSITE advice.
+    // Measured on dev2 2026-08-20: of the 5 members whose card cannot render,
+    // FOUR already have a one-liner — it is simply members-only, so the public
+    // card may not repeat it. Telling those four to "add a one-line what you
+    // do" is confidently wrong advice about a field they already filled in;
+    // only Carl Ioriatti has genuinely written nothing. So the blocker names
+    // the cause, not just the symptom.
+    $blockers = [];
+    if (trim((string) $r['avatar_url']) === '') $blockers[] = 'photo';
+    if ($resolverRole === '') {
+        $blockers[] = trim((string) $r['at_a_glance']) !== '' && $r['header_visibility'] !== 'public'
+            ? 'what_you_do_members_only'
+            : 'what_you_do';
+    }
+
     $pool[] = [
         'uuid'          => $r['uuid'],
         'slug'          => $r['slug'],
@@ -69,9 +148,14 @@ foreach ($rows as $r) {
         'avatar_url'    => $r['avatar_url'],
         'tagline'       => $tagline,
         'location'      => $loc,
+        // Consent + privacy ONLY (Ian 8/19, #107) — completion never narrows this.
         'eligible'      => $r['profile_visibility'] === 'public',
         'opted_in_at'   => $r['featured_opt_in_at'],
         'completeness'  => Completeness::forUser($uid),
+        // Information, never permission: the dash shows these, it does not
+        // refuse on them.
+        'card_renderable' => $blockers === [],
+        'card_blockers'   => $blockers,
     ];
 }
 

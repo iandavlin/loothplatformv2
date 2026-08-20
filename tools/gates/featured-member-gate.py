@@ -49,6 +49,34 @@ WHAT IT ASSERTS, and why each is here:
      is absent, matching gate 27/29's own convention for a not-yet-deployed
      surface — an unmerged branch is an environment fact, not a finding.
 
+  F. COMPLETION NEVER BLOCKS THE ADMIN'S PICK, and the dash never claims a
+     save rendered when it did not. Ian, 2026-08-19 (#107): "I'd also like to
+     be able to select a member for features even if they don't hit the
+     completion numbers... the dash should allow me to select anyone",
+     clarified the same night to "opted in only". So consent is the ONE gate
+     and completeness is information — §F1 proves that by EXECUTING the
+     shipped rule (FeaturedMemberDash::selection_block_reason) against the
+     real pool, not by grepping the file for a refusal that could simply have
+     moved. §F2 proves the pillar it must not take with it: a private profile
+     is still refused (Ian rejected the "literally anyone" reading).
+
+     §F4 covers the trap that makes §F1 dangerous on its own. The front-page
+     resolver keeps its own guard — no avatar or no role => no band — so
+     dropping the dash's wall without a warning converts a legible refusal
+     into a silent one. MEASURED 2026-08-20 through the real admin-post.php
+     path: featuring Rick Liftig, whom the dash then called "Ready" with an
+     enabled button, answered "Saved and pushed to archive-poc" and removed
+     the band from the front page entirely (74,456 -> 72,838 bytes, zero
+     lg-fm__ markers). Four of eight opted-in members were in that state.
+     §F3 is the drift alarm for the copy that fixes it: the pool's
+     card_renderable reproduces a rule that LIVES IN ANOTHER PROCESS
+     (archive-poc), so if the resolver's guard changes and the predictor does
+     not follow, this goes RED rather than quietly lying to the admin again.
+
+     §F is NOT vacuous on an empty pool: it reports CANNOT RUN if nobody has
+     opted in, because "every member is selectable" is trivially true of no
+     members — the same reason §B counts its rows.
+
 DB checks use passwordless sudo peer-auth (profile-app / postgres roles), same
 posture as gate 21/27/28. Exit codes follow run-all.sh: 0 green, 1 RED, 2
 CANNOT RUN.
@@ -67,8 +95,16 @@ FLAG_FILE = os.path.join(REPO, "platform", "config", "featured-members.php")
 AUTH_PHP = os.path.join(REPO, "profile-app", "src", "Auth.php")
 COMPLETENESS_PHP = os.path.join(REPO, "profile-app", "src", "Completeness.php")
 ME_FEATURED_PHP = os.path.join(REPO, "profile-app", "api", "v0", "me-featured.php")
+DASH_PHP = os.path.join(REPO, "lg-layout-v2", "src", "FeaturedMemberDash.php")
+POOL_ENDPOINT_PHP = os.path.join(REPO, "profile-app", "api", "v0", "internal-featured-pool.php")
 
 RED, DEAD, OK = [], [], []
+
+
+def php_str(v):
+    """A PHP single-quoted literal for `v` — paths are interpolated into the
+    §F harness, and a naive f-string would break on any quote in a path."""
+    return "'" + str(v).replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
 def read(path):
@@ -501,6 +537,208 @@ def section_e_live_routes():
                     "not a known-good or known-bad signature, needs a human look")
 
 
+# ── F. the #107 rule: completion informs, consent decides ────────────────────
+
+# The pool endpoint exit()s and needs the internal secret, so it runs as its own
+# process and hands back JSON. Kept as a separate file from the rule harness
+# below: nesting a PHP-generating-PHP string is how the first version of this
+# broke ("$_SERVER['K']" is a parse error inside double quotes, not an
+# interpolation), and the two steps have nothing to do with each other.
+F_POOL_RUNNER = """<?php
+$_SERVER['REQUEST_METHOD'] = 'GET';
+$_SERVER['HTTP_X_LG_INTERNAL_AUTH'] = trim((string) file_get_contents('/etc/lg-internal-secret'));
+$_SERVER['REMOTE_ADDR'] = '127.0.0.1';
+require %(pool)s;
+"""
+
+# Execute the SHIPPED rule against the REAL pool. Deliberately not a source
+# grep: a refusal that merely MOVED would still satisfy a grep, and a rule read
+# out of a file is not a rule that ran.
+F_HARNESS = """<?php
+require %(dash)s;
+use LG\\LayoutV2\\FeaturedMemberDash as D;
+
+$pool = json_decode((string) file_get_contents(%(json)s), true)['pool'] ?? null;
+if (!is_array($pool)) { echo "POOL_UNREADABLE\\n"; exit(0); }
+
+$total = count($pool);
+$eligible = $blockedEligible = $lowCompletion = $lowBlocked = 0;
+$renderable = $warned = $warnedWrong = $readyUnwarned = 0;
+foreach ($pool as $m) {
+    if (empty($m['eligible'])) continue;
+    $eligible++;
+    if (D::selection_block_reason($m) !== null) $blockedEligible++;
+    if (empty($m['completeness']['card_ready'])) {
+        $lowCompletion++;
+        if (D::selection_block_reason($m) !== null) $lowBlocked++;
+    }
+    if (!array_key_exists('card_renderable', $m)) continue;
+    $w = D::card_warning($m);
+    if ($m['card_renderable']) { $renderable++; if ($w !== null) $warnedWrong++; }
+    else                       { if ($w !== null) $warned++; else $readyUnwarned++; }
+}
+
+// Synthetic rows for the two states the live pool may not happen to contain.
+$privateRow = ['eligible' => false, 'display_name' => 'probe', 'card_renderable' => true];
+$oldPoolRow = ['eligible' => true,  'display_name' => 'probe'];   // pre-#107 endpoint
+
+echo "TOTAL=$total\\n";
+echo "ELIGIBLE=$eligible\\n";
+echo "BLOCKED_ELIGIBLE=$blockedEligible\\n";
+echo "LOW_COMPLETION=$lowCompletion\\n";
+echo "LOW_BLOCKED=$lowBlocked\\n";
+echo "RENDERABLE=$renderable\\n";
+echo "NONRENDERABLE_WARNED=$warned\\n";
+echo "NONRENDERABLE_UNWARNED=$readyUnwarned\\n";
+echo "RENDERABLE_WARNED_WRONGLY=$warnedWrong\\n";
+echo "PRIVATE_REFUSED=" . (D::selection_block_reason($privateRow) !== null ? "1" : "0") . "\\n";
+echo "UNKNOWN_INVENTS_WARNING=" . (D::card_warning($oldPoolRow) !== null ? "1" : "0") . "\\n";
+"""
+
+
+def section_f_completion_never_blocks():
+    dash_src = read(DASH_PHP)
+    if dash_src is None:
+        DEAD.append("[F] lg-layout-v2/src/FeaturedMemberDash.php is missing")
+        return
+    # RED, not DEAD: on a tree that still carries the wall this is absent, and
+    # that absence IS the finding this section exists to report (#107).
+    if "selection_block_reason" not in dash_src:
+        RED.append("[F1] FeaturedMemberDash has no selection_block_reason() — the completeness "
+                   "wall Ian overruled on 2026-08-19 is still the dash's rule "
+                   '("the dash should allow me to select anyone", "opted in only")')
+        return
+    if not os.path.isfile(POOL_ENDPOINT_PHP):
+        DEAD.append("[F] the featured-pool endpoint is missing — nothing to execute the rule against")
+        return
+
+    pid = os.getpid()
+    runner = "/tmp/.featured-member-gate-f-pool-%d.php" % pid
+    jsonf  = "/tmp/.featured-member-gate-f-pool-%d.json" % pid
+    tmp    = "/tmp/.featured-member-gate-f-%d.php" % pid
+
+    def cleanup():
+        for path in (runner, jsonf, tmp):
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+
+    try:
+        with open(runner, "w") as f:
+            f.write(F_POOL_RUNNER % {"pool": php_str(POOL_ENDPOINT_PHP)})
+        os.chmod(runner, 0o644)
+    except OSError as e:
+        DEAD.append(f"[F] could not write the pool runner: {e}")
+        return
+    rc, out, err = php("profile-app", runner)
+    if rc != 0 or not out.strip().startswith("{"):
+        cleanup()
+        DEAD.append("[F] the featured pool did not return JSON — cannot execute the rule "
+                    f"(rc={rc} err={err[:160]} out={out[:160]})")
+        return
+    try:
+        with open(jsonf, "w") as f:
+            f.write(out)
+        os.chmod(jsonf, 0o644)
+        with open(tmp, "w") as f:
+            f.write(F_HARNESS % {"dash": php_str(DASH_PHP), "json": php_str(jsonf)})
+        os.chmod(tmp, 0o644)
+    except OSError as e:
+        cleanup()
+        DEAD.append(f"[F] could not write harness: {e}")
+        return
+
+    rc, out, err = php("profile-app", tmp)
+    cleanup()
+
+    if "POOL_UNREADABLE" in out:
+        DEAD.append("[F] the pool JSON was unreadable by the rule harness")
+        return
+    vals = dict(re.findall(r"^([A-Z_]+)=(-?\d+)$", out, re.M))
+    if rc != 0 or "TOTAL" not in vals:
+        DEAD.append(f"[F] harness did not run cleanly: rc={rc} err={err[:200]} out={out[:200]}")
+        return
+    g = lambda k: int(vals.get(k, -1))
+
+    # LIVENESS FIRST. "Nobody is blocked" is trivially true of nobody, and an
+    # empty pool is exactly how this section would go vacuously green.
+    if g("ELIGIBLE") < 1:
+        DEAD.append("[F] no opted-in, public member in the pool — every assertion below "
+                    "would pass vacuously, so this reports no verdict rather than green")
+        return
+
+    # F1 — the ruling itself.
+    if g("BLOCKED_ELIGIBLE") > 0:
+        RED.append(f"[F1] {g('BLOCKED_ELIGIBLE')} of {g('ELIGIBLE')} opted-in public members are "
+                   f"still refused by the dash's own rule — Ian ruled completion never blocks "
+                   f"his selection (#107, 2026-08-19)")
+    elif g("LOW_BLOCKED") > 0:
+        RED.append(f"[F1] {g('LOW_BLOCKED')} low-completion member(s) still blocked from selection")
+    else:
+        OK.append(f"[F1] all {g('ELIGIBLE')} opted-in public members are selectable, including the "
+                  f"{g('LOW_COMPLETION')} below card_ready — completion informs, it does not block")
+
+    # F2 — the pillar that must SURVIVE the change. Ian rejected "literally anyone".
+    if g("PRIVATE_REFUSED") != 1:
+        RED.append("[F2] a member whose profile is Private is no longer refused — #107 removed "
+                   "the COMPLETION wall, not the consent/privacy one")
+    else:
+        OK.append("[F2] a Private profile is still refused — consent/privacy survived #107")
+
+    # F4 — a save that cannot render must be warned about, or the refusal has
+    # only become silent. Measured cost of getting this wrong: 4 members.
+    if g("NONRENDERABLE_UNWARNED") > 0:
+        RED.append(f"[F4] {g('NONRENDERABLE_UNWARNED')} member(s) cannot render a card and get NO "
+                   f'warning — the dash would answer "Saved and pushed" and leave the front '
+                   f"page blank, which is what featuring Rick Liftig actually did on 2026-08-20")
+    elif g("RENDERABLE_WARNED_WRONGLY") > 0:
+        RED.append(f"[F4] {g('RENDERABLE_WARNED_WRONGLY')} member(s) whose card renders fine are "
+                   f"warned about anyway — a false warning trains the admin to ignore the real one")
+    else:
+        OK.append(f"[F4] card warnings track the resolver: {g('RENDERABLE')} renderable and unwarned, "
+                  f"{g('NONRENDERABLE_WARNED')} non-renderable and warned")
+
+    if g("UNKNOWN_INVENTS_WARNING") != 0:
+        RED.append("[F4] a pool row with NO card_renderable key (an older endpoint mid-deploy) "
+                   "produces a warning — absent is not false, and guessing here would warn "
+                   "about cards that are perfectly fine")
+    else:
+        OK.append("[F4] an absent card_renderable reads as unknown, not as a broken card")
+
+
+def section_f3_predictor_tracks_resolver():
+    """The predictor copies a rule that lives in ANOTHER PROCESS. archive-poc
+    cannot be called from profile-app, so the copy is deliberate — and this is
+    what stops it going stale silently. It asserts the RESOLVER'S GUARD still
+    tests the two fields the predictor reproduces; if that guard grows a third
+    condition, the dash starts telling the admin a card will render when it
+    will not, which is the exact failure #107's measurement caught."""
+    idx = read(INDEX_PHP)
+    pool_src = read(POOL_ENDPOINT_PHP)
+    if idx is None or pool_src is None:
+        DEAD.append("[F3] index.php or the pool endpoint is missing — cannot check predictor drift")
+        return
+    m = re.search(r"if \(trim\(\(string\) \$u\['avatar_url'\]\) === ''[^\n]*\) return null;", idx)
+    if not m:
+        RED.append("[F3] lg_resolve_featured_member's card guard is no longer the known "
+                   "`avatar_url empty || role empty => return null` — the pool's card_renderable "
+                   "reproduces that rule and must be updated in the same commit, or the dash "
+                   "will promise a band the front page does not draw")
+        return
+    guard = m.group(0)
+    if "$role === ''" not in guard:
+        RED.append(f"[F3] the resolver's guard changed shape ({guard[:120]}) — re-check "
+                   f"card_renderable in internal-featured-pool.php against it")
+        return
+    if "card_renderable" not in pool_src or "card_blockers" not in pool_src:
+        RED.append("[F3] the pool endpoint no longer reports card_renderable/card_blockers, but "
+                   "the resolver still refuses to draw a card without an avatar and a role — "
+                   "the dash has lost its only honest signal")
+        return
+    OK.append("[F3] the pool's card_renderable still mirrors the resolver's own avatar+role guard")
+
+
 def main():
     print("=== featured-member-gate: backlog 18 ===")
     section_a_constraints()
@@ -508,6 +746,8 @@ def main():
     section_c_flag_off()
     section_d_no_admin_override()
     section_e_live_routes()
+    section_f_completion_never_blocks()
+    section_f3_predictor_tracks_resolver()
 
     for m in OK:   print(f"  ok   {m}")
     for m in RED:  print(f"  RED  {m}")
