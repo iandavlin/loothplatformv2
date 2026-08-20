@@ -1059,7 +1059,27 @@ if __name__ == "__main__":
 # harness bug into ten false "the assertion is decoration" verdicts
 # (feedback-mutation-harness-must-snapshot-not-checkout).
 #
-# Record is written by tools/gates/header-join-redfirst.sh; see that file for
-# the run log. Each mutation must redden its OWN named assertion, and the two
-# no-ops must redden nothing — a gate that is always red is as useless as one
-# that is always green.
+# tools/gates/header-join-redfirst.sh drives it. RUN 2026-08-20: baseline green
+# at 41, twelve mutations each reddening its OWN named assertion, two no-ops
+# reddening nothing. 14 of 14 as expected.
+#
+#    1  the ON href hardcoded into the anchor    -> "href is resolved at render time"
+#    2  reader forgets $_SERVER                  -> "read from getenv() AND $_SERVER"
+#    3  .local.php override dropped              -> "honours the .local.php box override"
+#    4  .local wins on any truthy, not === true  -> "wins only on an EXPLICIT boolean true"
+#    5  our own page opened in a new tab         -> "on: does NOT open a new tab"
+#    6  the OFF href changed by ONE character    -> "off: Join goes to patreon.com"
+#    7  ONE blank line added to the OFF path     -> "byte-identical to origin/main"
+#    8  bottom-nav target=_blank unconditional   -> "target=_blank only for an EXTERNAL href"
+#    9  bottom-nav stops reading the header      -> "anon sheet reads the header"
+#   10  config defaults ON when unreadable       -> "falls back to today's behaviour"
+#   11  the FLAGS.md row deleted                 -> "FLAGS.md carries a row"
+#   12  the FLAGS row drops the coupling         -> "row names lgms_stripe_pages_live"
+#   A   rename a local in the reader             -> GREEN, 41 passed
+#   B   reflow the config docblock               -> GREEN, 41 passed
+#
+# ⚠️ Mutation 7 is the one worth keeping. It is a pure-whitespace edit that
+# changes NO behaviour whatsoever, and it is caught only by the byte-identity
+# leg — which is exactly the defect lane 129 found in its own OFF path (a blank
+# line after a php endif, 46 bytes, on a diff that removed zero lines). Without
+# §C that mutation is invisible and "OFF is a no-op" is back to being a claim.

@@ -1667,6 +1667,50 @@ echo "=== GATE 76: the Stripe rail grants the tier that was PAID for ==="
 run "stripe-multi-tier" php "$(dirname "$0")/stripe-multi-tier-gate.php"
 echo
 
+echo "=== GATE 79: a logged-out visitor's Join goes to OUR join page, and can get there ==="
+# Ian, 2026-08-20, verbatim on #165: "can you Wire the header on Dev2 to have
+# the stripe menuing that a logged out user would see?" The anon header's Join
+# went straight to patreon.com — his own 6/12 ruling, right for a Patreon-only
+# world. Behind platform/config/header-join-stripe.php, default OFF.
+#
+# ⚠️ THE OBVIOUS ASSERTION IS NEARLY WORTHLESS HERE, which is the whole reason
+# this gate is shaped the way it is. "Flag ON means href=/lgjoin/" is TRUE of a
+# build where /lgjoin/ hands an anonymous visitor "This page isn't available
+# yet" — the MEASURED state of dev2 the day this landed, because that page's
+# audience is picked by a DIFFERENT switch (`lgms_stripe_pages_live`). §E
+# asserts the destination admits anon whenever the flag is ON, and reports
+# rather than asserts while it is OFF, so it cannot redden an unrelated lane.
+# The two flip in the same window or Join is wired perfectly and lands nowhere.
+#
+# OFF IS BYTE-PROVEN, NOT ARGUED: the partial is rendered from this branch and
+# from `git show origin/main:lg-shared/site-header.php` with the same anonymous
+# ctx and compared BYTE FOR BYTE — for the ABSENT config too, and for an AUTHED
+# ctx in every state including ON. Red-first mutation 7 is a pure-whitespace
+# edit that changes no behaviour and is caught by nothing else, which is exactly
+# the defect lane 129 found in its own OFF path.
+#
+# THE CONTRACT IS ROUTE-AGNOSTIC, like gate 12's: "an anon visitor can reach
+# Join", never "this pill is visible". At <=640 on the hub, forums.css hides the
+# whole header aside by design and the PWA account sheet IS the anon door — so
+# that sheet's Join is asserted there, including the rule that an internal href
+# must NOT open a new tab (an unconditional target="_blank" throws a member out
+# of the installed PWA to buy a membership in a browser tab).
+#
+# ⚠️ KNOWN_MAIN_GAPS: 821px is REPORTED, NOT SCORED. Measured on main — the Join
+# pill sits at x=845 in an 821px viewport, entirely past the right edge; the nav
+# collapses at <=820, so 821-904 is a band where the full nav and the anon
+# cluster cannot share a row. Same class as gate 12's 641-820 sign-in dead band,
+# one band over, and pre-existing. The allowance SELF-EXPIRES: if 821 ever
+# passes, the gate FAILS telling you to delete the entry. Every other width is a
+# hard assertion, so the list cannot grow silently.
+#
+# §A-C and §E are pure source + php + one HTTP GET; only §D drives a browser.
+# Red-first: tools/gates/header-join-redfirst.sh — 12 mutations each reddening
+# its OWN named assertion, 2 no-ops proven inert, against file SNAPSHOTS and
+# never `git checkout --`.
+run "header-join" python3 "$(dirname "$0")/header-join-gate.py"
+echo
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"
