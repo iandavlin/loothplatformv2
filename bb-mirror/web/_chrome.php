@@ -551,7 +551,6 @@ function bb_mirror_new_topic_modal(): void
         <input type="hidden" id="ntm-topics-input" value="">
       </div>
 <?php endif; ?>
-
       <!-- Post anonymously (anon-rebuild lane): per-post toggle. Sends _lg_anon
            with the topic write; the post renders as "Anonymous" to members
            (admins/mods still see the real author). Shared markup — Buck's mobile

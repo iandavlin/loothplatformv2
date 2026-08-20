@@ -291,20 +291,37 @@ in `docs/FLAGS.md` and asserted in all three states by **gate 74**.
   two heavy unmapped topics (New Builds 145 uses, Tools/Spaces/Robots/Widgets 97) stay
   open with Ian and are non-blocking.
 
-### 5.2 ⚠️ THE FLIP IS BLOCKED ON A MIRROR SYNC, AND THE CODE REFUSES UNTIL IT IS DONE
+### 5.2 The mirror-sync blocker — RAISED 8/19, CLEARED and re-verified 8/20
 
-Measured 8/19: forum **73564 exists in WordPress and is ABSENT from the Postgres
-mirror** (`forums.forum`; the mirror's newest row is 67776). Forum rows reach the
-mirror only via the `bbp_new_forum` / `bbp_edit_forum` hooks, and whatever created
-73564 did not fire them. The picker, the hub's forum reads and the postable contract
-**all read Postgres**, so a topic filed there would point at a forum row that does not
-exist.
+**When this was built, the flip was blocked.** Forum 73564 existed in WordPress and was
+absent from the Postgres mirror (`forums.forum`; the mirror's newest row was 67776),
+because forum rows only arrive there via the `bbp_new_forum` / `bbp_edit_forum` hooks
+and whatever created it did not fire them. The picker, the hub's forum reads and the
+postable contract all read Postgres, so a topic filed there would have pointed at a
+row that did not exist. `lg_ccl_default_forum_ok()` was written to keep the Where step
+while that was true — refuse, rather than file posts into a void.
 
-`lg_ccl_default_forum_ok()` therefore keeps the Where step while that is true — the
-composer refuses rather than filing posts into a void. Verified as the pool user, with
-a liveness control (73564 no · 3837 YES · 3818 parent no · 3876 excluded no).
+**Someone ran the resync between the park and 2026-08-20, and it is now clear.**
+Re-measured after the reboot, as the `bb-mirror` pool user, not as the lane's own
+shell:
 
-**Resync is one dispatch:** `bb_mirror_sync_dispatch('forum', 73564, 'upsert')`.
+```
+forums.forum 73564   discussions / Discussions / parent NULL / public / open / forum
+picker's own postable query for 73564          1 row
+lg_ccl_default_forum_ok()                      true
+  control 3818 (parent, has children)          not postable   <- liveness
+  control 3876 (explicitly excluded)           not postable   <- liveness
+lg_ccl_enabled()                               false          <- flag still OFF
+```
+
+The two controls are the point: a guard that returned `true` for everything would look
+identical on the one row being checked. Presence is not postability, so the postable
+query was run rather than a `SELECT 1 FROM forum`.
+
+**So the ON path's precondition is satisfied and nothing behavioural changed** — the
+flag is still OFF, and the flip is still Ian's. The refusal path stays in the code and
+stays gate-asserted, because live will hit exactly this state when its own twin forum
+is created there.
 
 ### 5.3 Two deploy steps a `git pull` does NOT do
 
@@ -327,8 +344,62 @@ Postgres. That last line is the recorded trap (a change that does not bump
 of a moved topic) measured as defeated rather than assumed. Probe deleted from both
 stores, zero orphans.
 
-**Not verified, and it cannot be from a lane:** the feature running on the dev2 serve.
-The serve serves `main` from `~/loothplatformv2-clean`, so nothing on this branch is
-reachable there until it is merged — which is the whole reason the flag exists. Ian's
-look happens after the merge, with the flag still OFF, then the mirror sync, then the
-flip.
+#### 5.4.1 "Flag OFF is byte-identical" is now MEASURED, not argued
+
+The first version of this section said the feature could not be seen running from a
+lane, because nginx serves the hub from `~/loothplatformv2-clean` and a branch has no
+URL. **That was wrong** — `cgi-fcgi` can drive the pool directly, because
+`SCRIPT_FILENAME` is just a path:
+
+```bash
+sudo -u www-data env SCRIPT_FILENAME=<tree>/bb-mirror/web/index.php \
+  REQUEST_URI=/hub/ SCRIPT_NAME=/hub/index.php DOCUMENT_URI=/hub/ \
+  DOCUMENT_ROOT=/var/www/dev LG_BB_MIRROR_PUBLIC_PATH=/hub \
+  HTTP_COOKIE="wordpress_logged_in_${HASH}=${CK}" ... \
+  cgi-fcgi -bind -connect /run/php/php8.3-fpm-bb-mirror.sock
+```
+
+Render the same URL from two trees and `cmp`. Connect as **www-data** (the socket is
+`listen.owner = www-data`; the pool user gets "Could not connect" and reads as a dead
+pool), mint the cookie with
+`wp eval 'echo wp_generate_auth_cookie(1, time()+3600, "logged_in");'` plus
+`COOKIEHASH`, and normalise **only** the `?v=<filemtime>` cache-buster.
+
+Two setup details this lane paid for:
+
+- **Compare against the MERGE-BASE, not against main.** main was one commit ahead and
+  that commit adds `platform/config/hub-feed-noindex.php`, so main rendered a
+  `<meta name="robots">` this branch cannot. The clean baseline is *this* worktree with
+  only the files I changed reverted to `git merge-base origin/main HEAD`.
+- **Copy the three gitignored box-local flags in first** —
+  `back-pill.local.php`, `frontend-compose.local.php`, `hub-feed-noindex.local.php`.
+  Without them a lane worktree renders with those features OFF while the serving
+  checkout has them ON, which looks like three defects and is none.
+
+**Result, re-proven after two reboots:**
+
+```
+off-base (merge-base)  217,336 bytes   ntm-form=1  picker radios=39  Where label=2  tag field=0
+off-mine (flag OFF)    217,336 bytes   ntm-form=1  picker radios=39  Where label=2  tag field=0
+                       -> cmp: BYTE-IDENTICAL
+on-mine  (flag ON)     213,124 bytes   ntm-form=1  picker radios=2   Where label=0  tag field=1
+                       -> landing 73564 "Discussions"; 7 category headers -> 0
+```
+
+The liveness columns matter: byte-identity between two stubs, or two 403s, would prove
+nothing. Both OFF renders contain the real composer with all 39 radios. The ON render's
+2 radios are the one pre-checked hidden leaf plus the reply form's pre-existing
+`frm-forum-id` hidden input, which is in every render.
+
+**And the render caught a defect the source review missed.** My inserted block left a
+blank line after `<?php endif; ?>`; PHP eats exactly one newline after `?>`, so the OFF
+path emitted **two** blank lines where the original had one. Byte-identity failed by 46
+bytes on a change I had reasoned was inert. That is the whole argument for rendering
+rather than reading.
+
+#### 5.4.2 Still not verified from a lane
+
+Ian looking at the running thing. The serve serves `main`, so his check happens after
+the merge, flag still OFF — then the flip. The renders above prove the OFF path is
+inert and that the ON path assembles; they cannot prove the picker *behaves* (that is
+JS in a browser against a deployed asset).
