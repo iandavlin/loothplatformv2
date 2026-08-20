@@ -99,6 +99,13 @@
   member. One definition, owned by the poller.
 
 ## State (8/20)
+- **PRICES RULED (Ian 8/20, verbatim: "We are going to go with five and 11"):**
+  Looth LITE $5/mo, Looth PRO $11/mo. Yearly is first-class in the dash
+  (tier x cadence) and the catalogue has carried the Patreon-shape yearly
+  prices since birth — LITE $60/yr, PRO $132/yr — awaiting his yearly
+  confirmation in the same dash session. His dash pricing session is ALSO the
+  #148 phone check AND auto-clears the dev2 four-button dupe. Go-live now
+  gates on: dash session -> live catalogue registration -> his flip.
 - **#148 BUILT** on `148-multi-tier`, flag `lgms_multi_tier` defaulted OFF,
   gate 76 (40 assertions, 10 mutations + 2 no-ops). Grant follows the price;
   dash Stripe Price tab is tier × cadence; WP checkout door accepts a
