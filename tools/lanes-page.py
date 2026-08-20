@@ -147,12 +147,56 @@ def plainize(title, limit=62):
     return t or (title or "").strip()
 
 
+def casual(title):
+    """#164, Ian's sketched format: "Agent 1 — #148, the multiple-tiers thing".
+
+    The "the …-… thing" form is applied ONLY where it cannot come out wrong:
+    a short title whose words are ordinary ones. A possessive ("Ian's todo
+    list") or an acronym ("SEO/sitemap") keeps its own capitals, because
+    "the ian's-todo-list thing" is worse than no flourish at all — this is a
+    tone, not a schema, and a tone is not worth a mangled proper noun."""
+    t = plainize(title, 40)
+    w = t.split()
+    if (2 <= len(w) <= 3 and len(t) <= 34
+            and "'" not in t and "’" not in t
+            and w[0][:1].isupper() and w[0][1:].islower()
+            and all(x.islower() for x in w[1:])):
+        return "the " + "-".join([w[0].lower()] + w[1:]) + " thing"
+    return t
+
+
+def agent_line(l, iss):
+    """What this worker is doing, in one clause. Ian asked for the live verb
+    where there is one and plain words where there isn't — an agent sitting at
+    a prompt is not "parked", it is waiting for a specific person to do a
+    specific thing, and that is what the line says."""
+    if l.get("state") == "working":
+        sb = spinner_bits(l.get("spinner", ""))
+        if sb:
+            return f"{sb[0]} {sb[1]}"
+        return "working"
+    ls, reason = l.get("lane_state", "none"), (l.get("reason") or "")
+    if ls == "DONE":
+        return "waiting for the keeper to merge"
+    if ls == "QUESTION":
+        return f"waiting on an answer: {reason[:90]}" if reason else "waiting on an answer"
+    if ls == "BLOCKED":
+        return f"blocked: {reason[:90]}" if reason else "blocked"
+    if l.get("state") == "needs-you":
+        return f"waiting on you{' — ' + reason[:90] if reason else ''}"
+    return "sitting idle at its desk"
+
+
 def spinner_bits(raw):
     """#160: 'Roosting… (22m 32s · ↓ 23.8k tokens)' -> ('Roosting…', '22m').
     The seconds are dropped once a bigger unit exists — Ian wants proof of life
     at a glance, and a clock that ticks every second reads as noise. Across two
     draws: same verb + a growing clock is a live turn, a frozen clock is a hang."""
-    m = re.match(r'\s*([A-Za-z]+…?)\s*\(([^·]+)·', raw or "")
+    # search, not match: the CLI prints a rotating glyph ahead of the verb
+    # ("✽ Roosting… (…"). The shell extractor strips it today, but a renderer
+    # that silently drops the whole chip the day it doesn't is not worth the
+    # one character this costs.
+    m = re.search(r'([A-Za-z]+…?)\s*\(([^·]+)·', raw or "")
     if not m:
         return None
     verb, elapsed = m.group(1), m.group(2).strip()
@@ -419,6 +463,8 @@ h2{font-size:13px;color:#9aa3ad;text-transform:uppercase;letter-spacing:.06em;ma
 .card .acts{margin-top:6px;}
 .card summary{cursor:pointer;color:#9aa3ad;font-size:12.5px;margin-top:4px;}
 .why{color:#e8e6df;font-size:13px;}
+.agent{background:#1b1f26;border:1px solid #2a2f38;border-radius:8px;
+  padding:8px 12px;margin-bottom:6px;font-size:14px;}
 </style></head><body><div class="wrap"><h1>lanes</h1>""")
 
     # 0. capacity — one glance, no counting rows (Ian's item 1)
@@ -505,6 +551,26 @@ h2{font-size:13px;color:#9aa3ad;text-transform:uppercase;letter-spacing:.06em;ma
                          f'<div class="plan">{html.escape(t["detail"])}</div>'
                          f'</details>')
             h.append(f'<div class="acts">{t["buttons"]}</div></div>')
+
+    # 3a. AGENTS (#164) — the WORKERS view. Ian: "I guess we need an agent
+    # section and what they are working like - agent 1 - 146 edit button thing."
+    # Deliberately NOT a second description of the desks (which is the thing
+    # #160 fixed): no seats, no branches, no git numbers here. A row exists for
+    # every agent that is ALIVE — a session at a prompt is still a worker, and
+    # saying what it waits for is the whole point. Absent when nobody is home.
+    live_agents = [l for l in seats if l.get("agent", "none") != "none"]
+    if live_agents:
+        h.append('<h2>Agents</h2>')
+        for n, l in enumerate(live_agents, 1):
+            iss = issue_for(l)
+            what = (f'<a href="{html.escape(iss["html_url"])}" target="_blank" '
+                    f'rel="noopener" style="color:#7fa8d9">#{iss["number"]}</a>, '
+                    f'{html.escape(casual(iss["title"]))}' if iss
+                    else f'{html.escape(l["branch"])}')
+            doing = html.escape(agent_line(l, iss))
+            colour = "#9db668" if l.get("state") == "working" else "#9aa3ad"
+            h.append(f'<div class="agent"><b>Agent {n}</b> &mdash; {what} '
+                     f'&mdash; <span style="color:{colour}">{doing}</span></div>')
 
     # 3b. in motion (no seat) — active investigations (#137): keeper working,
     # nothing needed from Ian yet. Explicitly labeled only; absent when none.

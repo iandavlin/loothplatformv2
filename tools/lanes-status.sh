@@ -14,8 +14,15 @@
 # Install: sudo ln -sf /home/ubuntu/keeper-repo/tools/lanes-status.sh /usr/local/bin/lanes
 set -euo pipefail
 
-REPO="/home/ubuntu/keeper-repo"
-SERVE="/home/ubuntu/loothplatformv2-clean"
+# Overridable ONLY so gate 77 can point the whole script at a throwaway repo of
+# fabricated seats and exercise the real classification — a brand-new branch, a
+# merged one, a PARKED: tip, a .lane-state marker — without inventing a worktree
+# on the real box. Production never sets these.
+REPO="${LG_LANES_REPO:-/home/ubuntu/keeper-repo}"
+SERVE="${LG_LANES_SERVE:-/home/ubuntu/loothplatformv2-clean}"
+# The seat root decides `scratch`: a worktree outside it is somebody's scratch
+# checkout and the page hides it. The gate's fake seats live under their own root.
+SEAT_ROOT="${LG_LANES_SEAT_ROOT:-/home/ubuntu}"
 
 # Ceilings — Ian's ruling 8/18 (handoff-4): two numbers, not one. Disk allows
 # 9+ seats (~100MB each); these are the ruled caps, and the binding limits are
@@ -125,18 +132,18 @@ while IFS= read -r line; do
     case "$line" in
         "worktree "*) folder="${line#worktree }" ;;
         "detached")
-            scr=false; [[ "$folder" != /home/ubuntu/* ]] && scr=true
-            ROWS+="999999|${folder#/home/ubuntu/}|(detached)|-|-|-|detached — investigate|NR|detached|$scr|false||none|needs-keeper|||999999|none"$'\n' ;;
+            scr=false; [[ "$folder" != "$SEAT_ROOT"/* ]] && scr=true
+            ROWS+="999999|${folder#$SEAT_ROOT/}|(detached)|-|-|-|detached — investigate|NR|detached|$scr|false||none|needs-keeper|||999999|none"$'\n' ;;
         "branch refs/heads/"*)
             branch="${line#branch refs/heads/}"
-            scr=false; [[ "$folder" != /home/ubuntu/* ]] && scr=true
+            scr=false; [[ "$folder" != "$SEAT_ROOT"/* ]] && scr=true
             WT_BRANCHES+=" $branch"
             # mismatch = the folder-name-lies hazard: `git worktree remove`
             # takes a PATH, and this is exactly where the wrong one gets removed
             mm=false; [[ "$(basename "$folder")" != "$branch" ]] && mm=true
             if [[ "$branch" == "main" ]]; then
                 # the parent checkout is not a seat; the deploy line covers it
-                ROWS+="-1|${folder#/home/ubuntu/}|main|0|0|0|— (parent checkout)|0|parent|false|false||none|retired|||999999|none"$'\n'
+                ROWS+="-1|${folder#$SEAT_ROOT/}|main|0|0|0|— (parent checkout)|0|parent|false|false||none|retired|||999999|none"$'\n'
                 continue
             fi
             lr=$(git -C "$REPO" rev-list --left-right --count "origin/main...$branch" 2>/dev/null | tr '\t' ' ' || true)
@@ -204,7 +211,7 @@ while IFS= read -r line; do
             elif [[ "$slug" == "done" ]]; then st4="retired"
             else st4="needs-keeper"
             fi
-            ROWS+="$behind|${folder#/home/ubuntu/}|$branch|$behind|$unique|$cell|$status|${push/NO REMOTE/NR}|$slug|$scr|$mm|$rid|$ag|$st4|${reason//|/ }|${spin//|/ }|$age_min|$lstate"$'\n' ;;
+            ROWS+="$behind|${folder#$SEAT_ROOT/}|$branch|$behind|$unique|$cell|$status|${push/NO REMOTE/NR}|$slug|$scr|$mm|$rid|$ag|$st4|${reason//|/ }|${spin//|/ }|$age_min|$lstate"$'\n' ;;
     esac
 done < <(git -C "$REPO" worktree list --porcelain)
 
