@@ -228,7 +228,9 @@ if ($mode === 'author') {
     foreach ($st->fetchAll() as $r) {
         $url = $r['kind'] === 'discussion'
             ? $base . '/' . $r['forum_slug'] . '/' . $r['topic_slug'] . '/'
-            : (string)$r['content_url'];
+            // Host-stripped for our own hosts — pre-cut mirror rows carry the
+            // other box's host (the 8/21 hub-card finding). See the helper.
+            : lg_bb_self_relative_url((string)$r['content_url']);
         // id/topic_id: lets the mobile open-in-place (hub-polish v169) skip its
         // resolve fetch — topic id for discussions, content_item id otherwise
         // (Buck ask 2026-06-11, coord-approved).

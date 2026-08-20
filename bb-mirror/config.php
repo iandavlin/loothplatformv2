@@ -734,3 +734,26 @@ function lg_hub_feed_noindex_on(): bool
     return $on;
 }
 }
+
+/* ─────────────────────────────── same-site links go host-relative ────────────
+ * Mirror rows store the ABSOLUTE permalink recorded at sync time, so a box cut
+ * from live carries the OTHER box's host in every pre-cut row. Measured 8/21
+ * (Ian's edit-button hunt): 46 of 60 loothprint cards on dev2's hub shipped the
+ * member to live — signed out there, every authored-content affordance gone.
+ * Render-time normalization is reload-proof (the same posture as
+ * looth-auth-issue's host-relative redirect): OUR hosts lose scheme+host, a
+ * FOREIGN host passes untouched — sponsor/video links must keep pointing where
+ * they point. */
+if (!function_exists('lg_bb_self_relative_url')) {
+function lg_bb_self_relative_url(string $url): string {
+    $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+    if ($host === '' || !in_array($host, ['loothgroup.com', 'www.loothgroup.com', 'dev2.loothgroup.com'], true)) {
+        return $url;
+    }
+    $path = (string) parse_url($url, PHP_URL_PATH);
+    if ($path === '' || $path[0] !== '/') return $url;
+    $q = (string) parse_url($url, PHP_URL_QUERY);
+    $f = (string) parse_url($url, PHP_URL_FRAGMENT);
+    return $path . ($q !== '' ? '?' . $q : '') . ($f !== '' ? '#' . $f : '');
+}
+}

@@ -1590,7 +1590,9 @@ $header_cat = $scoped_forum
       // A folded discovery row; deep-links to its standalone archive page.
       // No replies/threading — that's forum-topic-only below.
       if (($topic['card_type'] ?? 'topic') === 'content'):
-        $c_url     = (string)($topic['content_url'] ?? '#');
+        // Host-stripped for our own hosts: 46 of dev2's 60 loothprint cards
+        // carried live's host from pre-cut mirror rows (8/21). See the helper.
+        $c_url     = lg_bb_self_relative_url((string)($topic['content_url'] ?? '#'));
         $c_title   = htmlspecialchars((string)$topic['topic_title']);
         $c_kind    = (string)($topic['content_kind'] ?? 'content');
         $c_img     = lg_cover_src($topic['card_image'] ?? null);
