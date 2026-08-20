@@ -599,6 +599,16 @@ if ( ! is_readable( $msPage ) || ! is_readable( $msCss ) ) {
     $msBare = bare( $msPage );
     is_( str_contains( $msBare, 'lg_membership_is_dual_payer' ),
          'Manage Account asks whether this member is paying on BOTH rails' );
+
+    /* The FLAG is tested before any lookup. An earlier build resolved the
+       member's email first and asked afterwards — output-identical, and an
+       extra wp_users query on every load of this page for a feature that was
+       switched off. OFF has to mean the work does not happen, not merely that
+       the output matches. */
+    $flagPos  = strpos( $msBare, 'lg_membership_double_pay_block' );
+    $emailPos = strpos( $msBare, 'user_email FROM' );
+    is_( $flagPos !== false && $emailPos !== false && $flagPos < $emailPos,
+         '...and asks whether the feature is ON before it looks anything up' );
     is_( str_contains( bare( $mpConfig ), 'lg_membership_dual_payer_message' ),
          '...and has copy to show them, rather than only telling the admin' );
 

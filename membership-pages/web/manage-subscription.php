@@ -66,13 +66,16 @@ if (!$is_anon && $wp_user_id === 0) {
 $membership   = $wp_user_id > 0 ? lg_membership_load_patreon_membership($wp_user_id) : null;
 
 /* #150/#149 — the direction we cannot block. A member who pays here and then
-   pledges on patreon.com is charged twice and nothing of ours can stop them,
-   so the least we can do is be the one to tell them. Behind
-   `lgms_double_pay_block`; with the flag off nothing below runs and this page
-   is unchanged. The member's own email is needed for the fallback match, and
-   the Patreon snapshot already carries it when the WP row does not. */
-$dual_email = '';
-if ($wp_user_id > 0) {
+   pledges on patreon.com is charged twice and nothing of ours can stop them, so
+   the least we can do is be the one to tell them.
+   The flag is tested FIRST, before any lookup: an earlier version resolved the
+   member's email and only then asked whether the feature was on, which was
+   output-identical but put an extra wp_users query on every load of this page
+   for a switched-off feature. OFF has to mean the work does not happen. */
+$is_dual_payer = false;
+if (lg_membership_double_pay_block() && $wp_user_id > 0) {
+    // The Patreon snapshot already carries the address when it exists; the WP
+    // row is only consulted when it does not.
     $dual_email = (string) ($membership['email'] ?? '');
     if ($dual_email === '') {
         try {
@@ -83,8 +86,8 @@ if ($wp_user_id > 0) {
             $dual_email = (string) ($st->fetchColumn() ?: '');
         } catch (Throwable $e) { $dual_email = ''; }
     }
+    $is_dual_payer = lg_membership_is_dual_payer($wp_user_id, $dual_email);
 }
-$is_dual_payer = lg_membership_is_dual_payer($wp_user_id, $dual_email);
 $status_label = lg_membership_format_status_label($membership['patron_status'] ?? null);
 $status_kind  = lg_membership_format_status_kind($membership['patron_status'] ?? null);
 $last_charge  = lg_membership_format_date($membership['last_charge_date'] ?? null);
