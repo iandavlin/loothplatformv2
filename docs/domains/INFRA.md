@@ -94,6 +94,8 @@ like `POST /wp-json/wp/v2/media` through the front door — the showrunner
 sheet's image upload died on exactly this, 8/20 evening. The box's
 cf-api-token is R2-read-only (see login-door section); the rule lives in
 Ian's Cloudflare dashboard (same Security area as the 8/20 login rate
-limit). Fix shape: an exception for `POST /wp-json/wp/v2/media` (optionally
-scoped to ASN 15169 = Google, Apps Script's egress — seen live as
-107.178.193.205), or a loothdev-namespace upload door in a mu-plugin.
+limit). Fix shape: an exception for `POST /wp-json/wp/v2/media`, or a
+loothdev-namespace upload door in a mu-plugin. ⚠️ ASN trap (cost a
+round-trip 8/20): Apps Script's egress (seen live as 107.178.193.205) is
+**AS396982, Google Cloud** — NOT Google-proper AS15169; a rule scoped to
+15169 silently never matches. Use `ip.src.asnum in {15169 396982}`.
