@@ -358,8 +358,10 @@ function price_rig(): PDO {
     $pdo = new TestPdo( 'sqlite::memory:' );
     $pdo->setAttribute( PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION );
     $pdo->setAttribute( PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC );
-    $pdo->exec( 'CREATE TABLE customers (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, deleted_at TEXT)' );
+    $pdo->exec( 'CREATE TABLE customers (id INTEGER PRIMARY KEY AUTOINCREMENT, uuid TEXT, stripe_customer_id TEXT, email TEXT, name TEXT, deleted_at TEXT)' );
     $pdo->exec( 'CREATE TABLE subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER, stripe_subscription_id TEXT, stripe_price_id TEXT, status TEXT)' );
+    $pdo->exec( 'CREATE TABLE wp_user_bridge (customer_id INTEGER PRIMARY KEY, wp_user_id INTEGER UNIQUE, synced_at TEXT)' );
+    $pdo->exec( 'CREATE TABLE pending_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, wp_user_id INTEGER, created_at TEXT)' );
     seed_catalogue( $pdo );
     $GLOBALS['PDO'] = $pdo;
     $GLOBALS['LOG'] = [];
