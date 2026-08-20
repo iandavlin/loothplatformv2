@@ -75,9 +75,17 @@ namespace LGMS {
         public static function line( string $m, string $n = 'tick.log' ): void { $GLOBALS['LOG'][] = rtrim( $m, "\n" ); }
     }
     class StripePrice {
+        // Signatures MIRROR the real class on purpose (#148 added the $tier
+        // argument). PHP tolerates an extra argument to a userland method, so a
+        // lagging stub would keep this gate green while silently discarding the
+        // very parameter the door now passes — the gate would look like it still
+        // exercised the door and would not.
         public const CADENCES = [ 'month' => 'Monthly', 'year' => 'Yearly' ];
-        public static function configuredCadences(): array { return [ 'month' ]; }
-        public static function currentPriceId( string $c ): string { return 'price_test_month'; }
+        public static function tiers(): array { return [ 'looth2', 'looth3' ]; }
+        public static function configuredCadences( ?string $tier = null ): array { return [ 'month' ]; }
+        public static function currentPriceId( string $c, ?string $tier = null ): string {
+            return $tier !== null && $tier !== 'looth3' ? 'price_test_' . $tier . '_' . $c : 'price_test_month';
+        }
     }
     class StripeLifecycle {
         public static function flagOn(): bool { return (bool) ( $GLOBALS['OPTS']['lgms_stripe_lifecycle'] ?? false ); }
