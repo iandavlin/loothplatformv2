@@ -54,7 +54,8 @@ final class PatreonStandingRestController
         if ( $expected === '' ) {
             return false;   // unconfigured is closed, never open
         }
-        return hash_equals( $expected, (string) $req->get_header( 'x_lgms_token' ) );
+        $given = (string) $req->get_header( 'x-lgms-token' );
+        return $given !== '' && hash_equals( $expected, $given );
     }
 
     /**

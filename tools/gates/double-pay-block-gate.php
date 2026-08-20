@@ -187,6 +187,7 @@ class WP_REST_Request implements ArrayAccess {
     public function get_param( $k ) { return $this->params[ $k ] ?? null; }
     public function get_params() { return $this->params; }
     public function get_json_params() { return $this->params; }
+    /** WordPress canonicalises header names (lowercase, '-' -> '_'); the stub must too, or it would only accept one spelling and let a mismatch pass. */
     public function get_header( $k ) { return $this->headers[ strtolower( str_replace( '-', '_', $k ) ) ] ?? ''; }
     public function offsetExists( mixed $o ): bool { return isset( $this->params[ $o ] ); }
     public function offsetGet( mixed $o ): mixed { return $this->params[ $o ] ?? null; }
