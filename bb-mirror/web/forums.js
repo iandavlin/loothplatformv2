@@ -2235,10 +2235,19 @@
       var selChip = selWrap.querySelector('.lgw-sel__chip');
       var noRes = mk('p', 'lgw-noresults', 'No forums match that.'); noRes.hidden = true;
       if (forumLabel) panes[1].appendChild(forumLabel);
-      panes[1].appendChild(filter);
-      panes[1].appendChild(selWrap);
+      // Under ccl panes[1] is WRITE, and appending the Where furniture here is
+      // what put a dead "Filter forums…" search box above Title (Ian's #129
+      // phone check, 8/20). The elements stay constructed-but-detached so
+      // everything that reads them still needs no guards; only the appends
+      // are conditional. #ntm-forum itself always stays in the pane — its
+      // hidden pre-checked leaf is what ntmGetForum() and the pre-submit
+      // check read.
+      if (!ccl) {
+        panes[1].appendChild(filter);
+        panes[1].appendChild(selWrap);
+      }
       panes[1].appendChild(ntmForumList);   // the radiogroup container (kept; insides rebuilt)
-      panes[1].appendChild(noRes);
+      if (!ccl) panes[1].appendChild(noRes);
 
       // Rebuild #ntm-forum's flat [cat, leaf, leaf, …] into accordion sections.
       var sections = [];
