@@ -28,7 +28,7 @@ SEAT_ROOT="${LG_LANES_SEAT_ROOT:-/home/ubuntu}"
 # 9+ seats (~100MB each); these are the ruled caps, and the binding limits are
 # the 2-core box and attention, not storage.
 SEAT_CEILING=6     # worktrees existing
-WORKING_CAP=2      # lanes generating at once — and 1 while Ian is actively on dev2
+WORKING_CAP=3      # raised 8/20 by Ian from htop evidence (2 workers + chrome gate = 33%); pulse-watch guards it — drop back on evidence, not presence
 
 NO_LIVE=0; AGENTS=0; JSON=0; ALL=0; PROBE=""
 prev=""
