@@ -153,6 +153,61 @@ final class FeaturedMemberDash
         return ['ok' => true];
     }
 
+    /* ── THE SELECTION RULE, in one place both callers share ──────────────
+       Ian, 2026-08-19 (#107): "opted in only". Consent is the tickbox — it is
+       the pool's own WHERE clause, so anyone reaching this array has given it
+       — and privacy is the live state the member can change at any time.
+       NOTHING ELSE BLOCKS. Profile completion in particular does not: that was
+       the wall he overruled.
+
+       Returns null when the member may be featured, else the reason, ready to
+       show. Kept free of every WP function on purpose so gate 39 §F can
+       execute the shipped rule directly instead of pattern-matching the file
+       for a refusal that may have moved. */
+    public static function selection_block_reason(array $member): ?string
+    {
+        if (empty($member['eligible'])) return 'profile is Private';
+        return null;
+    }
+
+    /** Blocker key => how the dash says it. Mirrors the pool's card_blockers. */
+    private const CARD_BLOCKER_LABELS = [
+        'photo'       => 'a photo',
+        'what_you_do' => 'a one-line “what you do”',
+    ];
+
+    /* ── WILL THE FRONT PAGE ACTUALLY SHOW THIS PICK? ─────────────────────
+       Information, never permission — a member with a warning is still
+       selectable, which is the whole point of #107. This reads the pool's
+       card_renderable/card_blockers, which reproduce the resolver's own guard
+       (lg_resolve_featured_member); it deliberately does NOT read card_ready,
+       which answers a different question and gets this wrong in both
+       directions — it demands a location the card does not need, and cannot
+       see the header visibility the card's role depends on. On dev2 2026-08-20
+       that gap was 4 members wide: card_ready true, no band.
+
+       An ABSENT card_renderable key is not `false`. It means the pool endpoint
+       is older than this dash (a half-finished deploy), and the honest answer
+       to "what will the front page do" is then "unknown" — so say nothing
+       rather than warn about a card that may be perfectly fine. */
+    public static function card_warning(array $member): ?string
+    {
+        if (!array_key_exists('card_renderable', $member)) return null;
+        if (!empty($member['card_renderable'])) return null;
+
+        $blockers = is_array($member['card_blockers'] ?? null) ? $member['card_blockers'] : [];
+        $parts = [];
+        foreach ($blockers as $b) {
+            $parts[] = self::CARD_BLOCKER_LABELS[$b] ?? $b;
+        }
+        $missing = $parts ? implode(' and ', $parts) : 'a photo or a one-line “what you do”';
+        $name = trim((string) ($member['display_name'] ?? 'This member'));
+
+        return 'Featured — but the front-page band will stay hidden until '
+             . ($name !== '' ? $name : 'this member') . ' adds ' . $missing . '. '
+             . 'The selection is saved and will appear the moment they do.';
+    }
+
     public static function handle_feature(): void
     {
         if (!current_user_can(self::CAPABILITY)) wp_die('Forbidden', '', ['response' => 403]);
@@ -175,21 +230,43 @@ final class FeaturedMemberDash
         foreach ($pool as $p) {
             if (isset($p['uuid']) && strcasecmp((string) $p['uuid'], $uuid) === 0) { $member = $p; break; }
         }
-        if ($member === null || empty($member['eligible'])) {
+        if ($member === null) {
             self::redirect_back('member%20not%20eligible');
             return;
         }
-        // card_ready is ALSO enforced at the resolver itself
-        // (lg_resolve_featured_member in index.php — the true choke point
-        // every caller funnels through, including the pre-existing
-        // front-end editor). Re-checked here too so an admin who goes
-        // straight to admin-post.php (bypassing the disabled button) gets an
-        // immediate, legible error instead of a silent "Saved" that then
-        // renders nothing on the front page.
-        if (empty($member['completeness']['card_ready'])) {
-            self::redirect_back('member%27s%20card%20is%20not%20ready%20yet%20%E2%80%94%20missing%20photo%2C%20what-they-do%2C%20or%20where');
+        // ONE rule, one caller — the render below asks the same function, so
+        // the button an admin sees and the refusal this handler can give can
+        // never drift apart (and gate 39 §F executes this exact function).
+        $blocked = self::selection_block_reason($member);
+        if ($blocked !== null) {
+            self::redirect_back(urlencode($blocked));
             return;
         }
+        // ── NO COMPLETENESS WALL. Ian, 2026-08-19 (#107): "I'd also like to be
+        // able to select a member for features even if they don't hit the
+        // completion numbers... the dash should allow me to select anyone",
+        // clarified the same night to "opted in only". Consent is the ONE hard
+        // gate; profile completion is information for his judgement and never
+        // a refusal. The card_ready check that stood here is gone — see
+        // selection_block_reason(), which is now the whole of the rule.
+        //
+        // WHAT REPLACED IT, AND WHY IT IS NOT THE SAME CHECK. The front-page
+        // resolver keeps a guard of its own (lg_resolve_featured_member: no
+        // avatar or no role => return null, no band), and it must, because the
+        // card's template renders both unconditionally. Dropping the refusal
+        // without saying anything would have turned a legible "no" into a
+        // silent one: "Saved and pushed to archive-poc" followed by an empty
+        // front page. MEASURED, not feared — 2026-08-20 on dev2, featuring
+        // Rick Liftig (whom this dash called "Ready", enabled button and all)
+        // through this very handler took the band off the front page entirely,
+        // 74,456 bytes to 72,838, zero lg-fm__ markers.
+        //
+        // So the selection still goes through — always — and the admin is TOLD
+        // what the front page will do with it. card_renderable is the pool's
+        // report of the resolver's own verdict, which card_ready cannot stand
+        // in for (it tests location, which the card does not need, and cannot
+        // see header visibility, which the card's role does).
+        $warn = self::card_warning($member);
 
         $user = wp_get_current_user();
         $res = self::post_config([
@@ -203,7 +280,14 @@ final class FeaturedMemberDash
             // featured_history snapshot's source (see _config.php).
             'chosen_by'  => $user && $user->user_login ? $user->user_login : 'wp-admin',
         ]);
-        self::redirect_back($res['ok'] ? '' : urlencode((string) $res['error']), $res['ok']);
+        // The warning rides only on a SUCCESSFUL save — a failed write already
+        // has an error to show, and stacking "it did not save" with "and it
+        // would not have rendered" buries the one the admin must act on.
+        self::redirect_back(
+            $res['ok'] ? '' : urlencode((string) $res['error']),
+            $res['ok'],
+            $res['ok'] && $warn !== null ? urlencode($warn) : ''
+        );
     }
 
     public static function handle_remove(): void
@@ -217,10 +301,15 @@ final class FeaturedMemberDash
         self::redirect_back($res['ok'] ? '' : urlencode((string) $res['error']), $res['ok']);
     }
 
-    private static function redirect_back(string $error, bool $updated = false): void
+    private static function redirect_back(string $error, bool $updated = false, string $warn = ''): void
     {
         $url = add_query_arg(
-            array_filter(['page' => self::PAGE_SLUG, 'updated' => $updated ? '1' : null, 'err' => $error !== '' ? $error : null]),
+            array_filter([
+                'page'    => self::PAGE_SLUG,
+                'updated' => $updated ? '1' : null,
+                'err'     => $error !== '' ? $error : null,
+                'warn'    => $warn !== '' ? $warn : null,
+            ]),
             admin_url('admin.php')
         );
         wp_safe_redirect($url);
@@ -242,6 +331,7 @@ final class FeaturedMemberDash
 
         $notice = isset($_GET['updated']) ? (string) $_GET['updated'] : '';
         $error  = isset($_GET['err'])     ? (string) $_GET['err']     : '';
+        $warn   = isset($_GET['warn'])    ? (string) $_GET['warn']    : '';
         $nonce  = wp_create_nonce(self::NONCE_ACTION);
         $postUrl = admin_url('admin-post.php');
 
@@ -249,7 +339,17 @@ final class FeaturedMemberDash
         echo '<p class="description">Members who have ticked &ldquo;include me as a possible featured member&rdquo; on their own profile. '
            . 'Featuring someone puts them on the front page immediately; removing them takes the band down. One at a time.</p>';
 
-        if ($notice === '1') echo '<div class="notice notice-success is-dismissible"><p>Saved and pushed to archive-poc.</p></div>';
+        // A warned save is NOT a plain success — saying only "Saved and pushed"
+        // over a pick that renders nothing is the exact lie #107's measurement
+        // caught the old dash telling (Rick Liftig, 2026-08-20). When there is
+        // a warning it REPLACES the success notice rather than sitting under
+        // it, so there is one unambiguous answer to "what did that just do".
+        if ($notice === '1' && $warn === '') {
+            echo '<div class="notice notice-success is-dismissible"><p>Saved and pushed to archive-poc.</p></div>';
+        }
+        if ($warn !== '') {
+            echo '<div class="notice notice-warning"><p><strong>Saved.</strong> ' . esc_html(urldecode($warn)) . '</p></div>';
+        }
         if ($error !== '')   echo '<div class="notice notice-error"><p><strong>Error:</strong> ' . esc_html(urldecode($error)) . '</p></div>';
 
         if ($isLiveReal) {
@@ -268,12 +368,17 @@ final class FeaturedMemberDash
                . '<strong style="display:block;color:#1d2327;margin-bottom:4px">Nobody has opted in yet.</strong>'
                . 'Members join this list by ticking &ldquo;include me as a possible featured member&rdquo; on their own profile.</div>';
         } else {
+            // "Profile" is a NUMBER SHOWN, not a gate (#107). "Card" answers the
+            // only question that still has an operational consequence: will the
+            // front page render this pick? Both are information; neither
+            // disables anything.
             echo '<table class="wp-list-table widefat fixed striped"><thead><tr>'
                . '<th>Member</th><th>What they do</th><th>Profile</th><th>Where</th><th>Card</th><th></th></tr></thead><tbody>';
             foreach ($pool as $p) {
                 $isCurrent = strcasecmp((string) $p['uuid'], $currentUuid) === 0 && $isLiveReal;
-                $cardReady = !empty($p['completeness']['card_ready']);
                 $pct = (int) ($p['completeness']['pct'] ?? 0);
+                $blocked  = self::selection_block_reason($p);
+                $cardWarn = self::card_warning($p);
                 echo '<tr' . ($isCurrent ? ' style="background:#fcf9e8"' : '') . '>';
                 echo '<td><strong>' . esc_html((string) $p['display_name']) . '</strong><br><span style="color:#787c82;font-size:11.5px">/u/' . esc_html((string) $p['slug']) . '</span></td>';
                 echo '<td>' . esc_html((string) $p['tagline']) . '</td>';
@@ -294,17 +399,39 @@ final class FeaturedMemberDash
                        . '<input type="hidden" name="action" value="' . esc_attr(self::REMOVE_ACTION) . '">'
                        . '<input type="hidden" name="_wpnonce" value="' . esc_attr($nonce) . '">'
                        . '<button type="submit" class="button">Remove from front page</button></form></td>';
-                } elseif (!$p['eligible']) {
-                    echo '<td colspan="2" style="color:#646970"><strong>Not currently eligible</strong> — profile is Private.</td>';
-                } elseif (!$cardReady) {
-                    echo '<td style="color:#646970">Not ready</td><td><button class="button" disabled title="Card would be missing photo, what-they-do or where">Feature</button></td>';
+                } elseif ($blocked !== null) {
+                    // The ONE remaining wall, and it is consent/privacy — never
+                    // completion (#107).
+                    echo '<td colspan="2" style="color:#646970"><strong>Not currently eligible</strong> — '
+                       . esc_html($blocked) . '.</td>';
                 } else {
-                    echo '<td><span style="color:#787c82">Ready</span></td>';
+                    // EVERY opted-in, public member gets a live button, however
+                    // incomplete their profile. A card that cannot render yet is
+                    // LABELLED, not disabled — Ian's call to make, with the
+                    // consequence stated at the point he makes it.
+                    if ($cardWarn !== null) {
+                        $missing = array_map(
+                            static fn($b) => self::CARD_BLOCKER_LABELS[$b] ?? $b,
+                            is_array($p['card_blockers'] ?? null) ? $p['card_blockers'] : []
+                        );
+                        echo '<td style="color:#8a6d1f"><strong>Won’t show yet</strong><br>'
+                           . '<span style="font-size:11.5px">needs '
+                           . esc_html($missing ? implode(' and ', $missing) : 'a photo or a one-line “what you do”')
+                           . '</span></td>';
+                    } elseif (!array_key_exists('card_renderable', $p)) {
+                        // Pool endpoint older than this dash — unknown, and says so
+                        // rather than guessing with card_ready, which is a different test.
+                        echo '<td style="color:#646970">—</td>';
+                    } else {
+                        echo '<td><span style="color:#787c82">Ready</span></td>';
+                    }
                     echo '<td><form method="post" action="' . esc_url($postUrl) . '">'
                        . '<input type="hidden" name="action" value="' . esc_attr(self::FEATURE_ACTION) . '">'
                        . '<input type="hidden" name="member_uuid" value="' . esc_attr((string) $p['uuid']) . '">'
                        . '<input type="hidden" name="_wpnonce" value="' . esc_attr($nonce) . '">'
-                       . '<button type="submit" class="button button-primary">Feature</button></form></td>';
+                       . '<button type="submit" class="button' . ($cardWarn === null ? ' button-primary' : '') . '"'
+                       . ($cardWarn !== null ? ' title="' . esc_attr($cardWarn) . '"' : '')
+                       . '>' . ($cardWarn !== null ? 'Feature anyway' : 'Feature') . '</button></form></td>';
                 }
                 echo '</tr>';
             }
