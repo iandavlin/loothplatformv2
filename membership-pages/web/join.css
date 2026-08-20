@@ -92,5 +92,29 @@ html[data-lguser-theme='dark'] .lg-join__pill--ok   { background: #1a3324; color
 html[data-lguser-theme='dark'] .lg-join__pill--warn { background: #332818; color: #e8c073; }
 html[data-lguser-theme='dark'] .lg-join__secondary { color: var(--lg-mute, #a6ac9f); }
 html[data-lguser-theme='dark'] .lg-join__link { color: var(--lg-sage-d, #b0c693); }
-/* .lg-join__cta already sits on a near-black fill with white text — that
-   pairing does not change with the page theme, deliberately left alone. */
+
+/* ── #171: .lg-join__cta WAS NOT FINE, and the note that used to sit here shows
+   exactly how a surface gets missed. It read: ".lg-join__cta already sits on a
+   near-black fill with white text — that pairing does not change with the page
+   theme, deliberately left alone." Every word of that is true, and it is the
+   wrong question. It checks the TEXT against the FILL (#fff on #1a1a1a, 17.4:1,
+   never in doubt) and never asks what the fill sits ON.
+   Once the block above darkened .lg-join__card to #1e2124, the answer became
+   #1a1a1a on #1e2124 — a 1.05:1 BOUNDARY. The primary call to action on
+   /connect-your-patreon/, the one button the whole page exists to be clicked,
+   stopped reading as a button at all. Ian 8/20: "dark mode is sucking on the
+   patreon stuff." Measured, this is the literal Patreon page's literal CTA.
+   Gate 36 could never have caught it: it grades text, and WCAG 1.4.11 is a
+   COMPONENT-BOUNDARY bar. Gate 80 §B grades boundaries for this reason.
+   The fill is lifted to the same #262b30 the /lgjoin buttons now use — so the
+   two funnel pages finally agree — and the edge is #767c76 (3.79:1 on the card),
+   the same dark-border ink gate 36's own fix-verify CSS uses. box-shadow, not
+   border, so nothing moves by a pixel. */
+html[data-lguser-theme='dark'] .lg-join__cta {
+    background: var(--lguser-bubble, #262b30);
+    box-shadow: 0 0 0 1px #767c76 inset;
+}
+html[data-lguser-theme='dark'] .lg-join__cta:hover {
+    background: #2f353b;
+    box-shadow: 0 0 0 1px var(--lg-sage, #9cb37d) inset;
+}

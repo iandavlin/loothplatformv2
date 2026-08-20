@@ -102,3 +102,13 @@ one is not.
 155-page-train: #155 Your list · #151 chips that never lie · #156 poke keeper ·
 #159 the four chips · #160 spinner verb + one card per seat · #164 Agents.
 Gate 77 covers all six. Open: #145 (composer discussion input, scope from Ian).
+
+⚠️ **#171 wears the `page` label but is NOT a lanes-page issue.** It is the
+Patreon/join funnel dark-mode contrast pass (Ian 8/20: *"dark mode is sucking on
+the patreon stuff"*), worked on `169-front-polish` alongside #169. Its findings,
+its map and its traps live in **MEMBERSHIP.md**, where the next person touching
+those surfaces will actually look — putting them here would bury lanes-page
+knowledge under a stylesheet audit. Recorded rather than silently relabelled: the
+domain rule says a domain-labelled issue updates that domain's file in the same
+commit, so this line IS that update, and the label itself is flagged to Ian for a
+ruling. Gate 80 covers the behaviour.

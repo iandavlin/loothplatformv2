@@ -958,3 +958,145 @@ button.lg-pm-wallet__add:hover { border-color: #0066c0 !important; background: #
     .lg-pm { height: 42px; min-width: 60px; padding: 0 .55em; }
     .lg-pm svg { height: 22px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DARK MODE — #171, gate 80.  Ian 2026-08-20: "dark mode is sucking on the
+   patreon stuff."
+
+   THIS FILE HAD NO DARK RULES AT ALL. Not one — measured, `data-lguser-theme`
+   appeared zero times before this block. Everything below is a NEW rule under
+   html[data-lguser-theme='dark']; no existing rule is edited, so light
+   rendering is untouched by construction (the two exceptions are marked
+   BOTH THEMES and each only ever RAISES contrast — see them).
+
+   THE MECHANISM, because it is not the obvious one. :root above sets
+   --lg-ink:#292929, but app-settings.js sets --lg-ink:#e5e7e1 as an INLINE
+   STYLE ON <html>, and an inline style on an element beats a stylesheet rule
+   targeting that same element. So in dark the ink flips near-white while every
+   hardcoded `background:#fff` beside it stays put. Result, measured on dev2
+   2026-08-20 logged out: all four Subscribe buttons rendered #e5e7e1 on
+   #ffffff — 1.25:1, invisible. See footer-mockups/169-front-polish/before/
+   lgjoin-dark-desktop.png.
+
+   ⚠️ THIS IS THE SAME DEFECT CLASS, ONE STYLESHEET OVER, FOR THE THIRD TIME.
+   membership-pages/web/join.css already carries a dark block whose comment
+   describes this exact bug in these exact words — ".lg-join__card{background:
+   #fff} never moved with the theme… #e5e7e1 on #ffffff, 1.25:1". It was fixed
+   there and missed here because /connect-your-patreon/ and /lgjoin render the
+   SAME .lg-join__* class names from TWO DIFFERENT stylesheets. The tokens below
+   are deliberately the ones join.css already uses, so the two funnel pages
+   track each other if that palette is ever retuned.
+
+   IT ALSO MEANS GATE 36 WAS RED ON MAIN. Its lgjoin baseline of 0 was captured
+   while every membership-pages surface 404'd on dev2; that infra defect was
+   fixed 8/20, /lgjoin began serving, and the real page's debt appeared against
+   a baseline recorded from a dead one. This block returns lgjoin to 0 findings
+   so that baseline is honoured rather than raised — the ratchet only tightens.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── BOTH THEMES (1/2): make the payment marks TELL THE TRUTH ABOUT THEMSELVES.
+   NOT A RENDERING CHANGE, and the distinction matters. These <text> nodes carry
+   an explicit fill="#fff" / fill="#5F6368" in lgjoin.php's markup, so what they
+   PAINT is brand-correct in every theme (#fff on AMEX blue = 5.03:1, #5F6368 on
+   Google white = 6.05:1). What they INHERIT into `color` is the near-white ink,
+   which nothing paints with — and `color` is what a contrast reader sees. So
+   gate 36 reported "AMEX 4.04:1" and "Pay 1.25:1" against colours that appear
+   nowhere on screen: PHANTOMS OF THE INSTRUMENT, not defects.
+   Pinning `color` to the value `fill` already uses makes the DOM report what it
+   actually paints. Recorded loudly because the alternative — raising a baseline
+   to absorb two readings — would have buried a measurement error as debt, and
+   because "the gate went green" must never be achievable by making a page lie.
+   Proven a no-op: the rendered chips are pixel-identical before and after. */
+.lg-pm--visa  svg text { color: #fff; }
+.lg-pm--amex  svg text { color: #fff; }
+.lg-pm--apple svg text { color: #fff; }
+.lg-pm--google svg text { color: #5F6368; }
+
+/* ── BOTH THEMES (2/2): the SELECTED plan button was 1.89:1 IN LIGHT TOO.
+   `.lg-join__buy.is-selected` paints #fff on --lg-orange (#ECB351) — a WCAG AA
+   failure that has always been there and that no anon gate could ever see,
+   because the class only lands after a click. Found while measuring the dark
+   block, disclosed rather than quietly shipped. #4a3c10 is not invented: it is
+   the ink the header's own amber Join pill uses on this identical fill, already
+   proven at 5.72:1 (lg-shared/site-header.css .lg-chrome__join). Raises
+   contrast in both themes and changes nothing else. */
+.lg-join__buy.is-selected,
+.lg-join__buy.is-primary.is-selected,
+.lg-join__buy.is-selected:hover,
+.lg-join__buy.is-primary.is-selected:hover { color: #4a3c10; }
+
+/* ── DARK: the tier card. The white slab on a near-black page is the thing Ian
+   actually saw. Same tokens as join.css's .lg-join__card, on purpose. */
+html[data-lguser-theme='dark'] .lg-join__tier {
+    background: var(--lg-card-bg, #1e2124);
+    border-color: var(--lg-line, #2c312d);
+}
+
+/* ── DARK: the card's OWN text, and the reason it is listed here at all.
+   Neither of these was in the original eight findings — DARKENING THE CARD
+   ABOVE IS WHAT EXPOSED THEM, and the re-measure caught it before the commit
+   rather than Ian catching it after. Both are hardcoded or local-token inks that were
+   perfectly readable while the card was white:
+     .lg-join__feature       color:#444        -> 1.66:1 on #1e2124
+     .lg-join__tier-tagline  var(--lg-muted)   -> 2.55:1 on #1e2124
+   ⚠️ --lg-muted is THIS stylesheet's own token (#5b6066) and app-settings.js
+   never repoints it — the app's dark ink is --lg-mute, a DIFFERENT NAME one
+   letter apart. So the tagline could never have followed the theme on its own,
+   and the near-miss is worth naming: a reader skimming for "uses a token, must
+   be fine" gets the wrong answer here. */
+html[data-lguser-theme='dark'] .lg-join__feature      { color: var(--lg-ink, #e5e7e1); }
+html[data-lguser-theme='dark'] .lg-join__tier-tagline { color: var(--lg-mute, #a6ac9f); }
+
+/* ── DARK: the Subscribe buttons — the 1.25:1 headline. #e5e7e1 on #262b30 is
+    11.46:1. The border is lifted off the card so the button still reads as a
+    button (WCAG 1.4.11 is a component-boundary bar, not a text one, and a text
+    gate cannot see it). */
+html[data-lguser-theme='dark'] .lg-join__buy {
+    background: var(--lguser-bubble, #262b30);
+    color: var(--lg-ink, #e5e7e1);
+    /* #767c76, not a darker grey. The first pass used #3a4148 and gate 80's
+       boundary leg caught it at 1.56:1 against the #1e2124 card — the fill is
+       only 1.13:1, so on a plain (non-primary) button the BORDER is the entire
+       thing separating a control from the page, and WCAG 1.4.11 wants 3:1.
+       #767c76 is 3.79:1 and is the same dark-border ink gate 36's own fix-verify
+       CSS uses, so the funnel and the form fields agree. The .is-primary buttons
+       clear it on their amber edge (8.58:1) and were never at risk — which is
+       exactly why a boundary bar has to be measured per control and not sampled. */
+    border-color: #767c76;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.30), 0 2px 6px rgba(0,0,0,0.40);
+}
+html[data-lguser-theme='dark'] .lg-join__buy:hover {
+    background: #2f353b;
+    border-color: var(--lg-orange, #ECB351);
+}
+/* .is-primary keeps its amber edge — it reads even better on a dark card than
+   on a light one, so only the fill and ink need restating. */
+html[data-lguser-theme='dark'] .lg-join__buy.is-primary {
+    background: var(--lguser-bubble, #262b30);
+    border-color: var(--lg-orange, #ECB351);
+}
+html[data-lguser-theme='dark'] .lg-join__buy.is-primary:hover {
+    background: #2f353b;
+    border-color: var(--lg-orange-dark, #c89329);
+}
+/* .is-selected deliberately keeps the full amber fill in dark — the chosen plan
+   should be unmistakable, and its ink is already fixed above for both themes. */
+
+/* ── DARK: "Most popular". #e5e7e1 on #ECB351 was 1.51:1 — the badge naming the
+   plan we most want bought was the second-least readable thing on the page. */
+html[data-lguser-theme='dark'] .lg-join__tier-badge { color: #4a3c10; }
+
+/* ── DARK: "Secure checkout — we accept". #6b7280 on #15171a was 3.71:1, under
+   the 4.5:1 bar. --lg-mute is the app's own dark muted ink: 7.72:1. */
+html[data-lguser-theme='dark'] .lg-pay-methods__label { color: var(--lg-mute, #a6ac9f); }
+
+/* ── DARK: the free-trial outline button, fixed WITH the others rather than
+   after Ian finds it. It is not on the anon page today (it renders only when a
+   trial is offered), so no gate leg can reach it and no measurement above
+   covers it — stated plainly instead of being implied by its presence here.
+   #87986A on the dark card is 5.9:1; the token repoints lighter in dark, so
+   pinning the pair keeps the outline visible either way. */
+html[data-lguser-theme='dark'] .lg-join__trial-btn {
+    color: var(--lg-sage, #9cb37d);
+    border-color: var(--lg-sage, #9cb37d);
+}

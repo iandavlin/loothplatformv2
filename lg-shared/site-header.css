@@ -62,6 +62,11 @@ html[data-lguser-theme="dark"] .skip-link { background: #1b1e21; }
    the tokens to keep the dark rendering byte-identical to pre-nudge. */
 html[data-lguser-theme="dark"] .lg-chrome__wordmark { color: var(--lg-sage); }
 html[data-lguser-theme="dark"] .lg-chrome__connect { color: var(--lg-sage-d); }
+/* #171: same restore for the OUTLINE, added when the base ring was darkened for
+   light. Re-points to --lg-sage so dark renders EXACTLY as it did before that
+   change (#9cb37d, measured 9.16:1) — the nudge is a light-mode fix and must
+   not follow the pill into a theme where it was never broken. */
+html[data-lguser-theme="dark"] .lg-chrome__connect { box-shadow: 0 0 0 1px var(--lg-sage) inset; }
 html[data-lguser-theme="dark"] .lg-chrome__menu a.is-active { color: var(--lg-sage-d); }
 
 /* Reserve the scrollbar gutter permanently — the scrollbar popping in after
@@ -226,7 +231,16 @@ body { margin: 0; }
      header — 0.04 under. Darkened one step (5.64 cream); dark restores below. */
   color: #586b3f; text-decoration: none;
   padding: 9px 13px; border-radius: 999px;
-  box-shadow: 0 0 0 1px var(--lg-sage) inset;
+  /* #171, Ian's call 2026-08-20. The 7/24 nudge above fixed this pill's TEXT
+     and left its OUTLINE on --lg-sage (#87986a) — 2.72:1 on the painted header
+     #f3efe6, under WCAG 1.4.11's 3:1 for a component boundary. An outline IS
+     the control here: there is no fill, so the ring is the only thing saying
+     "button". Measured, not inferred, and note the theme: the issue named dark,
+     but in dark this pill is already ~9:1 — the defect was in LIGHT the whole
+     time. Darkened one step to --lg-sage-d's value = 3.95:1, a literal hex for
+     exactly the reason the 7/24 nudge used one (the token repoints LIGHTER in
+     dark); the dark restore below keeps dark byte-identical to today. */
+  box-shadow: 0 0 0 1px #6b7c52 inset;
   white-space: nowrap;
 }
 .lg-chrome__connect:hover { background: var(--lg-sage-tint); }
