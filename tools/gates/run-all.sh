@@ -1811,6 +1811,35 @@ echo "=== GATE 80: the front page drops its SECOND join, and the funnel reads in
 # each reddening its OWN named assertion plus 2 no-ops proven inert, every one
 # against a file SNAPSHOT restored by an EXIT trap.
 run "front-banner-patreon-dark" python3 "$(dirname "$0")/front-banner-patreon-dark-gate.py"
+echo "=== GATE 82: approval starts work by itself — for PRE-STAGED work, and nothing else ==="
+# #138 phase B. Ian's ruling 8/20 (verbatim): "If a lane goes Idle waiting for me
+# to make a decision, I want the next work in line to start up while I'm
+# screwing around." tools/approved-watcher.sh now spins the lane itself.
+#
+# ⚠️ THE FAILURE MODE IS THE REVERSE OF THE OBVIOUS ONE. A lane that fails to
+# start is visible in five minutes. A watcher that starts one it should not is
+# not: nine parked branches on this box wear open+approved issues whose charters
+# are still on disk, so a watcher missing its one-spin-ever backstop re-spins the
+# lot, on two cores, at once, with nobody watching. Every refusal is asserted.
+#
+# NO NETWORK, NO REAL SEAT, NO CLAUDE PROCESS — issues are a fixture, the spin
+# command is a recorder, and state/prompts/worktrees/manifest/bell/quiet all
+# redirect into a per-run temp dir. THE QUIET PATH ESPECIALLY: a gate that
+# touched the real /tmp/keeper-quiet would set a box-wide hold on the whole
+# fleet, and the window before it cleared is a fleet that silently stops working.
+#
+# EVERY ABSENCE IS PAIRED WITH A LIVENESS. "It did not spin" is equally true of a
+# broken script and an empty fixture, so each refusal runs a control in the same
+# harness where the same issue DOES spin, one condition apart. Leg 7 applies that
+# to the script's own PRODUCTION defaults, which no other leg ever executes —
+# every other leg drives it through LG_AW_* overrides.
+#
+# Red-first: tools/gates/approved-autospin-redfirst.sh — 19 mutations each
+# reddening its OWN named assertion, 2 no-ops proven inert, on file SNAPSHOTS and
+# never `git checkout --`. It found three things, all fixed: a cap checked twice
+# (the second copy made the first unprovable), a fixture where nothing could spin
+# even with the guard deleted, and a wrong claim about which leg catches what.
+run "approved-autospin" python3 "$(dirname "$0")/approved-autospin-gate.py"
 echo
 
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi

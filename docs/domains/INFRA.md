@@ -18,10 +18,58 @@ install-symlinks; A PULLED NGINX CONF IS NOT DEPLOYED UNTIL RELOAD.
   member site unless exempted (standing tidy-up: #134-adjacent note).
 - Known cosmetic WARNs on lg-deploy: lg-wp-cron unit drift (pre-8/11),
   duplicate MIME line.
+- **A `}` inside a `${VAR:-default}` CLOSES THE EXPANSION.** Written
+  `"${X:-tmux list-sessions -F #{session_name}}"`, the format string's own brace
+  ends the expansion and the leftover `}` is appended as a separate word. tmux
+  errors, the list is empty forever, and every guard that reads it silently
+  passes. Found in #138 phase B before it shipped; assign the default on its own
+  line. The class: a default that is wrong while the OVERRIDE still works is
+  invisible to any test that only drives the overrides.
+- **The systemd units in `platform/systemd/` are COPIES in `/etc`, not
+  symlinks** (root-owned, verified 8/20). A pull does NOT deploy a unit change —
+  it needs `sudo cp` + `daemon-reload`, and that belongs in the flip kit, never
+  in a merge assumption.
 
 ## Issue history
 #132/ledger-47 (unreachable projects remote — dated Wed 8/20) · #138 watcher
-phase A live, phase B on probation · #141 rider batching.
+phase A live, phase B built 8/20 (below) · #141 rider batching.
+
+## The approved-watcher — approval is the start button (#138)
+`tools/approved-watcher.sh`, every 5 min via `approved-watcher.timer`, dev2 only.
+
+**Phase A (live since 8/19):** an open issue newly wearing `approved` rings
+`/tmp/claude-ian-action` and posts one board line. State: `~/.approved-acks`.
+
+**Phase B (8/20, Ian: "If a lane goes Idle waiting for me to make a decision, I
+want the next work in line to start up while I'm screwing around"):** it spins
+the lane itself — **PRE-STAGED WORK ONLY**, through `spin-lane.sh`, which stays
+the one door. Approval alone still only rings.
+
+Four holds, checked once per tick: **keeper-quiet** (`/tmp/keeper-quiet` for the
+session, `~/.keeper-quiet` to survive a reboot) · **fleet-down** (manifest
+non-empty, zero lane sessions — the reboot signature; `respawn-fleet` is
+deliberately manual and the watcher must not become the thing that relights the
+box) · **1-min load over 4** · **the WORKING cap**, counted by shelling
+`lanes-status.sh --json` so the detector is never forked.
+
+Five per-issue guards: a charter at `~/lane-prompts/<n>-*.md` is REQUIRED and
+**names the seat** (nothing is slugified or generated) · **one spin per issue
+ever**, tracked in `~/.autospin-log` *and* backstopped by a branch-exists check
+— that backstop is what stops nine parked branches from all re-spinning the
+moment it goes live · an existing tmux session means it is already running · a
+worktree must be on its own branch, and a cut one is pushed `-u` so its upstream
+IS `origin/<lane>` (75a0fb6).
+
+**Dry-run is the default.** `~/.autospin-mode` must contain `live` to arm — a
+file, not a code edit. A dry run announces once per issue and consumes nothing,
+so the first real spin still happens after the flip. On a live spin the log line
+is written BEFORE tmux is touched: a crash costs one lost spin, never a loop.
+Holds and refusals are edge-triggered — announced when the reason changes, not
+every five minutes.
+
+Gate 82 (`approved-autospin-gate.py`) asserts all of it with no network, no real
+seat and no claude process; every absence assertion is paired with a liveness
+control.
 
 
 ## Login-door defense (verified in action 8/20)
