@@ -779,6 +779,11 @@
     // hdrHref is module-scope now (hoisted 2026-08-07 so the dash's Sign in slot
     // reads the same canonical hrefs); same function body, same behaviour.
     var signinHref  = hdrHref('.lg-chrome__signin, .lg-chrome__menu-signin a', '/wp-login.php');
+    // Join follows the header, which since #165 follows platform/config/
+    // header-join-stripe.php — so this sheet needs no flag of its own and cannot
+    // drift from the button beside it. The fallback stays the patreon URL: it is
+    // reached only when the header anchor is absent entirely, and matching the
+    // flag's OFF default is the fail-closed answer there.
     var joinHref    = hdrHref('.lg-chrome__join', 'https://www.patreon.com/c/theloothgroup/membership');
     var connectHref = hdrHref('.lg-chrome__connect', '/connect-your-patreon/');
 
@@ -793,7 +798,16 @@
 
     var joinRow = document.createElement('a');
     joinRow.className = 'lt-sheet__row';
-    joinRow.href = joinHref; joinRow.target = '_blank'; joinRow.rel = 'noopener';
+    joinRow.href = joinHref;
+    /* A NEW TAB IS FOR LEAVING THE SITE, and nothing else (#165). This was an
+       unconditional target="_blank" while Join could only ever be patreon.com.
+       The moment it can be /lgjoin/, that hardcode sends a member OUT of the
+       installed PWA — manifest.json is display:standalone, so there is no
+       browser chrome to come back through — to buy a membership in a browser
+       tab. Derived from the href for the same reason the header derives it:
+       "does this leave the site" is a fact about the destination, not about
+       which branch chose it. Same rule, both copies of this control. */
+    if (/^https?:\/\//i.test(joinHref)) { joinRow.target = '_blank'; joinRow.rel = 'noopener'; }
     joinRow.textContent = 'Join';
     sheet.appendChild(joinRow);
 
