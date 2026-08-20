@@ -27,11 +27,10 @@ THREE THINGS IT DOES NOT DO, on purpose (gate 77's rules, same reasons):
 ⚠️ ABSENCE ASSERTIONS ARE PAIRED WITH LIVENESS, EVERY TIME. "It did not spin" is
 true of a broken script, an empty fixture, and a box with no watcher at all. So
 each refusal leg runs a control in the SAME harness where the same issue DOES
-spin, one condition apart. Leg 5 is the same law applied to the script's own
-production defaults: it proved a real bug during the build — tmux's
-'#{session_name}' inside a ${VAR:-default} closes the expansion on its own brace,
-so the session list would have been empty forever, silently disabling the
-"already running" guard while the fleet-down hold jammed on.
+spin, one condition apart. Leg 7 is the same law applied to the script's own
+production defaults: every other leg drives the script through its LG_AW_*
+overrides, so nothing else ever executes the command the real box runs. Red-first
+proves the difference with a mutation that breaks only the default.
 
 Exit: 0 green · 1 RED (real findings) · 2 CANNOT RUN (no verdict).
 ⚠️ CANNOT RUN IS 2, NOT 3 — run-all.sh reads anything-else-non-zero as RED, so a
@@ -390,12 +389,16 @@ def leg_defaults(tmp):
         cannot_run(f"could not start a probe tmux session: {r.stderr[:200]}")
     try:
         time.sleep(0.5)
-        # ⚠ THE BUG THIS LEG EXISTS FOR. Written as
+        # THE SHAPE THIS LEG EXISTS FOR: a default that nothing else executes.
+        # Written as
         #   SESSIONS_CMD="${LG_AW_SESSIONS_CMD:-tmux list-sessions -F #{session_name}}"
-        # the } of tmux's format string closes the parameter expansion, and the
-        # stray } is appended as its own word. tmux then errors, the list is
-        # EMPTY FOREVER, "already running" can never fire and fleet-down jams on.
-        # Every override-driven leg above passes with that bug present.
+        # the } of tmux's format string closes the parameter expansion and the
+        # stray } is appended as its own word — the list is EMPTY FOREVER,
+        # "already running" can never fire and fleet-down jams on. That one is
+        # caught by leg 3 as well (the stray } corrupts the override too), which
+        # is measured, not assumed. What ONLY this leg catches is a default that
+        # is wrong while every override still works — red-first mutates exactly
+        # that, and leg 3 stays green while this goes red.
         rc, board, spins = w.run(default_sessions=True)
         check("the DEFAULT session command sees a real tmux session",
               spins.strip() == "",

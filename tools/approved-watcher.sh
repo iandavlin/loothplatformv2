@@ -230,10 +230,13 @@ if (( ${#VIABLE_N[@]} == 0 )); then
     exit 0
 fi
 
-announce_hold "$HOLD"
-[[ -n "$HOLD" ]] && exit 0
-
-# ── the cap, from lanes-status.sh's own JSON and its own detector ─────────────
+# ── H4: the cap, from lanes-status.sh's own JSON and its own DETECTOR — the
+#    8/20 CLI change moved the "working" signature twice in one day, and a second
+#    definition of it living here is the one thing #138's charter forbids by name.
+#    Read only when nothing else already holds and something is actually waiting:
+#    lanes-status runs a git fetch, and that is not paid on a quiet tick.
+WORKING=""; CAP=""; SEATS=""; CEIL=""
+if [[ -z "$HOLD" ]]; then
 CAPJSON="$($LANES_CMD 2>/dev/null || true)"
 read -r WORKING CAP SEATS CEIL <<< "$(printf '%s' "$CAPJSON" | python3 -c '
 import json, sys
@@ -245,18 +248,22 @@ c = d.get("capacity", {})
 w = sum(1 for l in d.get("lanes", []) if l.get("agent") == "working")
 print(w, c.get("working_cap", "ERR"), c.get("seats_used", "ERR"), c.get("seat_ceiling", "ERR"))
 ' || echo "ERR ERR ERR ERR")"
-
-if [[ "$WORKING" == ERR || -z "${CAP:-}" || "$CAP" == ERR ]]; then
-    # A cap that cannot be read is NOT a cap of zero and NOT a free pass. Refuse,
-    # loudly, once: silence here would mean "healthy" and it is not.
-    announce_hold "lanes-status returned no readable capacity — refusing to spin without a countable cap"
-    exit 0
+    if [[ "$WORKING" == ERR || -z "${CAP:-}" || "$CAP" == ERR ]]; then
+        # A cap that cannot be read is NOT a cap of zero and NOT a free pass:
+        # silence here would mean "healthy", and it is not.
+        HOLD="lanes-status returned no readable capacity — refusing to spin without a countable cap"
+    elif (( WORKING >= CAP )); then
+        HOLD="at the working cap ($WORKING/$CAP) — ${#VIABLE_N[@]} staged lane(s) waiting for a seat"
+    fi
 fi
 
-if (( WORKING >= CAP )); then
-    announce_hold "at the working cap ($WORKING/$CAP) — ${#VIABLE_N[@]} staged lane(s) waiting for a seat"
-    exit 0
-fi
+# ONE hold decision, ONE announcement per tick. The cap used to be checked twice —
+# once here and once in the loop below — and the second copy silently made the
+# first UNTESTABLE: red-first mutated this one and the gate stayed green because
+# the other still caught it. Redundant guards do not add safety, they subtract
+# provability.
+announce_hold "$HOLD"
+[[ -n "$HOLD" ]] && exit 0
 
 MODE="dry-run"
 if [[ -f "$MODEF" ]] && grep -qx "live" "$MODEF"; then MODE="live"; fi
