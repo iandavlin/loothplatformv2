@@ -780,8 +780,8 @@ def section_f3_predictor_tracks_resolver():
 # even when the header block correctly withholds it from the rendered body — 28
 # public members site-wide, including four of the eight in the featured pool.
 # G7 therefore asserts the BODY, which is the surface this ruling reasoned
-# about. The meta tags are a separate, pre-existing decision for Ian (#107
-# report, docs/domains/PROFILE.md).
+# about. The meta tags are a separate, pre-existing decision for Ian — filed as
+# #166 (42 members on LIVE, 28 on dev2), see docs/domains/PROFILE.md.
 
 G_ROLE_HARNESS = """<?php
 require %(fns)s;

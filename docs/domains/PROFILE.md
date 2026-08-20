@@ -186,9 +186,22 @@ narrower than the 8/16 rule assumes. **A profile's `<meta name="description">`,
 logged-out visitors, crawlers and link unfurls — even when the header block
 correctly withholds it from the rendered body.**
 
-Measured 2026-08-20 on dev2, all four members with a default header and a written
+Measured 2026-08-20, all four members with a default header and a written
 one-liner: absent from the visible body for anon, present in the head every time.
-Site-wide it is **28 public members** (of 37 who have written a glance at all).
+**Site-wide it is 28 on dev2 — and 42 on LIVE** (of 56 who have written a glance
+at all). Confirmed on live by an anonymous fetch of `/u/bryan-parris/`: the
+one-liner is in `<meta name="description">` and absent from the body. Only 26 of
+live's 1,824 public members have EVER set a header row, so almost none of the 42
+chose this — the two surfaces simply disagree about what the default means.
+
+Source: `profile-app/web/u.php:213` — `$seoGlance` is read straight off the
+column with no visibility condition, while every other consumer applies the
+ceiling. Three tags, one variable; the public-safe `else` branch already exists.
+The JSON-LD is clean (name/url/image/worksFor only — checked).
+
+**Filed as #166** with the two coherent positions written out; it needs Ian's
+ruling, not a patch, because option 2 (accept the meta as public) would mean
+#107's tickbox copy is understating things.
 
 It predates this lane, it is member-facing, and reddening main for it would block
 every seat — so gate 39 §G7 asserts the **body** and states this in its own
