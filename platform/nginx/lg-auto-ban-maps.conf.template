@@ -39,14 +39,17 @@ map $lg_ab_from_cf $lg_ab_client {
     default $remote_addr;
 }
 
-# The deny list itself, rebuilt by tools/infra/lg-auto-ban-render.py out of the
-# data file WordPress writes. A GLOB deliberately: if that file is ever missing,
+# The deny list itself (/etc/nginx/lg-auto-ban/list.conf), rebuilt by
+# tools/infra/lg-auto-ban-render.py out of the data file WordPress writes. The
+# path is SUBSTITUTED rather than written here, because the installer computes it
+# too and one path in two places is one path that will disagree with itself.
+# A GLOB deliberately: if that file is ever missing,
 # this map is left with `default 0` and nobody is blocked. Failing OPEN is the
 # correct failure here — the alternative is nginx refusing to start over a
 # missing blocklist, which turns a minor outage into a total one.
 map $lg_ab_client $lg_ab_listed {
     default 0;
-    include /etc/nginx/lg-auto-ban/list*.conf;
+    include @LIST_INCLUDE@;
 }
 
 # Which wp-login.php requests are the PASSWORD DOOR. Everything else on that

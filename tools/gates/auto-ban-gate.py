@@ -60,6 +60,7 @@ VHOST    = os.path.join(REPO, "platform", "nginx", "dev2.loothgroup.com.conf")
 T_MAPS   = os.path.join(REPO, "platform", "nginx", "lg-auto-ban-maps.conf.template")
 T_DOORS  = os.path.join(REPO, "platform", "nginx", "lg-auto-ban-doors.conf.template")
 ERRPAGE  = os.path.join(REPO, "lg-shared", "errors", "login-blocked.html")
+INSTALLER = os.path.join(REPO, "tools", "infra", "install-auto-ban.sh")
 
 # Public-looking fixture addresses. See the docblock: RFC 5737 would be refused.
 BAD_V4   = "45.83.64.10"
@@ -216,7 +217,7 @@ class Nginx:
             # never be exercised from loopback.
             block += "\n    127.0.0.1/32 1;\n    ::1/128 1;"
         maps = open(T_MAPS).read().replace("@CF_RANGES@", block)
-        maps = maps.replace("/etc/nginx/lg-auto-ban/list*.conf", self.list)
+        maps = maps.replace("@LIST_INCLUDE@", self.list)
         open(os.path.join(self.d, "maps.conf"), "w").write(maps)
 
         # A socket that does not exist: blocked never needs an upstream (403),
@@ -297,6 +298,100 @@ http {{
         return p.stdout.strip(), body
 
 
+class Installer:
+    """Drive the REAL tools/infra/install-auto-ban.sh inside a temp root.
+
+    This is the only piece of #162 a human runs on LIVE, by hand, with sudo — and
+    until §H it was the only piece with no coverage: the gate proved the templates
+    and the renderer, then trusted the script that installs them. Everything is
+    redirected through LG_AB_ROOT, so no root, no /etc, no systemd and no nginx
+    reload are involved; §H8 asserts the production defaults are untouched, so
+    these hooks cannot quietly become the shipped behaviour.
+    """
+
+    SOCK = "/run/php/php8.3-fpm-GATE84-FIXTURE.sock"   # distinctive on purpose
+
+    def __init__(self, tmp, tag, *, include_line=True, ban_page=True):
+        self.root = os.path.join(tmp, "installroot-" + tag)
+        self.tag = tag
+        for d in ("etc/looth", "etc/nginx/sites-enabled", "etc/nginx/conf.d",
+                  "etc/nginx/snippets", "etc/systemd/system", "srv/lg-shared/errors",
+                  "var/lib"):
+            os.makedirs(os.path.join(self.root, d), exist_ok=True)
+        with open(os.path.join(self.root, "etc/looth/env"), "w") as fh:
+            fh.write("LG_PUBLIC_HOST=gate84.invalid\nLG_WP_PATH=/var/www/gate84\n"
+                     "LG_WP_USER=%s\n" % os.environ.get("USER", "ubuntu"))
+
+        # A vhost shaped like the real one: the server_name the env names, the PHP
+        # handler the socket is READ from, and (optionally) the glob include.
+        vh = ["server {", "    server_name gate84.invalid;"]
+        if include_line:
+            vh.append("    include /etc/nginx/snippets/lg-auto-ban-*.conf;")
+        vh += ["    location ~ \\.php$ {", "        include snippets/fastcgi-php.conf;",
+               f"        fastcgi_pass unix:{self.SOCK};", "    }", "}"]
+        with open(os.path.join(self.root, "etc/nginx/sites-enabled/gate84.conf"), "w") as fh:
+            fh.write("\n".join(vh) + "\n")
+
+        if ban_page:
+            shutil.copy2(ERRPAGE, os.path.join(self.root, "srv/lg-shared/errors/login-blocked.html"))
+
+    def path(self, rel):
+        return os.path.join(self.root, rel)
+
+    def run(self, *args, nginx_test="", nginx_reload=""):
+        env = dict(os.environ,
+                   LG_AB_ROOT=self.root,
+                   LG_AB_ENVFILE=self.path("etc/looth/env"),
+                   LG_AB_SITES_ENABLED=self.path("etc/nginx/sites-enabled"),
+                   LG_AB_BANPAGE=self.path("srv/lg-shared/errors/login-blocked.html"),
+                   LG_AB_NGINX_TEST=nginx_test, LG_AB_NGINX_RELOAD=nginx_reload,
+                   LG_AB_SYSTEMCTL="true")
+        p = subprocess.run(["bash", INSTALLER, *args], capture_output=True, text=True,
+                           env=env, timeout=180, cwd=REPO)
+        return p
+
+    def present(self):
+        return {n: os.path.exists(self.path(p)) for n, p in (
+            ("maps",  "etc/nginx/conf.d/lg-auto-ban-maps.conf"),
+            ("doors", "etc/nginx/snippets/lg-auto-ban-doors.conf"),
+            ("list",  "etc/nginx/lg-auto-ban/list.conf"),
+            ("store", "var/lib/lg-auto-ban"),
+            ("unit",  "etc/systemd/system/lg-auto-ban.service"),
+        )}
+
+    def nginx_accepts(self, tmp):
+        """Does nginx accept what the INSTALLER wrote — not what the gate substituted."""
+        d = os.path.join(tmp, "instnginx-" + self.tag)
+        os.makedirs(d, exist_ok=True)
+        os.chmod(d, 0o755)
+        for aux in ("mime.types", "fastcgi.conf", "fastcgi_params", "snippets"):
+            link = os.path.join(d, aux)
+            if not os.path.lexists(link):
+                os.symlink(os.path.join("/etc/nginx", aux), link)
+        conf = os.path.join(d, "nginx.conf")
+        open(conf, "w").write(f"""
+worker_processes 1;
+error_log {d}/error.log warn;
+pid {d}/nginx.pid;
+events {{ worker_connections 16; }}
+http {{
+    include /etc/nginx/mime.types;
+    access_log off;
+    client_body_temp_path {d}/cbt; proxy_temp_path {d}/pt; fastcgi_temp_path {d}/ft;
+    uwsgi_temp_path {d}/ut; scgi_temp_path {d}/st;
+    include {self.path('etc/nginx/conf.d/lg-auto-ban-maps.conf')};
+    server {{
+        listen 127.0.0.1:{free_port()};
+        root {d};
+        location ^~ /lg-error/ {{ alias {os.path.join(REPO, 'lg-shared', 'errors')}/; internal; }}
+        include {self.path('etc/nginx/snippets/lg-auto-ban-doors.conf')};
+        location / {{ return 200 "ok"; }}
+    }}
+}}
+""")
+        return subprocess.run(["nginx", "-t", "-c", conf], capture_output=True, text=True, timeout=60)
+
+
 def free_port():
     """Per-run, and actually free — two suites at once must not collide."""
     base = 20000 + (os.getpid() % 9000)
@@ -319,7 +414,7 @@ def main():
         if not shutil.which(tool):
             print(f"CANNOT RUN: {tool} is not installed — {why}")
             return 2
-    for p in (HARNESS, RENDER, CFG_SRC, CF_LIST, VHOST, T_MAPS, T_DOORS, ERRPAGE):
+    for p in (HARNESS, RENDER, CFG_SRC, CF_LIST, VHOST, T_MAPS, T_DOORS, ERRPAGE, INSTALLER):
         if not os.path.exists(p):
             print(f"CANNOT RUN: missing {p}")
             return 2
@@ -329,6 +424,7 @@ def main():
     try:
         run_sections(tmp)
         ng = run_nginx_section(tmp)
+        run_installer_section(tmp)
     except RuntimeError as e:
         print(f"CANNOT RUN: {e}")
         return 2
@@ -659,9 +755,17 @@ def run_sections(tmp):
     else:
         note("F3 skipped — could not locate the vhost's lg-member-sync block to compare against")
 
-    check("F4 the maps template spells its placeholder exactly once "
-          "(a second mention in prose gets substituted and the geo block ends up empty)",
-          maps_t.count("@CF_RANGES@") == 1, maps_t.count("@CF_RANGES@"))
+    # Each placeholder EXACTLY ONCE. The installer does a plain string replace, so a
+    # second mention — in prose, in a comment, anywhere — is substituted too, and
+    # the geo block or the include quietly ends up holding the wrong thing.
+    for ph in ("@CF_RANGES@", "@LIST_INCLUDE@"):
+        check(f"F4 the maps template spells {ph} exactly once",
+              maps_t.count(ph) == 1, maps_t.count(ph))
+    for ph in ("@FPM_SOCK@", "@DOCROOT@"):
+        check(f"F4b the doors template's {ph} is only ever a placeholder, never prose",
+              doors_t.count(ph) >= 1 and "@" not in doors_t.replace(ph, "").replace(
+                  "info@loothgroup.com", "").replace("@FPM_SOCK@", "").replace("@DOCROOT@", ""),
+              doors_t.count(ph))
     for act in ("logout", "lostpassword", "rp", "resetpass"):
         check(f"F5 '{act}' stays reachable to a blocked address (asserted in the map, not a comment)",
               re.search(r'^\s*"%s"\s+0;' % act, maps_t, re.M) is not None)
@@ -745,6 +849,98 @@ def run_nginx_section(tmp):
     check("G8b …and the forger's own address is what gets refused  [liveness for G8]",
           code == "403", code)
     return ng
+
+
+def run_installer_section(tmp):
+    section("§H  the flip kit — the one piece a human runs on LIVE, by hand")
+    if not shutil.which("nginx"):
+        note("§H partially SKIPPED — no nginx to judge what the installer wrote")
+
+    # ── H1 the happy path ────────────────────────────────────────────────────
+    ok = Installer(tmp, "arm")
+    p = ok.run()
+    check("H1 a well-formed box arms cleanly", p.returncode == 0,
+          (p.stdout + p.stderr)[-400:])
+    st = ok.present()
+    check("H1b …writing BOTH nginx halves, the list, the store and the units",
+          all(st.values()), st)
+
+    maps = open(ok.path("etc/nginx/conf.d/lg-auto-ban-maps.conf")).read()
+    doors = open(ok.path("etc/nginx/snippets/lg-auto-ban-doors.conf")).read()
+    check("H2 no placeholder survives substitution in either file",
+          not re.search(r"@[A-Z_]+@", maps + doors),
+          re.findall(r"@[A-Z_]+@", maps + doors))
+    check("H2b the FPM socket is READ off the vhost, not guessed",
+          Installer.SOCK in doors, [l for l in doors.splitlines() if "fastcgi_pass" in l][:2])
+    check("H2c the deny list the maps file includes is the one the installer wrote — "
+          "one path computed in one place",
+          ok.path("etc/nginx/lg-auto-ban") in maps,
+          [l for l in maps.splitlines() if "include" in l][:3])
+    cf_count = len([l for l in open(CF_LIST) if l.strip() and not l.startswith("#")])
+    check("H2d every Cloudflare range reached the geo block",
+          len(re.findall(r"^\s+\S+/\d+ 1;$", maps, re.M)) == cf_count,
+          len(re.findall(r"^\s+\S+/\d+ 1;$", maps, re.M)))
+
+    if shutil.which("nginx"):
+        t = ok.nginx_accepts(tmp)
+        check("H3 nginx accepts what the INSTALLER wrote, not what the gate substituted",
+              t.returncode == 0, (t.stderr or t.stdout)[-300:])
+
+    # ── H4/H5 the two refusals that exist because nginx -t cannot see them ───
+    noinc = Installer(tmp, "noinclude", include_line=False)
+    p = noinc.run()
+    check("H4 it refuses a vhost with no include line — arming there would install "
+          "a blocklist that blocks nobody",
+          p.returncode != 0 and "STOP" in p.stdout, (p.stdout + p.stderr)[-300:])
+    check("H4b …and leaves nothing behind  [H1b is its control]",
+          not any(noinc.present()[k] for k in ("maps", "doors", "list")), noinc.present())
+
+    nopage = Installer(tmp, "nopage", ban_page=False)
+    p = nopage.run()
+    check("H5 it refuses when the polite page is not in the serving checkout — a bare "
+          "404 is the blank refusal the design was revised to avoid, and nginx -t "
+          "passes either way",
+          p.returncode != 0 and "404" in p.stdout, (p.stdout + p.stderr)[-300:])
+    check("H5b …and leaves nothing behind",
+          not any(nopage.present()[k] for k in ("maps", "doors", "list")), nopage.present())
+
+    # ── H6 a config nginx rejects must leave the box exactly as it was ───────
+    rej = Installer(tmp, "rejected")
+    p = rej.run(nginx_test="false")
+    check("H6 a rejected config aborts the arm", p.returncode != 0,
+          (p.stdout + p.stderr)[-300:])
+    check("H6b …and rolls BOTH halves back out, never leaving the pair half-installed",
+          not any(rej.present()[k] for k in ("maps", "doors", "list")), rej.present())
+
+    # ── H7 disarming ────────────────────────────────────────────────────────
+    seeded = os.path.join(ok.path("var/lib/lg-auto-ban"), "state.json")
+    with open(seeded, "w") as fh:
+        json.dump({"version": 1, "bans": [], "allowlist": [{"ip": BAD_V4}]}, fh)
+    p = ok.run("--uninstall")
+    check("H7 --uninstall succeeds", p.returncode == 0, (p.stdout + p.stderr)[-300:])
+    st = ok.present()
+    check("H7b …removing both nginx halves, the list and the units",
+          not any(st[k] for k in ("maps", "doors", "list", "unit")), st)
+    check("H7c …and NOT the ban store — disarming must not throw away the allowlist "
+          "somebody built by hand",
+          os.path.exists(seeded)
+          and json.load(open(seeded))["allowlist"][0]["ip"] == BAD_V4)
+
+    # ── H8 the test hooks did not become the shipped behaviour ──────────────
+    src = open(INSTALLER).read()
+    for want in ("$ROOT/etc/nginx/conf.d/lg-auto-ban-maps.conf",
+                 "$ROOT/etc/nginx/snippets/lg-auto-ban-doors.conf",
+                 "$ROOT/var/lib/lg-auto-ban",
+                 "$ROOT/etc/systemd/system"):
+        check(f"H8 production path intact: {want.replace('$ROOT', '')}", want in src)
+    check("H8b ROOT defaults to empty, so an unhooked run writes the real paths",
+          re.search(r'^ROOT="\$\{LG_AB_ROOT:-\}"$', src, re.M) is not None)
+    p = subprocess.run(["bash", INSTALLER, "--check"], capture_output=True, text=True,
+                       timeout=60, cwd=REPO, env={k: v for k, v in os.environ.items()
+                                                  if not k.startswith("LG_AB_")})
+    check("H8c a REAL install still demands root  [the guard the hooks bypass]",
+          p.returncode != 0 and "run as root" in (p.stdout + p.stderr),
+          (p.stdout + p.stderr)[-200:])
 
 
 if __name__ == "__main__":

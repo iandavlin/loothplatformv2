@@ -43,6 +43,7 @@ MAPS   = "platform/nginx/lg-auto-ban-maps.conf.template"
 DOORS  = "platform/nginx/lg-auto-ban-doors.conf.template"
 VHOST  = "platform/nginx/dev2.loothgroup.com.conf"
 PAGE   = "lg-shared/errors/login-blocked.html"
+INST   = "tools/infra/install-auto-ban.sh"
 
 # (name, file, find, replace, the assertion PREFIX that must go red)
 MUTATIONS = [
@@ -165,6 +166,25 @@ MUTATIONS = [
     ("the API door answers with HTML its caller cannot read", DOORS,
      '    if ($lg_ab_listed) { return 403 \'{"code":"lg_login_blocked","blocked":true,"message":"Sign-in from your network is paused for a day after several failed password attempts. You can still sign in with Patreon, or email info@loothgroup.com and we will lift it."}\'; }\n\n    include fastcgi.conf;\n    fastcgi_param SCRIPT_FILENAME @DOCROOT@/index.php;\n    fastcgi_param SCRIPT_NAME /index.php;\n    fastcgi_pass unix:@FPM_SOCK@;\n    fastcgi_read_timeout 300;\n}\n\nlocation = /wp-json/lg-member-sync/v1/gift-auth {',
      '    error_page 462 =403 /lg-error/login-blocked.html;\n    if ($lg_ab_listed) { return 462; }\n\n    include fastcgi.conf;\n    fastcgi_param SCRIPT_FILENAME @DOCROOT@/index.php;\n    fastcgi_param SCRIPT_NAME /index.php;\n    fastcgi_pass unix:@FPM_SOCK@;\n    fastcgi_read_timeout 300;\n}\n\nlocation = /wp-json/lg-member-sync/v1/gift-auth {', "G6b"),
+    # ── the flip kit ────────────────────────────────────────────────────────
+    ("the installer stops checking the vhost include line", INST,
+     'if [ -n "$VHOST" ] && ! grep -q \'include /etc/nginx/snippets/lg-auto-ban-\\*\\.conf;\' "$VHOST"; then',
+     'if false; then', "H4"),
+    ("the installer stops checking the polite page", INST,
+     'if [ ! -r "$BANPAGE" ]; then',
+     'if false; then', "H5"),
+    ("a rejected config is left half-installed", INST,
+     '    if [ -n "$PREV_DOORS" ]; then cp "$PREV_DOORS" "$DOORS"; else rm -f "$DOORS"; fi',
+     '    if [ -n "$PREV_DOORS" ]; then cp "$PREV_DOORS" "$DOORS"; fi', "H6b"),
+    ("--uninstall throws the ban store away too", INST,
+     '    rm -f "$MAPS" "$DOORS" "$LIST"',
+     '    rm -f "$MAPS" "$DOORS" "$LIST"; rm -rf "$STATE_DIR"', "H7c"),
+    ("the FPM socket is guessed instead of read off the vhost", INST,
+     '[ -n "$FPM_SOCK" ] || { echo "FATAL: could not find the WordPress FPM socket in $VHOST" >&2; exit 1; }',
+     'FPM_SOCK=/run/php/php8.3-fpm-looth-dev.sock', "H2b"),
+    ("the list path stops being substituted", MAPS,
+     "    include @LIST_INCLUDE@;",
+     "    include /etc/nginx/lg-auto-ban/list*.conf;", "H2c"),
     ("the polite page stops explaining itself", PAGE,
      "<h1>Sign-in is paused for your network</h1>",
      "<h1>Forbidden</h1>", "F6"),
