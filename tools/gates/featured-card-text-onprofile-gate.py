@@ -94,8 +94,34 @@ def norm(s):
     return re.sub(r"\s+", " ", s).strip()
 
 
+def consent_flag_on():
+    """#107, Ian 2026-08-20 — "the tick is consent". Read the SHIPPED flag the
+    same two ways the three PHP callers do (tracked file, then env/$_SERVER
+    override), by asking PHP rather than parsing the file: a regex would answer
+    about the source text while the running site answers about the value."""
+    cfg = os.path.join(REPO, "platform", "config", "featured-consent.php")
+    if not os.path.isfile(cfg):
+        return False
+    try:
+        p = subprocess.run(
+            ["php", "-r",
+             "$c = @include " + json.dumps(cfg) + ";"
+             "$on = is_array($c) && !empty($c['enabled']);"
+             "foreach ([getenv('LG_FEATURED_CONSENT'), $_SERVER['LG_FEATURED_CONSENT'] ?? false] as $o) {"
+             "  if ($o !== false && $o !== '') $on = ($o === '1' || $o === 'true'); }"
+             "echo $on ? '1' : '0';"],
+            capture_output=True, text=True, timeout=15)
+        return p.returncode == 0 and p.stdout.strip() == "1"
+    except Exception:                                         # noqa: BLE001
+        return False
+
+
 def main():
     print("=== GATE 58: featured-card-text-onprofile — the card may only say what the profile says ===")
+
+    consent_on = consent_flag_on()
+    print(f"    consent flag (platform/config/featured-consent.php): "
+          f"{'ON — the card may repeat a members-only one-liner for opted-in members' if consent_on else 'OFF'}")
 
     token = gate_token()
     if not token:
@@ -118,6 +144,13 @@ def main():
                  CASE WHEN coalesce((SELECT h.visibility FROM profile_sections h
                                       WHERE h.user_id = u.id AND h.key = 'header'), 'members') = 'public'
                       THEN coalesce(nullif(trim(u.at_a_glance), ''), '') ELSE '' END AS glance,
+                 -- The SAME column with the header rule NOT applied (#107). Under
+                 -- the consent flag the card may print this for an opted-in
+                 -- member whose header is members-only; without it here, this
+                 -- gate would compute role='' for exactly those members and stop
+                 -- asserting anything about them — silently blind on the ones the
+                 -- ruling newly affects, which is worse than red.
+                 coalesce(nullif(trim(u.at_a_glance), ''), '') AS glance_raw,
                  coalesce(nullif(trim(u.business_name), ''), '') AS biz,
                  coalesce((SELECT trim(ps.data->>'text') FROM profile_sections ps
                             WHERE ps.user_id = u.id AND ps.key = 'about'
@@ -144,6 +177,7 @@ def main():
     for m_ in members:
         slug, name = m_.get("slug") or "", m_.get("name") or ""
         glance, biz, about = m_.get("glance") or "", m_.get("biz") or "", m_.get("about") or ""
+        glance_raw = m_.get("glance_raw") or ""
         page = fetch_profile(slug, token)
         if not page:
             DEAD.append(f"[{slug}] profile did not fetch")
@@ -158,8 +192,33 @@ def main():
             continue
         checked += 1
 
-        role = glance or (biz if biz and not name.endswith(biz) else "")
-        if role:
+        # ── #107: the card may print a members-only glance for an opted-in
+        # member, and ONLY the card. So the source rule follows the flag, and so
+        # does what "the profile says it too" means. Getting this wrong in the
+        # quiet direction is the danger: leave the header rule hardcoded and this
+        # gate computes role='' for every consented member and asserts nothing
+        # about them at all.
+        via_consent = bool(consent_on and not glance and glance_raw)
+        role = glance or glance_raw if consent_on else glance
+        role = role or (biz if biz and not name.endswith(biz) else "")
+        if role and via_consent and role == glance_raw:
+            # The ruling's whole content is that this text is allowed on the card
+            # while the PROFILE still withholds it from a logged-out viewer — so
+            # "it appears on the anon profile" is the wrong assertion here, and
+            # asserting it would go red on correct, ruled behaviour. What still
+            # has to hold is the thing this gate was built to catch: the card is
+            # republishing the MEMBER'S OWN words, not text re-sourced from some
+            # column the profile never renders (§C/§D cover author_about, the
+            # actual near-miss). So: byte-equal to their own at_a_glance, and
+            # withheld from anon exactly as the profile intends.
+            if norm(role) in flat:
+                OK.append(f"[{slug}] card ROLE is the member's own one-liner and their profile "
+                          f"shows it publicly too ({norm(role)[:40]!r})")
+            else:
+                OK.append(f"[{slug}] card ROLE is the member's own one-liner, published on the "
+                          f"card by their featured-box consent and still withheld from the anon "
+                          f"profile — the #107 exception, working ({norm(role)[:40]!r})")
+        elif role:
             if norm(role) in flat:
                 OK.append(f"[{slug}] card ROLE text appears on the profile ({norm(role)[:40]!r})")
             else:

@@ -1,0 +1,7 @@
+[Unit]
+Description=Tell keeper that Ian flagged a seat as idle on the lanes page (#156)
+
+[Service]
+Type=oneshot
+User=ubuntu
+ExecStart=/bin/bash /home/ubuntu/keeper-repo/tools/lanes-poke-worker.sh

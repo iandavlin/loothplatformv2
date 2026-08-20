@@ -17,9 +17,27 @@ trap 'echo "==> RELAUNCH NOW (same tool call): bash ~/keeper-repo/tools/lanes/st
 MANIFEST="$HOME/.fleet-manifest"
 OKFILE="$HOME/.lane-park-ok"
 STATED="$HOME/.lane-park-state"
+POKES="$HOME/.keeper-pokes"          # #156: written by lanes-poke-worker.sh
+PMARK="$HOME/.keeper-poke-mark"
 mkdir -p "$STATED"
 PARK_LIMIT=600
 while true; do
+  # #156: Ian pressed "Poke keeper" on the lanes page. A HUMAN PRESSING A
+  # BUTTON OUTRANKS EVERY DERIVED SIGNAL BELOW, so it is checked first — and it
+  # is checked even before the manifest, because a poke can name a seat the
+  # manifest has already forgotten. The watermark is written BEFORE the exit:
+  # alerting without advancing it re-alarms on the same poke at every relaunch
+  # (the 8/16 blindspot, which fired three times in ten minutes on a healthy
+  # delivery).
+  if [ -s "$POKES" ]; then
+    NEWP=$(comm -13 <(sort "$PMARK" 2>/dev/null) <(sort "$POKES") 2>/dev/null)
+    if [ -n "$NEWP" ]; then
+      cp "$POKES" "$PMARK" 2>/dev/null
+      SEATS_P=$(printf '%s\n' "$NEWP" | awk '{print $2}' | tr '\n' ' ')
+      echo "ALERT ian-poke — Ian flagged these seats as idle from the lanes page: ${SEATS_P}— check each agent NOW, then tell him on the board what you found and what you did. He pressed a button expecting an answer."
+      exit 0
+    fi
+  fi
   [ -s "$MANIFEST" ] || { echo "ALERT empty-manifest"; exit 0; }
   while read -r L; do
     [ -n "$L" ] || continue

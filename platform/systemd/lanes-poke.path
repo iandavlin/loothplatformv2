@@ -1,0 +1,9 @@
+[Unit]
+Description=Deliver a lanes-page poke to keeper when the spool is written (#156)
+
+[Path]
+PathModified=/home/ubuntu/.lanes-poke-request
+Unit=lanes-poke.service
+
+[Install]
+WantedBy=paths.target

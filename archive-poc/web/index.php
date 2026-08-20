@@ -954,7 +954,23 @@ if ($lg_fm && !empty($lg_fm['member_uuid'])) {
     // resolver runs with PDO::ERRMODE_EXCEPTION and nothing guarded its call.
     if ($lg_fm_on) {
         try {
-            $lg_fm = lg_resolve_featured_member((string) $lg_fm['member_uuid'], $is_member);
+            // consent_ack: the admin featured this member from the dash while it
+            // was telling them, in words, that doing so would publish a
+            // members-only one-liner on the public front page (#107, Ian 8/20,
+            // "OR Ian features them knowingly"). It is a per-SELECTION fact, so
+            // it rides in the config beside member_uuid rather than in the DB.
+            //
+            // ⚠️ ITS ABSENCE IS THE WHOLE PROTECTION AGAINST A SILENT UPGRADE.
+            // A selection written before this shipped — including the one live
+            // in config.json right now — carries no ack, so flipping the
+            // consent flag ON cannot change what is already on the front page.
+            // The same is true of fp-save.php, the front-end editor path, which
+            // forwards a raw featured_member object it knows nothing about.
+            $lg_fm = lg_resolve_featured_member(
+                (string) $lg_fm['member_uuid'],
+                $is_member,
+                !empty($lg_fm['consent_ack'])
+            );
         } catch (\Throwable $e) {
             error_log('[featured-member resolve] ' . $e->getMessage());
             $lg_fm = null;
@@ -965,20 +981,114 @@ if ($lg_fm && !empty($lg_fm['member_uuid'])) {
 }
 
 /**
+ * The featured card's ROLE line, and the whole of the consent rule that decides
+ * whether it may repeat a members-only one-liner (#107, Ian 2026-08-20).
+ *
+ * DELIBERATELY PURE — no database, no config read, no globals. Everything it
+ * needs arrives as an argument. Two reasons, and both have been paid for here:
+ *
+ *  1. It is the ONE place the rule exists. The pool endpoint in profile-app
+ *     predicts this verdict for the admin dash, and it lives in a different
+ *     application against a different database that cannot call this function
+ *     (see internal-featured-pool.php's own note, and gate 39 §F3). A rule
+ *     spread across two processes goes stale silently; a rule in one function
+ *     with a gate reading both sides does not.
+ *  2. index.php is a whole rendered page, so a gate cannot require() it to test
+ *     the rule. It CAN lift this function out by name and execute it against a
+ *     truth table — which is what gate 39 §G3 does, over all three flag states.
+ *     A rule that is only read out of a file is not a rule that ran.
+ *
+ * @param string  $glance         users.at_a_glance, raw.
+ * @param string  $businessName   users.business_name, raw (escaped quotes and all).
+ * @param string  $displayName    users.display_name — the fallback's own guard.
+ * @param string  $headerVis      profile_sections key='header' visibility, or the
+ *                                'members' default when the member has no row.
+ * @param bool    $consentOn      platform/config/featured-consent.php enabled.
+ * @param ?string $informedSince  the moment the new tickbox copy reached members.
+ *                                MUST carry a UTC offset — see below.
+ * @param ?string $optedInAt      users.featured_opt_in_at, stamped on the tick.
+ * @param bool    $consentAck     the admin featured them knowingly (config.json).
+ */
+function lg_fm_card_role(
+    string $glance,
+    string $businessName,
+    string $displayName,
+    string $headerVis,
+    bool $consentOn,
+    ?string $informedSince,
+    ?string $optedInAt,
+    bool $consentAck
+): string {
+    $glance = trim($glance);
+
+    // ── May this card repeat a one-liner the profile itself keeps back? ─────
+    // Only ever with the flag ON, and then by ONE of two routes:
+    //
+    //   informed  the tick was made at or after the copy that says so. Ticks
+    //             are stamped on a real false->true transition and NULLed on
+    //             untick (me-featured.php), so a member "re-confirming" under
+    //             the new wording re-stamps and becomes informed by itself.
+    //   acked     an admin featured them while the dash spelled out what that
+    //             would publish. Ian, 8/20: "until they re-confirm OR Ian
+    //             features them knowingly" — these are those two clauses.
+    //
+    // Anything else — no flag, no timestamp, an unparseable cutover, a tick
+    // that predates the copy and no admin acknowledgement — falls through to
+    // the pre-#107 rule below, unchanged. There is no third route in, and the
+    // default on every uncertain input is the old, quieter behaviour.
+    $mayRepublish = false;
+    if ($consentOn && $glance !== '') {
+        if ($consentAck) {
+            $mayRepublish = true;
+        } elseif ($informedSince !== null && $optedInAt !== null) {
+            // ⚠️ BOTH SIDES MUST CARRY AN OFFSET OR THIS COMPARISON DRIFTS BY
+            // HOURS. featured_opt_in_at arrives from Postgres as timestamptz
+            // ("2026-08-15 03:17:15.249065+00"); informed_copy_since is written
+            // by hand, so the flag file demands an ISO-8601 with an explicit
+            // offset and gate 39 §G1 refuses an ON whose value lacks one. A
+            // naive local string would be read in PHP's default timezone and
+            // could mark a tick informed hours before the copy existed.
+            $a = strtotime($optedInAt);
+            $b = strtotime($informedSince);
+            if ($a !== false && $b !== false && $a >= $b) $mayRepublish = true;
+        }
+    }
+
+    // The pre-#107 rule, verbatim: the glance is the role only when the
+    // profile's own header block publishes it. `$mayRepublish` is the single
+    // consented exception, and it is additive — it can never HIDE a glance that
+    // was already public.
+    $role = ($headerVis === 'public' || $mayRepublish) ? $glance : '';
+
+    if ($role === '') {
+        $biz = str_replace(["\\'", '\\"'], ["'", '"'], $businessName);
+        if ($biz !== '' && !str_ends_with($displayName, $biz)) $role = $biz;
+    }
+    return $role;
+}
+
+/**
  * Resolve the featured-member card from profile_app. Column-scoped grant:
  * tools/cut/featured-member-grants.sql. Returns null if the member has since
  * gone Private, untuck their consent, or the row is simply gone — the caller
  * treats that exactly like "nothing selected" (no band), never a broken card.
  */
-function lg_resolve_featured_member(string $uuid, bool $isMember): ?array {
+function lg_resolve_featured_member(string $uuid, bool $isMember, bool $consentAck = false): ?array {
     static $pdo = null;
     if ($pdo === null) {
         $pdo = new PDO('pgsql:host=/var/run/postgresql;dbname=profile_app', null, null);
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     }
     $st = $pdo->prepare(
+        // featured_opt_in_at (#107): needed to tell an INFORMED tick from one
+        // made under the old copy. ⚠️ It required a NEW column grant — this
+        // role reads under column-scoped GRANTs and an ungranted column raises
+        // "permission denied for table users", which the caller's try/catch
+        // turns into a blank front page rather than an error anyone can see.
+        // tools/cut/featured-member-grants.sql, gate 39 §G2.
         'SELECT id, slug, display_name, avatar_url, at_a_glance, business_name,
                 location_city, location_region, location_members_precision,
+                featured_opt_in_at,
                 (profile_layout IS NULL OR profile_layout @> \'["location"]\'::jsonb) AS loc_on_profile
            FROM users
           WHERE uuid = :u AND featured_opt_in = true AND profile_visibility = \'public\''
@@ -1008,11 +1118,34 @@ function lg_resolve_featured_member(string $uuid, bool $isMember): ?array {
     $hdr->execute([':i' => (int) $u['id']]);
     $headerVis = (string) ($hdr->fetchColumn() ?: 'members');   // no row => Block::HEADER_DEFAULT
 
-    $role = $headerVis === 'public' ? trim((string) $u['at_a_glance']) : '';
-    if ($role === '') {
-        $biz = str_replace(["\\'", '\\"'], ["'", '"'], (string) $u['business_name']);
-        if ($biz !== '' && !str_ends_with((string) $u['display_name'], $biz)) $role = $biz;
+    // ── #107, Ian 2026-08-20: THE TICK IS CONSENT ───────────────────────────
+    // The rule above stands unchanged as the DEFAULT. What changed is that a
+    // member who has ticked "include me as a possible featured member" — and
+    // been told, in the tickbox copy, that ticking lets their one-liner appear
+    // on the public front-page card — has consented to exactly this one
+    // republication. That consent is checked in lg_fm_card_role() below, which
+    // is where the whole of the rule lives; nothing else in this file, and
+    // nothing anywhere else in the platform, republishes a members-only glance.
+    //
+    // Note the WHERE clause above already required featured_opt_in = true, so
+    // every member reaching this line has ticked. What lg_fm_card_role() adds
+    // is WHEN they ticked, and whether an admin knowingly accepted an older
+    // tick — the two things that separate informed consent from assumed.
+    $lg_fm_ccfg = @include __DIR__ . '/../../platform/config/featured-consent.php';
+    $lg_fm_con  = is_array($lg_fm_ccfg) && !empty($lg_fm_ccfg['enabled']);
+    foreach ([getenv('LG_FEATURED_CONSENT'), $_SERVER['LG_FEATURED_CONSENT'] ?? false] as $lg_fm_co) {
+        if ($lg_fm_co !== false && $lg_fm_co !== '') $lg_fm_con = ($lg_fm_co === '1' || $lg_fm_co === 'true');
     }
+    $role = lg_fm_card_role(
+        (string) $u['at_a_glance'],
+        (string) $u['business_name'],
+        (string) $u['display_name'],
+        $headerVis,
+        $lg_fm_con,
+        is_array($lg_fm_ccfg) ? ($lg_fm_ccfg['informed_copy_since'] ?? null) : null,
+        $u['featured_opt_in_at'] ?? null,
+        $consentAck
+    );
 
     // Location: members only (pre-existing rule, unchanged — the template's
     // own `!empty($lg_fm['where'])` check inside `if ($is_member)` still

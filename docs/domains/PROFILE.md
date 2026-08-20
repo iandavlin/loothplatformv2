@@ -86,8 +86,169 @@ instead of a bare "Saved and pushed".
 - The dash and the pool are **admin-only**; no flag, stated rather than skipped.
   Nothing member-facing renders differently — the resolver is untouched.
 
-**Still open for Ian (#107 report):** four opted-in members cannot be featured
-at all until their role resolves. Whether that is fixed by relaxing the card
-(render without a role) or by asking those members for a one-line "what you do"
-is his call, not this lane's — the charter's law is that nothing member-facing
-changes here.
+**Answered 8/20 — see the consent section below.** The "still open" question here
+(relax the card, or ask those members for a one-liner) was ruled on the same day:
+neither. The tick itself is the consent.
+
+## The tick is consent — #107 follow-up, Ian 8/20
+
+**Ruling (decision box, verbatim):** *"the tick is consent — a member ticking
+'include me as a possible featured member' consents to their one-line 'what you
+do' appearing on the public featured card."*
+
+So the featured card — **and only the featured card** — may repeat an opted-in
+member's `at_a_glance` even when their header block is members-only. The 8/16
+never-republish rule stands everywhere else, unchanged.
+
+**Where the rule lives:** `lg_fm_card_role()` in `archive-poc/web/index.php`.
+Deliberately PURE — no DB, no config read, no globals — for two reasons that
+have both been paid for: the pool endpoint in profile-app predicts this verdict
+for the dash from a different process against a different database and cannot
+call it, and `index.php` is a whole rendered page a gate cannot `require`.
+Gate 39 §G3 lifts the function out by name and executes it over a 12-case truth
+table, so the rule is *run*, not read.
+
+### A members-only one-liner reaches the public card by TWO routes and no others
+
+| route | what it is |
+|---|---|
+| **informed** | the tick was made at or after `informed_copy_since` — the moment the new tickbox copy reached members. `featured_opt_in_at` is stamped on every real false→true transition and NULLed on untick, so "re-confirming" re-stamps and needs no extra plumbing. |
+| **acked** | an admin featured them while the dash spelled out what that would publish. `consent_ack` rides in `config.json` beside `member_uuid`. |
+
+These are Ian's own two clauses — *"until they re-confirm OR Ian features them
+knowingly"* — with both doing real work. **Everything else falls back to the
+pre-#107 behaviour**: flag off, cutover unset, cutover unparseable, no opt-in
+stamp. There is no third way in and no input that fails open.
+
+**`consent_ack`'s ABSENCE is the protection against a silent upgrade**, and it is
+the case that is easy to miss: a member already on the front page when the flag
+flips would otherwise have their card switch quietly from their business name to
+their members-only one-liner with nobody clicking anything. A selection written
+before this shipped carries no ack, and neither does one written by `fp-save.php`
+(the front-end editor path, which forwards a raw `featured_member` object it
+knows nothing about). So the flip changes the NEXT pick, never the live one.
+The dash writes `consent_ack` explicitly false on every save — a stale true from
+an earlier selection would be consent from a member who never gave it.
+
+**Measured on the real stack, 2026-08-20, the real pool of 8:**
+
+| state | renderable | notes |
+|---|---|---|
+| flag OFF | 3 | byte-identical to the pre-change baseline |
+| ON, every tick old-copy, no ack | 3 | byte-identical to OFF — no silent upgrade |
+| ON, every tick old-copy, admin acked | 7 | the four unblock |
+| ON, every tick informed | 7 | Carl Ioriatti stays blocked, correctly — he has no one-liner at all |
+
+### ⚠️ A GRANT MUST LAND BEFORE THE FLAG FLIPS, AND ITS ABSENCE IS SILENT
+
+The resolver runs as the Postgres role `archive-poc` against profile_app under
+**column-scoped** grants, and it now reads `users.featured_opt_in_at`. That
+column was not granted. Measured before the change: `SELECT featured_opt_in_at`
+as that role returns **`permission denied for table users`** — an exception, not
+a null — and the call site's try/catch degrades it to "no band" so the front page
+cannot 500. **The visible symptom of a missed grant is the featured band
+vanishing for every visitor, with nothing anywhere to say why.**
+
+    sudo -u postgres psql profile_app -f tools/cut/featured-member-grants.sql
+
+Applied and verified on dev2 8/20; **live needs it before the flip**, and
+re-applying after any profile_app restore (grants do not survive one). Gate 39
+§G2 asserts the role can really read the column, so a blank band is a RED rather
+than a mystery.
+
+### The dash tells the admin which picks publish something new
+
+The pool reports three new facts, and the dash reads them with the same
+absent-key discipline as `card_renderable` — a missing key means the endpoint is
+older than the dash, which is *unknown*, never "no problem here":
+
+- `consent_informed` — null, not false, when the flag is off or no cutover is
+  set. False there would read as a member having declined something.
+- `glance_needs_ack` — featuring them publishes members-only text under a tick
+  that predates the wording. False the moment they re-confirm, and false for a
+  member whose glance is already public, since nothing is being republished.
+- `header_vis_explicit` — **did they choose it, or is it just the default?**
+  1,917 of 1,933 members have never opened their header settings, so telling Ian
+  "they set this to members-only" would be wrong about almost everyone. The dash
+  says *"they have never opened their header settings — members-only is the
+  platform default, not something they picked"* instead.
+
+Rendered against the real pool: OFF → 5 "Won't show yet", 0 consent notices;
+ON/old-copy → 1 "Won't show yet" (Carl) and 4 "Will publish their one-liner";
+ON/informed → 6 plain "Feature", 1 "Feature anyway". **Never a disabled button in
+any state** — #107's original ruling still holds.
+
+### 🔴 A PRE-EXISTING LEAK THIS LANE FOUND AND DID NOT FIX
+
+While proving the exception is confined, the confinement turned out to be
+narrower than the 8/16 rule assumes. **A profile's `<meta name="description">`,
+`og:description` and `twitter:description` carry `at_a_glance` verbatim to
+logged-out visitors, crawlers and link unfurls — even when the header block
+correctly withholds it from the rendered body.**
+
+Measured 2026-08-20, all four members with a default header and a written
+one-liner: absent from the visible body for anon, present in the head every time.
+**Site-wide it is 28 on dev2 — and 42 on LIVE** (of 56 who have written a glance
+at all). Confirmed on live by an anonymous fetch of `/u/bryan-parris/`: the
+one-liner is in `<meta name="description">` and absent from the body. Only 26 of
+live's 1,824 public members have EVER set a header row, so almost none of the 42
+chose this — the two surfaces simply disagree about what the default means.
+
+Source: `profile-app/web/u.php:213` — `$seoGlance` is read straight off the
+column with no visibility condition, while every other consumer applies the
+ceiling. Three tags, one variable; the public-safe `else` branch already exists.
+The JSON-LD is clean (name/url/image/worksFor only — checked).
+
+**Filed as #166** with the two coherent positions written out; it needs Ian's
+ruling, not a patch, because option 2 (accept the meta as public) would mean
+#107's tickbox copy is understating things.
+
+It predates this lane, it is member-facing, and reddening main for it would block
+every seat — so gate 39 §G7 asserts the **body** and states this in its own
+docblock rather than failing on it. It also means the featured-card republication
+is a smaller delta than it looks: for these members the one-liner is already
+reachable publicly. **That is a ruling for Ian, not a lane decision** — either the
+meta tags should honour header visibility, or the never-republish rule should be
+restated to mean the rendered page only.
+
+### One thing that CANNOT be verified until this merges, and why
+
+The consent path was proven link by link on real infrastructure — the rule
+executed over a truth table, the resolver against the real DB, the dash rendered
+against the branch's pool, and `consent_ack` round-tripped through the real
+`/archive-api/v0/_config` webhook. What could **not** be proven on dev2 is the
+whole chain through a real `admin-post.php` click.
+
+The reason is structural, not laziness: `FeaturedMemberDash::fetch_pool()` reads
+`https://127.0.0.1/profile-api/v0/internal/featured-pool`, and that route is
+served out of `~/loothplatformv2-clean` — i.e. **main**. A branch's dash always
+gets main's pool. Main's pool has no `glance_needs_ack` key, so `consent_notice()`
+correctly returns null (absent ≠ false), `consent_ack` is written false, and the
+consent-warned branch of the handler is never entered. A real click on dev2
+therefore re-proves the ordinary path and says nothing about the new one.
+
+The nearest honest substitute — used here — is WordPress's own
+`pre_http_request` filter to hand the shipped `render_page()` the branch's pool
+without touching a line of shipped code. That produced the 2/5/0 → 4-notice →
+6/1/0 matrix above.
+
+**So after this merges, one thing is still worth doing on the serve:** feature an
+old-copy ticker through the real dash and confirm `consent_ack: true` reaches
+`config.json` and the band renders. ⚠️ `config.json` is owned by `archive-poc`,
+so restoring it afterwards needs `sudo cp` — a plain `cp` fails with permission
+denied, and if you only diff the rendered page you will not notice, because the
+front page re-resolves live and looks identical either way.
+
+### Traps this leaves behind
+
+- `informed_copy_since` **must carry an explicit UTC offset**. It is compared
+  against a Postgres `timestamptz`; a naive local string is read in PHP's default
+  timezone and can mark a tick informed hours before the copy existed. Gate §G1
+  refuses an ON without one.
+- The flag file and the grant are **one deploy**, not two. See above.
+- The dash and the pool endpoint deploy together, as before — and now the
+  resolver joins them, since `consent_ack` is written by one and read by another.
+- A preview of any of this needs `platform/nginx/lane-preview-107-consent-followup.conf`:
+  every surface here is symlinked out of the serving checkout, so `/u/<slug>` on
+  dev2 renders main no matter what is committed. Use **named** nginx captures —
+  the dev-gate map resets `$1`-`$9` before fastcgi params are built.
