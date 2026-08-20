@@ -39,6 +39,15 @@ WHAT IT ASSERTS — five legs, and the three cheap ones cannot flake:
      own tokenizer), so prose in a docblock can never satisfy an assertion —
      the red-first-that-stays-green class has cost this repo six findings.
 
+     AND IT EXECUTES bottom-nav's tab rule rather than only reading it. That is
+     not belt-and-braces: §D drives the real origin, the real origin serves
+     MAIN, so §D's PWA-sheet legs read MAIN's bottom-nav.js and cannot exercise
+     this branch at all. They pass today because main sets target
+     unconditionally AND main's href is external, which makes "target iff
+     external" accidentally true — a green that says nothing about the diff
+     (trap-harness-and-serve-answer-from-main). So the branch's own guard line
+     is lifted out and RUN in node against both destinations.
+
   §B RENDER, ALL THREE STATES. The partial is executed under php with a fixed
      anonymous ctx against a config that is absent / OFF / ON. Absent and OFF
      emit the patreon href WITH target="_blank"; ON emits /lgjoin/ WITHOUT it.
@@ -288,6 +297,46 @@ def leg_a():
           "an unconditional target='_blank' punts a member out of the installed PWA")
     check("bottom-nav no longer sets target unconditionally",
           re.search(r"joinRow\.href\s*=\s*joinHref;\s*joinRow\.target", js) is None)
+
+    # ── EXECUTE the branch's rule, do not merely read it ────────────────────
+    #
+    # WHY THIS EXISTS AND WHY IT IS NOT REDUNDANT WITH §D. §D drives the real
+    # origin, and the real origin serves MAIN — so §D's PWA-sheet assertions
+    # read main's bottom-nav.js and cannot exercise this branch's change at all.
+    # They pass today because main sets target unconditionally AND main's href
+    # is external, which makes "target iff external" accidentally true. That is
+    # a green that says nothing about the diff
+    # (trap-harness-and-serve-answer-from-main), so the branch's own line is
+    # pulled out and RUN here, against both destinations, in node.
+    guard = None
+    for line in open(f"{REPO}/{BOTTOM}", encoding="utf-8").read().splitlines():
+        if "joinRow.target" in line and "test(joinHref)" in line:
+            guard = line.strip()
+            break
+    if guard is None:
+        check("bottom-nav's join-row tab rule can be located and executed", False,
+              "no line matching the target guard — §A-exec cannot run")
+    else:
+        prog = ("var results = {};"
+                "[%s].forEach(function (h) {"
+                "  var joinHref = h, joinRow = {};"
+                "  %s"
+                "  results[h] = joinRow.target || null;"
+                "});"
+                "console.log(JSON.stringify(results));"
+                % (json.dumps(PATREON) + ", " + json.dumps(LGJOIN), guard))
+        r = subprocess.run(["node", "-e", prog], capture_output=True, text=True)
+        if r.returncode != 0:
+            check("bottom-nav's join-row tab rule executes", False,
+                  f"node: {r.stderr.strip()[:200]}")
+        else:
+            got = json.loads(r.stdout)
+            check("EXECUTED: bottom-nav opens a new tab for the patreon href",
+                  got.get(PATREON) == "_blank", f"got target={got.get(PATREON)!r}")
+            check("EXECUTED: bottom-nav does NOT open a new tab for /lgjoin/",
+                  got.get(LGJOIN) is None,
+                  f"got target={got.get(LGJOIN)!r} — an internal page in a new tab "
+                  "leaves the installed PWA behind")
 
     # The flag register is a merge condition here (gate 62 enforces the general
     # rule; this names THIS flag so a rename cannot quietly orphan the row).
@@ -1060,7 +1109,7 @@ if __name__ == "__main__":
 # (feedback-mutation-harness-must-snapshot-not-checkout).
 #
 # tools/gates/header-join-redfirst.sh drives it. RUN 2026-08-20: baseline green
-# at 41, twelve mutations each reddening its OWN named assertion, two no-ops
+# at 43, twelve mutations each reddening its OWN named assertion, two no-ops
 # reddening nothing. 14 of 14 as expected.
 #
 #    1  the ON href hardcoded into the anchor    -> "href is resolved at render time"
