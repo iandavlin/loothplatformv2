@@ -17,6 +17,15 @@
   a constant. **Tier CREATION stays the catalogue file + import command**
   (scope ruling, same day): the dash gains PER-TIER PRICING only, no
   tier-builder form. Behind `lgms_multi_tier`, default OFF; gate 76.
+- **THE ANON FRONT DOOR IS A MEMBERSHIP SURFACE (Ian 8/20, verbatim):**
+  *"can you Wire the header on Dev2 to have the stripe menuing that a logged
+  out user would see?"* This **narrows** his 2026-06-12 ruling — *Join goes
+  STRAIGHT to Patreon* — rather than reversing it: that ruling was correct
+  while Patreon was the only rail, and the dual-rail founding law is now served
+  by the DESTINATION offering both worlds instead of by the button choosing one.
+  Behind `header-join-stripe`, default OFF; gate 79. **Connect Patreon is
+  untouched at every width** — a patron linking an existing pledge is not
+  joining, and that door stays exactly where it was.
 - **One payment source per member (8/19, verbatim):** *"We should disallow
   double payment source for the same user."* Block at checkout, not warn.
   Enforcement keys on ACTUAL Patreon standing (lgpo_patreon_user_id +
@@ -79,6 +88,44 @@
   say 'patreon') and zero stripe rows in `lg_role_sources`. Repaired since,
   or measured on dev2 — unknown from here. Do not requote the four as
   current.
+- **THE JOIN BUTTON AND THE JOIN PAGE ARE TWO SWITCHES, AND ONLY ONE IS A
+  FLAG (#165, measured 8/20).** `lg-shared/site-header.php` renders on EVERY
+  page of SEVEN independent apps (bb-mirror, archive-poc, events, profile-app,
+  membership-pages, lg-layout-v2, a docroot script) — verified by cookieless
+  fetch of `/`, `/hub/`, `/events/`, `/sponsors/`, `/connect-your-patreon/`,
+  `/shop-layout-planner/`, `/directory/members/` and `/lgjoin/`, all 200, all
+  emitting the one anchor. So there is exactly ONE place to change it and no
+  page it does not reach. ⚠️ **But `/lgjoin/` decides its own audience.**
+  `router.php` lists it `['lgjoin.php','testgroup','public']` and the wp_option
+  **`lgms_stripe_pages_live`** picks the column; while that is off the
+  PRE-LAUNCH column applies and an anonymous visitor gets
+  `lg_membership_admin_gate_or_exit()`'s *"This page isn't available yet"*
+  stub. **Turning the header flag on alone produces a Join button that is wired
+  correctly and lands nowhere.** Gate 79 §E asserts the destination admits anon
+  whenever the header flag is ON, and reports rather than asserts while it is
+  OFF.
+- **The anon Join has a SECOND home, and at phone widths it is the ONLY one.**
+  `bb-mirror/web/forums.css` hides `.lg-chrome__aside` with
+  `display:none!important` at ≤640 on the hub — deliberate, the hub swaps it for
+  its search bar — so the header's Join, Sign in and Connect Patreon are all
+  gone there and `webroot/bottom-nav.js`'s PWA account sheet carries Join
+  instead. It reads the header's href (`hdrHref`) so it cannot drift, but its
+  `target="_blank"` was **unconditional**: harmless while Join could only be
+  patreon.com, and an eject from the installed PWA (`display:standalone`) the
+  moment it can be `/lgjoin/`. Both copies now derive the new tab from the href.
+  The front page is different — its aside IS visible at 640.
+- ⚠️ **A DEAD BAND AT 821–904px, PRE-EXISTING, OPEN FOR IAN.** Measured on main
+  8/20 on `/hub/`: the anon Join pill sits at x=845 w=59 in an 821px viewport —
+  entirely past the right edge, `document.scrollWidth` 905. The nav collapses
+  into the hamburger at ≤820, so between 821 and roughly 904 the full nav and
+  the anon cluster cannot share one row and Join is pushed out of view; Connect
+  Patreon (x=649..797) still fits, and Join is last so Join is what goes. The
+  front page is milder — clipped by ~23px, centre still reachable. **This is the
+  same class as gate 12's 641–820 sign-in dead band, one band over**, and it is
+  the third time a control Ian could not use was in the DOM the whole time.
+  Held in gate 79's `KNOWN_MAIN_GAPS` (reported, not scored, self-expiring) so
+  it blocks no lane while it stays visible. Not fixed by #165 — a one-href
+  change cannot move a layout.
 - **THREE purchase doors, not two.** The two in #150 were the Slim API
   (CheckoutController.php:124) and lgjoin's active-sub redirect
   (lgjoin.php:86). A THIRD was found 8/19 while building #150:
@@ -123,6 +170,42 @@
   no FAIL line) because the door gained `StripePrice` and then
   `PatreonStanding` without either being added to its require list. Revived:
   20 assertions, including the *"body chooses NOTHING"* section.
+
+## State (8/20, #165 — the go-live header)
+- **#165 BUILT** on `165-header-join`, flag `header-join-stripe` defaulted OFF,
+  gate **79** (94 assertions with the browser leg, 41 without; red-first 14/14).
+  The anon header's Join follows the flag; the PWA account sheet follows the
+  header; both derive `target="_blank"` from the destination rather than from
+  the flag. **OFF is byte-proven, not argued** — the partial rendered from the
+  branch and from `origin/main` with the same anon ctx is 28,028 bytes both
+  ways, cmp clean, for the ABSENT config too; an AUTHED ctx is byte-identical in
+  every state including ON, so the flag cannot reach a signed-in member at all.
+  ON differs from main by exactly one line.
+- **THE FLIP IS TWO SWITCHES, NOT ONE.** `header-join-stripe.local.php` on the
+  box **and** `lgms_stripe_pages_live` in WP admin (Settings → LG Member Sync),
+  in the same window, or Ian's logged-out Join lands on the pre-launch stub.
+  Gate 79 §E turns from a report into a hard assertion the moment the header
+  flag goes ON, so the pairing cannot be half-done quietly.
+- ✅ **THE dev2 membership-pages 404 IS FIXED** — re-measured 8/20, anon and
+  cookieless: `/lgjoin/`, `/join/`, `/connect-your-patreon/` and
+  `/manage-subscription/` all answer **200** with the real shared header. The
+  `fastcgi_param LG_MS_SLUG` defect attributed on #150 is gone, so the three
+  gates lane 150 identified as reddening on it (34b, 36 anon-dark-contrast, and
+  digest-forum-images) should be re-attributed rather than re-reported. **This
+  supersedes the ⚠️ line in State (8/19) below.**
+- **Owed / open:** the 821–904px dead band above (Ian's call); three other anon
+  Patreon join CTAs found while sweeping and deliberately NOT changed —
+  `profile-app/web/directory-members.php:154` (*"Join on Patreon →"* on the
+  members directory), `archive-poc/web/defaults.php:88` (*"Join Looth Group"*
+  footer nav) and `archive-poc/web/_chrome-footer.php:40` (*"Membership"*). All
+  three are explicitly Patreon-labelled so none is wrong today, but they are
+  where this same question lands next and keeper is taking them to Ian as a
+  separate ruling.
+- Note for whoever hand-places the `.local.php`: **`php -l` it first.** The
+  reader is defensive about empty / non-array / missing-key / unreadable (all
+  gated), but `@` suppresses warnings and not parse errors, and this partial
+  renders on every page — a typo there is a site-wide 500, not one quiet
+  feature.
 
 ## State (8/19)
 - **#150 + #149 BUILT** on 150-double-pay-block, flag `lgms_double_pay_block`

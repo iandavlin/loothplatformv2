@@ -1,7 +1,13 @@
 # 165 — the go-live header: anon Join points at OUR join page — plan
 
-> **STATUS: awaiting approval.** No code touched. Everything below marked
-> "measured" was measured on dev2 today (2026-08-20) before writing this.
+> **BUILT 2026-08-20** — approved by keeper against the #165 scope, built as
+> written. Flag `header-join-stripe` defaulted OFF, gate **79** (94 assertions
+> with the browser leg, 41 without; red-first 14/14). Not merged and not
+> flipped — keeper merges, and the flip is two switches, not one (§2c). The one
+> deviation from the plan is in §5: §D's reachability assertion became a DELTA
+> ("the OTHER href is exactly as reachable as this one") plus a route-agnostic
+> contract, because the first run proved the absolute form was measuring main.
+> §2c's warning held exactly as written — /lgjoin/ still serves anon the stub.
 
 ## 1. What I'm solving
 
