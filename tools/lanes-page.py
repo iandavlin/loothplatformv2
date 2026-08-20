@@ -504,8 +504,13 @@ def gh_fine(issue):
             f'&#8599;</a>')
 
 
-def door_html(rec, records_ok):
-    """The Do-it link (#172, spec point 2), or the honest absence of one."""
+def door_html(rec, records_ok, quiet_when_absent=False):
+    """The Do-it link (#172, spec point 2), or the honest absence of one.
+
+    `quiet_when_absent` is for the question family: the answer to "what should
+    the second tier cost?" is a sentence, and telling him to go ask keeper for a
+    test link — when keeper is the very party he is answering — is noise on the
+    one card that is already a conversation."""
     u = rec.get("TEST-URL")
     if u:
         return (f'<a class="dobtn" href="{html.escape(u, quote=True)}" '
@@ -513,9 +518,12 @@ def door_html(rec, records_ok):
                 f'<span class="doorpath">{html.escape(u)}</span>')
     if not records_ok:
         # The one inversion of quiet-when-healthy, applied to the door: a read
-        # that failed must never render as an answer.
+        # that failed must never render as an answer. Loud even on a question
+        # card, because "I could not look" is never noise.
         return ('<span class="nodoor">test link unknown &mdash; a GitHub read '
                 'failed, so this is not &ldquo;there isn&rsquo;t one&rdquo;</span>')
+    if quiet_when_absent:
+        return ''
     return ('<span class="nodoor">no test link yet &mdash; ask keeper for '
             'one</span>')
 
@@ -611,8 +619,9 @@ def build_todo(seats, needs, allopen, parked_reason=None,
     # 1. a lane raised its hand and named him (its chip reads 'needs you', and
     #    #159's ruling says every one of those is mirrored here with its action)
     for l in seats:
-        if l.get("state") != "needs-you" or not l.get("reason"):
-            continue
+        if (l.get("state") != "needs-you" or not l.get("reason")
+                or l.get("state_from_label")):
+            continue                       # see the note at the upgrade site
         seat = l["branch"]
         num = seat.split("-")[0]
         iss = by_num.get(int(num)) if num.isdigit() else None
@@ -626,7 +635,8 @@ def build_todo(seats, needs, allopen, parked_reason=None,
             "action": f"Answer the {name} lane",
             "text": (f'<b>Answer {html.escape(seat)}</b> — it asked: '
                      f'&ldquo;{html.escape(l["reason"][:200])}&rdquo;'),
-            "door": door_html(rec_for(num) if num.isdigit() else {}, records_ok),
+            "door": door_html(rec_for(num) if num.isdigit() else {}, records_ok,
+                              quiet_when_absent=True),
             "buttons": copy_btn(
                 "Copy for keeper",
                 (f"Re #{num} {name} — answering: " if iss
@@ -758,6 +768,17 @@ def main():
         iss = issue_for(l)
         if iss and l.get("state") != "working" and labels_of(iss) & {"merged", "built"}:
             l["state"] = "needs-you"
+            # ⚠ #172: MARK IT AS OURS. This upgrade is derived from a label, so
+            # the words below are the RENDERER'S, not the lane's — and the todo
+            # list's first family exists for a lane that raised its hand and
+            # named him. Untagged, this seat printed "Answer 138-phase-b — it
+            # asked: 'merged — waiting on your check'", which attributes a
+            # sentence nobody said to a lane that never asked, AND swallowed the
+            # issue before the merged/built families could class it (#138 is the
+            # one item that should have dropped to the quiet line and did not).
+            # The SEAT CARD still shows this state and this reason — that is
+            # #159's design and unchanged. Only the checklist looks past it.
+            l["state_from_label"] = True
             if not l.get("reason"):
                 l["reason"] = ("merged — waiting on your check"
                                if "merged" in labels_of(iss)
