@@ -1,6 +1,11 @@
 # MEMBERSHIP — roles, tiers, content gating, and both payment rails
 
 ## Laws (Ian's rulings, quotable)
+- **THE FOUNDING LAW (Ian 8/19, verbatim):** *"We have two ways to become a
+  member. Patreon and Stripe. And they both need to work together to produce
+  a logical result."* Every membership behavior is judged against this: when
+  both rails have an opinion about one person, the outcome must be coherent —
+  never an accident of which rail spoke last.
 - **Dual-rail (8/15, permanent):** every member-facing flow fires for BOTH
   Patreon and Stripe; hooks key on membership activation, never one rail's
   events. Gate 34d asserts there is NO THIRD ROAD to a grant.

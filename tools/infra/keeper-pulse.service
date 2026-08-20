@@ -1,0 +1,13 @@
+[Unit]
+Description=keeper-pulse — 20s vitals log (load, cpu, steal, mem, front-door latency)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/home/ubuntu/keeper-repo/tools/infra/keeper-pulse.sh
+Restart=always
+RestartSec=10
+User=root
+
+[Install]
+WantedBy=multi-user.target
