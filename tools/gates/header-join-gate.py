@@ -1227,6 +1227,19 @@ def leg_d(base, browser):
                            "control ends up off the right edge")
             finally:
                 inc.close()
+
+    # ⚠️ WHAT THIS LEG DID NOT MEASURE, said out loud so a green §D is not read
+    # as covering it. Every width above was browsed ANONYMOUSLY, and #170's
+    # tester pill renders only for a signed-in member on the cohort list — a
+    # session this leg has no way to hold (and the one shared chrome profile on
+    # this box makes cookie-juggling its own class of false green:
+    # trap-shared-chrome-profile-duplicate-session-cookies). What carries the
+    # measurement across is §A's assertion that no stylesheet scopes
+    # .lg-chrome__join to the anon cluster, so the tester's copy inherits the
+    # presentation proven here rather than being assumed to.
+    report("the TESTER pill's in-browser reachability is not measured by this anon leg",
+           "click Join at 390px and at 900px signed in as a LISTED NON-ADMIN member; "
+           "the ≤640 hub answer is the PWA You-sheet row, which §A asserts structurally")
     log("")
 
 
@@ -1399,11 +1412,11 @@ if __name__ == "__main__":
 # harness bug into ten false "the assertion is decoration" verdicts
 # (feedback-mutation-harness-must-snapshot-not-checkout).
 #
-# tools/gates/header-join-redfirst.sh drives it. RUN 2026-08-20: baseline green
-# at 43, twelve mutations each reddening its OWN named assertion, two no-ops
-# reddening nothing. 14 of 14 as expected.
+# tools/gates/header-join-redfirst.sh drives it. RUN 2026-08-20 (#170): baseline
+# green at 104, twenty-one mutations each reddening its OWN named assertion, two
+# no-ops reddening nothing. 23 of 23 as expected. (#165's run: 14 of 14 at 43.)
 #
-#    1  the ON href hardcoded into the anchor    -> "href is resolved at render time"
+#    1  the ON href hardcoded into the anchor    -> "href resolved at render time"
 #    2  reader forgets $_SERVER                  -> "read from getenv() AND $_SERVER"
 #    3  .local.php override dropped              -> "honours the .local.php box override"
 #    4  .local wins on any truthy, not === true  -> "wins only on an EXPLICIT boolean true"
@@ -1415,8 +1428,31 @@ if __name__ == "__main__":
 #   10  config defaults ON when unreadable       -> "falls back to today's behaviour"
 #   11  the FLAGS.md row deleted                 -> "FLAGS.md carries a row"
 #   12  the FLAGS row drops the coupling         -> "row names lgms_stripe_pages_live"
-#   A   rename a local in the reader             -> GREEN, 41 passed
-#   B   reflow the config docblock               -> GREEN, 41 passed
+#   13  tester pill escapes 'allowlist' into ON  -> "gives a signed-in tester no pill"
+#   14  the pill ignores the cohort entirely     -> "member NOT on the list gets no Join"
+#   15  anon leaks /lgjoin/ in allowlist         -> "THE CACHING LAW"
+#   16  the tester pill never renders            -> "allowlist ACTUALLY DIFFERS from off"
+#   17  the legacy `enabled` key tidied away     -> "dev2's ACTUAL .local.php"
+#   18  an unknown state word falls OPEN         -> "unrecognised state word falls CLOSED"
+#   19  the header grows its own cohort list     -> "defines NO second cohort list"
+#   20  bottom-nav drops the tester row          -> "tester row EXISTS only when..."
+#   21  the pill block re-indented (9 bytes)     -> "authed (not listed)"
+#   A   rename the reader's closure              -> GREEN, 103 passed
+#   B   reflow the config docblock               -> GREEN, 103 passed
+#
+# ⚠️ Mutation 16 is #170's mutation 7 — the one that proves the gate is worth
+# having. It is the version of this issue that reads correct on every line: the
+# three states resolve, the href logic is right, `allowlist` is wired to the
+# cohort capability... and the control renders for nobody, because on main the
+# Join pill was ANON-ONLY and a signed-in test user could never see it. It
+# passes every other assertion in this file. Only "allowlist ACTUALLY DIFFERS
+# from off for a tester" catches it.
+#
+# ⚠️ Mutation 21 is the defect this lane actually shipped into its own working
+# tree and §C caught: an indented `<?php if ?>` tag emits its own leading spaces
+# whether the branch is taken or not, so the tester block added 9 bytes to EVERY
+# signed-in render in EVERY state including 'off'. Same family as mutation 7,
+# found the same way, kept so it cannot return unseen.
 #
 # ⚠️ Mutation 7 is the one worth keeping. It is a pure-whitespace edit that
 # changes NO behaviour whatsoever, and it is caught only by the byte-identity
