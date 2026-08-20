@@ -379,10 +379,16 @@ if [[ $AGENTS -eq 1 ]]; then
     found=0
     for s in $(tmux list-sessions -F "#{session_name}" 2>/dev/null); do
         found=1
-        if tmux capture-pane -t "$s" -p 2>/dev/null | grep -q "esc to interrupt"; then st="WORKING"; else st="parked "; fi
+        # Was its own inline copy of the detector, keyed on "esc to interrupt"
+        # alone — which the 8/20 CLI update removed, so this column called every
+        # working lane parked. One probe, one place (#151).
+        IFS=$'\t' read -r ast asp < <(probe_agent "$s")
+        if [[ "$ast" == "working" ]]; then st="WORKING"; else st="parked "; fi
         last=$(tmux capture-pane -t "$s" -p -S -30 2>/dev/null \
               | grep -vE "^\s*$|^─|^❯|bypass permissions|tmux |Auto-update|/clear to save|control this session" \
               | tail -1 | sed "s/^[ ●✻⎿·]*//" | cut -c1-90)
+        # the live verb beats the last scrollback line when there is one (#160)
+        [[ -n "$asp" ]] && last="$asp"
         printf "%-20s %s  %s\n" "$s" "$st" "$last"
     done
     [[ $found -eq 0 ]] && echo "(no agent sessions)"
