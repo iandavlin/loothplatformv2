@@ -223,6 +223,61 @@ final class FeaturedMemberDash
              . $why . '. The selection is saved and the band appears the moment that changes.';
     }
 
+    /* ── DID THEY KNOW THIS WOULD HAPPEN? (#107, Ian 2026-08-20) ──────────
+       "The tick is consent" — a member who ticks the featured box consents to
+       their one-line "what you do" appearing on the public front-page card,
+       even though their profile keeps it members-only. That is the ruling, and
+       the card pipeline now honours it.
+
+       It cannot be applied backwards in silence. Eight members ticked under
+       copy that never mentioned the one-liner, and four of them are the very
+       members the ruling unblocks. So the pool marks those picks
+       `glance_needs_ack`, this says so in words, and the act of featuring them
+       records the acknowledgement the resolver then honours — Ian's own
+       "until they re-confirm OR Ian features them knowingly", with both
+       clauses doing real work instead of one of them being a figure of speech.
+
+       ABSENT KEY IS NOT FALSE, same discipline as card_warning(): a missing
+       `glance_needs_ack` means the pool endpoint is older than this dash, and
+       the honest answer is silence, not a reassuring nothing. */
+    public static function consent_notice(array $member): ?string
+    {
+        if (!array_key_exists('glance_needs_ack', $member)) return null;
+        if (empty($member['glance_needs_ack'])) return null;
+
+        $name = trim((string) ($member['display_name'] ?? ''));
+        if ($name === '') $name = 'This member';
+
+        // Chosen or merely defaulted — opposite situations needing opposite
+        // remedies, and the common one is NOT the one the words suggest:
+        // 1,917 of 1,933 members have never set a header row at all, so
+        // "members-only" is almost always the platform's choice, not theirs.
+        $why = empty($member['header_vis_explicit'])
+            ? ' (they have never opened their header settings — members-only is the platform default, not something they picked)'
+            : ' (they set that themselves)';
+
+        return $name . ' keeps their one-line “what you do” members-only' . $why
+             . '. Featuring them publishes it on the public front page. They ticked the '
+             . 'featured box before it said that would happen, so this one is your call: '
+             . 'feature them anyway, or ask them to untick and re-tick to confirm.';
+    }
+
+    /* The same fact in the past tense, for the confirmation after a save. The
+       admin has already clicked by then, so this states what is now true and
+       what would put the consent on the record — it does not re-litigate. */
+    public static function consent_notice_saved(array $member): ?string
+    {
+        if (self::consent_notice($member) === null) return null;
+
+        $name = trim((string) ($member['display_name'] ?? ''));
+        if ($name === '') $name = 'This member';
+
+        return $name . '’s one-line “what you do” is now on the public front page, '
+             . 'though it stays members-only everywhere else. They ticked before the box '
+             . 'mentioned that, so this was your call — asking them to untick and re-tick '
+             . 'would put their consent on the record under the new wording.';
+    }
+
     public static function handle_feature(): void
     {
         if (!current_user_can(self::CAPABILITY)) wp_die('Forbidden', '', ['response' => 403]);
@@ -283,12 +338,23 @@ final class FeaturedMemberDash
         // see header visibility, which the card's role does).
         $warn = self::card_warning($member);
 
+        // #107: featuring an old-copy ticker whose glance is members-only is
+        // the "OR Ian features them knowingly" clause of the ruling. The click
+        // IS the acknowledgement, so it is recorded with the selection — and
+        // the front-page resolver republishes on nothing else. Its ABSENCE is
+        // what protects the pick already live in config.json from changing
+        // under the flag flip, so this is written on every save, explicitly
+        // false included: a stale true left behind by an earlier selection
+        // would be consent for a member who never gave it.
+        $consentWarn = self::consent_notice($member);
+
         $user = wp_get_current_user();
         $res = self::post_config([
             'enabled'    => true,
             'member_uuid' => $uuid,
             'name'       => (string) $member['display_name'],
             'role'       => (string) $member['tagline'],
+            'consent_ack' => $consentWarn !== null,
             // where/bio/cta_href/cta_label are NOT set here — index.php
             // re-resolves the live card from profile_app on every request
             // ("live, not frozen"). name/role are stored only as the
@@ -298,10 +364,15 @@ final class FeaturedMemberDash
         // The warning rides only on a SUCCESSFUL save — a failed write already
         // has an error to show, and stacking "it did not save" with "and it
         // would not have rendered" buries the one the admin must act on.
+        // Both notices can be true at once — a member with no photo AND an
+        // unconfirmed members-only one-liner — so they are joined rather than
+        // one silently winning. Order is deliberate: what got published first,
+        // then what still will not show.
+        $saved = array_values(array_filter([self::consent_notice_saved($member), $warn]));
         self::redirect_back(
             $res['ok'] ? '' : urlencode((string) $res['error']),
             $res['ok'],
-            $res['ok'] && $warn !== null ? urlencode($warn) : ''
+            $res['ok'] && $saved ? urlencode(implode(' ', $saved)) : ''
         );
     }
 
@@ -394,6 +465,10 @@ final class FeaturedMemberDash
                 $pct = (int) ($p['completeness']['pct'] ?? 0);
                 $blocked  = self::selection_block_reason($p);
                 $cardWarn = self::card_warning($p);
+                $consWarn = self::consent_notice($p);
+                // One flag for the button: either kind of notice means the
+                // admin is deciding something, not just clicking a name.
+                $needsCare = $cardWarn !== null || $consWarn !== null;
                 echo '<tr' . ($isCurrent ? ' style="background:#fcf9e8"' : '') . '>';
                 echo '<td><strong>' . esc_html((string) $p['display_name']) . '</strong><br><span style="color:#787c82;font-size:11.5px">/u/' . esc_html((string) $p['slug']) . '</span></td>';
                 echo '<td>' . esc_html((string) $p['tagline']) . '</td>';
@@ -433,6 +508,13 @@ final class FeaturedMemberDash
                            . '<span style="font-size:11.5px">needs '
                            . esc_html($missing ? implode(' and ', $missing) : 'a photo or a one-line “what you do”')
                            . '</span></td>';
+                    } elseif ($consWarn !== null) {
+                        // The card WILL render — this is not a defect column
+                        // entry, it is a consent one. Saying "won’t show yet"
+                        // here would be the same wrong-label failure #107
+                        // exists to fix, one category over.
+                        echo '<td style="color:#8a6d1f"><strong>Will publish their one-liner</strong><br>'
+                           . '<span style="font-size:11.5px">members-only on their profile; they ticked before the box said so</span></td>';
                     } elseif (!array_key_exists('card_renderable', $p)) {
                         // Pool endpoint older than this dash — unknown, and says so
                         // rather than guessing with card_ready, which is a different test.
@@ -444,9 +526,9 @@ final class FeaturedMemberDash
                        . '<input type="hidden" name="action" value="' . esc_attr(self::FEATURE_ACTION) . '">'
                        . '<input type="hidden" name="member_uuid" value="' . esc_attr((string) $p['uuid']) . '">'
                        . '<input type="hidden" name="_wpnonce" value="' . esc_attr($nonce) . '">'
-                       . '<button type="submit" class="button' . ($cardWarn === null ? ' button-primary' : '') . '"'
-                       . ($cardWarn !== null ? ' title="' . esc_attr($cardWarn) . '"' : '')
-                       . '>' . ($cardWarn !== null ? 'Feature anyway' : 'Feature') . '</button></form></td>';
+                       . '<button type="submit" class="button' . ($needsCare ? '' : ' button-primary') . '"'
+                       . ($needsCare ? ' title="' . esc_attr(trim(($consWarn ?? '') . ' ' . ($cardWarn ?? ''))) . '"' : '')
+                       . '>' . ($needsCare ? 'Feature anyway' : 'Feature') . '</button></form></td>';
                 }
                 echo '</tr>';
             }
