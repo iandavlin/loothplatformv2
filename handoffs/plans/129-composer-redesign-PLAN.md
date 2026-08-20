@@ -1,0 +1,405 @@
+# #129 COMPOSER REDESIGN — write first, categorize last
+
+Lane `129-composer-redesign`. **BUILT** — Ian gave BUILD GO on 8/19 after ruling the
+mock ("Looks good"). This file is the plan as approved; §5 at the bottom records what
+was actually built and the two things a deploy has to do by hand.
+
+Phases 1 (measure) and 2 (mock) are in
+`129-composer-redesign-MEASUREMENT.md` and `129-mock-composer-v2/`.
+
+- Measurement: `handoffs/plans/129-composer-redesign-MEASUREMENT.md`, also posted as
+  a comment on #129 (2026-08-19).
+- Mock: `handoffs/plans/129-mock-composer-v2/index.html`, served at
+  **https://dev2.loothgroup.com/mockups/composer-v2/** (behind the dev gate).
+
+**Ian ruled Option C on 8/19** (verbatim, relayed by keeper): *"I see it more being add
+in the tags and maybe popping up a new modal with a decent heirarchical layout."* The
+end-of-flow placement and the optional/bonus-points framing survive; the flat chip strip
+does not. Options A and B stay in the mock marked superseded. §1.2 below is written to
+Option C. His two data questions — (a) and (b) in §4 — remain open and still block
+Phase 4.
+
+---
+
+## 1. What I'd build
+
+### 1.1 The Where step leaves the composer
+
+Delete step 1 of the desktop wizard and the forum radiogroup from the mobile flat
+form. New discussions land in a **default forum**, config-defined, so forums become
+plumbing.
+
+The radiogroup is the *source of truth the wizard reads*, not just a view: the
+wizard moves the existing `input[name=forum_id]` radios into an accordion and
+`ntmGetForum()` reads the checked one. So removing the step means the form still has
+to POST a `forum_id` — it becomes a single hidden input carrying the default (or the
+mapped forum), and `ntmGetForum()` reads that instead. That keeps the submit handler,
+the edit-mode PUT and Buck's mobile reader of `#ntm-form` untouched, which is the
+same discipline the wizard itself was built with.
+
+**Edit mode must keep a way to change forum.** Today `ntmOpenForEdit()` jumps to step
+2 precisely because a *new* post starts at Where and an *edit* should not. Once Where
+is gone, an editing member has no forum control at all — and `api/v0/reply.php`
+already enforces the postable list on the edit PUT, so the capability exists and only
+the UI would be missing. Plan: keep a forum control on the **Review** row (the mock
+draws it as an `Edit` affordance on the Forum row) rather than resurrect the step.
+
+### 1.2 An optional tag step at the end, with a hierarchical picker
+
+Per Ian's ruling the end step holds a **tag field**, not a chip cloud: picked topics
+accumulate as removable tags, and a **＋ Add topics** control opens a **picker modal**
+that presents the taxonomy as a hierarchy.
+
+Rail becomes `Write → Photos → Topics → Review`, where Topics is optional and visibly
+skippable: `canLeave(3)` always returns true and the primary button never disables on
+that step. Mobile has no wizard (`buildNtmWizard()` returns null below 641px), so the
+tag field is the last block of the flat form and the picker is a bottom sheet.
+
+The picker's layout **is** the hierarchy: 7 parents, 29 children. Desktop puts the
+parents in a left list carrying child counts and fills the right pane with the selected
+parent's children; mobile makes the same tree an accordion. Both carry a search box —
+36 terms is past scanning — and both offer **"Tag the whole area"**, which selects the
+parent term itself. That row is exactly what makes ruling (b) load-bearing: two of the
+four big parents have no forum to land in.
+
+Three implementation facts this shape drags in:
+
+**Stacking.** The picker is a modal *on top of* a modal, and the two composers sit at
+wildly different heights. `.ntm-overlay` (desktop) is `z-index: 9000`, while the mobile
+composer sheet `#looth-comp-sheet` is `2147483560` and the tabbar is `2147481000+`. The
+ceiling is `.lg-lightbox` at `2147483646`. The @-mention dropdown already solved this
+exact problem inside this exact composer — at its old `100000` it painted *behind* the
+opaque mobile composer card and was invisible on phones (Ian, 2026-07-23). Reuse that
+value rather than re-deriving it, and check the picker on a phone width before calling
+it done.
+
+**Where the term list comes from.** The composer has no term data today. Per the craft
+standard — editors and composers load on intent, never eagerly for anon — the 36 terms
+should arrive when **＋ Add topics** is first tapped, not be inlined into every Hub page
+render for every visitor.
+
+**A multi-select chip control in this composer has already been a bug once.** The
+archived `reply-to-coordinator-ntm-forum-picker.md` records that mobile's picker used to
+be `.lg-fbc-chips`, multi-select, and that toggling two chips read as *"posting to two
+forums"* — the "select two forums" bug, fixed by replacing it with the single-select
+radiogroup. Option C's tags are legitimately multi-select because they are **topics, not
+forums**, but that history is precisely why the **"Lands in <forum>"** line in the mock
+is not decoration: it is the thing that stops a multi-tag field re-reading as
+multi-forum. Keep it in the build.
+
+Leftover from that episode: `.lg-fbc-chip`, `.lg-fbc-chiprow`, `.lg-fbc-catgroup`,
+`.lg-fbc-catgroup__h` and `.lg-fbc-chips__h` are **still in `forums.css` with nothing
+building them** — `hub-polish.js` references `lg-fbc` 93 times but never those classes.
+Dead CSS in the file this lane edits; see §4.
+
+### 1.3 taxo → forum mapping, committed and hand-reviewed
+
+A committed PHP map, **keyed on forum ID**, seeded from the measurement. ID because 4
+of the 37 postable forum slugs are duplicated and 2 titles are outright identical
+across the Repair and New Builds trees — a slug- or name-keyed map is ambiguous for 8
+of 37 forums.
+
+Resolution order: most specific term wins (a child term beats its parent), then the
+first mapped term in the picked set, then the default forum. A term with no mapping is
+not an error — it just doesn't move the post.
+
+Do **not** derive the map at runtime from name matching. Measured: matching gets 21 of
+36 terms right but produces 2 confidently wrong pairs, and the highest non-exact score
+in the whole run (0.909, `Electronics Repair` → `Electric Repair`) is on a wrong pair.
+21 rows need no thought; 6 need a decision. The map is small enough to read.
+
+### 1.4 `wp lg-recat` — the hand tool and the LLM's tool
+
+See §3 for the exact shape.
+
+### 1.5 Flag discipline
+
+One flag, **defaulted OFF**, copying `LG_AUTHOR_SOCIALS_ALL_MEMBERS`
+(`platform/mu-plugins/lg-author-socials.php`). Name: `LG_COMPOSER_CATEGORIZE_LAST`.
+
+- OFF must be a **proven byte-identical no-op** — same served `forums.js`, same
+  `_chrome.php` output, Where step present and required exactly as today.
+- The **OFF state must be gated**, per the standing rule that the missing OFF
+  assertion is the whole recurring failure class. The gate reads the flag and asserts
+  per state (absent / OFF / ON) off the *served* asset, so flipping the default later
+  needs no gate edit.
+- The flag has to be readable from **both** `getenv()` and `$_SERVER` — a
+  `fastcgi_param`-set preview flag lands in `$_SERVER` only, and an env-only read
+  serves OFF on the very preview URL built for Ian to click.
+- `wp lg-recat` runs under WP-CLI, which has **no FPM pool environment**. Its flag
+  read must come from a tracked PHP file via `__DIR__`, not from `env[]`.
+
+---
+
+## 2. Files I expect to touch
+
+Guessing wider rather than narrower, per LANE-RULES.
+
+| file | why |
+|---|---|
+| `bb-mirror/web/forums.js` | remove step 1, add the Topics step, `ntmGetForum()` reads the hidden input, `ntmOpenForEdit()` no longer needs to skip a step, chip UI + submit payload |
+| `bb-mirror/web/forums.css` | Topics-step styles (`.lgt*`, chips); retire the `.ntm-forumlist` / `.lgw-acc` accordion rules once nothing renders them |
+| `bb-mirror/web/_chrome.php` | stop rendering the 37-row radiogroup; emit the hidden default `forum_id`; keep the postable query for the Review-row forum control |
+| **`webroot/hub-polish.js`** | **the one I had missed.** `fbStyleComposer()` is the *mobile* composer: it restyles `#ntm-forum` with injected CSS, wraps it in its own expand/collapse trigger, and enforces its **own** required-forum check before submit (`if (!wForum.querySelector('input[name=forum_id]:checked'))` → re-expands the picker and refuses). Leave it alone and mobile keeps demanding a forum — i.e. the pain point survives on the platform most members use |
+| `bb-mirror/config.php` | the default forum ID + the flag reader (already the shared home for `LG_BB_MIRROR_NONPOSTABLE_FORUM_IDS`, which two pools have to agree about) |
+| `platform/config/taxo-forum-map.php` **(new)** | the committed ID-keyed map |
+| `platform/mu-plugins/lg-frontend-compose.php` | `register_taxonomy_for_object_type` for `topic`; shared term-list helper |
+| `platform/mu-plugins/lg-recat-cli.php` **(new)** | the wp-cli command |
+| `bb-mirror/api/v0/reply.php` | the topic-edit PUT already enforces the postable list; it must accept a forum arrived at via the map and keep refusing non-postable ones |
+| `docs/FLAGS.md` | register the flag row, same commit |
+| `tools/gates/craft-gate.py` + `tools/gates/run-all.sh` | new gate for the three flag states; number it **from main, after a rebase**, and add the row to `docs/CRAFT-STANDARD.md` |
+| `handoffs/plans/129-*` | measurement, mock, this plan (already committed) |
+
+Not touching: anything under the config directory that is symlinked to live services,
+without saying so explicitly first. `platform/config/` is the documented place for a
+tracked reader, which is why the map goes there rather than into an `env[]` flip —
+dev2's pool files symlink into the serving checkout and an `env[]` flip dirties it.
+
+---
+
+## 3. The wp-cli command's exact shape
+
+Two subcommands: one reads, one writes. The write verb is the single motion plan v2
+asked for.
+
+```
+wp lg-recat <topic-id>... --terms=<slug[,slug…]>
+                          [--forum=<id>] [--no-forum]
+                          [--dry-run] [--porcelain] [--reason=<text>]
+
+wp lg-recat-list [--uncategorized] [--forum=<id>] [--since=<YYYY-MM-DD>]
+                 [--limit=<n>] [--format=<table|json|csv|ids>]
+```
+
+**`wp lg-recat`** — assigns Content Topics terms to one or more discussions and
+re-homes each to the mapped forum, in one motion.
+
+| flag | meaning |
+|---|---|
+| `<topic-id>...` | one or more `topic` post IDs. Any non-topic or missing ID aborts the whole run before writing anything. |
+| `--terms=` | `shared_category` **slugs**, comma-separated. Every slug is validated up front; one unknown slug aborts the whole run. Slugs not IDs, because that is what an LLM can read off the term list and what a human can type. |
+| `--forum=` | override the mapped forum. Refused if the ID is not in the postable set — the same `LG_BB_MIRROR_NONPOSTABLE_FORUM_IDS`-aware list the picker and the edit PUT use, so all three agree. |
+| `--no-forum` | assign terms only, leave the topic where it is. For tagging without moving. |
+| `--dry-run` | print the plan — per topic: current forum → target forum, terms added, replies that would move — and write nothing. |
+| `--porcelain` | machine output, one line per topic, for the batch/LLM caller. |
+| `--reason=` | free text recorded in the audit meta, so a later reader knows whether a row was Ian's hand call or a supervised LLM suggestion. |
+
+Exit codes: `0` all applied, `1` nothing applied (validation refused), `2` partial —
+never silent. Every run prints a count; a no-op prints "0 changed" rather than nothing.
+
+**What one topic actually needs, and the trap that shapes it.** A bbPress topic stores
+its forum in **two** places — `post_parent` *and* `_bbp_forum_id` meta — and so does
+every one of its replies (5,128 of 5,130 replies carry `_bbp_forum_id`; the mirror's
+`reply` table has its own `forum_id` column). So the command must:
+
+1. validate everything, then
+2. `wp_set_object_terms($topic, $terms, 'shared_category', true)`,
+3. move the topic: `post_parent` + `_bbp_forum_id`, via bbPress's own helpers so its
+   counters stay right,
+4. move **every reply** of that topic: `_bbp_forum_id`,
+5. **bump `post_modified_gmt`** on the topic and on each moved reply, and
+6. dispatch the mirror sync explicitly for each.
+
+Steps 5 and 6 are not belt-and-braces. It is recorded that a change which does not
+bump `post_modified_gmt` never reaches the forum mirror, **confirmed specifically for
+the replies of a topic moved between forums** — which is exactly this operation. A
+version of this command that skips them would look completely successful in MySQL and
+leave the Hub showing the old forum indefinitely. Verification must therefore query
+the **Postgres** `forums.topic` / `forums.reply` rows after a run, not the MySQL rows
+it just wrote.
+
+**`wp lg-recat-list --uncategorized`** is the LLM's read side: discussions with no
+`shared_category` term. Today that is *every* discussion (measured: 1,406 term
+assignments exist and zero are on a `topic`), so the first batch is the whole corpus
+and `--limit` / `--since` are how it gets worked in supervised slices rather than one
+1,318-row swing. Output carries id, title, current forum and a body excerpt — enough
+for a suggestion, nothing more.
+
+---
+
+## 4. What I noticed but am not fixing
+
+1. **Two rulings block Phase 4** and are posted on #129. Both change what the mock's
+   "Lands in" line says, not how the step looks, so the mock stands either way:
+   (a) `#3837 General` is a child of *Repair and Restoration*, not a site-wide forum,
+   so defaulting untagged discussions there files them in the repair tree;
+   (b) `New Builds` (145 uses) and `Tools, Spaces, Robots and Widgets` (97 uses) have
+   no generic child to land on, while Repair has General and Business has General
+   Business. Together **25.5% of all term use**.
+2. **The issue body's evidence line is off by one rank.** "General is the #1
+   destination for new topics" — it is #2 (40 new topics/365d) behind Acoustic Repair
+   (87). Recorded in the measurement; does not disturb the ruling.
+3. **6 mapping rows still need a human decision** (§1.3). Not inventing them: the
+   whole measured point is that guessing here is what goes wrong.
+4. **`Quick Questions` (#3876) holds 181 topics and is frozen** — newest topic
+   2025-08-05, nonpostable by product decision. Not in scope, but any "busiest forum"
+   claim that counts all-time totals will keep tripping over it.
+5. **`scanners` is lowercase** where every sibling term is Title Case, and
+   `shared_category` carries the typo slug `general-buisness` on the forum side and
+   `shop-orginization` on the term side. Cosmetic; a normalising map hides them, and
+   renaming a term is a content decision, not a lane's.
+6. **14 postable forums are unreachable by any chip** — sponsor forums, Market Place,
+   local chapters, Suggestion Box, the two "Share Your … Content" forums, Neck Reset
+   Database. Correct by design (the map is one-directional and the picker is not the
+   only door), listed so it is not later read as a gap.
+7. **Two forum titles are identical across trees** (*Amps, Pickups, and Pedals*,
+   *Folk, Bluegrass, Irish, Old Time Instruments*) and a chip resolving to one of them
+   will read ambiguously in the "Lands in" line unless it is rendered with its parent.
+   The mock shows the leaf only; worth a parent prefix in the real thing.
+8. **The two-Generals naming collision and the Middle-Tennessee duplicate** (#58440
+   publish / #58442 private, same title) are out of scope by ruling — folded into
+   #127's rework.
+9. **`shared_category` is `public` and `publicly_queryable` with rewrite slug
+   `content_categories`.** Putting discussions into it therefore makes them appear on
+   whatever that archive renders, for the first time. Worth checking before the flag
+   flips ON; anon reachability differs dev2 vs live and has given opposite answers on
+   two URLs before.
+10. **Orphaned chip CSS in `forums.css`.** `.lg-fbc-chip*` / `.lg-fbc-catgroup*` are
+    styled and built by nothing — the remains of the multi-select mobile forum picker
+    that caused the "select two forums" bug. Not deleting it as a drive-by (it is
+    outside the ruling and someone may be mid-flight on it), but it should either be
+    reused by Option C's tag styling or removed, not left as a third chip vocabulary
+    beside `.lgw-chip` and Option C's `.tag`.
+11. **`tools/lanes/comment-issue.sh` does not exist.** The charter names it for
+    posting the measurement. I used the GitHub API directly with the same
+    `LG_GITHUB_ISSUES_TOKEN` from `/etc/looth/env` that `approve-issue.sh` uses, to
+    the same repo. Worth writing the helper so the next lane does not re-derive it.
+
+
+---
+
+## 5. What was actually built (added after BUILD GO, 8/19)
+
+Six commits. The flag is `composer-categorize-last`, **tracked default OFF**, registered
+in `docs/FLAGS.md` and asserted in all three states by **gate 74**.
+
+| commit | what |
+|---|---|
+| config | `platform/config/composer-categorize-last.php` — flag, per-box `default_forum_id`, the 21-row measured map; readers on both the WP and bb-mirror sides |
+| WP half | `register_taxonomy_for_object_type('shared_category','topic')` at `init:20`, `lg_ccl_apply()`, two REST routes |
+| UI | `_chrome.php` / `forums.js` / `forums.css` / `hub-polish.js` — Where step out, tag step + hierarchical picker in |
+| CLI | `wp lg-recat` + `wp lg-recat-list` |
+| gate | gate 74 + `categorize-last-redfirst.sh` (11 checks), wired into `run-all.sh`, row added to `CRAFT-STANDARD.md` |
+
+### 5.1 Two rulings landed, one is still open
+
+- **(a) RULED.** A new **top-level** forum is the landing: dev2 `73564` "Discussions".
+  Not the old `#3837 General`, which measured as a *child* of Repair and Restoration.
+- **(b) RULED workably.** An unmapped topic lands in the default. So the map holds
+  **only measured-correct pairs** — 21 of 36 — and the other 15 are listed in the
+  config with the reason each is absent. Nothing is guessed. Dedicated forums for the
+  two heavy unmapped topics (New Builds 145 uses, Tools/Spaces/Robots/Widgets 97) stay
+  open with Ian and are non-blocking.
+
+### 5.2 The mirror-sync blocker — RAISED 8/19, CLEARED and re-verified 8/20
+
+**When this was built, the flip was blocked.** Forum 73564 existed in WordPress and was
+absent from the Postgres mirror (`forums.forum`; the mirror's newest row was 67776),
+because forum rows only arrive there via the `bbp_new_forum` / `bbp_edit_forum` hooks
+and whatever created it did not fire them. The picker, the hub's forum reads and the
+postable contract all read Postgres, so a topic filed there would have pointed at a
+row that did not exist. `lg_ccl_default_forum_ok()` was written to keep the Where step
+while that was true — refuse, rather than file posts into a void.
+
+**Someone ran the resync between the park and 2026-08-20, and it is now clear.**
+Re-measured after the reboot, as the `bb-mirror` pool user, not as the lane's own
+shell:
+
+```
+forums.forum 73564   discussions / Discussions / parent NULL / public / open / forum
+picker's own postable query for 73564          1 row
+lg_ccl_default_forum_ok()                      true
+  control 3818 (parent, has children)          not postable   <- liveness
+  control 3876 (explicitly excluded)           not postable   <- liveness
+lg_ccl_enabled()                               false          <- flag still OFF
+```
+
+The two controls are the point: a guard that returned `true` for everything would look
+identical on the one row being checked. Presence is not postability, so the postable
+query was run rather than a `SELECT 1 FROM forum`.
+
+**So the ON path's precondition is satisfied and nothing behavioural changed** — the
+flag is still OFF, and the flip is still Ian's. The refusal path stays in the code and
+stays gate-asserted, because live will hit exactly this state when its own twin forum
+is created there.
+
+### 5.3 Two deploy steps a `git pull` does NOT do
+
+1. **The new mu-plugin needs its symlink.** mu-plugins are linked individually (33 of
+   them) into `/var/www/dev/wp-content/mu-plugins/`. Until
+   `lg-composer-categorize-last.php` is linked, the WP half — taxonomy registration,
+   both REST routes and `wp lg-recat` — does not load at all, while the hub UI is
+   present. That is the "UI lies" shape, so link it in the same window as the pull.
+2. **Live needs its own `default_forum_id`.** Live's twin of "Discussions" is a
+   different post ID; the value is config precisely so live can differ.
+
+### 5.4 What the build verified, and what it could not
+
+Verified against real dev2 data: the flag readers (both sides), the postable contract,
+mapping precedence (most-specific-wins), the all-or-nothing slug validation, the three
+exit codes, and — on a throwaway topic keyed to the run — the **whole write path**,
+ending in `forums.topic.forum_id` **and** `forums.reply.forum_id` both moving in
+Postgres. That last line is the recorded trap (a change that does not bump
+`post_modified_gmt` never reaches the mirror, confirmed before for exactly the replies
+of a moved topic) measured as defeated rather than assumed. Probe deleted from both
+stores, zero orphans.
+
+#### 5.4.1 "Flag OFF is byte-identical" is now MEASURED, not argued
+
+The first version of this section said the feature could not be seen running from a
+lane, because nginx serves the hub from `~/loothplatformv2-clean` and a branch has no
+URL. **That was wrong** — `cgi-fcgi` can drive the pool directly, because
+`SCRIPT_FILENAME` is just a path:
+
+```bash
+sudo -u www-data env SCRIPT_FILENAME=<tree>/bb-mirror/web/index.php \
+  REQUEST_URI=/hub/ SCRIPT_NAME=/hub/index.php DOCUMENT_URI=/hub/ \
+  DOCUMENT_ROOT=/var/www/dev LG_BB_MIRROR_PUBLIC_PATH=/hub \
+  HTTP_COOKIE="wordpress_logged_in_${HASH}=${CK}" ... \
+  cgi-fcgi -bind -connect /run/php/php8.3-fpm-bb-mirror.sock
+```
+
+Render the same URL from two trees and `cmp`. Connect as **www-data** (the socket is
+`listen.owner = www-data`; the pool user gets "Could not connect" and reads as a dead
+pool), mint the cookie with
+`wp eval 'echo wp_generate_auth_cookie(1, time()+3600, "logged_in");'` plus
+`COOKIEHASH`, and normalise **only** the `?v=<filemtime>` cache-buster.
+
+Two setup details this lane paid for:
+
+- **Compare against the MERGE-BASE, not against main.** main was one commit ahead and
+  that commit adds `platform/config/hub-feed-noindex.php`, so main rendered a
+  `<meta name="robots">` this branch cannot. The clean baseline is *this* worktree with
+  only the files I changed reverted to `git merge-base origin/main HEAD`.
+- **Copy the three gitignored box-local flags in first** —
+  `back-pill.local.php`, `frontend-compose.local.php`, `hub-feed-noindex.local.php`.
+  Without them a lane worktree renders with those features OFF while the serving
+  checkout has them ON, which looks like three defects and is none.
+
+**Result, re-proven after two reboots:**
+
+```
+off-base (merge-base)  217,336 bytes   ntm-form=1  picker radios=39  Where label=2  tag field=0
+off-mine (flag OFF)    217,336 bytes   ntm-form=1  picker radios=39  Where label=2  tag field=0
+                       -> cmp: BYTE-IDENTICAL
+on-mine  (flag ON)     213,124 bytes   ntm-form=1  picker radios=2   Where label=0  tag field=1
+                       -> landing 73564 "Discussions"; 7 category headers -> 0
+```
+
+The liveness columns matter: byte-identity between two stubs, or two 403s, would prove
+nothing. Both OFF renders contain the real composer with all 39 radios. The ON render's
+2 radios are the one pre-checked hidden leaf plus the reply form's pre-existing
+`frm-forum-id` hidden input, which is in every render.
+
+**And the render caught a defect the source review missed.** My inserted block left a
+blank line after `<?php endif; ?>`; PHP eats exactly one newline after `?>`, so the OFF
+path emitted **two** blank lines where the original had one. Byte-identity failed by 46
+bytes on a change I had reasoned was inert. That is the whole argument for rendering
+rather than reading.
+
+#### 5.4.2 Still not verified from a lane
+
+Ian looking at the running thing. The serve serves `main`, so his check happens after
+the merge, flag still OFF — then the flip. The renders above prove the OFF path is
+inert and that the ON path assembles; they cannot prove the picker *behaves* (that is
+JS in a browser against a deployed asset).

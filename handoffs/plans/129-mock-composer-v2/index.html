@@ -1,0 +1,1156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Composer v2 — write first, categorize last (#129 mock)</title>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     ⚠⚠ THIS FILE DELIBERATELY HAS NO CLOSING HEAD TAG. DO NOT ADD ONE. ⚠⚠
+     ⚠⚠ AND THE TAG IS WRITTEN ESCAPED (&lt;/head&gt;) EVERYWHERE BELOW ON PURPOSE:
+     ⚠⚠ sub_filter is a blind byte-level string replace on the response body and
+     ⚠⚠ does NOT respect HTML comments, so spelling the tag literally even inside
+     ⚠⚠ THIS comment would match and inject the whole payload. Measured: naming it
+     ⚠⚠ 5 times in here took the page from 0 to 5 live matches.
+
+     dev2's nginx conf carries, in the SERVER block, a
+         sub_filter '&lt;/head&gt;' '…manifest…boot script…&lt;script src="/pwa.js"&gt;…GTM…'
+     with sub_filter_once on. It fires on every text/html response, mockups
+     included. What it injects breaks a mock three ways, all of them measured
+     before on this box:
+       1. pwa.js paints APP CHROME over the mock — the bottom tabbar eats ~55px
+          and the PWA install banner has landed directly on the control being
+          shown.
+       2. the boot script writes every --lg-* token as INLINE STYLE on <html>
+          from localStorage['lg-set-boot'], so a mock that uses real tokens
+          INVERTS: a white card renders charcoal and vice versa.
+       3. when that boot payload says dark it also appends &lt;style id=lg-boot-crit&gt;
+          with body{background:…!important;color:…!important}, which beats an
+          id-plus-!important pin on our own body.
+
+     Omitting &lt;/head&gt; is valid HTML5 (head closes implicitly at the first body
+     content) and it means the sub_filter finds no match and injects NOTHING.
+     Measured on 2026-08-19 against this very path:
+         with    &lt;/head&gt;  → 2273 bytes, contains pwa.js + lg-set-boot + GTM
+         without &lt;/head&gt;  →   77 bytes, contains none of them
+     That is the whole defense, and it is why the tag is missing.
+
+     Belt and braces, because a conf change must not silently invert this page:
+     the full token set is ALSO pinned on the mock's own .t-light / .t-dark
+     wrappers rather than on html/body, so nothing inherited can reach it.
+
+     And it must never write localStorage or stamp data-lguser-theme: the shared
+     chrome profile has no iframe guard and app-settings.js PERSISTS a stamped
+     theme, which once turned every lane's browser dark for a whole run. Light
+     and dark are shown side by side as two scoped wrappers instead — no
+     switching, nothing stored.
+     ══════════════════════════════════════════════════════════════════════════ -->
+
+<style>
+/* ── tokens, copied verbatim from bb-mirror/web/forums.css :root (light) and
+      webroot/app-settings.js THEMES[dark].vars (dark) so the mock is faithful
+      without loading either file. Scoped to .t-* — never to html or body. ──── */
+.t-light{
+  --bg:#f4f2ec; --bg-card:#ffffff; --fg:#1a1814; --fg-muted:#524e48;
+  --fg-soft:#98938b; --border:#e4e7d8; --border-soft:#f0ebe1;
+  --accent:#586b3f; --accent-2:#b8842b; --lgw-cat:#6b7c52;
+  --chip-on-ink:#ffffff;
+}
+.t-dark{
+  --bg:#15171a; --bg-card:#1e2124; --fg:#e5e7e1; --fg-muted:#a6ac9f;
+  --fg-soft:#8b918a; --border:#2c312d; --border-soft:#242824;
+  --accent:#9cb37d; --accent-2:#ecb351; --lgw-cat:#9cb37d;
+  --chip-on-ink:#15171a;
+}
+/* per-category brand colours, from the :root block at forums.css:2408 */
+.t-light,.t-dark{
+  --cat-repair:#87986a; --cat-builds:#c66845; --cat-tools:#1a1d1a;
+  --cat-business:#6f8fa6; --cat-general:#99b27e; --cat-perspective:#8a6f5b;
+  --cat-vintage:#a67c52; --cat-market:#b8842b;
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s6:24px; --s8:32px;
+  --r-sm:6px; --r-md:12px; --r-lg:20px;
+  --shadow-elev:0 8px 24px rgba(0,0,0,.06);
+  --font-body:system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-head:"Source Serif Pro","Iowan Old Style",Georgia,serif;
+}
+.t-dark{ --shadow-elev:0 8px 24px rgba(0,0,0,.5); }
+/* dark needs the tools charcoal lifted or the chip dot vanishes on the canvas */
+.t-dark{ --cat-tools:#c2d5aa; }
+
+/* ── page shell (the mock's own furniture, not the app's) ─────────────────── */
+*{box-sizing:border-box}
+body{margin:0;background:#e9e7e0;color:#1a1814;
+     font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;
+     -webkit-text-size-adjust:100%}
+.wrap{max-width:1500px;margin:0 auto;padding:28px 20px 80px}
+h1{font:700 26px/1.25 Georgia,serif;margin:0 0 6px}
+.sub{margin:0 0 4px;color:#4a4740;max-width:78ch}
+.meta{margin:14px 0 0;padding:12px 14px;background:#fff;border:1px solid #d8d5cc;
+      border-radius:10px;font-size:13.5px;color:#4a4740;max-width:100ch}
+.meta b{color:#1a1814}
+h2{font:700 19px/1.3 Georgia,serif;margin:44px 0 4px;padding-top:22px;
+   border-top:2px solid #cfccc2}
+h2 .tag{display:inline-block;vertical-align:3px;margin-left:9px;padding:2px 9px;
+        border-radius:999px;font:700 10.5px/1.6 system-ui,sans-serif;
+        letter-spacing:.06em;text-transform:uppercase}
+.tag--rec{background:#586b3f;color:#fff}
+.tag--alt{background:#e4e0d5;color:#514d45}
+.tag--old{background:#c66845;color:#fff}
+.note{margin:6px 0 0;color:#4a4740;font-size:14px;max-width:88ch}
+.note code{background:#fff;border:1px solid #d8d5cc;border-radius:4px;padding:1px 5px;
+           font:12.5px ui-monospace,Menlo,monospace}
+.frames{display:flex;flex-wrap:wrap;gap:26px;margin-top:20px;align-items:flex-start}
+/* Frames are grouped into SEPARATE .frames rows on purpose. One greedy flex-wrap
+   holding both widths interleaves them — an 820 desktop and a 390 mobile pair up
+   on row 1, which pushes the second mobile onto row 2 beside the next desktop, and
+   the reading order stops matching the captions. A row per shape keeps light/dark
+   adjacent, which is the comparison Ian is actually making. */
+.frames--mob{gap:22px}
+/* max-width + min-width:0, NOT width. Measured 2026-08-19 at a 390px viewport:
+   .fr is a flex item sized by its content, so the `width:100%` that .dev--desk
+   used to take under @media(max-width:900px) resolved against a content-derived
+   width — circular, therefore ignored — and the desktop frame stayed 1126px wide,
+   giving the whole page a horizontal scroll on a phone. A percentage width inside
+   an auto-sized flex item is not a constraint; a max-width is. */
+.fr{flex:0 0 auto;max-width:100%;min-width:0}
+.fr__cap{font:700 11.5px system-ui,sans-serif;letter-spacing:.07em;
+         text-transform:uppercase;color:#6a665e;margin:0 0 7px}
+.fr__cap span{font-weight:400;text-transform:none;letter-spacing:0;color:#8a857c}
+
+/* the device box. overflow hidden so a frame reads as a screen, not a page. */
+.dev{position:relative;border-radius:14px;overflow:hidden;border:1px solid #c9c6bc;
+     box-shadow:0 6px 18px rgba(0,0,0,.10)}
+.dev--desk{width:820px;max-width:100%}
+.dev--mob{width:390px;max-width:100%}
+
+/* the app canvas inside a frame.
+   `color` HAS to be set here, not left to the elements. Measured 2026-08-19: with
+   only background pinned, the dark dialog inherited the page shell's light ink
+   (#1a1814) — getComputedStyle gave the light and dark dialogs the SAME colour —
+   so any text node that didn't name var(--fg) itself rendered near-invisible on
+   the dark card. Inheriting the right ink from the themed canvas is what the real
+   app does (its body carries the ink), so this matches it as well as fixing it. */
+.canvas{background:var(--bg);color:var(--fg);padding:22px 18px;min-height:100%}
+.dev--mob .canvas{padding:0}
+
+/* ── the real composer chrome, class names as in forums.css ───────────────── */
+.ntm-dialog{position:relative;background:var(--bg-card);border-radius:var(--r-md);
+  box-shadow:var(--shadow-elev);width:100%;padding:var(--s6);display:flex;
+  flex-direction:column;gap:var(--s4);border:1px solid var(--border)}
+.dev--mob .ntm-dialog{border-radius:0;border:0;box-shadow:none;padding:var(--s4);
+  min-height:660px}
+.ntm-heading{margin:0;font:600 20px/1.3 var(--font-body);color:var(--fg)}
+.ntm-typetoggle{display:inline-flex;align-self:flex-start;gap:2px;padding:3px;
+  border:1px solid var(--border);border-radius:999px;background:var(--bg)}
+.ntm-typetoggle__opt{font:700 13px/1 var(--font-body);border:0;border-radius:999px;
+  padding:9px 17px;background:none;color:var(--fg-muted)}
+.ntm-typetoggle__opt.is-on{background:var(--bg-card);color:var(--fg);
+  box-shadow:0 1px 2px rgba(0,0,0,.10)}
+.ntm-label{font:600 13px var(--font-body);color:var(--fg-muted);letter-spacing:.02em;
+  display:block;margin-bottom:2px}
+.ntm-label__opt{font-weight:400;color:var(--fg-soft)}
+.ntm-input,.ntm-textarea{width:100%;padding:var(--s2) var(--s3);
+  border:1px solid var(--border);border-radius:var(--r-sm);font:14px var(--font-body);
+  background:var(--bg);color:var(--fg)}
+.ntm-textarea{min-height:104px;white-space:pre-wrap}
+.is-filled{color:var(--fg)}
+.ph{color:var(--fg-soft)}
+
+/* step rail */
+.lgw-rail{display:flex;gap:var(--s2);margin:0 0 var(--s1)}
+.lgw-rail__step{flex:1;min-width:0;display:flex;align-items:center;gap:7px;background:none;
+  border:0;border-bottom:2px solid var(--border);padding:4px 2px 9px;text-align:left;
+  font:600 12.5px var(--font-body);color:var(--fg-soft)}
+.lgw-rail__num{flex:none;display:inline-flex;align-items:center;justify-content:center;
+  width:20px;height:20px;border-radius:999px;background:var(--border);
+  color:var(--bg-card);font:700 11px var(--font-body)}
+.lgw-rail__step.is-current{color:var(--fg);border-bottom-color:var(--accent)}
+.lgw-rail__step.is-current .lgw-rail__num,
+.lgw-rail__step.is-done .lgw-rail__num{background:var(--accent);color:var(--chip-on-ink)}
+.lgw-rail__step.is-done{color:var(--fg-muted);border-bottom-color:var(--accent)}
+.lgw-rail__step.is-opt .lgw-rail__lbl::after{content:" ·  optional";
+  color:var(--fg-soft);font-weight:400}
+
+/* footer */
+.lgw-foot{display:flex;flex-direction:column;gap:var(--s2);margin-top:var(--s1);
+  padding-top:var(--s3);border-top:1px solid var(--border)}
+.lgw-foot__btns{display:flex;align-items:center;gap:var(--s2)}
+.ntm-cancel{margin-right:auto;background:none;border:0;color:var(--fg-soft);
+  font:600 13px var(--font-body);padding:var(--s2)}
+.lgw-btn{padding:var(--s2) var(--s4);border-radius:var(--r-sm);
+  font:600 14px var(--font-body);border:1px solid transparent}
+.lgw-btn--ghost{background:none;border-color:var(--border);color:var(--fg-muted)}
+.lgw-btn--primary{background:var(--accent);color:var(--chip-on-ink)}
+.lgw-btn--link{background:none;border:0;color:var(--accent);font:600 13.5px var(--font-body);
+  text-decoration:underline;text-underline-offset:2px;padding:var(--s2) var(--s1)}
+
+/* ── THE NEW BIT: the optional topic-chip strip ───────────────────────────── */
+.lgt{display:flex;flex-direction:column;gap:var(--s3)}
+.lgt__head{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+.lgt__h{margin:0;font:600 17px/1.3 var(--font-body);color:var(--fg)}
+.lgt__bonus{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;
+  border-radius:999px;font:700 11px var(--font-body);letter-spacing:.05em;
+  text-transform:uppercase;background:color-mix(in srgb,var(--accent-2) 20%,var(--bg-card));
+  color:var(--fg);border:1px solid color-mix(in srgb,var(--accent-2) 45%,transparent)}
+.lgt__say{margin:0;font:14px/1.5 var(--font-body);color:var(--fg-muted);max-width:56ch}
+.lgt__grp{font:700 10.5px var(--font-body);letter-spacing:.07em;text-transform:uppercase;
+  color:var(--fg-soft);margin:var(--s2) 0 6px}
+.lgt__strip{display:flex;flex-wrap:wrap;gap:8px}
+
+/* a chip. --c is the category brand colour. */
+.chip{display:inline-flex;align-items:center;gap:7px;padding:7px 13px;
+  border-radius:999px;font:600 13px var(--font-body);color:var(--fg);
+  background:var(--bg-card);border:1px solid var(--border)}
+.chip::before{content:"";width:9px;height:9px;border-radius:999px;
+  background:var(--c,var(--lgw-cat));flex:none}
+.chip.is-on{background:color-mix(in srgb,var(--c,var(--lgw-cat)) 16%,var(--bg-card));
+  border-color:color-mix(in srgb,var(--c,var(--lgw-cat)) 50%,transparent);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--c,var(--lgw-cat)) 22%,transparent)}
+.chip.is-on::after{content:"✓";margin-left:1px;font-weight:700;color:var(--fg)}
+.chip--more{border-style:dashed;color:var(--fg-muted)}
+.chip--more::before{display:none}
+
+/* the quiet line that shows the mapping doing its work */
+.lgt__lands{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:var(--s2);
+  padding:10px var(--s3);border-radius:var(--r-sm);background:var(--bg);
+  border:1px solid var(--border);font:13px var(--font-body);color:var(--fg-muted)}
+.lgt__lands b{color:var(--fg);font-weight:600}
+.lgt__lands .ar{color:var(--fg-soft)}
+/* the "why" tail is desktop-only: at 390 it wrapped to three cramped lines and
+   buried the one thing the row exists to say — which forum the post lands in. */
+.dev--mob .lgt__why,.dev--mob .lgt__lands .ar{display:none}
+
+/* review step */
+.lgw-review{display:flex;flex-direction:column;border:1px solid var(--border);
+  border-radius:var(--r-sm);overflow:hidden}
+.lgw-rv{display:grid;grid-template-columns:96px 1fr auto;align-items:center;
+  gap:var(--s3);padding:11px var(--s3)}
+.lgw-rv+.lgw-rv{border-top:1px solid var(--border)}
+.lgw-rv__k{font:700 11px var(--font-body);text-transform:uppercase;letter-spacing:.06em;
+  color:var(--fg-soft)}
+.lgw-rv__v{font:500 14px var(--font-body);color:var(--fg);min-width:0;overflow-wrap:anywhere}
+.lgw-rv__v .qt{color:var(--fg-soft);font-weight:400}
+.lgw-rv__edit{background:none;border:0;color:var(--accent);
+  font:600 12.5px var(--font-body)}
+.lgw-rv--new{background:color-mix(in srgb,var(--accent) 7%,var(--bg-card))}
+
+/* the OLD where-step, drawn once so Ian sees what leaves */
+.old-fl{border:1px solid var(--border);border-radius:var(--r-sm);max-height:250px;
+  overflow:hidden;background:var(--bg);position:relative}
+.old-fl__cat{font:700 10.5px var(--font-body);letter-spacing:.06em;
+  text-transform:uppercase;color:var(--fg-soft);padding:9px var(--s3) 5px;
+  border-left:3px solid var(--lgw-cat)}
+.old-fl__leaf{display:flex;align-items:center;gap:9px;padding:7px var(--s3) 7px 26px;
+  font:14px var(--font-body);color:var(--fg)}
+.old-fl__radio{width:15px;height:15px;border-radius:999px;border:1.5px solid var(--fg-soft);
+  flex:none}
+.old-fl__fade{position:absolute;left:0;right:0;bottom:0;height:70px;
+  background:linear-gradient(to bottom,transparent,var(--bg))}
+.strike{position:relative}
+.strike::after{content:"";position:absolute;inset:auto 0 50% 0;height:2px;
+  background:#c66845;transform:rotate(-1.2deg)}
+.gone{display:inline-block;margin-left:8px;padding:2px 9px;border-radius:999px;
+  background:#c66845;color:#fff;font:700 10.5px system-ui,sans-serif;
+  letter-spacing:.05em;text-transform:uppercase;vertical-align:2px}
+
+/* mobile flat-form specifics */
+.mob-bar{display:flex;align-items:center;justify-content:space-between;
+  padding:13px var(--s4);border-bottom:1px solid var(--border);background:var(--bg-card)}
+.mob-bar__t{font:600 16px var(--font-body);color:var(--fg)}
+.mob-bar__x{color:var(--fg-soft);font-size:19px;line-height:1}
+.mob-bar__post{background:var(--accent);color:var(--chip-on-ink);border:0;
+  border-radius:999px;padding:7px 16px;font:700 13px var(--font-body)}
+.mob-body{display:flex;flex-direction:column;gap:var(--s4);padding:var(--s4)}
+.mob-sep{height:1px;background:var(--border);margin:var(--s1) 0}
+.mob-note{margin:0;font:12.5px var(--font-body);color:var(--fg-soft)}
+
+/* ══ OPTION C — Ian's ruling 8/19: "add in the tags and maybe popping up a new
+      modal with a decent heirarchical layout". The inline control is a TAG FIELD
+      (chips accumulate as tags, each removable); tapping Add opens a picker that
+      shows the taxonomy as parents-with-children, not a flat cloud. ══════════ */
+
+/* the inline tag field */
+.tagf{display:flex;flex-wrap:wrap;align-items:center;gap:7px;padding:9px;
+  border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg);
+  min-height:46px}
+.tagf--empty{border-style:dashed}
+.tagf__hint{font:13px var(--font-body);color:var(--fg-soft);margin:0 2px}
+.tagf__add{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;
+  border:1px solid var(--accent);border-radius:999px;background:none;
+  color:var(--accent);font:700 12.5px var(--font-body)}
+.tag{display:inline-flex;align-items:center;gap:7px;padding:5px 6px 5px 11px;
+  border-radius:999px;font:600 12.5px var(--font-body);color:var(--fg);
+  background:color-mix(in srgb,var(--c,var(--lgw-cat)) 16%,var(--bg-card));
+  border:1px solid color-mix(in srgb,var(--c,var(--lgw-cat)) 48%,transparent)}
+.tag::before{content:"";width:8px;height:8px;border-radius:999px;
+  background:var(--c,var(--lgw-cat));flex:none}
+.tag b{display:inline-flex;align-items:center;justify-content:center;width:16px;
+  height:16px;border-radius:999px;background:color-mix(in srgb,var(--fg) 12%,transparent);
+  color:var(--fg-muted);font:700 11px/1 var(--font-body)}
+.tag--parent{font-weight:700}
+
+/* ── the picker, drawn as an overlay INSIDE its device frame so it reads in
+      context rather than as a loose card ─────────────────────────────────── */
+.pick-ov{position:absolute;inset:0;display:flex;z-index:5}
+.pick-ov__bd{position:absolute;inset:0;background:rgba(0,0,0,.5)}
+.pick-ov--c{align-items:center;justify-content:center;padding:20px}
+.pick-ov--sheet{align-items:flex-end}
+
+.pick{position:relative;z-index:1;display:flex;flex-direction:column;
+  width:min(620px,100%);max-height:100%;background:var(--bg-card);
+  border:1px solid var(--border);border-radius:var(--r-md);
+  box-shadow:0 18px 50px rgba(0,0,0,.30);overflow:hidden}
+.pick--sheet{width:100%;border-radius:16px 16px 0 0;border-bottom:0;height:92%}
+.pick__grab{width:38px;height:4px;border-radius:99px;background:var(--border);
+  margin:9px auto 2px;flex:none}
+.pick__top{display:flex;align-items:center;gap:10px;padding:13px var(--s4) 11px;
+  border-bottom:1px solid var(--border);flex:none}
+.pick__h{margin:0;font:600 16px var(--font-body);color:var(--fg);flex:1}
+.pick__count{font:700 11px var(--font-body);letter-spacing:.05em;text-transform:uppercase;
+  color:var(--fg-muted);background:var(--bg);border:1px solid var(--border);
+  border-radius:999px;padding:3px 9px}
+.pick__x{color:var(--fg-soft);font-size:17px;line-height:1}
+.pick__search{margin:var(--s3) var(--s4) 0;padding:8px var(--s3);flex:none;
+  border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg);
+  color:var(--fg);font:13.5px var(--font-body)}
+
+/* desktop: parents left, their children right — the hierarchy is the layout */
+.pick__panes{display:grid;grid-template-columns:246px 1fr;gap:0;flex:1;min-height:0;
+  margin-top:var(--s3);border-top:1px solid var(--border)}
+.pick__l{border-right:1px solid var(--border);overflow:auto;padding:6px;min-height:0}
+.pick__r{overflow:auto;padding:6px 6px 10px;min-height:0}
+.pt{display:flex;align-items:center;gap:9px;width:100%;padding:9px 10px;
+  border:0;border-radius:var(--r-sm);background:none;text-align:left;
+  font:600 13px var(--font-body);color:var(--fg-muted)}
+.pt::before{content:"";width:9px;height:9px;border-radius:999px;flex:none;
+  background:var(--c,var(--lgw-cat))}
+.pt__n{flex:1;min-width:0}
+.pt__k{font:700 10.5px var(--font-body);color:var(--fg-soft);
+  background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:2px 7px}
+.pt.is-sel{background:color-mix(in srgb,var(--c,var(--lgw-cat)) 13%,var(--bg-card));
+  color:var(--fg);box-shadow:inset 3px 0 0 var(--c,var(--lgw-cat))}
+.pt.has-tag .pt__n::after{content:" ●";color:var(--accent);font-size:10px;vertical-align:2px}
+.pick__rh{margin:6px 6px 8px;font:700 10.5px var(--font-body);letter-spacing:.07em;
+  text-transform:uppercase;color:var(--fg-soft)}
+.pc{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-sm);
+  font:14px var(--font-body);color:var(--fg)}
+.pc__box{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--fg-soft);
+  flex:none;display:inline-flex;align-items:center;justify-content:center;
+  font:700 11px/1 var(--font-body);color:transparent}
+.pc__n{flex:1;min-width:0}
+.pc__k{font:11.5px var(--font-body);color:var(--fg-soft)}
+.pc.is-on{background:color-mix(in srgb,var(--c,var(--lgw-cat)) 12%,var(--bg-card))}
+.pc.is-on .pc__box{background:var(--accent);border-color:var(--accent);
+  color:var(--chip-on-ink)}
+.pc--all{border:1px dashed var(--border);margin:0 4px 7px;font-weight:600}
+.pc--all .pc__k{font-style:italic}
+
+/* mobile: the same hierarchy as an accordion */
+.pick__acc{flex:1;overflow:auto;min-height:0;padding:var(--s2) var(--s2) 0}
+.acch{display:flex;align-items:center;gap:9px;width:100%;padding:11px 10px;border:0;
+  background:none;text-align:left;font:600 13.5px var(--font-body);color:var(--fg);
+  border-radius:var(--r-sm)}
+.acch::before{content:"";width:10px;height:10px;border-radius:999px;flex:none;
+  background:var(--c,var(--lgw-cat))}
+.acch__n{flex:1;min-width:0}
+.acch__k{font:700 10.5px var(--font-body);color:var(--fg-soft);background:var(--bg);
+  border:1px solid var(--border);border-radius:999px;padding:2px 7px}
+.acch__c{color:var(--fg-soft);font-size:11px}
+.acch.is-open{background:color-mix(in srgb,var(--c,var(--lgw-cat)) 11%,var(--bg-card))}
+.acch.is-open .acch__c{transform:rotate(90deg);display:inline-block}
+.accb{padding:2px 0 10px 19px}
+.acc-sep{height:1px;background:var(--border);margin:2px 8px}
+
+/* picker footer: what you have so far + Done */
+.pick__foot{flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:8px;
+  padding:11px var(--s4);border-top:1px solid var(--border);background:var(--bg)}
+.pick__foot .lgw-btn{margin-left:auto}
+.pick__none{font:13px var(--font-body);color:var(--fg-soft);margin:0}
+
+.canvas--tall{min-height:640px}
+.dev{position:relative}
+
+.tag--sup{background:#d9d5ca;color:#4a463e}
+
+.legend{display:flex;gap:18px;flex-wrap:wrap;margin:10px 0 0;padding:0;list-style:none;
+  font-size:13.5px;color:#4a4740}
+.legend li{display:flex;align-items:center;gap:7px}
+.sw{width:12px;height:12px;border-radius:3px;flex:none;border:1px solid rgba(0,0,0,.15)}
+</style>
+
+<body>
+<div class="wrap">
+
+  <h1>Composer v2 — write first, categorize last</h1>
+  <p class="sub">Mock for <b>#129</b> (ledger 44), approved plan v2. The required
+  <b>Where</b> step leaves the composer; new discussions land in General; an
+  <b>optional</b> topic step arrives at the end, encouragement-framed. A picked
+  topic maps topic&nbsp;→&nbsp;forum behind the scenes.</p>
+  <p class="sub"><b>Look at §2, Option C</b> — that is Ian's 8/19 ruling: add-a-tag plus a
+  modal with a proper hierarchical layout. Options A and B are the two shapes drawn before
+  that ruling; they are kept below only so the reasoning is on the record, and both are
+  <b>superseded</b>.</p>
+
+  <div class="meta">
+    <b>Nothing here is wired.</b> Static HTML, no app CSS or JS loaded — the frames use
+    the real class names and the real token values so the colours and metrics match the
+    running composer.<br>
+    <b>Chips are real data:</b> every term shown is an actual <code>shared_category</code>
+    ("Content Topics") term measured on dev2, with its real use count. The forum a chip
+    lands on is the measured mapping.<br>
+    <b>Desktop is the 4-step wizard; mobile is the flat form.</b> That split is real —
+    <code>buildNtmWizard()</code> returns null below 641px, so mobile never gets a
+    wizard. The chip strip therefore has to work in both shapes, and both are drawn.
+  </div>
+
+  <!-- ══════════════════ WHAT LEAVES ══════════════════ -->
+  <h2>1 · What leaves <span class="tag tag--old">removed</span></h2>
+  <p class="note">The step that was first and required becomes no step at all. Today a
+  member must choose one of <b>37 postable forums</b> from a colour-coded accordion
+  before they may type a title. Ian, 8/16: the Where step is "a pain point for posting".</p>
+
+  <div class="frames">
+    <div class="fr">
+      <p class="fr__cap">Today — step 1 of 4, required <span>· desktop, light</span></p>
+      <div class="dev dev--desk t-light">
+        <div class="canvas">
+          <div class="ntm-dialog">
+            <h2 class="ntm-heading">Start a discussion</h2>
+            <div class="lgw-rail">
+              <div class="lgw-rail__step is-current strike"><span class="lgw-rail__num">1</span><span class="lgw-rail__lbl">Where</span></div>
+              <div class="lgw-rail__step"><span class="lgw-rail__num">2</span><span class="lgw-rail__lbl">Write</span></div>
+              <div class="lgw-rail__step"><span class="lgw-rail__num">3</span><span class="lgw-rail__lbl">Photos</span></div>
+              <div class="lgw-rail__step"><span class="lgw-rail__num">4</span><span class="lgw-rail__lbl">Review</span></div>
+            </div>
+            <div>
+              <span class="ntm-label">Forum <span class="ntm-label__opt">(pick one)</span><span class="gone">goes away</span></span>
+              <input class="ntm-input ph" value="Filter forums…" readonly>
+            </div>
+            <div class="old-fl">
+              <div class="old-fl__cat" style="--lgw-cat:var(--cat-repair)">Repair and Restoration</div>
+              <div class="old-fl__leaf"><span class="old-fl__radio"></span>General</div>
+              <div class="old-fl__leaf"><span class="old-fl__radio"></span>Acoustic Repair</div>
+              <div class="old-fl__leaf"><span class="old-fl__radio"></span>Electric Repair</div>
+              <div class="old-fl__leaf"><span class="old-fl__radio"></span>Finish Repair</div>
+              <div class="old-fl__cat" style="--lgw-cat:var(--cat-builds)">New Builds</div>
+              <div class="old-fl__leaf"><span class="old-fl__radio"></span>Acoustic Builds</div>
+              <div class="old-fl__leaf"><span class="old-fl__radio"></span>Electric Builds</div>
+              <div class="old-fl__fade"></div>
+            </div>
+            <div class="lgw-foot">
+              <div class="lgw-foot__btns">
+                <span class="ntm-cancel">Cancel</span>
+                <span class="lgw-btn lgw-btn--ghost">Back</span>
+                <span class="lgw-btn lgw-btn--primary" style="opacity:.5">Next</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ OPTION C — IAN'S RULING ══════════════════ -->
+  <h2>2 · Option C — add-a-tag, then a hierarchical picker <span class="tag tag--rec">Ian's ruling 8/19</span></h2>
+  <p class="note">Ian, 8/19 (verbatim): <b>"I see it more being add in the tags and maybe
+  popping up a new modal with a decent heirarchical layout."</b> So: the end-of-flow
+  placement stays, but the inline affordance is a <b>tag field</b> — chips accumulate as
+  tags, each one removable — and <b>＋ Add topics</b> opens a picker that presents the
+  taxonomy <b>as a hierarchy</b>, parents with their children, rather than the flat chip
+  cloud Options A and B drew.</p>
+  <p class="note">The hierarchy is the layout, not a label on it. On desktop the parents
+  are a list on the left and the selected parent's children fill the right pane — 7
+  parents, 29 children, each with the number of posts already using it, so a member can
+  see which topics are live. On mobile the same tree is an accordion in a bottom sheet.
+  Both carry a search box, because 36 terms is past scanning, and both let you tag the
+  <b>parent itself</b> ("Tag the whole area") — which is what makes ruling (b) below
+  matter, since two of those parents have no forum to land in.</p>
+
+  <div class="frames">
+    <div class="fr">
+      <p class="fr__cap">Option C · the tag field <span>· desktop, light</span></p>
+      <div class="dev dev--desk t-light"><div class="canvas">
+        <div class="ntm-dialog">
+          <h2 class="ntm-heading">Start a discussion</h2>
+          <div class="ntm-typetoggle"><span class="ntm-typetoggle__opt is-on">Discussion</span><span class="ntm-typetoggle__opt">Loothprint</span></div>
+          <div class="lgw-rail"><div class="lgw-rail__step is-done"><span class="lgw-rail__num">1</span><span class="lgw-rail__lbl">Write</span></div><div class="lgw-rail__step is-done"><span class="lgw-rail__num">2</span><span class="lgw-rail__lbl">Photos</span></div><div class="lgw-rail__step is-current is-opt"><span class="lgw-rail__num">3</span><span class="lgw-rail__lbl">Topics</span></div><div class="lgw-rail__step"><span class="lgw-rail__num">4</span><span class="lgw-rail__lbl">Review</span></div></div>
+          <div class="lgt"><div class="lgt__head"><h3 class="lgt__h">Add topics</h3><span class="lgt__bonus">★ bonus points</span></div><p class="lgt__say">Optional — your post is ready either way. Tags help the right people trip over it later.</p><div class="tagf"><span class="tag" style="--c:var(--cat-tools)">3D Printing<b>×</b></span><span class="tag tag--parent" style="--c:var(--cat-tools)">Tools, Spaces, Robots and Widgets<b>×</b></span><button class="tagf__add">＋ Add another</button></div><div class="lgt__lands"><span>Lands in</span> <b>3D Printing</b><span class="ar">←</span> <span class="lgt__why">from your tags, not a choice you had to make</span></div></div>
+          <div class="lgw-foot"><div class="lgw-foot__btns"><span class="ntm-cancel">Cancel</span><span class="lgw-btn lgw-btn--ghost">Back</span><span class="lgw-btn lgw-btn--link">Skip this</span><span class="lgw-btn lgw-btn--primary">Next</span></div></div>
+        </div>
+      </div></div>
+    </div>
+    <div class="fr">
+      <p class="fr__cap">Option C · the tag field — nothing added yet <span>· desktop, dark</span></p>
+      <div class="dev dev--desk t-dark"><div class="canvas">
+        <div class="ntm-dialog">
+          <h2 class="ntm-heading">Start a discussion</h2>
+          <div class="ntm-typetoggle"><span class="ntm-typetoggle__opt is-on">Discussion</span><span class="ntm-typetoggle__opt">Loothprint</span></div>
+          <div class="lgw-rail"><div class="lgw-rail__step is-done"><span class="lgw-rail__num">1</span><span class="lgw-rail__lbl">Write</span></div><div class="lgw-rail__step is-done"><span class="lgw-rail__num">2</span><span class="lgw-rail__lbl">Photos</span></div><div class="lgw-rail__step is-current is-opt"><span class="lgw-rail__num">3</span><span class="lgw-rail__lbl">Topics</span></div><div class="lgw-rail__step"><span class="lgw-rail__num">4</span><span class="lgw-rail__lbl">Review</span></div></div>
+          <div class="lgt"><div class="lgt__head"><h3 class="lgt__h">Add topics</h3><span class="lgt__bonus">★ bonus points</span></div><p class="lgt__say">Optional — your post is ready either way. Tags help the right people trip over it later.</p><div class="tagf tagf--empty"><p class="tagf__hint">No topics yet — that's fine.</p><button class="tagf__add">＋ Add topics</button></div><div class="lgt__lands"><span>Lands in</span> <b>General</b><span class="ar">←</span> <span class="lgt__why">the default. Add a tag and it moves itself.</span></div></div>
+          <div class="lgw-foot"><div class="lgw-foot__btns"><span class="ntm-cancel">Cancel</span><span class="lgw-btn lgw-btn--ghost">Back</span><span class="lgw-btn lgw-btn--link">Skip this</span><span class="lgw-btn lgw-btn--primary">Next</span></div></div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="frames frames--mob">
+    <div class="fr">
+      <p class="fr__cap">Option C · tag field <span>· mobile 390, light</span></p>
+      <div class="dev dev--mob t-light"><div class="canvas">
+        <div class="ntm-dialog">
+          <div class="mob-bar" style="margin:calc(var(--s4)*-1) calc(var(--s4)*-1) 0">
+            <span class="mob-bar__x">✕</span><span class="mob-bar__t">New discussion</span>
+            <span class="mob-bar__post">Post</span>
+          </div>
+          <div class="mob-body" style="padding-left:0;padding-right:0">
+            <div><span class="ntm-label">Title</span>
+              <input class="ntm-input is-filled" value="Bed adhesion on the Bambu — giving up on glue stick" readonly></div>
+            <div><span class="ntm-label">Body <span class="ntm-label__opt">(optional)</span></span>
+              <div class="ntm-textarea is-filled">Third print in a row lifting at the corner. Chamber at 45…</div></div>
+            <div><span class="ntm-label">Photos <span class="ntm-label__opt">(optional)</span></span>
+              <p class="mob-note">2 photos added</p></div>
+            <div class="mob-sep"></div>
+            <div class="lgt"><div class="lgt__head"><h3 class="lgt__h">Add topics</h3><span class="lgt__bonus">★ bonus points</span></div><p class="lgt__say">Optional — your post is ready either way. Tags help the right people trip over it later.</p><div class="tagf"><span class="tag" style="--c:var(--cat-tools)">3D Printing<b>×</b></span><span class="tag tag--parent" style="--c:var(--cat-tools)">Tools, Spaces, Robots and Widgets<b>×</b></span><button class="tagf__add">＋ Add another</button></div><div class="lgt__lands"><span>Lands in</span> <b>3D Printing</b><span class="ar">←</span> <span class="lgt__why">from your tags, not a choice you had to make</span></div></div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+    <div class="fr">
+      <p class="fr__cap">Option C · tag field — empty <span>· mobile 390, dark</span></p>
+      <div class="dev dev--mob t-dark"><div class="canvas">
+        <div class="ntm-dialog">
+          <div class="mob-bar" style="margin:calc(var(--s4)*-1) calc(var(--s4)*-1) 0">
+            <span class="mob-bar__x">✕</span><span class="mob-bar__t">New discussion</span>
+            <span class="mob-bar__post">Post</span>
+          </div>
+          <div class="mob-body" style="padding-left:0;padding-right:0">
+            <div><span class="ntm-label">Title</span>
+              <input class="ntm-input is-filled" value="Bed adhesion on the Bambu — giving up on glue stick" readonly></div>
+            <div><span class="ntm-label">Body <span class="ntm-label__opt">(optional)</span></span>
+              <div class="ntm-textarea is-filled">Third print in a row lifting at the corner. Chamber at 45…</div></div>
+            <div><span class="ntm-label">Photos <span class="ntm-label__opt">(optional)</span></span>
+              <p class="mob-note">2 photos added</p></div>
+            <div class="mob-sep"></div>
+            <div class="lgt"><div class="lgt__head"><h3 class="lgt__h">Add topics</h3><span class="lgt__bonus">★ bonus points</span></div><p class="lgt__say">Optional — your post is ready either way. Tags help the right people trip over it later.</p><div class="tagf tagf--empty"><p class="tagf__hint">No topics yet — that's fine.</p><button class="tagf__add">＋ Add topics</button></div><div class="lgt__lands"><span>Lands in</span> <b>General</b><span class="ar">←</span> <span class="lgt__why">the default. Add a tag and it moves itself.</span></div></div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="frames">
+    <div class="fr">
+      <p class="fr__cap">Option C · the picker — parents left, their children right <span>· desktop, light</span></p>
+      <div class="dev dev--desk t-light"><div class="canvas canvas--tall">
+        <div class="ntm-dialog">
+          <h2 class="ntm-heading">Start a discussion</h2>
+          <div class="lgw-rail"><div class="lgw-rail__step is-done"><span class="lgw-rail__num">1</span><span class="lgw-rail__lbl">Write</span></div><div class="lgw-rail__step is-done"><span class="lgw-rail__num">2</span><span class="lgw-rail__lbl">Photos</span></div><div class="lgw-rail__step is-current is-opt"><span class="lgw-rail__num">3</span><span class="lgw-rail__lbl">Topics</span></div><div class="lgw-rail__step"><span class="lgw-rail__num">4</span><span class="lgw-rail__lbl">Review</span></div></div>
+          <div class="lgt"><div class="lgt__head"><h3 class="lgt__h">Add topics</h3><span class="lgt__bonus">★ bonus points</span></div><p class="lgt__say">Optional — your post is ready either way. Tags help the right people trip over it later.</p><div class="tagf"><span class="tag" style="--c:var(--cat-tools)">3D Printing<b>×</b></span><span class="tag tag--parent" style="--c:var(--cat-tools)">Tools, Spaces, Robots and Widgets<b>×</b></span><button class="tagf__add">＋ Add another</button></div><div class="lgt__lands"><span>Lands in</span> <b>3D Printing</b><span class="ar">←</span> <span class="lgt__why">from your tags, not a choice you had to make</span></div></div>
+          <div class="lgw-foot"><div class="lgw-foot__btns"><span class="ntm-cancel">Cancel</span><span class="lgw-btn lgw-btn--ghost">Back</span><span class="lgw-btn lgw-btn--link">Skip this</span><span class="lgw-btn lgw-btn--primary">Next</span></div></div>
+        </div>
+        <div class="pick-ov pick-ov--c">
+          <div class="pick-ov__bd"></div>
+          <div class="pick">
+            <div class="pick__top">
+              <h4 class="pick__h">Add topics</h4>
+              <span class="pick__count">2 chosen</span>
+              <span class="pick__x">✕</span>
+            </div>
+            <input class="pick__search ph" value="Search topics…" readonly>
+            <div class="pick__panes">
+              <div class="pick__l"><button class="pt" style="--c:var(--cat-repair)"><span class="pt__n">Repair and Restoration</span><span class="pt__k">8</span></button><button class="pt" style="--c:var(--cat-builds)"><span class="pt__n">New Builds</span><span class="pt__k">7</span></button><button class="pt is-sel has-tag" style="--c:var(--cat-tools)"><span class="pt__n">Tools, Spaces, Robots and Widgets</span><span class="pt__k">9</span></button><button class="pt" style="--c:var(--cat-business)"><span class="pt__n">Business</span><span class="pt__k">5</span></button><button class="pt" style="--c:var(--cat-vintage)"><span class="pt__n">Vintage</span><span class="pt__k">—</span></button><button class="pt" style="--c:var(--cat-perspective)"><span class="pt__n">Perspective</span><span class="pt__k">—</span></button><button class="pt" style="--c:var(--cat-general)"><span class="pt__n">Local Looths</span><span class="pt__k">—</span></button></div>
+              <div class="pick__r"><p class="pick__rh">Tools, Spaces, Robots and Widgets · 9 sub-topics</p><label class="pc pc--all is-on" style="--c:var(--cat-tools)"><span class="pc__box">✓</span><span class="pc__n">Tag the whole area</span><span class="pc__k">97 posts use this</span></label><label class="pc is-on" style="--c:var(--cat-tools)"><span class="pc__box">✓</span><span class="pc__n">3D Printing</span><span class="pc__k">80</span></label><label class="pc" style="--c:var(--cat-tools)"><span class="pc__box"></span><span class="pc__n">CAD/CAM</span><span class="pc__k">40</span></label><label class="pc" style="--c:var(--cat-tools)"><span class="pc__box"></span><span class="pc__n">CNC</span><span class="pc__k">22</span></label><label class="pc" style="--c:var(--cat-tools)"><span class="pc__box"></span><span class="pc__n">Lasers</span><span class="pc__k">—</span></label><label class="pc" style="--c:var(--cat-tools)"><span class="pc__box"></span><span class="pc__n">Machine Shop</span><span class="pc__k">3</span></label><label class="pc" style="--c:var(--cat-tools)"><span class="pc__box"></span><span class="pc__n">PLEK</span><span class="pc__k">—</span></label><label class="pc" style="--c:var(--cat-tools)"><span class="pc__box"></span><span class="pc__n">scanners</span><span class="pc__k">—</span></label><label class="pc" style="--c:var(--cat-tools)"><span class="pc__box"></span><span class="pc__n">Shop Organization</span><span class="pc__k">31</span></label><label class="pc" style="--c:var(--cat-tools)"><span class="pc__box"></span><span class="pc__n">Tools, Jigs and Fixtures</span><span class="pc__k">85</span></label></div>
+            </div>
+            <div class="pick__foot">
+              <span class="tag" style="--c:var(--cat-tools)">3D Printing<b>×</b></span>
+              <span class="tag tag--parent" style="--c:var(--cat-tools)">Tools, Spaces…<b>×</b></span>
+              <span class="lgw-btn lgw-btn--primary">Done</span>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+    <div class="fr">
+      <p class="fr__cap">Option C · the picker — parents left, their children right <span>· desktop, dark</span></p>
+      <div class="dev dev--desk t-dark"><div class="canvas canvas--tall">
+        <div class="ntm-dialog">
+          <h2 class="ntm-heading">Start a discussion</h2>
+          <div class="lgw-rail"><div class="lgw-rail__step is-done"><span class="lgw-rail__num">1</span><span class="lgw-rail__lbl">Write</span></div><div class="lgw-rail__step is-done"><span class="lgw-rail__num">2</span><span class="lgw-rail__lbl">Photos</span></div><div class="lgw-rail__step is-current is-opt"><span class="lgw-rail__num">3</span><span class="lgw-rail__lbl">Topics</span></div><div class="lgw-rail__step"><span class="lgw-rail__num">4</span><span class="lgw-rail__lbl">Review</span></div></div>
+          <div class="lgt"><div class="lgt__head"><h3 class="lgt__h">Add topics</h3><span class="lgt__bonus">★ bonus points</span></div><p class="lgt__say">Optional — your post is ready either way. Tags help the right people trip over it later.</p><div class="tagf"><span class="tag" style="--c:var(--cat-tools)">3D Printing<b>×</b></span><span class="tag tag--parent" style="--c:var(--cat-tools)">Tools, Spaces, Robots and Widgets<b>×</b></span><button class="tagf__add">＋ Add another</button></div><div class="lgt__lands"><span>Lands in</span> <b>3D Printing</b><span class="ar">←</span> <span class="lgt__why">from your tags, not a choice you had to make</span></div></div>
+          <div class="lgw-foot"><div class="lgw-foot__btns"><span class="ntm-cancel">Cancel</span><span class="lgw-btn lgw-btn--ghost">Back</span><span class="lgw-btn lgw-btn--link">Skip this</span><span class="lgw-btn lgw-btn--primary">Next</span></div></div>
+        </div>
+        <div class="pick-ov pick-ov--c">
+          <div class="pick-ov__bd"></div>
+          <div class="pick">
+            <div class="pick__top">
+              <h4 class="pick__h">Add topics</h4>
+              <span class="pick__count">2 chosen</span>
+              <span class="pick__x">✕</span>
+            </div>
+            <input class="pick__search ph" value="Search topics…" readonly>
+            <div class="pick__panes">
+              <div class="pick__l"><button class="pt" style="--c:var(--cat-repair)"><span class="pt__n">Repair and Restoration</span><span class="pt__k">8</span></button><button class="pt" style="--c:var(--cat-builds)"><span class="pt__n">New Builds</span><span class="pt__k">7</span></button><button class="pt is-sel has-tag" style="--c:var(--cat-tools)"><span class="pt__n">Tools, Spaces, Robots and Widgets</span><span class="pt__k">9</span></button><button class="pt" style="--c:var(--cat-business)"><span class="pt__n">Business</span><span class="pt__k">5</span></button><button class="pt" style="--c:var(--cat-vintage)"><span class="pt__n">Vintage</span><span class="pt__k">—</span></button><button class="pt" style="--c:var(--cat-perspective)"><span class="pt__n">Perspective</span><span class="pt__k">—</span></button><button class="pt" style="--c:var(--cat-general)"><span class="pt__n">Local Looths</span><span class="pt__k">—</span></button></div>
+              <div class="pick__r"><p class="pick__rh">Tools, Spaces, Robots and Widgets · 9 sub-topics</p><label class="pc pc--all is-on" style="--c:var(--cat-tools)"><span class="pc__box">✓</span><span class="pc__n">Tag the whole area</span><span class="pc__k">97 posts use this</span></label><label class="pc is-on" style="--c:var(--cat-tools)"><span class="pc__box">✓</span><span class="pc__n">3D Printing</span><span class="pc__k">80</span></label><label class="pc" style="--c:var(--cat-tools)"><span class="pc__box"></span><span class="pc__n">CAD/CAM</span><span class="pc__k">40</span></label><label class="pc" style="--c:var(--cat-tools)"><span class="pc__box"></span><span class="pc__n">CNC</span><span class="pc__k">22</span></label><label class="pc" style="--c:var(--cat-tools)"><span class="pc__box"></span><span class="pc__n">Lasers</span><span class="pc__k">—</span></label><label class="pc" style="--c:var(--cat-tools)"><span class="pc__box"></span><span class="pc__n">Machine Shop</span><span class="pc__k">3</span></label><label class="pc" style="--c:var(--cat-tools)"><span class="pc__box"></span><span class="pc__n">PLEK</span><span class="pc__k">—</span></label><label class="pc" style="--c:var(--cat-tools)"><span class="pc__box"></span><span class="pc__n">scanners</span><span class="pc__k">—</span></label><label class="pc" style="--c:var(--cat-tools)"><span class="pc__box"></span><span class="pc__n">Shop Organization</span><span class="pc__k">31</span></label><label class="pc" style="--c:var(--cat-tools)"><span class="pc__box"></span><span class="pc__n">Tools, Jigs and Fixtures</span><span class="pc__k">85</span></label></div>
+            </div>
+            <div class="pick__foot">
+              <span class="tag" style="--c:var(--cat-tools)">3D Printing<b>×</b></span>
+              <span class="tag tag--parent" style="--c:var(--cat-tools)">Tools, Spaces…<b>×</b></span>
+              <span class="lgw-btn lgw-btn--primary">Done</span>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="frames frames--mob">
+    <div class="fr">
+      <p class="fr__cap">Option C · the picker as a sheet <span>· mobile 390, light</span></p>
+      <div class="dev dev--mob t-light"><div class="canvas" style="min-height:660px">
+        <div class="ntm-dialog">
+          <div class="mob-bar" style="margin:calc(var(--s4)*-1) calc(var(--s4)*-1) 0">
+            <span class="mob-bar__x">✕</span><span class="mob-bar__t">New discussion</span>
+            <span class="mob-bar__post">Post</span>
+          </div>
+          <div class="mob-body" style="padding-left:0;padding-right:0">
+            <div><span class="ntm-label">Title</span>
+              <input class="ntm-input is-filled" value="Bed adhesion on the Bambu…" readonly></div>
+            <div class="lgt"><div class="lgt__head"><h3 class="lgt__h">Add topics</h3><span class="lgt__bonus">★ bonus points</span></div><p class="lgt__say">Optional — your post is ready either way. Tags help the right people trip over it later.</p><div class="tagf"><span class="tag" style="--c:var(--cat-tools)">3D Printing<b>×</b></span><span class="tag tag--parent" style="--c:var(--cat-tools)">Tools, Spaces, Robots and Widgets<b>×</b></span><button class="tagf__add">＋ Add another</button></div><div class="lgt__lands"><span>Lands in</span> <b>3D Printing</b><span class="ar">←</span> <span class="lgt__why">from your tags, not a choice you had to make</span></div></div>
+          </div>
+        </div>
+        <div class="pick-ov pick-ov--sheet">
+          <div class="pick-ov__bd"></div>
+          <div class="pick pick--sheet">
+            <div class="pick__grab"></div>
+            <div class="pick__top">
+              <h4 class="pick__h">Add topics</h4>
+              <span class="pick__count">2</span>
+              <span class="pick__x">✕</span>
+            </div>
+            <input class="pick__search ph" value="Search topics…" readonly>
+            <div class="pick__acc"><button class="acch" style="--c:var(--cat-repair)"><span class="acch__n">Repair and Restoration</span><span class="acch__k">8</span><span class="acch__c">▸</span></button><div class="acc-sep"></div><button class="acch" style="--c:var(--cat-builds)"><span class="acch__n">New Builds</span><span class="acch__k">7</span><span class="acch__c">▸</span></button><div class="acc-sep"></div><button class="acch is-open" style="--c:var(--cat-tools)"><span class="acch__n">Tools, Spaces, Robots and Widgets</span><span class="acch__k">9</span><span class="acch__c">▸</span></button><div class="accb"><label class="pc pc--all is-on" style="--c:var(--cat-tools)"><span class="pc__box">✓</span><span class="pc__n">Tag the whole area</span><span class="pc__k">97</span></label><label class="pc is-on" style="--c:var(--cat-tools)"><span class="pc__box">✓</span><span class="pc__n">3D Printing</span><span class="pc__k">80</span></label><label class="pc" style="--c:var(--cat-tools)"><span class="pc__box"></span><span class="pc__n">CAD/CAM</span><span class="pc__k">40</span></label><label class="pc" style="--c:var(--cat-tools)"><span class="pc__box"></span><span class="pc__n">CNC</span><span class="pc__k">22</span></label><label class="pc" style="--c:var(--cat-tools)"><span class="pc__box"></span><span class="pc__n">Lasers</span><span class="pc__k">—</span></label><label class="pc" style="--c:var(--cat-tools)"><span class="pc__box"></span><span class="pc__n">Machine Shop</span><span class="pc__k">3</span></label><label class="pc"><span class="pc__box"></span><span class="pc__n" style="color:var(--fg-soft)">4 more…</span></label></div><div class="acc-sep"></div><button class="acch" style="--c:var(--cat-business)"><span class="acch__n">Business</span><span class="acch__k">5</span><span class="acch__c">▸</span></button><div class="acc-sep"></div><button class="acch" style="--c:var(--cat-vintage)"><span class="acch__n">Vintage</span><span class="acch__k">—</span><span class="acch__c">▸</span></button><div class="acc-sep"></div><button class="acch" style="--c:var(--cat-perspective)"><span class="acch__n">Perspective</span><span class="acch__k">—</span><span class="acch__c">▸</span></button><div class="acc-sep"></div><button class="acch" style="--c:var(--cat-general)"><span class="acch__n">Local Looths</span><span class="acch__k">—</span><span class="acch__c">▸</span></button><div class="acc-sep"></div></div>
+            <div class="pick__foot">
+              <span class="tag" style="--c:var(--cat-tools)">3D Printing<b>×</b></span>
+              <span class="lgw-btn lgw-btn--primary">Done</span>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+    <div class="fr">
+      <p class="fr__cap">Option C · the picker as a sheet <span>· mobile 390, dark</span></p>
+      <div class="dev dev--mob t-dark"><div class="canvas" style="min-height:660px">
+        <div class="ntm-dialog">
+          <div class="mob-bar" style="margin:calc(var(--s4)*-1) calc(var(--s4)*-1) 0">
+            <span class="mob-bar__x">✕</span><span class="mob-bar__t">New discussion</span>
+            <span class="mob-bar__post">Post</span>
+          </div>
+          <div class="mob-body" style="padding-left:0;padding-right:0">
+            <div><span class="ntm-label">Title</span>
+              <input class="ntm-input is-filled" value="Bed adhesion on the Bambu…" readonly></div>
+            <div class="lgt"><div class="lgt__head"><h3 class="lgt__h">Add topics</h3><span class="lgt__bonus">★ bonus points</span></div><p class="lgt__say">Optional — your post is ready either way. Tags help the right people trip over it later.</p><div class="tagf"><span class="tag" style="--c:var(--cat-tools)">3D Printing<b>×</b></span><span class="tag tag--parent" style="--c:var(--cat-tools)">Tools, Spaces, Robots and Widgets<b>×</b></span><button class="tagf__add">＋ Add another</button></div><div class="lgt__lands"><span>Lands in</span> <b>3D Printing</b><span class="ar">←</span> <span class="lgt__why">from your tags, not a choice you had to make</span></div></div>
+          </div>
+        </div>
+        <div class="pick-ov pick-ov--sheet">
+          <div class="pick-ov__bd"></div>
+          <div class="pick pick--sheet">
+            <div class="pick__grab"></div>
+            <div class="pick__top">
+              <h4 class="pick__h">Add topics</h4>
+              <span class="pick__count">2</span>
+              <span class="pick__x">✕</span>
+            </div>
+            <input class="pick__search ph" value="Search topics…" readonly>
+            <div class="pick__acc"><button class="acch" style="--c:var(--cat-repair)"><span class="acch__n">Repair and Restoration</span><span class="acch__k">8</span><span class="acch__c">▸</span></button><div class="acc-sep"></div><button class="acch" style="--c:var(--cat-builds)"><span class="acch__n">New Builds</span><span class="acch__k">7</span><span class="acch__c">▸</span></button><div class="acc-sep"></div><button class="acch is-open" style="--c:var(--cat-tools)"><span class="acch__n">Tools, Spaces, Robots and Widgets</span><span class="acch__k">9</span><span class="acch__c">▸</span></button><div class="accb"><label class="pc pc--all is-on" style="--c:var(--cat-tools)"><span class="pc__box">✓</span><span class="pc__n">Tag the whole area</span><span class="pc__k">97</span></label><label class="pc is-on" style="--c:var(--cat-tools)"><span class="pc__box">✓</span><span class="pc__n">3D Printing</span><span class="pc__k">80</span></label><label class="pc" style="--c:var(--cat-tools)"><span class="pc__box"></span><span class="pc__n">CAD/CAM</span><span class="pc__k">40</span></label><label class="pc" style="--c:var(--cat-tools)"><span class="pc__box"></span><span class="pc__n">CNC</span><span class="pc__k">22</span></label><label class="pc" style="--c:var(--cat-tools)"><span class="pc__box"></span><span class="pc__n">Lasers</span><span class="pc__k">—</span></label><label class="pc" style="--c:var(--cat-tools)"><span class="pc__box"></span><span class="pc__n">Machine Shop</span><span class="pc__k">3</span></label><label class="pc"><span class="pc__box"></span><span class="pc__n" style="color:var(--fg-soft)">4 more…</span></label></div><div class="acc-sep"></div><button class="acch" style="--c:var(--cat-business)"><span class="acch__n">Business</span><span class="acch__k">5</span><span class="acch__c">▸</span></button><div class="acc-sep"></div><button class="acch" style="--c:var(--cat-vintage)"><span class="acch__n">Vintage</span><span class="acch__k">—</span><span class="acch__c">▸</span></button><div class="acc-sep"></div><button class="acch" style="--c:var(--cat-perspective)"><span class="acch__n">Perspective</span><span class="acch__k">—</span><span class="acch__c">▸</span></button><div class="acc-sep"></div><button class="acch" style="--c:var(--cat-general)"><span class="acch__n">Local Looths</span><span class="acch__k">—</span><span class="acch__c">▸</span></button><div class="acc-sep"></div></div>
+            <div class="pick__foot">
+              <span class="tag" style="--c:var(--cat-tools)">3D Printing<b>×</b></span>
+              <span class="lgw-btn lgw-btn--primary">Done</span>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ OPTION A ══════════════════ -->
+  <h2>3 · Option A — a dedicated last step <span class="tag tag--sup">superseded 8/19</span></h2>
+  <p class="note">Where is gone, so the rail is <b>Write → Photos → Topics → Review</b>:
+  the same four steps as today, but <b>nothing is required until Post</b> and the
+  categorizing step is last, optional and clearly skippable.</p>
+  <p class="note"><b>Superseded by Ian's 8/19 ruling.</b> The end-of-flow placement and the
+  optional framing survived into Option C; what did not is the flat chip strip — Ian asked
+  for tags plus a hierarchical modal instead. Kept here because the step-rail treatment and
+  the Skip affordance are the parts Option C reuses.</p>
+
+  <div class="frames">
+    <!-- A · desktop light -->
+    <div class="fr">
+      <p class="fr__cap">Option A · step 3, chip picked <span>· desktop, light</span></p>
+      <div class="dev dev--desk t-light">
+        <div class="canvas">
+          <div class="ntm-dialog">
+            <h2 class="ntm-heading">Start a discussion</h2>
+            <div class="ntm-typetoggle">
+              <span class="ntm-typetoggle__opt is-on">Discussion</span>
+              <span class="ntm-typetoggle__opt">Loothprint</span>
+            </div>
+            <div class="lgw-rail">
+              <div class="lgw-rail__step is-done"><span class="lgw-rail__num">1</span><span class="lgw-rail__lbl">Write</span></div>
+              <div class="lgw-rail__step is-done"><span class="lgw-rail__num">2</span><span class="lgw-rail__lbl">Photos</span></div>
+              <div class="lgw-rail__step is-current is-opt"><span class="lgw-rail__num">3</span><span class="lgw-rail__lbl">Topics</span></div>
+              <div class="lgw-rail__step"><span class="lgw-rail__num">4</span><span class="lgw-rail__lbl">Review</span></div>
+            </div>
+
+            <div class="lgt">
+              <div class="lgt__head">
+                <h3 class="lgt__h">Want to tag a topic?</h3>
+                <span class="lgt__bonus">★ bonus points</span>
+              </div>
+              <p class="lgt__say">Totally optional — your post is ready to go either way.
+              A topic just helps the right people trip over it later.</p>
+
+              <div>
+                <p class="lgt__grp">The big ones</p>
+                <div class="lgt__strip">
+                  <span class="chip" style="--c:var(--cat-repair)">Repair and Restoration</span>
+                  <span class="chip" style="--c:var(--cat-builds)">New Builds</span>
+                  <span class="chip is-on" style="--c:var(--cat-tools)">Tools, Spaces, Robots and Widgets</span>
+                  <span class="chip" style="--c:var(--cat-business)">Business</span>
+                  <span class="chip" style="--c:var(--cat-vintage)">Vintage</span>
+                  <span class="chip" style="--c:var(--cat-perspective)">Perspective</span>
+                </div>
+              </div>
+              <div>
+                <p class="lgt__grp">More precise, if you like — Tools, Spaces, Robots and Widgets</p>
+                <div class="lgt__strip">
+                  <span class="chip is-on" style="--c:var(--cat-tools)">3D Printing</span>
+                  <span class="chip" style="--c:var(--cat-tools)">CAD/CAM</span>
+                  <span class="chip" style="--c:var(--cat-tools)">CNC</span>
+                  <span class="chip" style="--c:var(--cat-tools)">Tools, Jigs and Fixtures</span>
+                  <span class="chip" style="--c:var(--cat-tools)">Shop Organization</span>
+                  <span class="chip chip--more">Machine Shop, Lasers, PLEK…</span>
+                </div>
+              </div>
+
+              <div class="lgt__lands">
+                <span>Lands in</span> <b>3D Printing</b>
+                <span class="ar">←</span> <span class="lgt__why">from your topic, not a choice you had to make</span>
+              </div>
+            </div>
+
+            <div class="lgw-foot">
+              <div class="lgw-foot__btns">
+                <span class="ntm-cancel">Cancel</span>
+                <span class="lgw-btn lgw-btn--ghost">Back</span>
+                <span class="lgw-btn lgw-btn--link">Skip this</span>
+                <span class="lgw-btn lgw-btn--primary">Next</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- A · desktop dark -->
+    <div class="fr">
+      <p class="fr__cap">Option A · step 3, nothing picked <span>· desktop, dark</span></p>
+      <div class="dev dev--desk t-dark">
+        <div class="canvas">
+          <div class="ntm-dialog">
+            <h2 class="ntm-heading">Start a discussion</h2>
+            <div class="ntm-typetoggle">
+              <span class="ntm-typetoggle__opt is-on">Discussion</span>
+              <span class="ntm-typetoggle__opt">Loothprint</span>
+            </div>
+            <div class="lgw-rail">
+              <div class="lgw-rail__step is-done"><span class="lgw-rail__num">1</span><span class="lgw-rail__lbl">Write</span></div>
+              <div class="lgw-rail__step is-done"><span class="lgw-rail__num">2</span><span class="lgw-rail__lbl">Photos</span></div>
+              <div class="lgw-rail__step is-current is-opt"><span class="lgw-rail__num">3</span><span class="lgw-rail__lbl">Topics</span></div>
+              <div class="lgw-rail__step"><span class="lgw-rail__num">4</span><span class="lgw-rail__lbl">Review</span></div>
+            </div>
+
+            <div class="lgt">
+              <div class="lgt__head">
+                <h3 class="lgt__h">Want to tag a topic?</h3>
+                <span class="lgt__bonus">★ bonus points</span>
+              </div>
+              <p class="lgt__say">Totally optional — your post is ready to go either way.
+              A topic just helps the right people trip over it later.</p>
+
+              <div>
+                <p class="lgt__grp">The big ones</p>
+                <div class="lgt__strip">
+                  <span class="chip" style="--c:var(--cat-repair)">Repair and Restoration</span>
+                  <span class="chip" style="--c:var(--cat-builds)">New Builds</span>
+                  <span class="chip" style="--c:var(--cat-tools)">Tools, Spaces, Robots and Widgets</span>
+                  <span class="chip" style="--c:var(--cat-business)">Business</span>
+                  <span class="chip" style="--c:var(--cat-vintage)">Vintage</span>
+                  <span class="chip" style="--c:var(--cat-perspective)">Perspective</span>
+                </div>
+              </div>
+
+              <div class="lgt__lands">
+                <span>Lands in</span> <b>General</b>
+                <span class="ar">←</span> <span class="lgt__why">the default. Pick a topic and it moves itself.</span>
+              </div>
+            </div>
+
+            <div class="lgw-foot">
+              <div class="lgw-foot__btns">
+                <span class="ntm-cancel">Cancel</span>
+                <span class="lgw-btn lgw-btn--ghost">Back</span>
+                <span class="lgw-btn lgw-btn--link">Skip this</span>
+                <span class="lgw-btn lgw-btn--primary">Next</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="frames frames--mob">
+    <!-- A · mobile light -->
+    <div class="fr">
+      <p class="fr__cap">Option A · flat form, end of scroll <span>· mobile 390, light</span></p>
+      <div class="dev dev--mob t-light">
+        <div class="canvas">
+          <div class="ntm-dialog">
+            <div class="mob-bar" style="margin:calc(var(--s4)*-1) calc(var(--s4)*-1) 0">
+              <span class="mob-bar__x">✕</span>
+              <span class="mob-bar__t">New discussion</span>
+              <span class="mob-bar__post">Post</span>
+            </div>
+            <div class="mob-body" style="padding-left:0;padding-right:0">
+              <div>
+                <span class="ntm-label">Title</span>
+                <input class="ntm-input is-filled" value="Bed adhesion on the Bambu — giving up on glue stick" readonly>
+              </div>
+              <div>
+                <span class="ntm-label">Body <span class="ntm-label__opt">(optional)</span></span>
+                <div class="ntm-textarea is-filled">Third print in a row lifting at the corner. Chamber at 45, plate washed with dish soap…</div>
+              </div>
+              <div>
+                <span class="ntm-label">Photos <span class="ntm-label__opt">(optional)</span></span>
+                <p class="mob-note">2 photos added</p>
+              </div>
+
+              <div class="mob-sep"></div>
+
+              <div class="lgt">
+                <div class="lgt__head">
+                  <h3 class="lgt__h">Tag a topic?</h3>
+                  <span class="lgt__bonus">★ bonus</span>
+                </div>
+                <p class="lgt__say">Optional. Helps the right people find it.</p>
+                <div class="lgt__strip">
+                  <span class="chip is-on" style="--c:var(--cat-tools)">3D Printing</span>
+                  <span class="chip" style="--c:var(--cat-repair)">Repair and Restoration</span>
+                  <span class="chip" style="--c:var(--cat-builds)">New Builds</span>
+                  <span class="chip" style="--c:var(--cat-business)">Business</span>
+                  <span class="chip chip--more">More…</span>
+                </div>
+                <div class="lgt__lands">
+                  <span>Lands in</span> <b>3D Printing</b>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- A · mobile dark -->
+    <div class="fr">
+      <p class="fr__cap">Option A · flat form, nothing picked <span>· mobile 390, dark</span></p>
+      <div class="dev dev--mob t-dark">
+        <div class="canvas">
+          <div class="ntm-dialog">
+            <div class="mob-bar" style="margin:calc(var(--s4)*-1) calc(var(--s4)*-1) 0">
+              <span class="mob-bar__x">✕</span>
+              <span class="mob-bar__t">New discussion</span>
+              <span class="mob-bar__post">Post</span>
+            </div>
+            <div class="mob-body" style="padding-left:0;padding-right:0">
+              <div>
+                <span class="ntm-label">Title</span>
+                <input class="ntm-input is-filled" value="Bed adhesion on the Bambu — giving up on glue stick" readonly>
+              </div>
+              <div>
+                <span class="ntm-label">Body <span class="ntm-label__opt">(optional)</span></span>
+                <div class="ntm-textarea is-filled">Third print in a row lifting at the corner. Chamber at 45, plate washed with dish soap…</div>
+              </div>
+              <div>
+                <span class="ntm-label">Photos <span class="ntm-label__opt">(optional)</span></span>
+                <p class="mob-note">2 photos added</p>
+              </div>
+
+              <div class="mob-sep"></div>
+
+              <div class="lgt">
+                <div class="lgt__head">
+                  <h3 class="lgt__h">Tag a topic?</h3>
+                  <span class="lgt__bonus">★ bonus</span>
+                </div>
+                <p class="lgt__say">Optional. Helps the right people find it.</p>
+                <div class="lgt__strip">
+                  <span class="chip" style="--c:var(--cat-tools)">3D Printing</span>
+                  <span class="chip" style="--c:var(--cat-repair)">Repair and Restoration</span>
+                  <span class="chip" style="--c:var(--cat-builds)">New Builds</span>
+                  <span class="chip" style="--c:var(--cat-business)">Business</span>
+                  <span class="chip chip--more">More…</span>
+                </div>
+                <div class="lgt__lands">
+                  <span>Lands in</span> <b>General</b>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="frames">
+    <!-- A · review -->
+    <div class="fr">
+      <p class="fr__cap">Option A · step 4, Review <span>· desktop, light</span></p>
+      <div class="dev dev--desk t-light">
+        <div class="canvas">
+          <div class="ntm-dialog">
+            <h2 class="ntm-heading">Start a discussion</h2>
+            <div class="lgw-rail">
+              <div class="lgw-rail__step is-done"><span class="lgw-rail__num">1</span><span class="lgw-rail__lbl">Write</span></div>
+              <div class="lgw-rail__step is-done"><span class="lgw-rail__num">2</span><span class="lgw-rail__lbl">Photos</span></div>
+              <div class="lgw-rail__step is-done is-opt"><span class="lgw-rail__num">3</span><span class="lgw-rail__lbl">Topics</span></div>
+              <div class="lgw-rail__step is-current"><span class="lgw-rail__num">4</span><span class="lgw-rail__lbl">Review</span></div>
+            </div>
+            <div class="lgw-review">
+              <div class="lgw-rv"><span class="lgw-rv__k">Title</span>
+                <span class="lgw-rv__v">Bed adhesion on the Bambu — giving up on glue stick</span>
+                <span class="lgw-rv__edit">Edit</span></div>
+              <div class="lgw-rv"><span class="lgw-rv__k">Body</span>
+                <span class="lgw-rv__v">Third print in a row lifting at the corner. Chamber at 45, plate washed…</span>
+                <span class="lgw-rv__edit">Edit</span></div>
+              <div class="lgw-rv"><span class="lgw-rv__k">Photos</span>
+                <span class="lgw-rv__v">2 photos</span>
+                <span class="lgw-rv__edit">Edit</span></div>
+              <div class="lgw-rv lgw-rv--new"><span class="lgw-rv__k">Topic</span>
+                <span class="lgw-rv__v"><span class="chip is-on" style="--c:var(--cat-tools)">3D Printing</span></span>
+                <span class="lgw-rv__edit">Edit</span></div>
+              <div class="lgw-rv"><span class="lgw-rv__k">Forum</span>
+                <span class="lgw-rv__v">3D Printing <span class="qt">· from your topic</span></span>
+                <span class="lgw-rv__edit">Edit</span></div>
+            </div>
+            <div class="lgw-foot">
+              <div class="lgw-foot__btns">
+                <span class="ntm-cancel">Cancel</span>
+                <span class="lgw-btn lgw-btn--ghost">Back</span>
+                <span class="lgw-btn lgw-btn--primary">Post it</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- A · review, skipped -->
+    <div class="fr">
+      <p class="fr__cap">Option A · Review after Skip <span>· desktop, dark</span></p>
+      <div class="dev dev--desk t-dark">
+        <div class="canvas">
+          <div class="ntm-dialog">
+            <h2 class="ntm-heading">Start a discussion</h2>
+            <div class="lgw-rail">
+              <div class="lgw-rail__step is-done"><span class="lgw-rail__num">1</span><span class="lgw-rail__lbl">Write</span></div>
+              <div class="lgw-rail__step is-done"><span class="lgw-rail__num">2</span><span class="lgw-rail__lbl">Photos</span></div>
+              <div class="lgw-rail__step is-opt"><span class="lgw-rail__num">3</span><span class="lgw-rail__lbl">Topics</span></div>
+              <div class="lgw-rail__step is-current"><span class="lgw-rail__num">4</span><span class="lgw-rail__lbl">Review</span></div>
+            </div>
+            <div class="lgw-review">
+              <div class="lgw-rv"><span class="lgw-rv__k">Title</span>
+                <span class="lgw-rv__v">Anyone recognise this bridge plate?</span>
+                <span class="lgw-rv__edit">Edit</span></div>
+              <div class="lgw-rv"><span class="lgw-rv__k">Body</span>
+                <span class="lgw-rv__v">Came in on a 60s parlour, no label anywhere…</span>
+                <span class="lgw-rv__edit">Edit</span></div>
+              <div class="lgw-rv"><span class="lgw-rv__k">Photos</span>
+                <span class="lgw-rv__v">1 photo</span>
+                <span class="lgw-rv__edit">Edit</span></div>
+              <div class="lgw-rv"><span class="lgw-rv__k">Topic</span>
+                <span class="lgw-rv__v"><span class="qt">None — that's fine</span></span>
+                <span class="lgw-rv__edit">Add one</span></div>
+              <div class="lgw-rv"><span class="lgw-rv__k">Forum</span>
+                <span class="lgw-rv__v">General <span class="qt">· the default</span></span>
+                <span class="lgw-rv__edit">Edit</span></div>
+            </div>
+            <div class="lgw-foot">
+              <div class="lgw-foot__btns">
+                <span class="ntm-cancel">Cancel</span>
+                <span class="lgw-btn lgw-btn--ghost">Back</span>
+                <span class="lgw-btn lgw-btn--primary">Post it</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ OPTION B ══════════════════ -->
+  <h2>4 · Option B — folded into Review <span class="tag tag--sup">superseded 8/19</span></h2>
+  <p class="note">No third step: the flow is <b>Write → Photos → Review</b> and the chip
+  strip is a block on the Review page, just above Post. <b>Shortest possible flow</b> —
+  one fewer screen than today, and the chips sit at the literal last moment. The cost is
+  that the strip has to compete with the summary rows for attention, so fewer people will
+  notice it, which works against the "bonus points" nudge. Mobile is barely different
+  from Option A, since mobile is one scroll either way.</p>
+  <p class="note"><b>Superseded by Ian's 8/19 ruling.</b> Kept on the record as the
+  shortest-flow variant, and because its "Forum" review row is the affordance an
+  <i>editing</i> member needs once the Where step is gone — that part is still in the plan.</p>
+
+  <div class="frames">
+    <div class="fr">
+      <p class="fr__cap">Option B · Review carries the strip <span>· desktop, light</span></p>
+      <div class="dev dev--desk t-light">
+        <div class="canvas">
+          <div class="ntm-dialog">
+            <h2 class="ntm-heading">Start a discussion</h2>
+            <div class="lgw-rail">
+              <div class="lgw-rail__step is-done"><span class="lgw-rail__num">1</span><span class="lgw-rail__lbl">Write</span></div>
+              <div class="lgw-rail__step is-done"><span class="lgw-rail__num">2</span><span class="lgw-rail__lbl">Photos</span></div>
+              <div class="lgw-rail__step is-current"><span class="lgw-rail__num">3</span><span class="lgw-rail__lbl">Review &amp; post</span></div>
+            </div>
+            <div class="lgw-review">
+              <div class="lgw-rv"><span class="lgw-rv__k">Title</span>
+                <span class="lgw-rv__v">Bed adhesion on the Bambu — giving up on glue stick</span>
+                <span class="lgw-rv__edit">Edit</span></div>
+              <div class="lgw-rv"><span class="lgw-rv__k">Body</span>
+                <span class="lgw-rv__v">Third print in a row lifting at the corner…</span>
+                <span class="lgw-rv__edit">Edit</span></div>
+              <div class="lgw-rv"><span class="lgw-rv__k">Photos</span>
+                <span class="lgw-rv__v">2 photos</span>
+                <span class="lgw-rv__edit">Edit</span></div>
+              <div class="lgw-rv"><span class="lgw-rv__k">Forum</span>
+                <span class="lgw-rv__v">General <span class="qt">· the default</span></span>
+                <span class="lgw-rv__edit">Edit</span></div>
+            </div>
+
+            <div class="lgt" style="padding:var(--s3);border:1px dashed var(--border);border-radius:var(--r-sm)">
+              <div class="lgt__head">
+                <h3 class="lgt__h">Tag a topic before you post?</h3>
+                <span class="lgt__bonus">★ bonus points</span>
+              </div>
+              <p class="lgt__say">Optional — helps the right people find it.</p>
+              <div class="lgt__strip">
+                <span class="chip" style="--c:var(--cat-repair)">Repair and Restoration</span>
+                <span class="chip" style="--c:var(--cat-builds)">New Builds</span>
+                <span class="chip" style="--c:var(--cat-tools)">Tools, Spaces, Robots and Widgets</span>
+                <span class="chip" style="--c:var(--cat-business)">Business</span>
+                <span class="chip chip--more">More…</span>
+              </div>
+            </div>
+
+            <div class="lgw-foot">
+              <div class="lgw-foot__btns">
+                <span class="ntm-cancel">Cancel</span>
+                <span class="lgw-btn lgw-btn--ghost">Back</span>
+                <span class="lgw-btn lgw-btn--primary">Post it</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fr">
+      <p class="fr__cap">Option B · same, chip picked <span>· desktop, dark</span></p>
+      <div class="dev dev--desk t-dark">
+        <div class="canvas">
+          <div class="ntm-dialog">
+            <h2 class="ntm-heading">Start a discussion</h2>
+            <div class="lgw-rail">
+              <div class="lgw-rail__step is-done"><span class="lgw-rail__num">1</span><span class="lgw-rail__lbl">Write</span></div>
+              <div class="lgw-rail__step is-done"><span class="lgw-rail__num">2</span><span class="lgw-rail__lbl">Photos</span></div>
+              <div class="lgw-rail__step is-current"><span class="lgw-rail__num">3</span><span class="lgw-rail__lbl">Review &amp; post</span></div>
+            </div>
+            <div class="lgw-review">
+              <div class="lgw-rv"><span class="lgw-rv__k">Title</span>
+                <span class="lgw-rv__v">Bed adhesion on the Bambu — giving up on glue stick</span>
+                <span class="lgw-rv__edit">Edit</span></div>
+              <div class="lgw-rv"><span class="lgw-rv__k">Body</span>
+                <span class="lgw-rv__v">Third print in a row lifting at the corner…</span>
+                <span class="lgw-rv__edit">Edit</span></div>
+              <div class="lgw-rv"><span class="lgw-rv__k">Photos</span>
+                <span class="lgw-rv__v">2 photos</span>
+                <span class="lgw-rv__edit">Edit</span></div>
+              <div class="lgw-rv lgw-rv--new"><span class="lgw-rv__k">Forum</span>
+                <span class="lgw-rv__v">3D Printing <span class="qt">· from your topic</span></span>
+                <span class="lgw-rv__edit">Edit</span></div>
+            </div>
+
+            <div class="lgt" style="padding:var(--s3);border:1px dashed var(--border);border-radius:var(--r-sm)">
+              <div class="lgt__head">
+                <h3 class="lgt__h">Tag a topic before you post?</h3>
+                <span class="lgt__bonus">★ bonus points</span>
+              </div>
+              <p class="lgt__say">Optional — helps the right people find it.</p>
+              <div class="lgt__strip">
+                <span class="chip" style="--c:var(--cat-repair)">Repair and Restoration</span>
+                <span class="chip" style="--c:var(--cat-builds)">New Builds</span>
+                <span class="chip is-on" style="--c:var(--cat-tools)">3D Printing</span>
+                <span class="chip" style="--c:var(--cat-business)">Business</span>
+                <span class="chip chip--more">More…</span>
+              </div>
+            </div>
+
+            <div class="lgw-foot">
+              <div class="lgw-foot__btns">
+                <span class="ntm-cancel">Cancel</span>
+                <span class="lgw-btn lgw-btn--ghost">Back</span>
+                <span class="lgw-btn lgw-btn--primary">Post it</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ THE TWO OPEN RULINGS ══════════════════ -->
+  <h2>5 · Two things the mock can't decide for you</h2>
+  <p class="note">Both came out of the Phase-1 measurement and are on #129 as a comment.
+  They change what the <b>Lands in</b> line says, not how the step looks — so this mock
+  stands either way, but the code can't be written until they're settled.</p>
+
+  <ul class="legend">
+    <li><span class="sw" style="background:var(--cat-repair)"></span>Repair and Restoration</li>
+    <li><span class="sw" style="background:var(--cat-builds)"></span>New Builds</li>
+    <li><span class="sw" style="background:#1a1d1a"></span>Tools, Spaces, Robots and Widgets</li>
+    <li><span class="sw" style="background:var(--cat-business)"></span>Business</li>
+    <li><span class="sw" style="background:var(--cat-vintage)"></span>Vintage</li>
+    <li><span class="sw" style="background:var(--cat-perspective)"></span>Perspective</li>
+  </ul>
+
+  <div class="meta" style="margin-top:16px">
+    <b>(a) "General" is a child of "Repair and Restoration", not a site-wide forum.</b>
+    So defaulting every untagged discussion there files it inside the repair tree — a
+    member asking a business question with no chip lands under Repair and Restoration.
+    Accept it, make a genuinely top-level General, or land the default in the parentless
+    block?<br><br>
+    <b>(b) Two of the four big chips have nowhere natural to land.</b> Repair and
+    Restoration has its General and Business has General Business, but <b>New Builds</b>
+    (145 uses) and <b>Tools, Spaces, Robots and Widgets</b> (97 uses) have no generic
+    child at all. Create General sub-forums under each, map to the busiest child
+    (Acoustic Builds / Tools and Jigs — both a guess), or let them fall to the default
+    and inherit (a)?<br><br>
+    Together these two are <b>25.5% of all term use</b>, so not an edge case. In these
+    frames the chips shown for Tools resolve to a real leaf (3D Printing), which is why
+    the mapping reads cleanly here — pick the parent chip instead and (b) is what decides
+    the answer.
+  </div>
+
+</div>

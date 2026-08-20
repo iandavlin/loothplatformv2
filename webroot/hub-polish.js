@@ -1231,7 +1231,24 @@
     // back with the new label. The radio that submits is unchanged.
     var forumLabEl = document.getElementById('ntm-forum-label');
     if (forumLabEl) forumLabEl.style.display = 'none';
-    if (forumSel && !form.querySelector('.lg-fbc-forumtrig')) {
+
+    /* ── #129 categorize-last (ledger 44) ─────────────────────────────────────
+       When the flag is ON, _chrome.php sets data-ccl on the form and renders
+       #ntm-forum as ONE pre-checked leaf, hidden — the Where step is gone and the
+       landing forum is decided for the member (a picked topic re-homes it).
+       So there is nothing to choose here and this whole accordion must not be
+       built: without this guard the phone still shows a "Forum ▾ / Choose a forum"
+       row over a one-item list, which is the pain point Ian ruled away, surviving
+       on the platform most members actually post from.
+
+       The pre-submit check further down is deliberately left ALONE. It asks
+       `input[name=forum_id]:checked` and the pre-checked leaf satisfies it, so it
+       keeps guarding the OFF path and never fires on the ON path — no second
+       branch to keep in step with the first. */
+    var fbcCcl = (form.dataset && form.dataset.ccl === '1');
+    if (fbcCcl && forumSel) forumSel.style.display = 'none';
+
+    if (!fbcCcl && forumSel && !form.querySelector('.lg-fbc-forumtrig')) {
       var trig = document.createElement('button');
       trig.type = 'button';
       trig.className = 'lg-fbc-forumtrig';
@@ -1425,7 +1442,10 @@
         var d = document.createElement('div'); d.className = 'lg-fbc-step'; d.dataset.step = n;
         d.innerHTML = '<p class="lg-fbc-steph">' + label + '</p>'; return d;
       }
-      var ws1 = wStep(1, 'Step 1 of 4 · Title &amp; forum');
+      /* #129: with the Where step gone there is no forum to name here. Step COUNT is
+         unchanged at 4 — the required forum step becomes the optional topic step at
+         the END, which is the whole ruling ("write first, categorize last"). */
+      var ws1 = wStep(1, fbcCcl ? 'Step 1 of 4 · Title' : 'Step 1 of 4 · Title &amp; forum');
       var ws2 = wStep(2, 'Step 2 of 4 · Add photos');
       var ws3 = wStep(3, 'Step 3 of 4 · Write your post');
       var ws4 = wStep(4, 'Step 4 of 4 · Tags &amp; options');
@@ -1433,8 +1453,14 @@
       // Step 1: title + forum
       if (wTitleLab) ws1.appendChild(wTitleLab);
       if (wTitle) ws1.appendChild(wTitle);
-      if (wForumLab) { wForumLab.style.display = ''; ws1.appendChild(wForumLab); }
-      if (wTrig) ws1.appendChild(wTrig);
+      /* Under ccl the label and the trigger stay hidden/unbuilt, but #ntm-forum
+         itself is still MOVED here: it carries the one pre-checked leaf that the
+         step-1 Next check and the submit handler both read. It is hidden, so it
+         costs the member nothing and costs us no second code path. */
+      if (!fbcCcl) {
+        if (wForumLab) { wForumLab.style.display = ''; ws1.appendChild(wForumLab); }
+        if (wTrig) ws1.appendChild(wTrig);
+      }
       ws1.appendChild(wForum);
 
       // Step 2: photos (button row + a thumbnail gallery)
@@ -1454,6 +1480,14 @@
       if (wTags) ws4.appendChild(wTags);
       if (wQuick) ws4.appendChild(wQuick);
       if (wAnon) ws4.appendChild(wAnon);
+      /* #129: the topic field lands on the LAST step, which is where "categorize
+         last" puts it on a phone. Same server-rendered #ntm-topics node the desktop
+         wizard moves into its own Topics pane — one tag field in the codebase, and
+         forums.js owns its behaviour on both shapes, so nothing is duplicated here. */
+      if (fbcCcl) {
+        var wTopics = document.getElementById('ntm-topics');
+        if (wTopics) ws4.appendChild(wTopics);
+      }
 
       var wSteps = document.createElement('div'); wSteps.className = 'lg-fbc-steps';
       wSteps.appendChild(ws1); wSteps.appendChild(ws2); wSteps.appendChild(ws3); wSteps.appendChild(ws4);
