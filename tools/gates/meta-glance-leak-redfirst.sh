@@ -37,6 +37,14 @@
 set -uo pipefail
 
 HOST="${LG_GATE_HOST:-dev2.loothgroup.com}"
+# Same knob as the gate. EMPTY means the real /u/ and /p/ routes — which are
+# symlinked out of the serving checkout and therefore serve MAIN, which is
+# exactly what you want for the red-first run. Point it at a lane preview
+# (LG_MGL_PREFIX=/preview/166-meta-leak) to watch the SAME script go SEALED
+# against the branch. Without this the header's "run it on the fixed branch"
+# instruction was unfollowable: every fetch went to main no matter which tree
+# the script was sitting in.
+PREFIX="${LG_MGL_PREFIX:-}"; PREFIX="${PREFIX%/}"
 PSQL_DB="${LG_PROFILE_DB:-profile_app}"
 
 say() { printf '%s\n' "$*"; }
@@ -106,7 +114,8 @@ probe() {   # probe <label> <url> <needle> <liveness-marker>
 }
 
 say "=== #166 red-first: private one-liners in the crawler-visible head ==="
-say "host=$HOST  (anon, cookieless, loopback past the dev gate)"
+say "host=$HOST  prefix=${PREFIX:-(none — the REAL routes, i.e. main)}"
+say "(anon, cookieless, loopback past the dev gate)"
 say ""
 
 U=$(pick "SELECT u.slug || '|' || btrim(u.at_a_glance)
@@ -118,7 +127,7 @@ U=$(pick "SELECT u.slug || '|' || btrim(u.at_a_glance)
              AND EXISTS (SELECT 1 FROM wp_user_bridge b WHERE b.user_id=u.id)
            ORDER BY u.slug LIMIT 1" | head -1)
 if [ -n "$U" ]; then
-  probe "PROFILE" "/u/${U%%|*}/" "${U#*|}" "lg-gate"
+  probe "PROFILE" "${PREFIX}/u/${U%%|*}/" "${U#*|}" "lg-gate"
 else
   say "[PROFILE] NO VERDICT — no public member with a members-only header and a"
   say "          written one-liner exists on this box."
@@ -134,7 +143,7 @@ P=$(pick "SELECT p.slug || '|' || btrim(coalesce(nullif(btrim(p.tagline),''), p.
                             WHERE ps.key = 'practice-header:' || p.id),'members') <> 'public'
            ORDER BY p.slug LIMIT 1" | head -1)
 if [ -n "$P" ]; then
-  probe "PRACTICE" "/p/${P%%|*}/" "${P#*|}" "lg-gate"
+  probe "PRACTICE" "${PREFIX}/p/${P%%|*}/" "${P#*|}" "lg-gate"
 else
   say "[PRACTICE] NO VERDICT — no practice with a members-only header and text."
   VERDICT=2
