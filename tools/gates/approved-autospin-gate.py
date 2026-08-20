@@ -131,7 +131,8 @@ class World:
         (self.d / "state" / fname).write_text(body)
         return self
 
-    def run(self, sessions="true", load="0.5", extra_env=None, default_sessions=False):
+    def run(self, sessions="true", load="0.5", extra_env=None,
+            default_sessions=False, default_spin=False, watcher=None):
         (self.d / "issues.json").write_text(json.dumps(self.issues))
         (self.d / "lanes.json").write_text(json.dumps(self.lanes))
         for f in (self.board, self.spins):
@@ -156,9 +157,11 @@ class World:
             env["LG_AW_SESSIONS_CMD"] = sessions
         else:
             env.pop("LG_AW_SESSIONS_CMD", None)
+        if default_spin:
+            env.pop("LG_AW_SPIN_CMD", None)
         env.update(extra_env or {})
-        r = subprocess.run(["bash", str(WATCHER)], env=env, capture_output=True,
-                           text=True, timeout=120)
+        r = subprocess.run(["bash", str(watcher or WATCHER)], env=env,
+                           capture_output=True, text=True, timeout=120)
         board = self.board.read_text() if self.board.exists() else ""
         spins = self.spins.read_text() if self.spins.exists() else ""
         return r.returncode, board, spins
@@ -426,6 +429,61 @@ def _terminated(signum, _frame):
     raise SystemExit(2)
 
 
+def leg_realspin(tmp):
+    print("\n[8] the REAL spin path — tmux and spin-lane, not the recorder")
+    if shutil.which("tmux") is None:
+        cannot_run("tmux is not installed — the real spin path cannot be exercised")
+    # Every other leg replaces the spin with LG_AW_SPIN_CMD, so the command the
+    # box actually runs — `tmux new-session -d -s <lane> "cd … && export LG_LANE=1
+    # && exec bash …/lanes/spin-lane.sh <lane>"` — is exercised NOWHERE. That
+    # string carries the lane's cwd, its env and its name through two levels of
+    # quoting; getting it wrong spawns a session in the wrong directory, or one
+    # that dies instantly, and the board post would still say SPUN.
+    #
+    # spin-lane.sh itself is NOT run: it would need a real approved issue and
+    # would exec a paid claude. A recorder stands in its place, at the path the
+    # watcher resolves relative to ITSELF — so the watcher runs from a copy.
+    lane = f"9903-g82spin-{os.getpid()}"
+    subprocess.run(["tmux", "kill-session", "-t", lane], capture_output=True)
+    w = World(tmp, "realspin").issue(9903).charter(lane).worktree(lane)
+    w.state(".autospin-mode", "live\n")
+    tools = w.d / "tools"
+    (tools / "lanes").mkdir(parents=True, exist_ok=True)
+    shutil.copy(WATCHER, tools / "approved-watcher.sh")
+    rec = tools / "lanes" / "spin-lane.sh"
+    rec.write_text(
+        "#!/usr/bin/env bash\n"
+        f"{{ echo \"cwd=$PWD\"; echo \"lg_lane=${{LG_LANE:-unset}}\"; "
+        f"echo \"arg=$1\"; }} > '{w.d}/spin-lane-saw.txt'\n"
+        "sleep 20\n")
+    rec.chmod(0o755)
+    try:
+        rc, board, spins = w.run(default_spin=True, default_sessions=True,
+                                 watcher=tools / "approved-watcher.sh")
+        time.sleep(1.0)
+        sess = subprocess.run(["tmux", "has-session", "-t", lane],
+                              capture_output=True)
+        check("the default path really starts a tmux session named for the lane",
+              sess.returncode == 0,
+              f"no session {lane!r}; board was {board!r}")
+        saw = w.d / "spin-lane-saw.txt"
+        check("…and it really invokes spin-lane.sh — the one door, not a shortcut",
+              saw.exists(), "spin-lane.sh was never reached")
+        if saw.exists():
+            got = dict(l.split("=", 1) for l in saw.read_text().split() if "=" in l)
+            check("…in the lane's OWN worktree",
+                  got.get("cwd") == str(w.d / "wt" / lane),
+                  f"cwd was {got.get('cwd')!r}")
+            check("…with LG_LANE=1 set, as keeper's own wrappers do",
+                  got.get("lg_lane") == "1", f"LG_LANE was {got.get('lg_lane')!r}")
+            check("…and the lane name arrives intact through two levels of quoting",
+                  got.get("arg") == lane, f"arg was {got.get('arg')!r}")
+        check("…and the board says SPUN only once it actually started",
+              "SPUN" in board and lane in board, board)
+    finally:
+        subprocess.run(["tmux", "kill-session", "-t", lane], capture_output=True)
+
+
 def main():
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, _terminated)
@@ -443,6 +501,7 @@ def main():
         leg_holds(tmp)
         leg_worktree(tmp)
         leg_defaults(tmp)
+        leg_realspin(tmp)
     print(f"\n{CHECKS} checks, {len(FAILS)} failed")
     if FAILS:
         print("\nGATE 82 RED:")
