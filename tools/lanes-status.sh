@@ -23,8 +23,55 @@ SERVE="/home/ubuntu/loothplatformv2-clean"
 SEAT_CEILING=6     # worktrees existing
 WORKING_CAP=2      # lanes generating at once — and 1 while Ian is actively on dev2
 
-NO_LIVE=0; AGENTS=0; JSON=0; ALL=0
-for a in "$@"; do case "$a" in --no-live) NO_LIVE=1;; --agents) AGENTS=1;; --json) JSON=1;; --all) ALL=1;; esac; done
+NO_LIVE=0; AGENTS=0; JSON=0; ALL=0; PROBE=""
+prev=""
+for a in "$@"; do
+    case "$prev" in --agent-probe) PROBE="$a"; prev=""; continue;; esac
+    case "$a" in --no-live) NO_LIVE=1;; --agents) AGENTS=1;; --json) JSON=1;; --all) ALL=1;; --agent-probe) prev="$a";; esac
+done
+NOW_TS=$(date +%s)
+
+# ── the worker probe, in ONE place so nothing can drift from it ─────────────
+# #151's law: tmux ground truth outranks every derived guess. #160: the working
+# chip mirrors the CLI's own live spinner line. Both read the SAME pane here.
+#
+# Two working signatures: the old CLI printed "esc to interrupt" beside the
+# spinner; the 8/20 CLI update dropped it — the live spinner now reads
+# "Verbing… (17m 57s · ↓ 23.6k tokens)". A finished turn collapses to
+# "Verbed for 17m" with no token parenthesis, so the paren+tokens shape only
+# exists while a turn is actually running. A TOOL line wears the same parens
+# without the token clause ("⎿  Running… (9m 46s · timeout 10m)") — which is
+# why the extraction keys on the token clause, not on the parentheses.
+#
+# ⚠ NEITHER PATTERN MAY REQUIRE THE CLOSING PAREN. The 8/20 fix (9c23bb7)
+# anchored on "tokens\)" and was already wrong the same afternoon: a lane
+# thinking at a raised effort prints
+#   "✽ Roosting… (34m 53s · ↓ 46.3k tokens · thinking with xhigh effort)"
+# and the clause keeps growing. Anchoring on the paren means every deep-thinking
+# lane reads as IDLE — the precise lie #151 exists to kill, arriving through the
+# detector that was supposed to prevent it. Match the token clause; stop there.
+AGENT_RE="esc to interrupt|s · ↓ [0-9.,]+k? tokens"
+SPIN_RE="[A-Za-z]+… \\([0-9][0-9hms ]*· ↓ [0-9.,]+k? tokens"
+probe_agent() {   # $1 = tmux session name; echoes "<state>\t<spinner or empty>"
+    local sess="$1" pane st="none" sp=""
+    if tmux has-session -t "$sess" 2>/dev/null; then
+        pane="$(tmux capture-pane -p -t "$sess" 2>/dev/null || true)"
+        if printf '%s\n' "$pane" | grep -qE "$AGENT_RE"; then st="working"; else st="parked"; fi
+        # `|| true`: a no-match grep exits 1, and under `set -e` + `pipefail`
+        # that killed the WHOLE script — `lanes --json` printed nothing at all
+        # and every caller (the page included) failed for a reason nowhere near
+        # the pane it was reading.
+        sp="$(printf '%s\n' "$pane" | grep -oE "$SPIN_RE" | tail -1 || true)"
+    fi
+    printf '%s\t%s\n' "$st" "$sp"
+}
+if [[ -n "$PROBE" ]]; then probe_agent "$PROBE"; exit 0; fi
+
+# Free text (a lane's own .lane-state line, a PARKED: reason) now reaches the
+# JSON, so it must be escaped: an unescaped quote or backslash from a lane's
+# prose would produce a lanes.json nothing can parse, and the page would then
+# fail for a reason nowhere near the lane that wrote it.
+jsonesc() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\t/ /g'; }
 
 # Ian's ruling 8/18: fetch before the unbacked count — remote-tracking refs go
 # stale, and a branch pushed hours ago must never read as unbacked. A failed
@@ -67,7 +114,8 @@ GAP=0
 [[ "$DEV2" != "$MAIN" ]] && GAP=1
 [[ $NO_LIVE -eq 0 && "$LIVE" != "$MAIN" ]] && GAP=1
 # ── rows: one per worktree, straight from git ────────────────────────────────
-ROWS=""          # sortkey|folder|branch|behind|unique|push|status|rawpush|slug|scratch|mismatch
+ROWS=""          # sortkey|folder|branch|behind|unique|push|status|rawpush|slug|scratch|
+                 # mismatch|riders|agent|state|reason|spinner|age_min|lane_state
 SHOW_PUSH=0      # push column materializes only when a lane has unpushed work
 SEATS_USED=0     # real (non-scratch) worktree seats, parent excluded
 WT_BRANCHES=""   # branches that HAVE a worktree (parked zone excludes these)
@@ -78,7 +126,7 @@ while IFS= read -r line; do
         "worktree "*) folder="${line#worktree }" ;;
         "detached")
             scr=false; [[ "$folder" != /home/ubuntu/* ]] && scr=true
-            ROWS+="999999|${folder#/home/ubuntu/}|(detached)|-|-|-|detached — investigate|NR|detached|$scr|false||none"$'\n' ;;
+            ROWS+="999999|${folder#/home/ubuntu/}|(detached)|-|-|-|detached — investigate|NR|detached|$scr|false||none|needs-keeper|||999999|none"$'\n' ;;
         "branch refs/heads/"*)
             branch="${line#branch refs/heads/}"
             scr=false; [[ "$folder" != /home/ubuntu/* ]] && scr=true
@@ -88,7 +136,7 @@ while IFS= read -r line; do
             mm=false; [[ "$(basename "$folder")" != "$branch" ]] && mm=true
             if [[ "$branch" == "main" ]]; then
                 # the parent checkout is not a seat; the deploy line covers it
-                ROWS+="-1|${folder#/home/ubuntu/}|main|0|0|0|— (parent checkout)|0|parent|false|false||none"$'\n'
+                ROWS+="-1|${folder#/home/ubuntu/}|main|0|0|0|— (parent checkout)|0|parent|false|false||none|retired|||999999|none"$'\n'
                 continue
             fi
             lr=$(git -C "$REPO" rev-list --left-right --count "origin/main...$branch" 2>/dev/null | tr '\t' ' ' || true)
@@ -100,11 +148,30 @@ while IFS= read -r line; do
                 push="NO REMOTE"
             fi
             subj=$(git -C "$REPO" log -1 --format=%s "$branch" 2>/dev/null || echo "")
+            # #144: a seat is a desk, not a worker — probe tmux for the worker.
+            # MOVED ABOVE the status decision on purpose (#151): all three lies
+            # that issue reports come from deciding "finished" without ever
+            # asking whether somebody is sitting there.
+            IFS=$'\t' read -r ag spin < <(probe_agent "$(basename "$folder")")
+            # #151: a branch cut minutes ago has ZERO unique commits and is not
+            # finished. Unknown age reads as OLD, so this only ever fires when
+            # we positively KNOW the branch is young.
+            created=$(git -C "$REPO" reflog show "$branch" --date=unix 2>/dev/null \
+                      | tail -1 | sed -n 's/.*@{\([0-9]\{1,\}\)}.*/\1/p')
+            if [[ -n "$created" ]]; then age_min=$(( (NOW_TS - created) / 60 )); else age_min=999999; fi
+            # .lane-state is the lane's own hand-raise (tools/lanes/lane-stop-hook.sh
+            # writes it). Most-urgent first: unblock me > answer me > merge me.
+            lstate="none"; lreason=""
+            for _m in BLOCKED QUESTION DONE; do
+                if [[ -f "$folder/.lane-state/$_m" ]]; then
+                    lstate="$_m"; lreason=$(head -1 "$folder/.lane-state/$_m" | tr -d '\r'); break
+                fi
+            done
             # Status: spec's five rules. Precedence note: AT RISK outranks
             # re-cut — the loud flag must never be masked by a big behind count.
-            if   [[ "$unique" == "0" ]]; then status="done — seat freeable"; slug="done"
+            if   [[ "$unique" == "0" && "$ag" == "none" && "$age_min" -ge 60 ]]; then status="done — seat freeable"; slug="done"
             elif [[ "$subj" == "STOOD DOWN: "* ]]; then status="stood down"; slug="stood-down"
-            elif [[ "$push" == "NO REMOTE" ]]; then status="AT RISK — work on one disk only"; slug="at-risk"
+            elif [[ "$push" == "NO REMOTE" && "$unique" != "0" ]]; then status="AT RISK — work on one disk only"; slug="at-risk"
             elif [[ "$behind" =~ ^[0-9]+$ && "$behind" -gt 300 ]]; then status="re-cut, don't rebase"; slug="re-cut"
             else status="live lane"; slug="live"
             fi
@@ -117,17 +184,27 @@ while IFS= read -r line; do
             [[ "$scr" == false ]] && SEATS_USED=$((SEATS_USED + 1))
             [[ "$scr" == false && "$unique" =~ ^[0-9]+$ && "$unique" -gt 0 ]] && COLL_BRANCHES+=" $branch"
             rid="$(git -C "$folder" config --worktree lane.riders 2>/dev/null || true)"
-            # #144: a seat is a desk, not a worker — probe tmux for the worker
-            ag="none"; sess="$(basename "$folder")"
-            if tmux has-session -t "$sess" 2>/dev/null; then
-                # Two working signatures: the old CLI printed "esc to interrupt" beside the
-                # spinner; the 8/20 CLI update dropped it — the live spinner now reads
-                # "Verbing… (17m 57s · ↓ 23.6k tokens)". A finished turn collapses to
-                # "Verbed for 17m" with no token parenthesis, so the paren+tokens shape
-                # only exists while a turn is actually running.
-                if tmux capture-pane -p -t "$sess" 2>/dev/null | grep -qE "esc to interrupt|s · ↓ [0-9.,]+k? tokens\)"; then ag="working"; else ag="parked"; fi
+            # ── #159: FOUR chips, and only four (Ian's ruling 8/20 — six states
+            #    were rejected as wrongness surface). Derived from box truth in
+            #    strict precedence; the page may upgrade a non-working seat to
+            #    needs-you from GitHub labels, which this script cannot read.
+            #      working      — somebody is at the desk, mid-turn
+            #      needs-you    — the lane raised a hand and named Ian
+            #      needs-keeper — the lane raised a hand, or nobody is at the desk
+            #      retired      — deliberately set down, or genuinely finished
+            #    Each carries the VERBATIM reason where one exists: the lane's own
+            #    .lane-state line, or the PARKED:/STOOD DOWN: subject remainder.
+            reason=""
+            if [[ "$ag" == "working" ]]; then st4="working"
+            elif [[ "$lstate" != "none" ]]; then
+                reason="$lreason"
+                if [[ "$lreason" =~ (^|[^A-Za-z])[Ii]an([^A-Za-z]|$) ]]; then st4="needs-you"; else st4="needs-keeper"; fi
+            elif [[ "$subj" == "PARKED: "* ]]; then st4="retired"; reason="${subj#PARKED: }"
+            elif [[ "$subj" == "STOOD DOWN: "* ]]; then st4="retired"; reason="${subj#STOOD DOWN: }"
+            elif [[ "$slug" == "done" ]]; then st4="retired"
+            else st4="needs-keeper"
             fi
-            ROWS+="$behind|${folder#/home/ubuntu/}|$branch|$behind|$unique|$cell|$status|${push/NO REMOTE/NR}|$slug|$scr|$mm|$rid|$ag"$'\n' ;;
+            ROWS+="$behind|${folder#/home/ubuntu/}|$branch|$behind|$unique|$cell|$status|${push/NO REMOTE/NR}|$slug|$scr|$mm|$rid|$ag|$st4|${reason//|/ }|${spin//|/ }|$age_min|$lstate"$'\n' ;;
     esac
 done < <(git -C "$REPO" worktree list --porcelain)
 
@@ -150,7 +227,6 @@ fi
 #    never a junk-drawer zone. Age is the cost of parking; behind>300 means
 #    the parking has expired in practice. ─────────────────────────────────────
 PARKED=""        # branch|reason|days|behind|expired
-NOW_TS=$(date +%s)
 while IFS='|' read -r b subj ts; do
     [[ " $WT_BRANCHES " == *" $b "* ]] && continue
     [[ "$subj" == "PARKED: "* ]] || continue
@@ -213,7 +289,7 @@ if [[ $JSON -eq 1 ]]; then
     done <<<"$PARKED"
     printf '],\n  "lanes": [\n'
     first=1
-    while IFS='|' read -r _ f b behind unique _ _ rawpush slug scratch mismatch riders agent; do
+    while IFS='|' read -r _ f b behind unique _ _ rawpush slug scratch mismatch riders agent state reason spinner age_min lstate; do
         [[ -z "$f" ]] && continue
         [[ $first -eq 0 ]] && printf ',\n'
         first=0
@@ -221,8 +297,10 @@ if [[ $JSON -eq 1 ]]; then
         un="null"; [[ "$unique" =~ ^[0-9]+$ ]] && un="$unique"
         if [[ "$rawpush" == "NR" ]]; then up="null"; nr="true"; else up="$rawpush"; nr="false"; fi
         rjson=""; for rr in $riders; do rjson+="$rr, "; done
-        printf '    {"folder": "%s", "branch": "%s", "behind": %s, "unique": %s, "unpushed": %s, "no_remote": %s, "status": "%s", "scratch": %s, "mismatch": %s, "riders": [%s], "agent": "%s"}' \
-            "$f" "$b" "$bh" "$un" "$up" "$nr" "$slug" "$scratch" "$mismatch" "${rjson%, }" "${agent:-none}"
+        am="null"; [[ "$age_min" =~ ^[0-9]+$ ]] && am="$age_min"
+        printf '    {"folder": "%s", "branch": "%s", "behind": %s, "unique": %s, "unpushed": %s, "no_remote": %s, "status": "%s", "scratch": %s, "mismatch": %s, "riders": [%s], "agent": "%s", "state": "%s", "reason": "%s", "spinner": "%s", "age_min": %s, "lane_state": "%s"}' \
+            "$f" "$b" "$bh" "$un" "$up" "$nr" "$slug" "$scratch" "$mismatch" "${rjson%, }" "${agent:-none}" \
+            "${state:-needs-keeper}" "$(jsonesc "$reason")" "$(jsonesc "$spinner")" "$am" "${lstate:-none}"
     done < <(printf '%s' "$ROWS" | sort -t'|' -k1,1n)
     printf '\n  ]\n}\n'
     exit 0
@@ -262,7 +340,7 @@ if [[ $SHOW_PUSH -eq 1 ]]; then
 else
     printf "%-34s %-24s %7s %7s  %s\n" "FOLDER" "BRANCH" "BEHIND" "UNIQUE" "STATUS"
 fi
-printf '%s' "$ROWS" | sort -t'|' -k1,1n | while IFS='|' read -r _ f b behind unique cell status _ _ scratch mismatch _ _; do
+printf '%s' "$ROWS" | sort -t'|' -k1,1n | while IFS='|' read -r _ f b behind unique cell status _ _ scratch mismatch _ _ _ _ _ _ _; do
     [[ -z "$f" ]] && continue
     # scratch worktrees (outside /home/ubuntu) are noise on every run — hidden
     # unless --all; JSON always carries them, flagged, for machines to filter
