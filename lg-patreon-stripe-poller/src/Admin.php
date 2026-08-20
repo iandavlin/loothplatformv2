@@ -298,6 +298,11 @@ final class Admin
         try {
             $cents    = StripePrice::parseAmount( (string) ( $_POST['price_amount'] ?? '' ) );
             $interval = StripePrice::assertInterval( sanitize_key( (string) ( $_POST['price_interval'] ?? '' ) ) );
+            // MULTI-TIER (#148). Validated against the catalogue, never trusted:
+            // assertTier() refuses a tier that has no registered product rather
+            // than falling back to the default, because a silent fallback here
+            // would put a price on the wrong membership.
+            $tier = StripePrice::assertTier( sanitize_key( (string) ( $_POST['price_tier'] ?? '' ) ) );
 
             // Typing the amount twice is cheaper than an accidental price. A
             // Stripe price cannot be deleted once made, only deactivated.
@@ -306,14 +311,15 @@ final class Admin
                 throw new \RuntimeException( 'The two amounts do not match — nothing was changed.' );
             }
 
-            $set = StripePrice::setPrice( $cents, $interval );
+            $set = StripePrice::setPrice( $cents, $interval, $tier );
         } catch ( \Throwable $e ) {
             self::priceRedirect( [ 'lgms_price_err' => rawurlencode( $e->getMessage() ) ] );
             return;
         }
 
         self::priceRedirect( [ 'lgms_price_ok' => rawurlencode( sprintf(
-            'New members will now pay %s %s. Everyone already subscribed keeps the price they joined on.',
+            'New %s members will now pay %s %s. Everyone already subscribed keeps the price they joined on.',
+            $set['product_name'],
             StripePrice::money( $set['unit_amount_cents'] ),
             $set['interval'] === 'year' ? 'a year' : 'a month'
         ) ) ] );
@@ -324,15 +330,24 @@ final class Admin
         $ok  = isset( $_GET['lgms_price_ok'] )  ? rawurldecode( (string) $_GET['lgms_price_ok'] )  : '';
         $err = isset( $_GET['lgms_price_err'] ) ? rawurldecode( (string) $_GET['lgms_price_err'] ) : '';
 
-        $current  = StripePrice::currentPrice();
-        $orphaned = StripePrice::currentPriceIsOrphaned();
+        // MULTI-TIER (#148): the tiers come from the CATALOGUE, so registering a
+        // product is the whole of adding a tier and this tab needs no edit to
+        // show it. Each is resolved to its product independently — one tier
+        // with an ambiguous catalogue must not blank the page for the others.
+        $tiers      = StripePrice::tiers();
+        $products   = [];
+        $tierErrs   = [];
+        foreach ( $tiers as $t ) {
+            try {
+                $products[ $t ] = StripePrice::tierProduct( $t );
+            } catch ( \Throwable $e ) {
+                $tierErrs[ $t ] = $e->getMessage();
+            }
+        }
 
         $productErr = '';
-        $product    = null;
-        try {
-            $product = StripePrice::tierProduct();
-        } catch ( \Throwable $e ) {
-            $productErr = $e->getMessage();
+        if ( $tiers === [] ) {
+            $productErr = 'The Stripe catalogue has not been imported on this box, so there is nothing to price.';
         }
 
         $modeErr = '';
@@ -349,11 +364,16 @@ final class Admin
             <div class="notice notice-error is-dismissible"><p><?php echo esc_html( $err ); ?></p></div>
         <?php endif; ?>
 
-        <h2>Membership price</h2>
+        <h2>Membership prices</h2>
         <p class="description" style="max-width:720px;">
-            This is what somebody pays to join. There is one membership, so there is one price.
-            <strong>Changing it only affects people who join afterwards</strong> — everybody already
+            This is what somebody pays to join, for each membership you offer.
+            <strong>Changing a price only affects people who join afterwards</strong> — everybody already
             subscribed keeps paying the price they joined on, and nothing here can change that.
+        </p>
+        <p class="description" style="max-width:720px;">
+            The memberships themselves are not created here — they come from the Stripe catalogue.
+            To offer a new one, register its product and import the catalogue; it then appears below
+            ready to be priced.
         </p>
 
         <?php if ( $modeErr !== '' ) : ?>
@@ -366,30 +386,54 @@ final class Admin
 
         <h3>Right now</h3>
         <?php
-          // ONE TIER, TWO CADENCES (Ian: "We need a monthly and a yearly price
-          // etc."). Both prices sit under the SAME membership — the member
-          // chooses how often they pay, not what they get.
-          $any = false;
-          foreach ( StripePrice::CADENCES as $cad => $cadLabel ) {
-              if ( StripePrice::currentPriceId( $cad ) !== '' ) { $any = true; }
+          // TIER x CADENCE. Tier is WHAT they get, cadence is HOW OFTEN they pay
+          // — two different questions that were the same one under the old
+          // single-tier ruling, which is why the copy below spells them apart.
+          $anyAtAll = false;
+          foreach ( $tiers as $t ) {
+              if ( StripePrice::configuredCadences( $t ) !== [] ) { $anyAtAll = true; }
           }
         ?>
-        <?php if ( ! $any ) : ?>
+        <?php if ( $tiers === [] ) : ?>
+          <p><strong>No memberships are registered</strong>, so there is nothing to price yet.</p>
+        <?php elseif ( ! $anyAtAll ) : ?>
           <p><strong>No price is set yet</strong>, so nobody can join. That is the intended state until
              you decide the numbers.</p>
-        <?php else : ?>
-          <table class="widefat striped" style="max-width:760px;">
-            <thead><tr><th style="width:9em;">Billed</th><th>New members pay</th><th>Stripe reference</th></tr></thead>
+        <?php endif; ?>
+
+        <?php if ( $tiers !== [] ) : ?>
+          <table class="widefat striped" style="max-width:860px;">
+            <thead><tr>
+              <th style="width:14em;">Membership</th>
+              <th style="width:9em;">Billed</th>
+              <th>New members pay</th>
+              <th>Stripe reference</th>
+            </tr></thead>
             <tbody>
-            <?php foreach ( StripePrice::CADENCES as $cad => $cadLabel ) :
-                    $cur = StripePrice::currentPrice( $cad );
-                    $orph = StripePrice::currentPriceIsOrphaned( $cad ); ?>
+            <?php foreach ( $tiers as $t ) :
+                    $label   = $products[ $t ]['name'] ?? $t;
+                    $offered = StripePrice::configuredCadences( $t );
+                    $first   = true;
+                    foreach ( StripePrice::CADENCES as $cad => $cadLabel ) :
+                        $cur  = StripePrice::currentPrice( $cad, $t );
+                        $orph = StripePrice::currentPriceIsOrphaned( $cad, $t ); ?>
               <tr>
-                <td><strong><?php echo esc_html( $cadLabel ); ?></strong></td>
+                <?php if ( $first ) : ?>
+                  <td rowspan="<?php echo count( StripePrice::CADENCES ); ?>">
+                    <strong><?php echo esc_html( $label ); ?></strong><br>
+                    <code style="font-size:11px;"><?php echo esc_html( $t ); ?></code>
+                    <?php if ( isset( $tierErrs[ $t ] ) ) : ?>
+                      <br><span style="color:#8a3208;"><?php echo esc_html( $tierErrs[ $t ] ); ?></span>
+                    <?php elseif ( $offered === [] ) : ?>
+                      <br><span style="color:#666;">not on sale</span>
+                    <?php endif; ?>
+                  </td>
+                <?php endif; $first = false; ?>
+                <td><?php echo esc_html( $cadLabel ); ?></td>
                 <?php if ( $orph ) : ?>
                   <td colspan="2" style="color:#8a3208;">
                     Pointed at a price this site has no record of
-                    (<code><?php echo esc_html( StripePrice::currentPriceId( $cad ) ); ?></code>) —
+                    (<code><?php echo esc_html( StripePrice::currentPriceId( $cad, $t ) ); ?></code>) —
                     <strong>set it again before anybody joins.</strong>
                   </td>
                 <?php elseif ( $cur === null ) : ?>
@@ -400,12 +444,12 @@ final class Admin
                   <td><code><?php echo esc_html( $cur['stripe_price_id'] ); ?></code></td>
                 <?php endif; ?>
               </tr>
-            <?php endforeach; ?>
+            <?php endforeach; endforeach; ?>
             </tbody>
           </table>
-          <p class="description" style="max-width:760px;">A member picks one of these at checkout. Both
-             give the same membership — only the billing rhythm differs. Leave one unset and it is simply
-             not offered.</p>
+          <p class="description" style="max-width:860px;">A member picks a membership and a billing
+             rhythm at checkout. Leave a row unset and it is simply not offered; leave a whole
+             membership unpriced and it is not on sale at all.</p>
         <?php endif; ?>
 
         <h3>Set a new price</h3>
@@ -414,15 +458,25 @@ final class Admin
         <?php else : ?>
             <p class="description" style="max-width:720px;">
                 A price cannot be deleted from Stripe once it is made, only replaced — so the amount is
-                typed twice on purpose.
-                <?php if ( $product !== null ) : ?>
-                    It will be added to <strong><?php echo esc_html( $product['name'] ); ?></strong>.
-                <?php endif; ?>
+                typed twice on purpose. Setting a price also retires the one it replaces, so a
+                membership never shows two different prices for the same billing rhythm.
             </p>
             <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
                 <?php wp_nonce_field( 'lgms_price_set' ); ?>
                 <input type="hidden" name="action" value="lgms_price_set">
                 <table class="form-table" style="max-width:720px;">
+                    <tr>
+                        <th scope="row"><label for="lgms_price_tier">Membership</label></th>
+                        <td><select name="price_tier" id="lgms_price_tier">
+                            <?php foreach ( $tiers as $t ) : ?>
+                                <option value="<?php echo esc_attr( $t ); ?>"
+                                    <?php disabled( isset( $tierErrs[ $t ] ) ); ?>>
+                                    <?php echo esc_html( ( $products[ $t ]['name'] ?? $t ) . ' (' . $t . ')' ); ?>
+                                </option>
+                            <?php endforeach; ?>
+                            </select>
+                            <p class="description">Which membership this price is for.</p></td>
+                    </tr>
                     <tr>
                         <th scope="row"><label for="lgms_price_amount">Price</label></th>
                         <td><input name="price_amount" id="lgms_price_amount" type="text" class="regular-text"

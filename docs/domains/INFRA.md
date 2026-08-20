@@ -22,3 +22,16 @@ install-symlinks; A PULLED NGINX CONF IS NOT DEPLOYED UNTIL RELOAD.
 ## Issue history
 #132/ledger-47 (unreachable projects remote — dated Wed 8/20) · #138 watcher
 phase A live, phase B on probation · #141 rider batching.
+
+
+## Login-door defense (verified in action 8/20)
+Cloudflare carries a RATE LIMIT on the login door (Ian confirmed 8/20; the
+box's cf-api-token is R2-read-only so keepers cannot inspect the rule — ask
+Ian for thresholds). Signature of it WORKING: a burst of ~5 failed logins in
+one second, then silence — the edge truncated the volley; WP saw only the
+head. lg-login-monitor then sends ONE stuffing summary (5 distinct accounts /
+15 min threshold, per-account alerts suppressed 60 min). 8/20 incident:
+5 tried, 0 succeeded (session audit clean), all patreon_* machine-password
+accounts, list was outside-world breach spray (public surfaces leak no
+emails — scanned). An alert of this shape = the wall held; verify successes
+via wp_usermeta session_tokens before escalating.

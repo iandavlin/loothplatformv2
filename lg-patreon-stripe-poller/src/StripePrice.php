@@ -56,23 +56,48 @@ final class StripePrice
     public const PRICE_OPT = StripeLifecycle::PRICE_OPT;
 
     /**
-     * ONE TIER, TWO CADENCES (Ian, 2026-08-15: "We need a monthly and a yearly
-     * price etc." — his Patreon shape, 5/month or 60/year).
+     * TWO CADENCES (Ian, 2026-08-15: "We need a monthly and a yearly price
+     * etc." — his Patreon shape, 5/month or 60/year).
      *
-     * Still a single tier: both prices sit under the SAME product and grant the
-     * same membership. The choice a member makes is how often they pay, not
-     * what they get — which is why the grant is still a constant and the poller
-     * still needs no price logic.
+     * Cadence is how often they pay. TIER is what they get. Keeping the two
+     * words apart matters here because they used to be the same thing: under
+     * the 8/08 one-tier ruling both prices sat under one product, so "which
+     * price" only ever meant "how often".
      */
     public const CADENCES = [ 'month' => 'Monthly', 'year' => 'Yearly' ];
 
-    /** One option per cadence, so neither can quietly overwrite the other. */
-    public static function priceOpt( string $cadence ): string
+    /**
+     * One option per TIER per CADENCE, so no two can quietly overwrite each
+     * other — the same reasoning that split the single option into two when
+     * cadences arrived, applied one dimension further out.
+     *
+     * MULTI-TIER (Ian, 2026-08-19: "I've decided I want to be able to have
+     * multiple tiers"). The tier is part of the KEY rather than a value inside
+     * one option, because the failure mode of a single option holding a map is
+     * that a partial write loses a tier's price silently, and a lost price is
+     * a tier nobody can buy.
+     */
+    public static function priceOpt( string $cadence, ?string $tier = null ): string
+    {
+        $tier = $tier ?? self::TIER;
+        return 'lgms_stripe_price_' . $tier . '_' . $cadence;
+    }
+
+    /**
+     * The LEGACY per-cadence option, which predates tiers. Read-only, and only
+     * ever for the DEFAULT tier — see currentPriceId() for why a non-default
+     * tier must never borrow it.
+     */
+    public static function legacyCadenceOpt( string $cadence ): string
     {
         return 'lgms_stripe_price_' . $cadence;
     }
 
-    /** The single tier. Same ruling as StripeLifecycle::TIER — not a lookup. */
+    /**
+     * The DEFAULT tier — what an unqualified "the price" means, and the tier
+     * every member granted under the one-tier ruling holds. Same value as
+     * StripeLifecycle::TIER so the dash and the grant cannot drift.
+     */
     public const TIER = StripeLifecycle::TIER;
 
     /** Stripe's own floor for a recurring charge, and ours: no free tiers here. */
@@ -107,21 +132,85 @@ final class StripePrice
      * monthly slot is empty — so an older box keeps selling what it was
      * selling, and a configured monthly price always wins over it.
      */
-    public static function currentPriceId( string $cadence = 'month' ): string
+    public static function currentPriceId( string $cadence = 'month', ?string $tier = null ): string
     {
-        $v = trim( (string) get_option( self::priceOpt( $cadence ), '' ) );
-        if ( $v === '' && $cadence === 'month' ) {
-            $v = trim( (string) get_option( self::PRICE_OPT, '' ) );   // legacy
+        $tier = $tier ?? self::TIER;
+
+        $v = trim( (string) get_option( self::priceOpt( $cadence, $tier ), '' ) );
+        if ( $v !== '' ) {
+            return $v;
+        }
+
+        // THE FALLBACK CHAIN IS DELIBERATELY CLOSED TO NON-DEFAULT TIERS.
+        //
+        // Both legacy options were written in a world with exactly one tier, so
+        // the price they name is that tier's price. Letting looth2 read them
+        // would sell Looth LITE at the Pro price — worse, it would do it
+        // SILENTLY, on a box that looked configured. An unset tier must read as
+        // "not offered" and nothing else.
+        if ( $tier !== self::TIER ) {
+            return '';
+        }
+
+        $v = trim( (string) get_option( self::legacyCadenceOpt( $cadence ), '' ) );
+        if ( $v !== '' ) {
+            return $v;
+        }
+        if ( $cadence === 'month' ) {
+            $v = trim( (string) get_option( self::PRICE_OPT, '' ) );   // the original single option
         }
         return $v;
     }
 
+    /**
+     * Every tier the CATALOGUE holds, in order. Not a constant, and not a dash
+     * form either: tier CREATION stays the catalogue file plus the import
+     * command (Ian's 8/19 scope ruling — "the dash gains PER-TIER pricing
+     * only"). Registering a product is therefore the whole of adding a tier,
+     * and this method is how the dash finds out.
+     *
+     * Regional products are excluded and the list is de-duplicated, so a tier
+     * with three regional variants is still ONE tier — the regional prices hang
+     * off their own products and are not what this control sets.
+     *
+     * @return string[] e.g. ['looth2','looth3']
+     */
+    public static function tiers(): array
+    {
+        try {
+            $rows = Db::pdo()->query(
+                "SELECT DISTINCT ref FROM products
+                  WHERE kind = 'membership' AND active = 1 AND region_tag IS NULL AND ref IS NOT NULL AND ref <> ''
+                  ORDER BY ref"
+            )->fetchAll( \PDO::FETCH_COLUMN );
+        } catch ( Throwable $e ) {
+            return [];
+        }
+        return array_values( array_unique( array_map( 'strval', $rows ) ) );
+    }
+
     /** Every cadence that currently has a price, in offer order. */
-    public static function configuredCadences(): array
+    public static function configuredCadences( ?string $tier = null ): array
     {
         $out = [];
         foreach ( array_keys( self::CADENCES ) as $c ) {
-            if ( self::currentPriceId( $c ) !== '' ) { $out[] = $c; }
+            if ( self::currentPriceId( $c, $tier ) !== '' ) { $out[] = $c; }
+        }
+        return $out;
+    }
+
+    /**
+     * Every tier that currently has at least one price, in catalogue order.
+     * A registered tier with no price is NOT offered — the same rule cadences
+     * already follow, so a half-configured tier cannot reach a member.
+     *
+     * @return string[]
+     */
+    public static function configuredTiers(): array
+    {
+        $out = [];
+        foreach ( self::tiers() as $t ) {
+            if ( self::configuredCadences( $t ) !== [] ) { $out[] = $t; }
         }
         return $out;
     }
@@ -134,9 +223,9 @@ final class StripePrice
      *
      * @return array{stripe_price_id:string,unit_amount_cents:int,currency:string,interval:?string,product_name:string}|null
      */
-    public static function currentPrice( string $cadence = 'month' ): ?array
+    public static function currentPrice( string $cadence = 'month', ?string $tier = null ): ?array
     {
-        $id = self::currentPriceId( $cadence );
+        $id = self::currentPriceId( $cadence, $tier );
         if ( $id === '' ) {
             return null;
         }
@@ -166,9 +255,9 @@ final class StripePrice
     }
 
     /** True when the option points at a price our own table has never heard of. */
-    public static function currentPriceIsOrphaned( string $cadence = 'month' ): bool
+    public static function currentPriceIsOrphaned( string $cadence = 'month', ?string $tier = null ): bool
     {
-        return self::currentPriceId( $cadence ) !== '' && self::currentPrice( $cadence ) === null;
+        return self::currentPriceId( $cadence, $tier ) !== '' && self::currentPrice( $cadence, $tier ) === null;
     }
 
     /**
@@ -182,27 +271,28 @@ final class StripePrice
      * @return array{id:int,stripe_product_id:string,name:string}
      * @throws RuntimeException when the catalogue cannot name exactly one
      */
-    public static function tierProduct(): array
+    public static function tierProduct( ?string $tier = null ): array
     {
+        $tier = $tier ?? self::TIER;
         $st = Db::pdo()->prepare(
             "SELECT id, stripe_product_id, name
                FROM products
               WHERE ref = ? AND kind = 'membership' AND active = 1 AND region_tag IS NULL
               ORDER BY id"
         );
-        $st->execute( [ self::TIER ] );
+        $st->execute( [ $tier ] );
         $rows = $st->fetchAll( \PDO::FETCH_ASSOC );
 
         if ( count( $rows ) === 0 ) {
             throw new RuntimeException(
-                'No active membership product for ' . self::TIER . '. The Stripe catalogue has not been '
+                'No active membership product for ' . $tier . '. The Stripe catalogue has not been '
                 . 'imported on this box, so there is nothing to attach a price to.'
             );
         }
         if ( count( $rows ) > 1 ) {
             // Never guess which product a member's money should land against.
             throw new RuntimeException(
-                'The catalogue has ' . count( $rows ) . ' active products for ' . self::TIER
+                'The catalogue has ' . count( $rows ) . ' active products for ' . $tier
                 . '. Exactly one is required before a price can be set.'
             );
         }
@@ -279,6 +369,35 @@ final class StripePrice
         return $interval;
     }
 
+    /**
+     * The tier must be one the CATALOGUE actually holds. Never guessed, never
+     * created here: a tier that is not a registered product has no product to
+     * hang a price on, and inventing one would put a price in Stripe against a
+     * membership this site cannot grant.
+     *
+     * @throws RuntimeException with a message written to be shown to Ian
+     */
+    public static function assertTier( ?string $tier ): string
+    {
+        $tier = trim( (string) ( $tier ?? self::TIER ) );
+        if ( $tier === '' ) {
+            $tier = self::TIER;
+        }
+        $known = self::tiers();
+        if ( $known === [] ) {
+            throw new RuntimeException(
+                'The Stripe catalogue has not been imported on this box, so there are no tiers to price.'
+            );
+        }
+        if ( ! in_array( $tier, $known, true ) ) {
+            throw new RuntimeException( sprintf(
+                'There is no membership tier called "%s" in the catalogue. Registered tiers: %s.',
+                $tier, implode( ', ', $known )
+            ) );
+        }
+        return $tier;
+    }
+
     /* ------------------------------------------------------------------ */
     /* The write                                                          */
     /* ------------------------------------------------------------------ */
@@ -299,12 +418,14 @@ final class StripePrice
      * @return array{stripe_price_id:string,unit_amount_cents:int,interval:string,product_name:string}
      * @throws RuntimeException with a message written to be shown to Ian
      */
-    public static function setPrice( int $cents, string $interval, string $currency = 'usd' ): array
+    public static function setPrice( int $cents, string $interval, ?string $tier = null, string $currency = 'usd' ): array
     {
         self::assertTestMode();
         $interval = self::assertInterval( $interval );
-        $product  = self::tierProduct();
+        $tier     = self::assertTier( $tier );
+        $product  = self::tierProduct( $tier );
         $currency = strtolower( $currency );
+
 
         /* 1. Stripe. */
         try {
@@ -316,7 +437,7 @@ final class StripePrice
                 'currency'    => $currency,
                 'unit_amount' => $cents,
                 'recurring'   => [ 'interval' => $interval ],
-                'metadata'    => [ 'set_by' => 'lgms-dash', 'tier' => self::TIER ],
+                'metadata'    => [ 'set_by' => 'lgms-dash', 'tier' => $tier ],
             ] );
         } catch ( Throwable $e ) {
             Log::line( sprintf( "[%s] price create FAILED (%d %s/%s): %s\n",
@@ -364,10 +485,60 @@ final class StripePrice
         }
 
         /* 3. Only now do new joins move. */
-        update_option( self::priceOpt( $interval ), $priceId, false );
+        update_option( self::priceOpt( $interval, $tier ), $priceId, false );
 
-        Log::line( sprintf( "[%s] price set: %s (%d %s/%s) under %s\n",
-            gmdate( 'c' ), $priceId, $cents, $currency, $interval, $product['stripe_product_id'] ) );
+        /* 4. Retire every other price for this membership + rhythm. */
+        //
+        // WHY THIS IS NOT COSMETIC. The join page renders one button per ACTIVE
+        // recurring price (lgjoin.php renderTiers), with no de-duplication by
+        // cadence — so a tier priced twice offers two different monthly prices
+        // for the same membership. Photographed on dev2 before this landed: the
+        // Looth PRO card showed FOUR buttons — $11/month AND $9/month, $132/year
+        // AND $99/year.
+        //
+        // IT SWEEPS THE WHOLE (product, interval), NOT JUST THE PRICE THE OPTION
+        // POINTED AT, and that distinction is the entire fix. dev2 is the proof:
+        // the options named prices 30 and 31, while 11 and 12 sat active and
+        // unpointed from an earlier round. Retiring only the superseded pointer
+        // would have deactivated 30 and left 11 — still two monthly buttons, on
+        // a control whose whole job was to stop that.
+        //
+        // IT IS SAFE FOR THE MEMBERS STILL BILLING ON THOSE PRICES, and that is
+        // the part worth checking rather than assuming, because the neighbouring
+        // mistake is the double-charge shape this class exists to prevent:
+        //   - lgjoin's "do you already have a subscription?" lookup joins
+        //     `prices` with NO active filter, so a retired row does not make an
+        //     existing subscriber vanish;
+        //   - both tierForPrice implementations filter on the PRODUCT's active
+        //     flag, never the price row's, so their tier still resolves.
+        // Gate 76 §8 asserts both of those, not merely the count.
+        //
+        // One-time prices are left alone: they are a different product shape
+        // (a fixed-duration purchase), not a competing rhythm.
+        //
+        // Our table only. A Stripe price cannot be deleted, and deactivating it
+        // THERE would break the subscriptions billing against it.
+        try {
+            $st = Db::pdo()->prepare(
+                'UPDATE prices SET active = 0
+                  WHERE product_id = ? AND `interval` = ? AND type = ? AND stripe_price_id <> ?'
+            );
+            $st->execute( [ $product['id'], $interval, 'recurring', $priceId ] );
+            $retired = $st->rowCount();
+            if ( $retired > 0 ) {
+                Log::line( sprintf( "[%s] retired %d superseded %s price(s) for %s\n",
+                    gmdate( 'c' ), $retired, $interval, $tier ) );
+            }
+        } catch ( Throwable $e ) {
+            // Never fatal: new joins are already pointed at the new price, which
+            // is the part that had to be right. The worst case is an old price
+            // staying on the join page, which is visible.
+            Log::line( sprintf( "[%s] could not retire superseded %s price(s) for %s: %s\n",
+                gmdate( 'c' ), $interval, $tier, $e->getMessage() ) );
+        }
+
+        Log::line( sprintf( "[%s] price set: %s (%d %s/%s) for %s under %s\n",
+            gmdate( 'c' ), $priceId, $cents, $currency, $interval, $tier, $product['stripe_product_id'] ) );
 
         return [
             'stripe_price_id'   => $priceId,
