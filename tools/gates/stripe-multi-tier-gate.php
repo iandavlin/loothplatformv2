@@ -539,6 +539,16 @@ section( '§8 a superseded price stops being offered — without hiding its memb
 
 $pdo = price_rig();
 $GLOBALS['OPTS']['lgms_stripe_price_looth3_month'] = PRO_MONTH;
+// AN UNPOINTED COMPETING PRICE — the case that makes this section bite.
+// Retiring only the price the OPTION names looks correct and is not: dev2
+// carried exactly this shape (options naming prices 30/31 while 11/12 sat
+// active and unpointed from an earlier round), so a pointer-only retirement
+// would have left a second monthly button standing.
+$pdo->exec( "INSERT INTO prices (product_id, stripe_price_id, type, \"interval\", unit_amount_cents, currency, active)
+             VALUES (2, 'price_PRO_MONTH_ORPHAN', 'recurring', 'month', 1500, 'usd', 1)" );
+// A one-time price must NOT be swept — a different product shape, not a rhythm.
+$pdo->exec( "INSERT INTO prices (product_id, stripe_price_id, type, \"interval\", unit_amount_cents, currency, active)
+             VALUES (2, 'price_PRO_LIFETIME', 'one_time', NULL, 14500, 'usd', 1)" );
 // A member already billing on the price that is about to be superseded.
 $pdo->exec( "INSERT INTO customers (email) VALUES ('payer@x.test')" );
 $cid = (int) $pdo->lastInsertId();
@@ -550,10 +560,19 @@ $err = '';
 try { StripePrice::setPrice( 900, 'month', 'looth3' ); } catch ( Throwable $e ) { $err = $e->getMessage(); }
 is_( $err === '', 'a replacement price is set', $err );
 
-$stillActive = $pdo->query( "SELECT COUNT(*) AS n FROM prices WHERE product_id = 2 AND \"interval\" = 'month' AND active = 1" )->fetch()['n'] ?? 0;
+$stillActive = $pdo->query( "SELECT COUNT(*) AS n FROM prices WHERE product_id = 2 AND \"interval\" = 'month' AND type = 'recurring' AND active = 1" )->fetch()['n'] ?? 0;
 is_( (int) $stillActive === 1,
      'exactly ONE monthly price remains active for the tier',
      "got {$stillActive}" );
+$orphanGone = $pdo->query( "SELECT active FROM prices WHERE stripe_price_id = 'price_PRO_MONTH_ORPHAN'" )->fetch()['active'] ?? 1;
+is_( (int) $orphanGone === 0,
+     '...including one no option ever pointed at — the sweep is by rhythm, not by pointer' );
+$lifetime = $pdo->query( "SELECT active FROM prices WHERE stripe_price_id = 'price_PRO_LIFETIME'" )->fetch()['active'] ?? 0;
+is_( (int) $lifetime === 1,
+     '...while a ONE-TIME price is left alone — a different shape, not a competing rhythm' );
+$yearly = $pdo->query( "SELECT active FROM prices WHERE stripe_price_id = '" . PRO_YEAR . "'" )->fetch()['active'] ?? 0;
+is_( (int) $yearly === 1,
+     "...and the tier's YEARLY price is untouched by a monthly change" );
 
 // The join page's own query shape (membership-pages/web/lgjoin.php:49) — it
 // joins `prices` with NO active filter, so a retired price must not make an

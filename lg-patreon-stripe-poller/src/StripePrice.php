@@ -426,9 +426,6 @@ final class StripePrice
         $product  = self::tierProduct( $tier );
         $currency = strtolower( $currency );
 
-        // The price this one replaces, resolved BEFORE anything moves, so the
-        // retirement below cannot act on a pointer we have already changed.
-        $superseded = self::currentPriceId( $interval, $tier );
 
         /* 1. Stripe. */
         try {
@@ -490,18 +487,25 @@ final class StripePrice
         /* 3. Only now do new joins move. */
         update_option( self::priceOpt( $interval, $tier ), $priceId, false );
 
-        /* 4. Retire the price this one replaces. */
+        /* 4. Retire every other price for this membership + rhythm. */
         //
         // WHY THIS IS NOT COSMETIC. The join page renders one button per ACTIVE
         // recurring price (lgjoin.php renderTiers), with no de-duplication by
-        // cadence — so without this step a tier priced twice offers two
-        // different monthly prices for the same membership. Measured on dev2
-        // before this landed: product 9 carried $11/mo AND $9/mo, $132/yr AND
-        // $99/yr, all active, so the Pro card showed four buttons.
+        // cadence — so a tier priced twice offers two different monthly prices
+        // for the same membership. Photographed on dev2 before this landed: the
+        // Looth PRO card showed FOUR buttons — $11/month AND $9/month, $132/year
+        // AND $99/year.
         //
-        // IT IS SAFE FOR THE MEMBERS STILL BILLING ON IT, and that is the part
-        // worth checking rather than assuming, because the neighbouring mistake
-        // is the double-charge shape this class exists to prevent:
+        // IT SWEEPS THE WHOLE (product, interval), NOT JUST THE PRICE THE OPTION
+        // POINTED AT, and that distinction is the entire fix. dev2 is the proof:
+        // the options named prices 30 and 31, while 11 and 12 sat active and
+        // unpointed from an earlier round. Retiring only the superseded pointer
+        // would have deactivated 30 and left 11 — still two monthly buttons, on
+        // a control whose whole job was to stop that.
+        //
+        // IT IS SAFE FOR THE MEMBERS STILL BILLING ON THOSE PRICES, and that is
+        // the part worth checking rather than assuming, because the neighbouring
+        // mistake is the double-charge shape this class exists to prevent:
         //   - lgjoin's "do you already have a subscription?" lookup joins
         //     `prices` with NO active filter, so a retired row does not make an
         //     existing subscriber vanish;
@@ -509,19 +513,28 @@ final class StripePrice
         //     flag, never the price row's, so their tier still resolves.
         // Gate 76 §8 asserts both of those, not merely the count.
         //
+        // One-time prices are left alone: they are a different product shape
+        // (a fixed-duration purchase), not a competing rhythm.
+        //
         // Our table only. A Stripe price cannot be deleted, and deactivating it
         // THERE would break the subscriptions billing against it.
-        if ( $superseded !== '' && $superseded !== $priceId ) {
-            try {
-                Db::pdo()->prepare( 'UPDATE prices SET active = 0 WHERE stripe_price_id = ?' )
-                    ->execute( [ $superseded ] );
-            } catch ( Throwable $e ) {
-                // Never fatal: new joins are already pointed at the new price,
-                // which is the part that had to be right. The worst case is the
-                // old price staying on the join page, which is visible.
-                Log::line( sprintf( "[%s] could not retire superseded price %s: %s\n",
-                    gmdate( 'c' ), $superseded, $e->getMessage() ) );
+        try {
+            $st = Db::pdo()->prepare(
+                'UPDATE prices SET active = 0
+                  WHERE product_id = ? AND `interval` = ? AND type = ? AND stripe_price_id <> ?'
+            );
+            $st->execute( [ $product['id'], $interval, 'recurring', $priceId ] );
+            $retired = $st->rowCount();
+            if ( $retired > 0 ) {
+                Log::line( sprintf( "[%s] retired %d superseded %s price(s) for %s\n",
+                    gmdate( 'c' ), $retired, $interval, $tier ) );
             }
+        } catch ( Throwable $e ) {
+            // Never fatal: new joins are already pointed at the new price, which
+            // is the part that had to be right. The worst case is an old price
+            // staying on the join page, which is visible.
+            Log::line( sprintf( "[%s] could not retire superseded %s price(s) for %s: %s\n",
+                gmdate( 'c' ), $interval, $tier, $e->getMessage() ) );
         }
 
         Log::line( sprintf( "[%s] price set: %s (%d %s/%s) for %s under %s\n",
