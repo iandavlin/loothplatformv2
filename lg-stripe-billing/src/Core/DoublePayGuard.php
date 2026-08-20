@@ -24,6 +24,23 @@ use LGSB\Contracts\PatreonStandingProbe;
  *   - AN UNKNOWN ANSWER is not refused. See PatreonStandingProbe: null means the
  *     flag is off or WordPress did not answer, and both must leave the site
  *     selling exactly as it does today.
+ *
+ * ⚠️ WHAT THIS DOOR CANNOT DO, stated rather than left to be discovered. It
+ * knows an EMAIL and nothing else — this endpoint is reachable without a
+ * WordPress session, which is the whole reason the probe exists. A member who
+ * buys under a different address than the one carrying their Patreon linkage is
+ * not recognised and is not refused.
+ *
+ * The other two doors do not have that hole: the WordPress checkout route and
+ * the /lgjoin/ page both key on the SESSION's user id, which cannot be typed in.
+ * /lgjoin/ also pre-fills a signed-in member's address as a hidden field, so
+ * reaching this case at all means posting to the API directly.
+ *
+ * It is not closable here, and closing it is not obviously right either —
+ * refusing a stranger because a DIFFERENT account somewhere pays Patreon would
+ * be worse. The residue is caught after the fact: IdentityMatcher links the
+ * purchase to the member, and the Dual Payers screen (#149) shows Ian anyone
+ * who ends up on both rails.
  */
 final class DoublePayGuard
 {
