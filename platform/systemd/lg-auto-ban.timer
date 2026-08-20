@@ -1,0 +1,15 @@
+[Unit]
+Description=Expire login-door bans on their own, every 5 minutes (#162)
+
+[Timer]
+# THE PATH UNIT IS NOT ENOUGH ON ITS OWN. It only fires when someone writes a new
+# ban — so on a quiet box the last ban would sit in the nginx list forever and
+# "bans expire after a day" would be false exactly when nothing else is
+# happening. This is what actually makes expiry true.
+OnBootSec=3min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Unit=lg-auto-ban.service
+
+[Install]
+WantedBy=timers.target

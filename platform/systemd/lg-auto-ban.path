@@ -1,0 +1,11 @@
+[Unit]
+Description=Rebuild the login-door blocklist the moment WordPress writes a ban (#162)
+
+[Path]
+# WordPress commits the store with rename(), so this fires on a complete file and
+# never on a half-written one.
+PathModified=/var/lib/lg-auto-ban/state.json
+Unit=lg-auto-ban.service
+
+[Install]
+WantedBy=paths.target

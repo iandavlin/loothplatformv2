@@ -1,0 +1,78 @@
+# === lg-auto-ban — HTTP-CONTEXT half (#162) ===============================
+# TEMPLATE. tools/infra/install-auto-ban.sh renders this to the box-local
+# /etc/nginx/conf.d/lg-auto-ban-maps.conf, filling the placeholder in the geo
+# block below from the one tracked list at tools/infra/cloudflare-ranges.txt.
+# ⚠️ Do not spell that placeholder anywhere else in this file, comments included:
+# the installer does a plain string replace, so a second mention gets substituted
+# too and the geo block silently ends up with no ranges in it.
+#
+# TWO FILES, AND THEY ARE INSTALLED AND REMOVED TOGETHER. `geo` and `map` are
+# http-context directives and `location` is not, so the doors live in
+# snippets/lg-auto-ban-doors.conf (server context, pulled in by the vhost's glob)
+# while the vocabulary lives here. A box with the doors and not the maps has an
+# undefined variable and `nginx -t` fails — which is why the installer writes both
+# or neither, tests before it reloads, and rolls back as a pair.
+#
+# ── WHY $remote_addr IS NOT THE CLIENT ────────────────────────────────────────
+# Neither box restores real client IPs (there is no set_real_ip_from anywhere in
+# /etc/nginx, verified 2026-08-20), so on an ordinary request $remote_addr is a
+# CLOUDFLARE EDGE NODE — 104.23.190.196 and 162.158.159.108 in the last five log
+# lines. Denying on it would ban the edge and take the site off the internet for
+# every visitor behind it. The real client is in CF-Connecting-IP.
+#
+# ── AND WHY THAT HEADER IS ONLY BELIEVED SOMETIMES ────────────────────────────
+# The origin is reachable directly on 443, so anybody may connect straight to it
+# and send CF-Connecting-IP saying whatever they like. Honoured unconditionally,
+# that header lets an attacker put an address of THEIR choosing on the blocklist.
+# So it is believed only when the connection itself came from Cloudflare; from
+# anywhere else the peer's own address is used and a forged header bans the
+# forger. platform/mu-plugins/lg-auto-ban.php makes the identical decision from
+# the identical range list — one file, three readers, no drift.
+
+geo $lg_ab_from_cf {
+    default 0;
+@CF_RANGES@
+}
+
+map $lg_ab_from_cf $lg_ab_client {
+    1       $http_cf_connecting_ip;
+    default $remote_addr;
+}
+
+# The deny list itself, rebuilt by tools/infra/lg-auto-ban-render.py out of the
+# data file WordPress writes. A GLOB deliberately: if that file is ever missing,
+# this map is left with `default 0` and nobody is blocked. Failing OPEN is the
+# correct failure here — the alternative is nginx refusing to start over a
+# missing blocklist, which turns a minor outage into a total one.
+map $lg_ab_client $lg_ab_listed {
+    default 0;
+    include /etc/nginx/lg-auto-ban/list*.conf;
+}
+
+# Which wp-login.php requests are the PASSWORD DOOR. Everything else on that
+# endpoint stays open to a blocked address on purpose: they must still be able to
+# log out and to reset their password, and a reset link goes to an inbox an
+# attacker does not own.
+#
+# DEFAULT IS 1 — i.e. no ?action at all (the ordinary sign-in POST), or an action
+# nobody has listed here, counts as the door. The exemptions are enumerated and
+# the unknown case blocks, because this map only ever gets consulted for an
+# address that has already been caught trying five members' passwords.
+map $arg_action $lg_ab_password_door {
+    default                 1;
+    "logout"                0;
+    "lostpassword"          0;
+    "retrievepassword"      0;
+    "rp"                    0;
+    "resetpass"             0;
+    "register"              0;
+    "confirmaction"         0;
+    "confirm_admin_email"   0;
+    "postpass"              0;
+    "entered_recovery_mode" 0;
+}
+
+map "$lg_ab_listed:$lg_ab_password_door" $lg_ab_block {
+    default 0;
+    "1:1"   1;
+}
