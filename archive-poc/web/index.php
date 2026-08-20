@@ -151,6 +151,44 @@ const LG_WEEKLY_FRONT_TTL = 900;
  * lane-preview URL built for someone to click. Same shape as the
  * featured-members read below.
  */
+/**
+ * #169 — has the anon front-page "Join the Looth community" strip been retired?
+ *
+ * Ian 2026-08-20: "The secondary join on the front page at the top banner can go
+ * away." THE RULES LIVE IN platform/config/front-signup-banner-retire.php,
+ * including the one that matters most: this gates the ANON banner only, and the
+ * member "Welcome back" greeting sharing that slot must render in both states.
+ *
+ * Same three-layer read as lg_weekly_front_enabled() below and for the same
+ * reasons — tracked config, then a gitignored per-box .local.php (dev2 can run
+ * this ON for Ian's look while the tracked default stays false, so a live pull
+ * cannot switch it on unverified), then getenv() AND $_SERVER, because a
+ * fastcgi_param lands in $_SERVER but not reliably in the environment and a
+ * getenv()-only reader serves the OFF path on the very preview URL built to be
+ * clicked.
+ *
+ * Fails CLOSED: unreadable or malformed config means the banner still shows,
+ * which is today's behaviour for everybody.
+ */
+function lg_front_signup_banner_retired(): bool {
+    static $on = null;
+    if ($on !== null) return $on;
+    $cfg = @include __DIR__ . '/../../platform/config/front-signup-banner-retire.php';
+    $on  = is_array($cfg) && !empty($cfg['enabled']);
+    // Per-box override, gitignored (platform/config/*.local.php). Sits BEFORE
+    // the env loop so a gate forcing a state still wins over the box. Only an
+    // explicit boolean true flips it — a malformed file leaves the tracked
+    // value standing rather than being coerced into ON.
+    $loc = @include __DIR__ . '/../../platform/config/front-signup-banner-retire.local.php';
+    if (is_array($loc) && array_key_exists('enabled', $loc)) {
+        $on = ($loc['enabled'] === true);
+    }
+    foreach ([getenv('LG_FRONT_SIGNUP_BANNER_RETIRE'), $_SERVER['LG_FRONT_SIGNUP_BANNER_RETIRE'] ?? false] as $o) {
+        if ($o !== false && $o !== '') $on = ($o === '1' || $o === 'true');
+    }
+    return $on;
+}
+
 function lg_weekly_front_enabled(): bool {
     static $on = null;
     if ($on !== null) return $on;
@@ -369,6 +407,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'feedb
 $rows_full_config = archive_poc_load_rows_full(__DIR__ . '/../rows.json');
 $rows_config = $rows_full_config['rows'] ?? [];
 $signup_banner = $rows_full_config['signup_banner'] ?? null;
+// #169: the anon "Join the Looth community" strip is retired behind a flag.
+// Resolved HERE, beside the config it gates, rather than inline at the render
+// site — the render site is a template island where a bare function call reads
+// as decoration. The rules, the coupling and the member-greeting caveat live in
+// platform/config/front-signup-banner-retire.php; read that before changing this.
+$signup_banner_retired = lg_front_signup_banner_retired();
 // Dash override: config.json's `rows` key (when present) replaces the rows.json
 // default list. Same overlay pattern as the sponsors/CTAs blocks above.
 if (defined('LG_ARCHIVE_POC_CONFIG_JSON') && is_file(LG_ARCHIVE_POC_CONFIG_JSON)) {
@@ -667,7 +711,11 @@ require __DIR__ . '/_chrome.php'; ?>
   <a class="live-banner__cta" href="<?= h($hn_join_url) ?>" target="_blank" rel="noopener"><?= h($hn_join_label) ?></a>
 </aside>
 <?php endif; ?>
-<?php if (!$is_member && $signup_banner): ?>
+<?php /* #169: `&& !$signup_banner_retired` retires the SECONDARY join (Ian 8/20).
+         The `elseif ($is_member)` below is the member greeting and is deliberately
+         NOT gated — when the flag is on, an anon viewer gets neither branch and a
+         signed-in viewer is untouched. platform/config/front-signup-banner-retire.php */ ?>
+<?php if (!$is_member && $signup_banner && !$signup_banner_retired): ?>
 <aside class="signup-banner" role="region" aria-label="Sign up">
   <div class="signup-banner__inner">
     <div>
