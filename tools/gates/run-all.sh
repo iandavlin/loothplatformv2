@@ -812,7 +812,7 @@ run "compose" python3 "$(dirname "$0")/compose-gate.py" \
 echo "=== GATE 38: v2 insert path — OFF is identity, an insert only SURFACES declared meta ==="
 run "license-insert" python3 "$(dirname "$0")/license-insert-gate.py"
 
-echo "=== GATE 39: featured members — schema constraints, completeness parity, flag-off, no admin override ==="
+echo "=== GATE 39: featured members — schema constraints, completeness parity, flag-off, no admin override, completion-never-blocks (#107) ==="
 # Backlog 18 (Ian 8/11), rulings 2026-08-14. Roster number allocated by
 # keeper 2026-08-15 — first as 36, RENUMBERED to 39 the same night when
 # keeper caught a collision with dark-anon-sweep also wiring 36 (not minted
