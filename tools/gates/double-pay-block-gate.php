@@ -210,6 +210,10 @@ $MP      = $ROOT . '/membership-pages';
 $standingFile = $POLLER . '/src/Membership/PatreonStanding.php';
 $standRest    = $POLLER . '/src/Wp/PatreonStandingRestController.php';
 $wpCheckout   = $POLLER . '/src/Wp/CheckoutRestController.php';
+// The door also consults the multi-tier flag (#148). This gate asserts the
+// double-pay refusal, which is orthogonal to tiering — but the class has to be
+// LOADABLE or createSession() fatals before reaching a single assertion.
+$multiTier    = $POLLER . '/src/Membership/MultiTier.php';
 $slimCheckout = $BILLING . '/src/Http/Controllers/CheckoutController.php';
 $slimContract = $BILLING . '/src/Contracts/PatreonStandingProbe.php';
 $slimGuard    = $BILLING . '/src/Core/DoublePayGuard.php';
@@ -218,7 +222,7 @@ $slimWiring   = $BILLING . '/config/container.php';
 $joinPage     = $MP . '/web/lgjoin.php';
 $mpConfig     = $MP . '/config.php';
 
-foreach ( [ $wpCheckout, $slimCheckout, $slimWiring, $joinPage, $mpConfig ] as $f ) {
+foreach ( [ $wpCheckout, $multiTier, $slimCheckout, $slimWiring, $joinPage, $mpConfig ] as $f ) {
     if ( ! is_readable( $f ) ) { cannot( 'missing pre-existing file ' . $f ); }
 }
 $built = [
@@ -498,6 +502,7 @@ is_( $callAt !== false && $sessAt !== false && $callAt < $sessAt,
 
 section( '[6] DOOR 2 — /wp-json/lg-member-sync/v1/me/checkout-session (found by this lane)' );
 
+require_once $multiTier;
 require_once $wpCheckout;
 \LGMS\Wp\CheckoutRestController::$clientFactory = static function () {
     return new class {
