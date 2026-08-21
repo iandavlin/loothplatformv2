@@ -40,7 +40,7 @@ final class Client
     {
         $key = (string) get_option( 'lgms_stripe_secret_key', '' );
         if ( $key === '' ) {
-            throw new RuntimeException( 'LGMS: Stripe secret key not configured. Visit Settings → LG Member Sync.' );
+            throw new RuntimeException( 'LGMS: Stripe secret key not configured. Visit LG Member Sync.' );
         }
         $this->sdk = new StripeClient( [
             'api_key'        => $key,

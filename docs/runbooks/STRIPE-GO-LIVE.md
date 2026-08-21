@@ -18,7 +18,7 @@ steps below, not surprises.
 ## 1. Live catalogue (Ian, one command + one dash session)
 - [ ] `php bin/stripe-import-catalog.php db/catalog.json` with the LIVE key
       (idempotent; registers Looth LITE + Looth PRO products).
-- [ ] Live dash → Settings → LG Member Sync → Stripe Price (tier × cadence):
+- [ ] Live dash → LG Member Sync → Stripe Price (tier × cadence):
       **LITE $5/mo + $55/yr, PRO $11/mo + $120/yr** (the 8/20 ruling). This
       creates the live Stripe prices and retires any strays by rhythm.
 - [ ] Verify: live `/billing/v1/products` shows exactly 2 recurring prices

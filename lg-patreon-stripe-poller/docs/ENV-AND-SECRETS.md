@@ -41,7 +41,7 @@ No secret value is committed. The repo `.gitignore` excludes `vendor/`,
 |---|---|---|
 | `LG_INTERNAL_SECRET` | `wp-config.php` define | edit wp-config (shared with profile-app) |
 | `LG_PROFILE_APP_URL` | `wp-config.php` define | edit wp-config (loopback `https://127.0.0.1`) |
-| `lgms_db_pass` (+host/port/name/user) | WP option (DB) | Settings → LG Member Sync, or `wp option update` |
+| `lgms_db_pass` (+host/port/name/user) | WP option (DB) | LG Member Sync, or `wp option update` |
 | `lgms_shared_secret` (`X-LGMS-Token`) | WP option (DB) | `wp option update lgms_shared_secret <val>` |
 | `lgms_stripe_secret_key` | WP option (DB) | from Stripe dashboard → `wp option update` |
 | `lgpo_client_id` / `lgpo_client_secret` | WP option (DB) | from Patreon OAuth app |

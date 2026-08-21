@@ -32,7 +32,7 @@ final class Db
         $pass = (string) get_option( 'lgms_db_pass', '' );
 
         if ( $user === '' ) {
-            throw new RuntimeException( 'LGMS: DB credentials not configured. Visit Settings → LG Member Sync.' );
+            throw new RuntimeException( 'LGMS: DB credentials not configured. Visit LG Member Sync.' );
         }
 
         $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";

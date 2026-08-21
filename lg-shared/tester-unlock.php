@@ -120,7 +120,56 @@ const LG_TESTER_UNLOCK_CLEAR_WORDS = ['off', 'clear', 'no', '0'];
 const LG_TESTER_UNLOCK_SCOPE = ['join', 'lgjoin', 'regional-pricing-not-available', 'welcome'];
 
 /**
- * The config, resolved tracked → box-local → env, fail-CLOSED at every step.
+ * WHERE THE OPERATOR STORE LIVES (#190). A constant in practice; the env
+ * override exists so gate 90 can point the reader at a per-run temp file
+ * instead of the box's real one, exactly as LG_TESTER_UNLOCK_SHA256 already
+ * does for the hash. Read from getenv() AND $_SERVER for the fastcgi_param
+ * reason given below.
+ */
+if (!function_exists('lg_tester_unlock_state_path')) {
+function lg_tester_unlock_state_path(): string
+{
+    foreach ([getenv('LG_TESTER_UNLOCK_STATE'), $_SERVER['LG_TESTER_UNLOCK_STATE'] ?? false] as $o) {
+        if (is_string($o) && $o !== '') { return $o; }
+    }
+    return '/srv/lg-shared-state/tester-unlock.json';
+}
+}
+
+/**
+ * The operator store as an array, or NULL when it has nothing to say (#190).
+ *
+ * NULL rather than an empty array, so that a missing, empty, unreadable or
+ * malformed file applies NOTHING and leaves whatever the tracked config and the
+ * box file already decided. An empty array would be indistinguishable from a
+ * file that exists and says nothing — but $apply only overrides keys it finds,
+ * so both happen to be safe; null is the one that says so out loud.
+ *
+ * A TORN READ FAILS CLOSED BY CONSTRUCTION. The dash writes tmp+rename, so a
+ * reader never sees half a file; but if it somehow did, json_decode returns
+ * null, this returns null, and the request behaves as though the dash had never
+ * written anything. There is no shape of this file that can widen access beyond
+ * what a valid 64-hex hash allows, because $apply re-validates it.
+ */
+if (!function_exists('lg_tester_unlock_state')) {
+function lg_tester_unlock_state(): ?array
+{
+    $path = lg_tester_unlock_state_path();
+    if ($path === '' || !is_readable($path)) { return null; }
+
+    $raw = @file_get_contents($path);
+    if (!is_string($raw) || $raw === '') { return null; }
+
+    /* Depth 3 and no object hydration: this is a two-key file, and a store that
+       can be read should never be a store that can build anything. */
+    $v = json_decode($raw, true, 3);
+    return is_array($v) ? $v : null;
+}
+}
+
+/**
+ * The config, resolved tracked → box-local → operator store → env, fail-CLOSED
+ * at every step.
  *
  * Returns ['enabled' => bool, 'hash' => string]. 'enabled' true with an empty
  * hash is a DEAD config, not a permissive one — see lg_tester_unlock_armed().
@@ -130,9 +179,21 @@ const LG_TESTER_UNLOCK_SCOPE = ['join', 'lgjoin', 'regional-pricing-not-availabl
  * file — the same resolution site-header.php relies on for its own flag.
  */
 if (!function_exists('lg_tester_unlock_config')) {
-function lg_tester_unlock_config(): array
+function lg_tester_unlock_config(bool $forget = false): array
 {
     static $cache = null;
+    /* $forget exists for exactly one caller: the wp-admin Testers tab, which
+       WRITES the operator store and then wants to CONFIRM the site is armed
+       before telling Ian the link is live (#190).
+
+       Without it that confirmation reads the cache populated microseconds
+       earlier — before the write — and honestly reports "not armed" on a box
+       that now is. The tab would then either lie or refuse to show a link that
+       works. An optional parameter rather than a new global so every existing
+       caller, including gate 85, is untouched.
+
+       Per-request only. Nothing here caches across requests. */
+    if ($forget) { $cache = null; }
     if ($cache !== null) { return $cache; }
 
     $enabled = false;
@@ -169,6 +230,40 @@ function lg_tester_unlock_config(): array
        that must only ever pull. */
     $apply(@include __DIR__ . '/../platform/config/tester-unlock.local.php');
 
+    /* THE OPERATOR STORE (#190) — written by the wp-admin Testers tab, and the
+       reason it is a THIRD source rather than a rewrite of the second.
+
+       Ian asked for Rotate and Clear to be buttons. They cannot write the file
+       above: platform/config/ in the serving checkout is ubuntu:ubuntu 0755 and
+       WordPress runs as FPM pool looth-dev. Nor can this move to a wp_option —
+       this file is required by lg-shared/site-header.php, which renders on SEVEN
+       apps under seven different unix users and has no database at all. That is
+       why #180 used a file, and it is still true.
+
+       So the dash writes a file the seven apps can read and only WordPress can
+       write: /srv/lg-shared-state/tester-unlock.json.
+
+         JSON, NOT PHP, deliberately. A web-writable file that seven apps
+         `include` would be remote code execution across all seven the moment
+         wp-admin was compromised. json_decode cannot execute, and the hash it
+         yields is re-validated by $apply's own /^[a-f0-9]{64}$/ below.
+
+         OUTSIDE THE SERVING CHECKOUT, deliberately. ~/loothplatformv2-clean only
+         ever pulls; runtime-mutable state does not belong in it even gitignored.
+
+       IT SITS AFTER THE .local.php ON PURPOSE. A hand-placed box file must not
+       outrank the operator: dev2 carries an armed tester-unlock.local.php right
+       now, so if this source lost to it, Clear would appear to work in the dash
+       and the site would stay armed. Turning it off writes enabled=false rather
+       than deleting the file, for the same reason — an absent file is silence,
+       and silence loses to the box file.
+
+       ABSENT = TODAY'S SITE, BYTE FOR BYTE. Until the dash mints something the
+       file does not exist, this applies nothing, and the header renders what
+       origin/main renders. That is this change's equivalent of a flag defaulted
+       OFF, and gate 90 proves it with cmp rather than by repeating this. */
+    $apply(lg_tester_unlock_state());
+
     /* Previews and gate red-first legs ONLY — never a deploy mechanism. Read
        from getenv() AND $_SERVER, deliberately: a fastcgi_param lands in
        $_SERVER but not reliably in the environment, so a getenv()-only reader
@@ -185,6 +280,21 @@ function lg_tester_unlock_config(): array
     }
 
     return $cache = ['enabled' => $enabled, 'hash' => $hash];
+}
+}
+
+/**
+ * Forget the per-request config cache (#190).
+ *
+ * Called by the dash immediately after it writes the operator store, so that
+ * "is this box armed?" is a fresh MEASUREMENT rather than the answer from
+ * before the write. Nothing on the serving path calls this — a page render
+ * reads the config once and must keep getting the same answer.
+ */
+if (!function_exists('lg_tester_unlock_forget')) {
+function lg_tester_unlock_forget(): void
+{
+    lg_tester_unlock_config(true);
 }
 }
 

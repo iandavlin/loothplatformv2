@@ -180,6 +180,114 @@
   `PatreonStanding` without either being added to its require list. Revived:
   20 assertions, including the *"body chooses NOTHING"* section.
 
+## State (8/21, #190 — one membership dash, and the tester link stops living in a chat message)
+
+- **THE LAW THIS ADDS (Ian 8/21):** *"Can we round up all of the membership
+  patreon and strip and put them in one membership dash ?"*, placed the same
+  day — *"I want it in main dash, not in settings or tool"* — and scoped the
+  same evening — *"Can we put the token link in there with the whitlist ?"*
+  He approved the built tab from screenshots: **"That works awesome."**
+- ⚠️ **#190'S OWN ISSUE TEXT MIS-MEASURED THE THING IT WAS ABOUT, so do not
+  requote it.** It records `LG Member Sync` as already using `add_menu_page`
+  and therefore already top-level. Measured on main 8/21, `Admin.php:35` was
+  **`add_options_page`** — the dash lived under **Settings**, the one place the
+  placement ruling excludes; only **Affiliates** was top-level. The
+  corroboration was a link dead the whole time:
+  `platform/mu-plugins/lg-admin-tools.php:67` had always pointed at
+  `admin.php?page=lg-member-sync`, the top-level URL the page did not have.
+  Both are now true instead of assumed, and gate 90 §G asserts them.
+- ⚠️ **THE TESTER LINK COULD NOT BE READ BACK, AND THAT WAS THE REAL HOLE.**
+  #180 stores `sha256(token)` on purpose — a store that can be read should not
+  be a store that can be used — so the WORKING URL existed **only in a chat
+  message keeper pasted**. A hash cannot be turned back into a link. The
+  Testers tab is where it lives now: shown in full with a Copy button, Rotate,
+  and Turn off.
+- **THE STORE IS SPLIT IN TWO WITH ONE WRITER, and neither home could take both
+  jobs — both constraints measured, not reasoned:** `platform/config/` in the
+  serving checkout is `ubuntu:ubuntu 0755` while WordPress runs as FPM pool
+  **looth-dev**, so the dash **cannot** write `tester-unlock.local.php`; and the
+  hash **cannot** become a `wp_option`, because `lg-shared/tester-unlock.php` is
+  required by `site-header.php`, which renders on **seven apps under seven unix
+  users and has no database at all** (they share no group either — the file must
+  be plain world-readable). So: **raw token in `wp_options`
+  (`lgms_tester_unlock_token`)** for the dash to show, **`sha256`+`enabled` in
+  `/srv/lg-shared-state/tester-unlock.json`** for the seven apps to read.
+  **JSON not PHP** — a web-writable file seven apps `include` is RCE across all
+  seven — and **outside the serving checkout**, which only ever pulls.
+- ⚠️ **STORING THE RAW TOKEN IS A DELIBERATE REVERSAL OF #180'S PROPERTY**, at
+  Ian's request, because the link's whole purpose is to be sent. It is in
+  `wp_options` and nowhere else, never in the shared file (gate 90 §A15 asserts
+  **no hex run of any length but 64** reaches it), never logged, and **never in
+  a redirect** — the neighbouring invite panel *does* put its raw token in a
+  query arg, so it lands in the admin URL, browser history and every onward
+  Referer. **Observed, deliberately not changed** (different token, not this
+  issue). The trust level was already set: `wp_options` here holds
+  `lgms_db_pass` and `lgms_stripe_secret_key`.
+- ⚠️ **TWO ORDERING DECISIONS ARE LOAD-BEARING AND LOOK LIKE DETAIL.** The
+  operator store is read **AFTER** the `.local.php`, and Turn-it-off **writes
+  `enabled => false` rather than deleting the file**. Both for one reason: an
+  absent store applies NOTHING, and "applies nothing" on a box carrying an armed
+  `tester-unlock.local.php` — **which dev2 does today** — means STILL ARMED. Get
+  either wrong and the button lies. Gate 90 §B7/§B7b assert it against a real
+  hand-placed box file, §B7b with the valid hash still in place so only the
+  `enabled` half can refuse.
+- **THE PANEL SHOWS WHAT IS TRUE AND SAYS WHY WHEN IT CANNOT SHOW SOMETHING.**
+  Four states: `dash` (armed by this dash, token agrees — the link is shown),
+  **`foreign`** (armed by something else — **no link is shown at all**, because
+  the one it holds is dead, and it says so), `stale`, `off`. **dev2 renders
+  `foreign` today.** A panel that always printed `TesterUnlock::url()` would
+  show a link that looks completely live and does not work; gate 90 §D6 asserts
+  the absence, with a fixture that **holds a token**, since a fixture with none
+  leaves nothing for a broken panel to leak.
+- **The dash is now top-level with its own icon, and BOTH old addresses still
+  work.** `options-general.php?page=lg-member-sync` (this page's home for its
+  whole life, and the URL written throughout this file and the handoffs) and
+  `admin.php?page=lg-affiliates` both **301 to the new location**, carrying the
+  tab / the row being edited / the notice. A moved page that strands its old
+  address is a worse outcome than one that never moved.
+- ⚠️ **THREE THINGS MOVE TOGETHER IN A MENU PROMOTION and one fails SILENTLY:**
+  the registration, `PARENT_FILE` (one constant behind seven redirect targets),
+  and the enqueue hook prefix — **`settings_page_` never fires again once the
+  page is top-level, and the Welcome Email tab's media uploader simply stops
+  loading with no error anywhere.** Nothing but a person clicking it would have
+  caught that; gate 90 §G3 does now.
+- **Affiliates is folded in** — it was a second top-level menu in the same file.
+  **Seven links pointed at `page=lg-affiliates`**; four internal ones now build
+  the tab URL through one helper, `lg-admin-tools` is updated, and the redirect
+  covers the rest — **including two member-facing ones deliberately left alone**
+  (`membership-pages/web/affiliate-earnings.php:119` and
+  `lg-patreon-stripe-poller/src/Wp/Shortcodes.php:6082`), so this diff never
+  reached into member-facing files.
+- **The name is unchanged on purpose.** "LG Member Sync" is what this file,
+  every handoff and both operators call it; renaming the sidebar entry would
+  invalidate that vocabulary for a cosmetic gain. **Renaming is Ian's call.**
+- **#190 BUILT** on `190-membership-dash`, gate **90** (93 assertions; red-first
+  **35/35** — 33 mutations each reddening its own named assertion, 2 no-op
+  controls proven inert). **Dash-only pieces carry no flag**, matching #148 and
+  #183; the one member-facing change is the reader's third source, which is a
+  proven no-op while the store is absent.
+- ⚠️ **THE GATE'S OWN ASSERTIONS FAILED IN THREE INSTRUCTIVE WAYS**, all found
+  by red-first rather than by review: **(1)** two of them matched **their own
+  explanatory prose** (§F4 found the docblock explaining the source order, §F5
+  the comment saying the panel avoids `StripeLifecycle`) — every source check
+  now runs through PHP's **tokenizer**, not a regex; **(2)** §E2/§E3 read a
+  **fixed-width window** that ran past one handler into its neighbour, so
+  deleting rotate's `check_admin_referer` stayed green on the *neighbour's*
+  guard — the body is brace-matched now; **(3)** §G asserted placement **only
+  when the page already looked top-level** and reported otherwise, so a revert
+  flipped it into report mode and said nothing. **A gate that stops watching the
+  moment the thing it watches breaks is not a gate.**
+- **Owed / not reached:** the **health panel** (webhook-secret agreement between
+  `lgms_stripe_webhook_secret` and the billing app's env, the same for
+  `lgms_shared_secret`, test-vs-live mode, does the catalogue resolve to tiers,
+  when did a webhook last arrive) — the part of #190 with the most operational
+  value, and untouched. Also untouched: `UserLifecycleAdmin`, `MembershipGuide`
+  and `lg-patreon-onboard`, which are still their own `add_options_page` /
+  hidden-submenu screens. Nobody needs to place a `.local.php` for any of this;
+  `/srv/lg-shared-state` exists on dev2 (keeper, 8/21) and **live has no such
+  directory yet**, where the tab will correctly report that it cannot store a
+  link and refuse rather than half-work.
+
 ## State (8/21, #183 — the comp timer runs again, through the single writer)
 
 - **THE LAW THIS ADDS (Ian 8/21):** *"comp timers need to work."* And the ruling
@@ -209,7 +317,7 @@
   no code-snippet, no ACF field group, no wp_option names the key; the only two
   occurrences on live are the two data rows. Enforcement without a setter is
   half a feature and **Ian grants comps by hand**, so #183 ships the **Comp
-  Timers tab** (Settings → LG Member Sync) alongside it. It writes the meta and
+  Timers tab** (LG Member Sync) alongside it. It writes the meta and
   **never a role**.
 - **THE TIMEZONE IS UTC, AND THE OLD READER WAS FOUR HOURS LATE.** Two
   independent proofs: the old plugin's own source
@@ -513,7 +621,7 @@
   every state including ON, so the flag cannot reach a signed-in member at all.
   ON differs from main by exactly one line.
 - **THE FLIP IS TWO SWITCHES, NOT ONE.** `header-join-stripe.local.php` on the
-  box **and** `lgms_stripe_pages_live` in WP admin (Settings → LG Member Sync),
+  box **and** `lgms_stripe_pages_live` in WP admin (LG Member Sync),
   in the same window, or Ian's logged-out Join lands on the pre-launch stub.
   Gate 79 §E turns from a report into a hard assertion the moment the header
   flag goes ON, so the pairing cannot be half-done quietly.
@@ -609,7 +717,7 @@
   OFF state is the WordPress route not existing (404 ⇒ unknown ⇒ proceed),
   so there is no second switch. Fail-open by design: an unknown answer never
   blocks a sale. The unblockable reverse direction is surfaced BOTH ways: a
-  read-only "Dual Payers" tab on Settings → LG Member Sync for Ian, and a
+  read-only "Dual Payers" tab on LG Member Sync for Ian, and a
   notice on /manage-subscription/ for the member — so the first person to
   notice a double charge is the one paying it. Never reconciled silently.
 - **Dual-payer census (read-only, 8/19). LIVE: ZERO.** 1,737 Patreon rows /
@@ -634,7 +742,7 @@
 - Live catalogue EMPTY (planned 8/11 reset; zz_truncsnap_20260811 snapshots
   hold the old test rows). Dev2 registers Looth LITE ($5/$60) + Looth PRO
   (placeholder $11/$132). Registration at go-live gates on IAN'S PRICE
-  DECISION (dash: Settings → LG Member Sync). Per-tier control is BUILT (#148):
+  DECISION (dash: LG Member Sync). Per-tier control is BUILT (#148):
   the options are now lgms_stripe_price_<tier>_<cadence>, and the old
   lgms_stripe_price_month/_year pair is a read-only fallback for the DEFAULT
   tier only. Dev2's pair currently names PRO's $9/$99 — worth knowing when

@@ -10,10 +10,34 @@ final class Admin
     private const OPT_PAGE  = 'lg-member-sync';
     private const AFF_PAGE  = 'lg-affiliates';
 
+    /**
+     * The admin file this page hangs off — ONE definition, because it appears
+     * in seven redirect targets and every one of them is a silent breakage if
+     * it disagrees with how menu() registered the page (#190).
+     *
+     * It is 'admin.php' because menu() registers this page with add_menu_page —
+     * top-level, per Ian's #190 ruling. The two must agree: a redirect to
+     * options-general.php?page=lg-member-sync now lands on a Settings page that
+     * does not exist. Gate 90 §G asserts the pairing, and §G3 asserts no
+     * redirect hardcodes a parent file behind this constant's back.
+     */
+    private const PARENT_FILE = 'admin.php';
+
+    /** The dash's own URL, optionally on a given tab. */
+    private static function pageUrl( array $args = [] ): string
+    {
+        return add_query_arg(
+            array_merge( [ 'page' => self::OPT_PAGE ], $args ),
+            admin_url( self::PARENT_FILE )
+        );
+    }
+
     public static function boot(): void
     {
         add_action( 'admin_menu',  [ self::class, 'menu' ] );
         add_action( 'admin_init',  [ self::class, 'registerSettings' ] );
+        add_action( 'admin_init',  [ self::class, 'redirectLegacySettingsUrl' ] );
+        add_action( 'admin_init',  [ self::class, 'redirectLegacyAffiliatesUrl' ] );
         add_action( 'admin_enqueue_scripts', [ self::class, 'enqueueScripts' ] );
         add_action( 'admin_post_lgms_rerun_pages',       [ self::class, 'handleRerunPages' ] );
         add_action( 'admin_post_lgms_save_welcome_mosaic', [ self::class, 'handleSaveMosaic' ] );
@@ -28,27 +52,138 @@ final class Admin
         add_action( 'admin_post_lgms_invite_mint',   [ self::class, 'handleInviteMint' ] );
         add_action( 'admin_post_lgms_price_set', [ self::class, 'handlePriceSet' ] );
         add_action( 'admin_post_lgms_comp_timer_set', [ self::class, 'handleCompTimerSet' ] );
+        add_action( 'admin_post_lgms_tester_rotate', [ self::class, 'handleTesterRotate' ] );
+        add_action( 'admin_post_lgms_tester_clear',  [ self::class, 'handleTesterClear' ] );
     }
 
     public static function menu(): void
     {
-        add_options_page(
+        /**
+         * TOP-LEVEL, WITH ITS OWN ICON — Ian ruled it on #190, 2026-08-21:
+         * "I want it in main dash, not in settings or tool."
+         *
+         * ⚠️ IT WAS NOT ALREADY. #190's own text records this page as already
+         * using add_menu_page; measured on main the same day, it was
+         * add_options_page — this dash lived under Settings, the one place the
+         * ruling excludes. The corroboration was a link that was dead the whole
+         * time: platform/mu-plugins/lg-admin-tools.php:67 has always pointed at
+         * admin.php?page=lg-member-sync, the top-level URL this page did not
+         * have. That link starts working with this change and needs no edit.
+         *
+         * THE NAME IS DELIBERATELY UNCHANGED. "LG Member Sync" is what
+         * docs/domains/MEMBERSHIP.md, every handoff and both operators call it;
+         * renaming the sidebar entry would invalidate that vocabulary for a
+         * cosmetic gain, and being top-level with an icon is what "so I can
+         * find it" actually asked for. Renaming is Ian's call, not a drive-by.
+         *
+         * THREE THINGS MOVE TOGETHER OR NOT AT ALL: this call, PARENT_FILE
+         * above, and the hook prefix in enqueueScripts() below. The hook is the
+         * one that fails SILENTLY — 'settings_page_' never fires again once the
+         * page is top-level, and the Welcome Email tab's media uploader simply
+         * stops loading with no error anywhere.
+         */
+        add_menu_page(
             'LG Member Sync',
             'LG Member Sync',
             'manage_options',
             self::OPT_PAGE,
             [ self::class, 'render' ],
-        );
-
-        add_menu_page(
-            'Affiliates',
-            'Affiliates',
-            'manage_options',
-            self::AFF_PAGE,
-            [ self::class, 'renderAffiliatePage' ],
             'dashicons-groups',
             30,
         );
+
+        /* AFFILIATES USED TO BE A SECOND TOP-LEVEL MENU and is now a tab above
+           (#190). Ian: "one sidebar item ... everything a membership question
+           could send Ian to should be reachable from that one item without
+           hunting."
+
+           Nothing registers page=lg-affiliates any more, so that address would
+           answer "Sorry, you are not allowed to access this page" — and SEVEN
+           places point at it: four redirects inside this file and three outside
+           it (lg-admin-tools, membership-pages/web/affiliate-earnings.php, and
+           Wp/Shortcodes.php, the last two member-facing). Consolidating a menu
+           by breaking every link into it is not consolidation, so the old
+           address redirects to the tab instead — see
+           redirectLegacyAffiliatesUrl(). */
+    }
+
+    /**
+     * THE OLD SETTINGS URL STILL WORKS (#190).
+     *
+     * This dash lived at options-general.php?page=lg-member-sync for its whole
+     * life, and moving it top-level makes that URL answer "Sorry, you are not
+     * allowed to access this page" — WordPress no longer registers a Settings
+     * page by that name. That is a broken link for every bookmark, and for
+     * every "Settings -> LG Member Sync" in docs/domains/MEMBERSHIP.md, the
+     * handoffs, and the instructions already given to Ian.
+     *
+     * A moved page that leaves its old address dead is a worse outcome than not
+     * moving it, so the old address redirects instead. Costs one string compare
+     * on admin_init and nothing at all on the front end.
+     *
+     * ONLY `tab` IS CARRIED OVER, deliberately: it is the one parameter a real
+     * bookmark holds, and forwarding arbitrary query args from a URL into a
+     * redirect is how an open redirect gets built by accident. wp_safe_redirect
+     * would catch the host, but not carrying them is simpler than trusting it.
+     */
+    public static function redirectLegacySettingsUrl(): void
+    {
+        global $pagenow;
+        if ( $pagenow !== 'options-general.php' ) { return; }
+        if ( ! isset( $_GET['page'] ) || $_GET['page'] !== self::OPT_PAGE ) { return; }
+
+        $args = [];
+        if ( isset( $_GET['tab'] ) ) {
+            $tab = sanitize_key( (string) $_GET['tab'] );
+            if ( $tab !== '' ) { $args['tab'] = $tab; }
+        }
+        wp_safe_redirect( self::pageUrl( $args ), 301 );
+        exit;
+    }
+
+    /**
+     * THE OLD AFFILIATES MENU URL STILL WORKS (#190).
+     *
+     * Affiliates was its own top-level menu until this issue folded it into a
+     * tab. Nothing registers page=lg-affiliates now, so wp-admin would answer
+     * "Sorry, you are not allowed to access this page" for SEVEN inbound links
+     * — including two that are member-facing (membership-pages'
+     * affiliate-earnings.php and Wp/Shortcodes.php both tell an admin where
+     * payouts live). Consolidating a menu by breaking every link into it is not
+     * consolidation.
+     *
+     * admin_init fires BEFORE wp-admin/admin.php decides a page hook is
+     * missing, so this intercepts cleanly rather than racing that wp_die().
+     *
+     * The carried parameters are a WHITELIST, not everything in $_GET: the edit
+     * id is cast to an int and the two notices are our own strings, re-escaped
+     * where they render. Forwarding arbitrary query args out of a URL and into
+     * a redirect is how an open redirect gets built by accident.
+     */
+    public static function redirectLegacyAffiliatesUrl(): void
+    {
+        global $pagenow;
+        if ( $pagenow !== 'admin.php' ) { return; }
+        if ( ! isset( $_GET['page'] ) || $_GET['page'] !== self::AFF_PAGE ) { return; }
+
+        $extra = [];
+        if ( isset( $_GET['lgms_edit_aff'] ) ) {
+            $id = (int) $_GET['lgms_edit_aff'];
+            if ( $id > 0 ) { $extra['lgms_edit_aff'] = $id; }
+        }
+        foreach ( [ 'lgms_aff_ok', 'lgms_aff_err' ] as $k ) {
+            if ( isset( $_GET[ $k ] ) && is_string( $_GET[ $k ] ) ) {
+                $extra[ $k ] = rawurlencode( rawurldecode( $_GET[ $k ] ) );
+            }
+        }
+        wp_safe_redirect( self::affiliatesUrl( $extra ), 301 );
+        exit;
+    }
+
+    /** The Affiliates TAB's URL — the one place that knows where it now lives. */
+    private static function affiliatesUrl( array $extra = [] ): string
+    {
+        return self::pageUrl( array_merge( [ 'tab' => 'affiliates' ], $extra ) );
     }
 
     public static function registerSettings(): void
@@ -74,7 +209,12 @@ final class Admin
 
     public static function enqueueScripts( string $hook ): void
     {
-        if ( $hook === 'settings_page_' . self::OPT_PAGE ) {
+        /* 'toplevel_page_', not 'settings_page_' — WordPress builds the hook
+           suffix from where the page is REGISTERED, so this string had to change
+           in the same commit as add_menu_page. Getting it wrong breaks nothing
+           visibly: the page still renders, and the Welcome Email tab's media
+           library button just quietly never opens. */
+        if ( $hook === 'toplevel_page_' . self::OPT_PAGE ) {
             $tab = isset( $_GET['tab'] ) ? sanitize_key( (string) $_GET['tab'] ) : 'settings';
             if ( $tab === 'welcome_email' ) {
                 wp_enqueue_media();
@@ -103,7 +243,7 @@ final class Admin
 
         wp_safe_redirect( add_query_arg(
             [ 'page' => self::OPT_PAGE, 'lgms_pages' => rawurlencode( $msg ) ],
-            admin_url( 'options-general.php' )
+            admin_url( self::PARENT_FILE )
         ) );
         exit;
     }
@@ -124,7 +264,7 @@ final class Admin
 
         wp_safe_redirect( add_query_arg(
             [ 'page' => self::OPT_PAGE, 'tab' => 'welcome_email', 'lgms_mosaic_saved' => '1' ],
-            admin_url( 'options-general.php' )
+            admin_url( self::PARENT_FILE )
         ) );
         exit;
     }
@@ -156,7 +296,7 @@ final class Admin
     {
         wp_safe_redirect( add_query_arg(
             array_merge( [ 'page' => self::OPT_PAGE, 'tab' => 'stripe_cohort' ], $extra ),
-            admin_url( 'options-general.php' )
+            admin_url( self::PARENT_FILE )
         ) );
         exit;
     }
@@ -255,6 +395,75 @@ final class Admin
                                 'lgms_invite_exp'  => (string) $inv['expires'] ] );
     }
 
+    // -------------------------------------------------------------------------
+    // The tester unlock link (#190) — the write half of #180
+    //
+    // Ian, 2026-08-21: "Can we put the token link in there with the whitlist ?"
+    // The link existed only in a chat message, because the store holds sha256
+    // and cannot be read back. These two buttons are what make it recoverable.
+    // The store, and why it is shaped the way it is, live in LGMS\TesterUnlock.
+    // -------------------------------------------------------------------------
+
+    /**
+     * ROTATE — mint a new link, arm the site on it, and show it once on screen.
+     *
+     * ⚠️ THE RAW TOKEN IS NOT PUT IN THE REDIRECT. The invite panel next door
+     * passes its token through a query arg (lgms_invite_link), which lands in
+     * the admin URL, in browser history, and in any onward Referer. This one is
+     * read back out of the option by the tab instead, so the only place it ever
+     * appears is the rendered page. (The invite panel's shape is noted on #190
+     * as observed and deliberately NOT changed here — different token, and
+     * changing it is not this issue.)
+     */
+    public static function handleTesterRotate(): void
+    {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( 'Insufficient permissions.', 403 );
+        }
+        check_admin_referer( 'lgms_tester_rotate' );
+
+        $had = TesterUnlock::token() !== '';
+        $r   = TesterUnlock::mint();
+
+        if ( ! $r['ok'] ) {
+            self::cohortRedirect( [ 'lgms_cohort_err' => rawurlencode( $r['error'] ) ] );
+        }
+
+        /* CONFIRM RATHER THAN ASSUME. mint() wrote two stores; this asks the
+           SHARED READER — the same code the seven apps run — whether the box is
+           actually armed now. Without the cache reset in writeState() this read
+           would answer from before the write, which is exactly how a dash comes
+           to report success on a box where nothing happened. */
+        $armed = TesterUnlock::siteArmed();
+        $note  = $armed
+            ? 'A new tester link is live on this box.'
+            : 'The new link was stored, but this box does not read as armed — check the Testers tab state below before sending it to anyone.';
+
+        self::cohortRedirect( [ 'lgms_tester_ok' => rawurlencode(
+            $note . ( $had ? ' Every link sent before now has stopped working.' : '' )
+        ) ] );
+    }
+
+    /** TURN IT OFF — disarm the site and forget the token. */
+    public static function handleTesterClear(): void
+    {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( 'Insufficient permissions.', 403 );
+        }
+        check_admin_referer( 'lgms_tester_clear' );
+
+        $r = TesterUnlock::clear();
+        if ( ! $r['ok'] ) {
+            self::cohortRedirect( [ 'lgms_cohort_err' => rawurlencode( $r['error'] ) ] );
+        }
+
+        $armed = TesterUnlock::siteArmed();
+        self::cohortRedirect( [ 'lgms_tester_ok' => rawurlencode( $armed
+            ? 'The token was cleared, but this box STILL reads as armed — something other than this dash is arming it (a hand-placed platform/config/tester-unlock.local.php, or an environment override). See the state below.'
+            : 'The tester link is off. Every link sent has stopped working, and anyone still carrying the mark sees the ordinary site.'
+        ) ] );
+    }
+
     public static function handleCohortRemove(): void
     {
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -284,7 +493,7 @@ final class Admin
     {
         wp_safe_redirect( add_query_arg(
             array_merge( [ 'page' => self::OPT_PAGE, 'tab' => 'stripe_price' ], $extra ),
-            admin_url( 'options-general.php' )
+            admin_url( self::PARENT_FILE )
         ) );
         exit;
     }
@@ -505,6 +714,8 @@ final class Admin
 
     private static function renderStripeCohortTab(): void
     {
+        TesterUnlockPanel::render();
+
         $ok  = isset( $_GET['lgms_cohort_ok'] )  ? rawurldecode( (string) $_GET['lgms_cohort_ok'] )  : '';
         $err = isset( $_GET['lgms_cohort_err'] ) ? rawurldecode( (string) $_GET['lgms_cohort_err'] ) : '';
         $confirmId = (int) ( $_GET['lgms_cohort_confirm'] ?? 0 );
@@ -601,7 +812,7 @@ final class Admin
                         <input type="hidden" name="cohort_user_id" value="<?php echo (int) $cu->ID; ?>">
                         <button type="submit" class="button button-primary">Add #<?php echo (int) $cu->ID; ?> to the cohort</button>
                     </form>
-                    <a class="button" href="<?php echo esc_url( add_query_arg( [ 'page' => self::OPT_PAGE, 'tab' => 'stripe_cohort' ], admin_url( 'options-general.php' ) ) ); ?>">Cancel</a>
+                    <a class="button" href="<?php echo esc_url( add_query_arg( [ 'page' => self::OPT_PAGE, 'tab' => 'stripe_cohort' ], admin_url( self::PARENT_FILE ) ) ); ?>">Cancel</a>
                 </div>
             <?php endif; ?>
         <?php endif; ?>
@@ -775,10 +986,10 @@ final class Admin
             }
         }
 
-        $args = [ 'page' => self::AFF_PAGE ];
+        $args = [];
         if ( $notice !== '' ) $args['lgms_aff_ok']  = rawurlencode( $notice );
         if ( $err    !== '' ) $args['lgms_aff_err'] = rawurlencode( $err );
-        wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
+        wp_safe_redirect( self::affiliatesUrl( $args ) );
         exit;
     }
 
@@ -797,10 +1008,17 @@ final class Admin
             'settings'      => 'Settings',
             'member_tools'  => 'Member Tools',
             'welcome_email' => 'Welcome Email',
-            'stripe_cohort' => 'Stripe Test Group',
+            // #190: renamed for what it now answers end to end — the link that
+            // lets ONE anonymous browser in, and the list of who may buy. The
+            // SLUG deliberately stays 'stripe_cohort': three redirect helpers and
+            // any bookmark or linked notice already address it by that name.
+            'stripe_cohort' => 'Testers',
             'stripe_price'  => 'Stripe Price',
             'dual_payers'   => 'Dual Payers',
             'comp_timers'   => 'Comp Timers',
+            // #190: absorbed from its own top-level menu. Same content, same
+            // handlers, one sidebar item.
+            'affiliates'    => 'Affiliates',
         ];
         ?>
         <div class="wrap">
@@ -808,7 +1026,7 @@ final class Admin
 
             <nav class="nav-tab-wrapper" style="margin-bottom:1.5em;">
                 <?php foreach ( $tabs as $slug => $label ) : ?>
-                    <a href="<?php echo esc_url( add_query_arg( [ 'page' => self::OPT_PAGE, 'tab' => $slug ], admin_url( 'options-general.php' ) ) ); ?>"
+                    <a href="<?php echo esc_url( add_query_arg( [ 'page' => self::OPT_PAGE, 'tab' => $slug ], admin_url( self::PARENT_FILE ) ) ); ?>"
                        class="nav-tab<?php echo $tab === $slug ? ' nav-tab-active' : ''; ?>">
                         <?php echo esc_html( $label ); ?>
                     </a>
@@ -823,6 +1041,7 @@ final class Admin
                 'stripe_price'  => self::renderStripePriceTab(),
                 'dual_payers'   => self::renderDualPayersTab(),
                 'comp_timers'   => self::renderCompTimersTab(),
+                'affiliates'    => self::renderAffiliatesContent(),
                 default         => self::renderSettingsTab(),
             };
             ?>
@@ -1115,7 +1334,7 @@ final class Admin
         $back = static function ( array $extra ): void {
             wp_safe_redirect( add_query_arg(
                 array_merge( [ 'page' => self::OPT_PAGE, 'tab' => 'comp_timers' ], $extra ),
-                admin_url( 'options-general.php' )
+                admin_url( self::PARENT_FILE )
             ) );
             exit;
         };
@@ -1364,6 +1583,25 @@ final class Admin
     // Affiliates page (top-level menu)
     // -------------------------------------------------------------------------
 
+    /**
+     * The affiliate content WITHOUT its own <div class="wrap"><h1> (#190).
+     *
+     * render() already supplies both for every tab, and a page cannot contain
+     * two wraps or two h1s without WordPress's admin CSS laying it out wrongly
+     * and a screen reader announcing two page titles.
+     */
+    private static function renderAffiliatesContent(): void
+    {
+        self::renderAffiliatesTab();
+        self::renderPayoutsPanel();
+    }
+
+    /**
+     * The standalone Affiliates page. No longer reachable from a menu — #190
+     * folded it into the Affiliates TAB — but kept as the one definition of
+     * "the affiliate screen", so nothing that still routes here renders a bare
+     * fragment with no heading.
+     */
     public static function renderAffiliatePage(): void
     {
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -1372,8 +1610,7 @@ final class Admin
         ?>
         <div class="wrap">
             <h1>Affiliates</h1>
-            <?php self::renderAffiliatesTab(); ?>
-            <?php self::renderPayoutsPanel(); ?>
+            <?php self::renderAffiliatesContent(); ?>
         </div>
         <?php
     }
@@ -1735,10 +1972,10 @@ final class Admin
             }
         }
 
-        $args = [ 'page' => self::AFF_PAGE ];
+        $args = [];
         if ( $notice !== '' ) $args['lgms_aff_ok']  = rawurlencode( $notice );
         if ( $err    !== '' ) $args['lgms_aff_err'] = rawurlencode( $err );
-        wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
+        wp_safe_redirect( self::affiliatesUrl( $args ) );
         exit;
     }
 
@@ -1791,10 +2028,10 @@ final class Admin
             }
         }
 
-        $args = [ 'page' => self::AFF_PAGE, 'lgms_edit_aff' => $id ];
+        $args = [ 'lgms_edit_aff' => $id ];
         if ( $notice !== '' ) $args['lgms_aff_ok']  = rawurlencode( $notice );
         if ( $err    !== '' ) $args['lgms_aff_err'] = rawurlencode( $err );
-        wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
+        wp_safe_redirect( self::affiliatesUrl( $args ) );
         exit;
     }
 
@@ -2002,10 +2239,7 @@ final class Admin
                 $retEligible      = (int) $row['retention_eligible'];
                 $rate             = $clicks > 0 ? round( $conversions / $clicks * 100 ) . '%' : '—';
                 $debitsCents      = (int) $row['total_debits_cents'];
-                $editUrl          = add_query_arg( [
-                    'page'          => self::AFF_PAGE,
-                    'lgms_edit_aff' => $row['id'],
-                ], admin_url( 'admin.php' ) );
+                $editUrl          = self::affiliatesUrl( [ 'lgms_edit_aff' => $row['id'] ] );
             ?>
                 <tr>
                     <td>

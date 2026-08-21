@@ -63,7 +63,7 @@ final class LG_Admin_Tools
                 'blurb' => "Patreon polls the Patreon API for active patrons + their tiers, syncs to BB roles. lg-stripe-billing handles the standalone billing portal.",
                 'groups' => [
                     'Dashes' => [
-                        ['Affiliates / Patrons', admin_url('admin.php?page=lg-affiliates'),  'lg-patreon-stripe-poller', false],
+                        ['Affiliates / Patrons', admin_url('admin.php?page=lg-member-sync&tab=affiliates'),  'lg-patreon-stripe-poller', false],
                         ['Member Sync',          admin_url('admin.php?page=lg-member-sync'), 'tier resolution + audit',   false],
                     ],
                     'Apps' => [

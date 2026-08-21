@@ -2144,6 +2144,86 @@ echo "=== GATE 88: compose uploads have limits, and the cleanup cannot eat a fil
 run "compose-limits" python3 "$(dirname "$0")/compose-limits-gate.py"
 echo
 
+echo "=== GATE 90: the tester link is recoverable, and rotating kills the old one ==="
+# #190, Ian 2026-08-21: "Can we put the token link in there with the whitlist ?"
+# #180 stored sha256(token) on purpose, so reading the config hands nobody a
+# working link -- and the consequence nobody had said out loud is that THE
+# WORKING LINK EXISTED ONLY IN A CHAT MESSAGE. A hash cannot be turned back into
+# a URL, so losing the message loses the link, for a feature about to be handed
+# to real testers. The Testers tab is the write half; this gate is what keeps it
+# honest.
+#
+# THE ASSERTION THAT BITES IS THE REFUSAL, NOT THE GRANT. "Rotate produces a new
+# token" passes on code that never writes it anywhere, on code that writes the
+# token but not the hash, and on code where the OLD hash keeps working --
+# random_bytes is not the part that breaks. A9 is the one that means something:
+# AFTER ROTATING, THE OLD LINK STOPS WORKING, measured in a SUBPROCESS so no
+# cached config can flatter it. Same family as #148's "a PRO purchase grants
+# looth3" passing on a constant.
+#
+# THE SECOND VACUOUS GREEN, and the reason the panel is tested at all: "the panel
+# shows a link" is satisfied by one that ALWAYS prints TesterUnlock::url(). On a
+# box armed by a hand-placed tester-unlock.local.php -- which is what dev2 carries
+# TODAY -- that prints a link built from a token whose hash is not the armed one.
+# It looks completely live and does not work. D6 requires that no lgtester= URL
+# appears at all in that state, and its fixture HOLDS A TOKEN, because a fixture
+# with none leaves nothing for a broken panel to leak (red-first M6/M13 found
+# exactly that, twice).
+#
+# THE THIRD: turning it off must survive a box file. An absent operator store
+# applies NOTHING, so a Clear implemented as "delete the file" leaves a box armed
+# by a .local.php still armed while the dash says off. B7/B7b arm a real box file
+# and require the token to stop matching -- B7b with the VALID hash still in
+# place, so only the `enabled` half can do the refusing.
+#
+# No browser, no DB, no WordPress, no FPM, no network, and every store under a
+# PER-RUN temp dir keyed to the PID, so concurrent suites cannot collide. It
+# loads the BRANCH's shared reader first on purpose: TesterUnlock::loadReader()
+# prefers /srv/lg-shared, which is the SERVING CHECKOUT (main) sitting beside
+# dev2's armed .local.php -- the first run measured that and called a disarmed
+# box armed (trap-harness-and-serve-answer-from-main). Section H asserts the
+# loaded reader really is the branch's, because nothing else here means anything
+# if it is not.
+#
+# SECTION G IS THE MENU MOVE, and it is HARD rather than a report. An earlier
+# draft asserted the placement only when the page ALREADY looked top-level and
+# reported otherwise, so that it could not redden a lane which had not done the
+# move yet -- and red-first M24 put the dash straight back under Settings and the
+# gate stayed GREEN, because the revert flipped it back into report mode. A gate
+# that stops watching the moment the thing it watches breaks is not a gate. G5-G7
+# are BEHAVIOURAL and run in subprocesses: they load Admin.php with WP's menu and
+# redirect functions stubbed and drive the real methods, so a fatal in that file
+# becomes a failed assertion instead of killing the run. G6/G7 are a pair -- the
+# OLD Settings URL must redirect (the dash lived there its whole life and that
+# URL is in MEMBERSHIP.md, the handoffs, and Ian's bookmarks) and the handler
+# must NOT fire anywhere else, or "it redirects" is satisfied by a build that
+# bounces the whole of wp-admin into this dash.
+#
+# TWO OF ITS OWN ASSERTIONS FAILED ON THEIR OWN WARNINGS first time (F4 resolved
+# the reader's source order by strpos and found the docblock EXPLAINING the
+# order; F5 matched the panel comment saying it avoids StripeLifecycle), so every
+# source check now runs on php_code_only() -- PHP's tokenizer, not a regex,
+# because these files contain '//' inside strings. And E2/E3 read a FIXED-WIDTH
+# window that ran past the end of one handler into its neighbour, so deleting
+# rotate's nonce check stayed green on the neighbour's; the body is brace-matched
+# now.
+#
+# G9-G12 ARE THE AFFILIATES FOLD. Affiliates was a SECOND top-level menu in the
+# same file; Ian asked for one sidebar item. G9 asserts behaviourally that the
+# plugin now registers exactly ONE. G10/G11 are the same pair as G6/G7 for the
+# old page=lg-affiliates address -- SEVEN links point at it, two of them
+# member-facing (membership-pages' affiliate-earnings.php and Wp/Shortcodes.php
+# both tell an admin where payouts live), and consolidating a menu by breaking
+# every link into it is not consolidation. G10b requires the redirect to carry
+# the row being edited, or the operator lands on a list instead of the affiliate
+# they clicked. G12 requires the TAB not to nest a second wrap/h1 -- and it
+# checks for delegation as well as for literal markup, because red-first M33
+# made the tab call the standalone page and the markup arrived that way.
+#
+# RED-FIRST: 33 mutations + 2 no-op controls, 35/35 -- tools/gates/tester-dash-redfirst.py.
+run "tester-dash" php "$(dirname "$0")/tester-dash-gate.php"
+echo
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"

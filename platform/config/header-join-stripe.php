@@ -99,7 +99,7 @@
  * every line of it is right. THE TWO FLIP TOGETHER, in one window:
  *
  *     this flag                  header-join-stripe.local.php on the box
- *     lgms_stripe_pages_live     WP admin, Settings → LG Member Sync
+ *     lgms_stripe_pages_live     WP admin, LG Member Sync
  *
  * Gate 79 leg E holds that shut: while this flag is ON it ASSERTS that anon
  * GET /lgjoin/ is not the stub. While it is OFF that leg reports and does not
