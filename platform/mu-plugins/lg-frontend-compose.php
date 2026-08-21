@@ -3136,7 +3136,16 @@ html[data-lguser-theme="dark"] .lgfc-taxo__done{
    need saying twice. --lg-paper and --lg-rust-tint are light-only in the current
    palette, so they are restated rather than left to a fallback that would stay
    cream on a dark card. */
-html[data-lguser-theme="dark"] .lgfc{--lg-paper:#20241f;--lg-rust-tint:#3a2320}
+/* ⚠️ THE LOCAL RE-POINT, AND #189 FOUND TWO TOKENS MISSING FROM IT.
+   app-settings.js re-points most of the palette as inline style on <html>, but
+   not every name this file uses: `--lg-card` and `--lg-error` are in NEITHER the
+   app's dark set NOR this line, so every colour written against them stayed
+   LIGHT in dark mode — measured, by reading the app's own THEMES table rather
+   than by eye. `--lg-card` was already used by the type toggle before this lane,
+   so this is a pre-existing gap closed in one line rather than a new need.
+   #1e2124 is the app's own `--lg-card-bg`, so the two agree by construction. */
+html[data-lguser-theme="dark"] .lgfc{--lg-paper:#20241f;--lg-rust-tint:#3a2320;
+  --lg-card:#1e2124;--lg-error:#f2b8b5;--lg-ink-soft:#c6cabf}
 /* SELECTED CHIPS IN DARK — Ian 2026-08-15: "compose works well. Needs some dark
    mode love." Gate 47 caught this on its first real run; measured, 1.85:1.
 
@@ -3284,7 +3293,13 @@ html[data-lguser-theme="dark"] .lgfc__card{box-shadow:0 10px 34px rgba(0,0,0,.28
 /* VISIBLE ON PURPOSE. It is the fallback where drag-and-drop is unavailable and
    the native control on the keyboard path, so it is never sr-only. */
 .lgfc-up__file{max-width:100%;font-size:12.5px;color:var(--lg-ink-soft,#565a55);cursor:pointer}
-.lgfc-up.is-full .lgfc-up__zone{opacity:.72}
+/* ⚠️ `.is-full` IS DELIBERATELY UNSTYLED, and the class is kept as a state hook
+   rather than deleted so this note has somewhere to live. It used to carry
+   `opacity:.72` on the drop-zone. That was wrong: at ten photos the zone is
+   FULLY LIVE — dropping another is what offers the swap, which is the whole
+   feature — and a dimmed control says "disabled" to everyone who looks at it.
+   Caught in a screenshot, in dark, where the greyed-out zone read as broken.
+   Do not re-add a dim here. */
 
 /* ---- sending ---- */
 .lgfc-up__prog{margin:0 0 10px;padding:0;list-style:none}
@@ -3320,17 +3335,18 @@ html[data-lguser-theme="dark"] .lgfc__card{box-shadow:0 10px 34px rgba(0,0,0,.28
   .lgfc-up--file .lgfc-up__item{width:100%}
 }
 
-/* ---- dark ---- */
-html[data-lguser-theme="dark"] .lgfc-up__zone{background:#1e2220;border-color:#2c312d}
-html[data-lguser-theme="dark"] .lgfc-up__zone:hover,
-html[data-lguser-theme="dark"] .lgfc-up__zone.is-drag{background:#222824;border-color:var(--lg-sage,#87986a)}
-html[data-lguser-theme="dark"] .lgfc-up__item{background:#1e2220;border-color:#2c312d}
+/* ---- dark ----
+   There is almost nothing here on purpose. Every colour above is written against
+   a --lg-* token, and dark re-points those tokens — so dark comes free, exactly
+   as this file's header says it should. The nine hardcoded overrides that used
+   to sit here were compensating for ONE missing token (`--lg-card`), which is
+   now re-pointed with the rest; keeping them would have frozen this control at
+   one palette while the rest of the site was retuned around it.
+   The thumbnail well is the only exception: it wants to be a shade DARKER than
+   the tile it sits in, so that an image with transparency reads as a hole rather
+   than as part of the card, and there is no token for "one step down". */
 html[data-lguser-theme="dark"] .lgfc-up__thumb,
-html[data-lguser-theme="dark"] .lgfc-up__thumb--none{background:#181b19}
-html[data-lguser-theme="dark"] .lgfc-up__swapbar{background:#1f2620;border-color:var(--lg-sage,#87986a)}
-html[data-lguser-theme="dark"] .lgfc-up__cancel{background:#1e2220;border-color:#2c312d}
-html[data-lguser-theme="dark"] .lgfc-up__bar{background:#2c312d}
-html[data-lguser-theme="dark"] .lgfc-up__err{background:#2e1e1c;color:#f2b8b5}
+html[data-lguser-theme="dark"] .lgfc-up__thumb--none{background:#15171a}
 CSS;
 }
 

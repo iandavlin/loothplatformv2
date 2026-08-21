@@ -258,6 +258,11 @@ MUTATIONS = [
      "    /* mutation: the roots are left enqueued */",
      ["I3.media_is_gone"], False),
 
+    ("M29 a colour token loses its dark value",
+     "  --lg-card:#1e2124;--lg-error:#f2b8b5;--lg-ink-soft:#c6cabf}",
+     "  --lg-error:#f2b8b5;--lg-ink-soft:#c6cabf}",
+     ["K.dark.repointed"], False),
+
     ("N1  CONTROL: a comment is reworded",
      "/** The stamp that makes the collector safe. See lg_fc_collect_unused(). */",
      "/** The stamp that makes the collector safe. (reworded by the red-first) */",

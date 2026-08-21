@@ -202,6 +202,46 @@ def js_mb_agrees(plugin, want):
     return bad, None
 
 
+def dark_tokens_are_repointed(plugin, repo):
+    """§K — every COLOUR token this stylesheet reads must have a dark value.
+
+    ⚠️ THIS IS A CROSS-FILE CHECK, WHICH IS WHY IT IS NOT A BROWSER TEST. Dark on
+    this platform is applied by app-settings.js re-pointing the --lg-* tokens as
+    inline style on <html>; the compose page additionally re-points a few of its
+    own. A colour written against a token that appears in NEITHER list silently
+    stays light — dark-grey text on a dark background, or a white card in a black
+    page — and it looks like a defect in whatever is drawn on top of it.
+
+    Found the hard way: `--lg-card` (used by the type toggle since before #189)
+    and `--lg-ink-soft` (4 uses) were in neither, so a screenshot in dark showed
+    a control that read as broken and was not.
+
+    ⚠️ WHAT IT CANNOT SEE: whether the dark value is a GOOD colour. It asserts a
+    value EXISTS. Contrast is gate 47's job and a human's.
+    """
+    src = io.open(plugin, encoding="utf-8").read()
+    m = re.search(r"function lg_fc_css\(\): string\s*\{\s*return <<<'CSS'\n(.*?)\nCSS;", src, re.S)
+    if not m:
+        return None, "could not find lg_fc_css()'s stylesheet — this leg is not running"
+    body = m.group(1)
+    used = sorted(set(re.findall(r"var\((--lg-[a-z0-9-]+)", body)))
+    if not used:
+        return None, "the stylesheet reads no tokens at all, which cannot be right"
+
+    settings = os.path.join(repo, "webroot/app-settings.js")
+    if not os.path.isfile(settings):
+        return None, "webroot/app-settings.js is missing — the dark palette cannot be read"
+    app = set(re.findall(r"'(--lg[a-z0-9-]*)'\s*:", io.open(settings, encoding="utf-8").read()))
+
+    local = set()
+    for blk in re.findall(r'html\[data-lguser-theme="dark"\][^{]*\{([^}]*)\}', body):
+        local |= set(re.findall(r"(--lg-[a-z0-9-]+)\s*:", blk))
+
+    # Fonts are not colours and are correctly absent from a theme palette.
+    missing = [t for t in used if t not in app and t not in local and "font" not in t]
+    return missing, None
+
+
 def main():
     repo = repo_root()
     plugin = os.path.join(repo, PLUGIN_REL)
@@ -278,6 +318,23 @@ def main():
         print("   %d passed, %d failed" % (
             sum(1 for _, ok, _ in rows if ok), sum(1 for _, ok, _ in rows if not ok)))
         print()
+
+    # ── §K the dark palette, once (it reads files, not a WordPress) ──────────
+    missing, why = dark_tokens_are_repointed(plugin, repo)
+    if why:
+        failed += 1
+        findings.append("both       K.dark.readable  " + why)
+        print("   FAIL  %-28s %s" % ("K.dark.readable", why))
+    elif missing:
+        failed += 1
+        detail = ("%d colour token(s) the stylesheet reads have no dark value, so they "
+                  "stay LIGHT in dark mode: %s" % (len(missing), ", ".join(missing)))
+        findings.append("both       K.dark.repointed  " + detail)
+        print("   FAIL  %-28s %s" % ("K.dark.repointed", detail))
+    else:
+        passed += 1
+        print("── dark palette ──\n   every colour token the stylesheet reads has a dark "
+              "value (app-settings.js or the page's own re-point)\n")
 
     print("gate 88 — %d passed, %d failed" % (passed, failed))
     if failed:

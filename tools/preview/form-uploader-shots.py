@@ -23,10 +23,11 @@ CDP cannot fabricate a DataTransfer with real files. The drop handler and the
 file input call the SAME accept() one line apart, so it is the same code path —
 but only the input path is exercised here.
 """
-import base64, json, os, subprocess, sys, time
+import base64, io, json, os, re, subprocess, sys, time
 import urllib.request
 import websocket
 
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 LANE = "189-form-uploader"
 OUT  = "/home/ubuntu/projects/footer-mockups/189-uploader"
 URL  = "https://dev2.loothgroup.com/preview/%s/compose/?type=loothprint" % LANE
@@ -73,7 +74,13 @@ def cleanup():
     named for it, deleted by name, and the leftovers are counted."""
     out = wpcli(
         '$u=%d;'
-        '$posts=get_posts(["post_type"=>array_keys(lg_fc_types()),"post_status"=>"any",'
+        # ⚠️ auto-draft MUST BE NAMED. WP_Query's "any" excludes auto-draft (and
+        # trash), and the composing post IS an auto-draft — so the first version
+        # of this reported "posts=0 files=0" while quietly relying on
+        # wp_delete_user's cascade, which is the exact trust this teardown exists
+        # to replace. The numbers were true and meaningless.
+        '$posts=get_posts(["post_type"=>array_keys(lg_fc_types()),'
+        '"post_status"=>["auto-draft","draft","pending","publish","private","trash"],'
         '"numberposts"=>-1,"author"=>$u,"fields"=>"ids"]);'
         '$n=0;'
         'foreach($posts as $p){'
@@ -144,10 +151,45 @@ def go():
     send("Page.navigate", {"url": URL})
     time.sleep(2.2)
 
+# ⚠️ SETTING THE ATTRIBUTE IS NOT SETTING THE THEME, and the first run of this
+# harness proved it the expensive way: every "dark" shot came back with a WHITE
+# card and light labels around dark inputs, and it looked like a defect in the
+# new controls. It was the harness. On this platform dark is applied by
+# app-settings.js, which RE-POINTS the --lg-* tokens as inline style on <html>
+# and only then stamps data-lguser-theme. Set the attribute alone and every
+# var(--lg-…, <light fallback>) stays light — a half-dark page that is not what
+# any member sees.
+#
+# The values are READ OUT OF app-settings.js rather than copied here, so a
+# retuned palette cannot leave this harness photographing last month's dark.
+# Nothing is written to localStorage: a stamped theme key persists on the shared
+# chrome profile and would take every other lane's browser dark with it.
+def dark_theme_vars():
+    src = io.open(os.path.join(REPO, "webroot/app-settings.js"), encoding="utf-8").read()
+    m = re.search(r"id:\s*'dark'.*?vars:\s*\{(.*?)\}\s*\}", src, re.S)
+    if not m:
+        sys.exit("could not read the dark palette out of app-settings.js — refusing to "
+                 "photograph a theme I cannot apply faithfully")
+    pairs = re.findall(r"'(--[a-z0-9-]+)'\s*:\s*'([^']+)'", m.group(1))
+    if not pairs:
+        sys.exit("the dark palette parsed to nothing")
+    return pairs
+
+DARK = dark_theme_vars()
+
 def shot(name, width=1280, height=900, theme="light"):
     send("Emulation.setDeviceMetricsOverride",
          {"width": width, "height": height, "deviceScaleFactor": 2, "mobile": width < 700})
-    ev("document.documentElement.setAttribute('data-lguser-theme', %r)" % theme)
+    if theme == "dark":
+        sets = ";".join("r.style.setProperty(%r,%r)" % (k, v) for k, v in DARK)
+        ev("(function(r){%s;r.setAttribute('data-lguser-theme','dark');"
+           "r.setAttribute('data-lguser-dark','1')})(document.documentElement)" % sets)
+    else:
+        dels = ";".join("r.style.removeProperty(%r)" % k for k, _ in DARK)
+        # 'default' is the app's own id for Light — not 'light', which the app
+        # never sets and which no rule would ever match.
+        ev("(function(r){%s;r.setAttribute('data-lguser-theme','default');"
+           "r.setAttribute('data-lguser-dark','0')})(document.documentElement)" % dels)
     time.sleep(0.45)
     png = send("Page.captureScreenshot", {"format": "png", "captureBeyondViewport": True})
     p = os.path.join(OUT, "%s-%s-%dw.png" % (name, theme, width))
@@ -258,6 +300,23 @@ try:
          "return !!h && getComputedStyle(h).display==='none'})()"),
       "\"Which photo leads?\" is really invisible on an empty form, not merely "
       "carrying a hidden attribute an author display rule overrides")
+
+    # ⚠️ THE THEME'S OWN LIVENESS. A dark shot with a white card is what a
+    # half-applied theme looks like, and it reads as a defect in the thing being
+    # photographed. Assert the page actually went dark before believing any dark
+    # picture — the delta, against the light value, never an absolute.
+    shot("_probe", 1280, 900, "light")
+    light_card = ev("getComputedStyle(document.querySelector('.lgfc__card')).backgroundColor")
+    shot("_probe", 1280, 900, "dark")
+    dark_card = ev("getComputedStyle(document.querySelector('.lgfc__card')).backgroundColor")
+    R("theme.dark.really.applies", bool(light_card) and bool(dark_card) and light_card != dark_card,
+      "the card is %s in light and %s in dark — equal values mean the tokens were "
+      "never re-pointed and every dark shot is a light page with a dark attribute"
+      % (light_card, dark_card))
+    for junk in ("_probe-light-1280w.png", "_probe-dark-1280w.png"):
+        p = os.path.join(OUT, junk)
+        if os.path.exists(p):
+            os.remove(p)
 
     SHOT_EMPTY = [shot("1-empty", 1280, 1000, "light"), shot("1-empty", 1280, 1000, "dark"),
                   shot("1-empty", 390, 900, "light"),  shot("1-empty", 390, 900, "dark")]
