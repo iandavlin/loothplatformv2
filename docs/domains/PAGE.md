@@ -479,3 +479,149 @@ Capture `$!`, or pick the interpreter line out of `ps -eo pid,cmd`.
   the feature is a gate that goes red on success.**
 - No cancel on an upload in flight; the 5GB/4.6G spool risk from #186 is still
   open; the print-file field's `mime_types = zip` is still unenforced.
+
+---
+
+## ⚠️ #187 wears the `page` label and is NOT a lanes-page issue — the SIXTH in six days
+
+After #171 (Patreon/join dark mode → MEMBERSHIP.md), #179 (the Loothprint
+bundle), #185 (the compose write-up editor), #186 (compose uploads) and #189 (the
+form's own uploader). **#187 is image delivery on the article pages** — the
+resizer, `srcset` and dimensions on every managed-CPT single. Nothing in it
+touches `/lanes/`, `tools/lanes-page.py`, `lanes.json` or the timer. Recorded
+here rather than silently relabelled, because the domain rule says a
+domain-labelled issue updates its domain file in the same commit — so this line
+IS that update.
+
+**Six in six days, five different lanes.** The label has now cost more paragraphs
+explaining what it does not mean than it has ever saved. It needs Ian's ruling.
+
+### ⚠️ THE ONE THING EVERY LANE ON THIS BOX SHOULD READ: `transferSize` IS 0 CROSS-ORIGIN
+
+The craft gate computes `PAGE-IMG-BUDGET`, `PAGE-BUDGET` and every KB it prints
+from `performance.getEntriesByType('resource')` → `transferSize`. **That field is
+0 for a cross-origin response with no `Timing-Allow-Origin` header.**
+
+MEASURED 2026-08-21 on `/post-imgcap/68-jazz-bass-truss-rod-reclamation/`:
+**28 of its 35 images are stored with the LIVE host** in their URL, so the gate
+reported the page's images at **222KB when the true weight was 5,730KB** — a
+26× understatement, in the direction that looks healthy.
+
+Two consequences, both live today:
+
+- **The gate's weight numbers are a floor, not a measurement, on any page that
+  pulls from another host.** 436 posts on this box store media on
+  `loothgroup.com` (1,217 media rows; 265 posts / 697 rows are on dev2's own
+  host, 2 host-relative). None of that weight is visible to the gate.
+- **Fixing such a page reads as a regression.** #187 cut that article's images
+  49% and the gate's own number went *up* 63%, because the images only started
+  being counted once they became same-origin. A lane that trusts the gate here
+  will revert a genuine improvement.
+
+To measure honestly: read each `<img>`'s `currentSrc` in the browser at the
+viewport under test, then fetch each URL and sum. `tools/gates/craft-gate.py`
+was deliberately **not** changed to do this — it would redden main for
+pre-existing weight on surfaces nobody has been asked to fix.
+
+### The image law, and where it is now enforced
+
+`CLAUDE.md`: *"Images: always the resizer (`/img.php?w=`) + `srcset` +
+width/height — never raw uploads, never one-size"*. Until #187 the CPT singles —
+the pages members actually read — were the one family the craft gate had never
+looked at, so the law had never been evaluated there. `/loothprint/fret-sander-v2/`
+shipped **11 `<img>` tags, 0 through the resizer, 17 raw uploads URLs and 1
+`srcset`**, with a 2000px hero in a 780px slot, downloaded twice (the embed
+poster reuses the same file).
+
+Now in `craft-gate.py` PAGES: `loothprint` (anon + member), `article`, `video`.
+**Three, not nine.** All nine managed CPT singles are served by the same
+`archive-poc/standalone/render.php` and the same block set
+(`platform/nginx/strangler-archive-poc.conf`), so nine entries would cost every
+lane ~9s of shared gate time to re-prove one code path. The emitters were fixed
+for **every** variant including the sponsor hero that no gate page exercises —
+uncovered-and-fixed, not uncovered-and-broken.
+
+### Delivery lives in ONE class now: `archive-poc/standalone/engine/src/Img.php`
+
+`Img::src()` / `srcset()` / `dims()`, mirroring the trio already proven in
+`bb-mirror/web/forums/_feed.php`. Two rules in it are load-bearing:
+
+1. **Dimensions come from the blob's `sizes` metadata, never the filesystem.**
+   The feed's `lg_cover_dims()` calls `getimagesize()` on the R2 mount and that
+   was the hub's #1 server cost. The standalone renderer does not need to: the
+   materializer already baked width and height for every variant. Where a bare
+   URL carries no metadata (the related-post cards), the **variant filename**
+   `-768x576.webp` supplies them.
+2. **It resizes from the widest uncropped VARIANT, not the original** — see the
+   trap below.
+
+Nothing is guessed: a crop-only `sizes` map (`thumbnail` is 150x150 on a 16:9
+photo) yields **no** dimensions rather than a square hero, and no derivable
+source width yields **no** `srcset` rather than candidates whose widths we
+invented.
+
+### ⚠️ Trap: rewriting a stored URL host-relative can 404 a photo that works today
+
+PAGE.md's own ruling (8/21) is that same-site URLs go host-relative at render
+time — `loothgroup.com`, `www.` and `dev2.` are all "our hosts"
+(`lg_bb_self_relative_url`). Applying it to **images** is not free, because a
+missing link is a wrong destination and a missing image is a hole in the page.
+
+MEASURED: of **1,196** distinct media files stored with the live host, **11 do
+not exist on dev2 in any form** (dev2 holds a differently-named import,
+`i_bridge-wing-flattener-hero-*.jpg`, not the `.webp` the blob names). Those 11
+sit on **4 posts** — `bridge-wing-flattener` (8 images), plus the heroes of
+`a-cowboys-dream-gretsch-roundup-pt-1`,
+`loothing-for-dollars-moses-mckinley-and-guitar-czar-repair` and
+`somogyi-neck-reset-with-jonathan-scott`. They render today only because the page
+fetches them from production; host-relative they 404 **on dev2 only** (on live
+the files exist, so live is unaffected).
+
+Shipped anyway, deliberately, and the reasoning is the part worth keeping: the
+alternative — leaving the live host on — produces a **FALSE GREEN**. The craft
+gate's collector filters images to same-origin
+(`i.src.startsWith(location.origin)`), so those 436 posts' raw full-size images
+are invisible to it. Keeping the host would have left the real defect unfixed on
+the majority of articles *and* made the gate report success. A visible hole on 4
+dev2 pages beats an invisible defect on 436.
+
+**The remedy is data, not code**: copy those 11 files into the dev uploads
+bucket, or re-materialize those 4 posts on dev2.
+
+**Related, and NOT caused by #187:** `/loothprint/fret-sander-v2/`'s
+related-post card for `bridge-wing-flattener` is **already broken on main** — it
+stores a `dev2.loothgroup.com` URL for a file dev2 does not have, and 404s
+today. Same data gap, different field.
+
+### Two more things #187 proved, cheaply
+
+- **`tools/preview/lane-preview.sh` gives the standalone renderer a real browser
+  on a BRANCH**, and it is the only way to measure this kind of change: the
+  `/loothprint/` route serves `/srv/archive-poc`, a symlink into the serving
+  checkout, so "weighed the page on dev2" otherwise means "weighed main".
+  Verified both directions in the same minute — main's route emitted 0 `img.php`
+  while the preview emitted 27.
+- **Gate 69's `--path` is a TEMPLATE (`/loothprint/{slug}/`), not a prefix.**
+  Passing a bare prefix makes it request a slugless URL and report *"the sticky
+  dock renders no .lg-standalone-dock"* four times — which reads exactly like a
+  lane having deleted the dock. And once pointed correctly it fails a *second*
+  way, on the Edit href, because `platform/config/frontend-compose.local.php` is
+  gitignored and exists **only in the serving checkout** (the #185/#186 trap): a
+  worktree preview reads the tracked default and the Edit pill falls back to
+  `?lg_edit=1`. Copy the `.local.php` into the worktree and it is green (49
+  checks).
+
+### Reported by #187, not fixed
+
+- **The craft gate cannot see a broken image.** `check()` skips any `<img>` with
+  `naturalWidth == 0`, so a 404 photo is silently not a violation. That is how
+  the related-card hole above has sat on main unnoticed.
+- **`PAGE-IMG-BUDGET` also misses never-loaded lazy images**, so it is a
+  transferred-bytes assertion, not a page-weight one. The 35-image article is
+  2,901KB of real images after the fix and the gate scores it at 293KB.
+- Author **avatars** and the shell's own header/footer logos stay raw uploads
+  (10.5KB and 39KB). The footer logo is hardcoded to `https://loothgroup.com`
+  and the header avatars are served over **`http://`** — mixed content on an
+  https page. Left alone: they are site chrome and one of them stores a host
+  whose file dev2 lacks, so rewriting it would break a working image to save
+  nothing.

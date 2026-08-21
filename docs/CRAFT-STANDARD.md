@@ -110,6 +110,39 @@ MEASURED: 393 attachments on dev2 → **640px median, 67 KB mean**, against 900p
 column. Both are accepted because a single URL must serve both layouts and mail
 is read mostly on phones. Known, not missed.
 
+### Not an exception: the numbers this gate prints are a FLOOR, not a weight
+
+⚠️ Read before quoting a craft-gate KB figure at anyone. Every KB the gate prints
+comes from `performance.getEntriesByType('resource')` → `transferSize`, and that
+field is **0 for a cross-origin response with no `Timing-Allow-Origin`**. It is
+also absent for a lazy image that never entered the viewport during the 6s
+collection window.
+
+MEASURED 2026-08-21 (#187) on `/post-imgcap/68-jazz-bass-truss-rod-reclamation/`:
+28 of its 35 images are stored with the **live** host in their URL, so the gate
+reported **222KB of images against a true 5,730KB** — a 26× understatement, in
+the direction that looks healthy. 436 posts on this box store media that way.
+
+Two consequences that have already bitten once:
+
+- `PAGE-IMG-BUDGET` / `PAGE-BUDGET` are transferred-bytes assertions, not page
+  weight. They cannot fire on weight the instrument cannot see.
+- **Fixing such a page reads as a regression.** #187 cut that article's real
+  image weight 49% and the gate's own number went *up* 63%, purely because the
+  images became same-origin and started being counted. A lane trusting the
+  printed number would revert a real improvement.
+
+To measure weight honestly: read each `<img>`'s `currentSrc` in the browser at
+the viewport under test, fetch each URL, sum. The gate was deliberately NOT
+changed to do this — it would redden `main` for pre-existing weight on surfaces
+nobody has been asked to fix, and a gate that goes red for somebody else's open
+defect blocks every lane.
+
+Related blind spot, same section: `check()` skips any `<img>` whose
+`naturalWidth` is 0, so **a broken image is never a violation**. A 404 photo on
+`/loothprint/fret-sander-v2/`'s related-card strip has been on `main` unnoticed
+because of it.
+
 ### Not an exception: `img.php?s=bb_medias/…` without dims
 
 `/hub/<forum>/` ships a topic cover through the resizer *without* `width`/`height`.
