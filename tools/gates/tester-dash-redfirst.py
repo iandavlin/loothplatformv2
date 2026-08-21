@@ -177,8 +177,38 @@ MUTATIONS = [
     ("M22", ADMIN,
      "            admin_url( self::PARENT_FILE )\n        ) );\n        exit;\n    }\n\n    /** Step 1 of add",
      "            admin_url( 'options-general.php' )\n        ) );\n        exit;\n    }\n\n    /** Step 1 of add",
-     "G3", "one redirect hardcodes the parent file behind the constant's back, "
-           "so promoting the menu leaves that one link on a page that no longer exists"),
+     "G8", "one redirect hardcodes the parent file behind the constant's back, "
+           "so the move half-lands and that one link points at a page that no "
+           "longer exists"),
+
+    # ---- the menu move (#190, keeper's item 2) ---------------------------
+    ("M24", ADMIN,
+     "        add_menu_page(\n            'LG Member Sync',",
+     "        add_options_page(\n            'LG Member Sync',",
+     "G1", "the dash slides back under Settings — the one place Ian ruled against"),
+
+    ("M25", ADMIN,
+     "    private const PARENT_FILE = 'admin.php';",
+     "    private const PARENT_FILE = 'options-general.php';",
+     "G2", "every redirect lands on a Settings page that no longer exists"),
+
+    ("M26", ADMIN,
+     "        if ( $hook === 'toplevel_page_' . self::OPT_PAGE ) {",
+     "        if ( $hook === 'settings_page_' . self::OPT_PAGE ) {",
+     "G3", "the enqueue hook never fires again, so the Welcome Email tab's "
+           "media uploader silently stops loading — no error anywhere"),
+
+    ("M27", ADMIN,
+     "        global $pagenow;\n        if ( $pagenow !== 'options-general.php' ) { return; }",
+     "        return;\n        global $pagenow;\n        if ( $pagenow !== 'options-general.php' ) { return; }",
+     "G6", "the old Settings URL is left dead, stranding every bookmark and "
+           "every 'Settings -> LG Member Sync' in the docs"),
+
+    ("M28", ADMIN,
+     "        if ( $pagenow !== 'options-general.php' ) { return; }",
+     "        if ( false ) { return; }",
+     "G7", "the redirect fires on EVERY admin page, bouncing the whole of "
+           "wp-admin into this dash"),
 ]
 
 NOOPS = [

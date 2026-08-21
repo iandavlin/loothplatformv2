@@ -15,21 +15,13 @@ final class Admin
      * in seven redirect targets and every one of them is a silent breakage if
      * it disagrees with how menu() registered the page (#190).
      *
-     * ⚠️ IT IS 'options-general.php' TODAY, WHICH IS SETTINGS — the one place
-     * Ian ruled this dash must NOT live: "I want it in main dash, not in
-     * settings or tool." #190's own issue text says this page already uses
-     * add_menu_page and is top-level; measured 2026-08-21, it does not and it
-     * is not. Only Affiliates is top-level. The corroboration is a link that is
-     * dead right now: platform/mu-plugins/lg-admin-tools.php:67 points at
-     * admin.php?page=lg-member-sync, the top-level URL this page does not have.
-     *
-     * Promoting it means changing this constant, the registration in menu(),
-     * and the enqueue hook prefix in enqueueScripts() — TOGETHER. The hook is
-     * the one that fails quietly: 'settings_page_' becomes 'toplevel_page_',
-     * and if it is missed the Welcome Email tab's media uploader stops loading
-     * with no error at all.
+     * It is 'admin.php' because menu() registers this page with add_menu_page —
+     * top-level, per Ian's #190 ruling. The two must agree: a redirect to
+     * options-general.php?page=lg-member-sync now lands on a Settings page that
+     * does not exist. Gate 90 §G asserts the pairing, and §G3 asserts no
+     * redirect hardcodes a parent file behind this constant's back.
      */
-    private const PARENT_FILE = 'options-general.php';
+    private const PARENT_FILE = 'admin.php';
 
     /** The dash's own URL, optionally on a given tab. */
     private static function pageUrl( array $args = [] ): string
@@ -44,6 +36,7 @@ final class Admin
     {
         add_action( 'admin_menu',  [ self::class, 'menu' ] );
         add_action( 'admin_init',  [ self::class, 'registerSettings' ] );
+        add_action( 'admin_init',  [ self::class, 'redirectLegacySettingsUrl' ] );
         add_action( 'admin_enqueue_scripts', [ self::class, 'enqueueScripts' ] );
         add_action( 'admin_post_lgms_rerun_pages',       [ self::class, 'handleRerunPages' ] );
         add_action( 'admin_post_lgms_save_welcome_mosaic', [ self::class, 'handleSaveMosaic' ] );
@@ -64,23 +57,73 @@ final class Admin
 
     public static function menu(): void
     {
-        add_options_page(
+        /**
+         * TOP-LEVEL, WITH ITS OWN ICON — Ian ruled it on #190, 2026-08-21:
+         * "I want it in main dash, not in settings or tool."
+         *
+         * ⚠️ IT WAS NOT ALREADY. #190's own text records this page as already
+         * using add_menu_page; measured on main the same day, it was
+         * add_options_page — this dash lived under Settings, the one place the
+         * ruling excludes. The corroboration was a link that was dead the whole
+         * time: platform/mu-plugins/lg-admin-tools.php:67 has always pointed at
+         * admin.php?page=lg-member-sync, the top-level URL this page did not
+         * have. That link starts working with this change and needs no edit.
+         *
+         * THE NAME IS DELIBERATELY UNCHANGED. "LG Member Sync" is what
+         * docs/domains/MEMBERSHIP.md, every handoff and both operators call it;
+         * renaming the sidebar entry would invalidate that vocabulary for a
+         * cosmetic gain, and being top-level with an icon is what "so I can
+         * find it" actually asked for. Renaming is Ian's call, not a drive-by.
+         *
+         * THREE THINGS MOVE TOGETHER OR NOT AT ALL: this call, PARENT_FILE
+         * above, and the hook prefix in enqueueScripts() below. The hook is the
+         * one that fails SILENTLY — 'settings_page_' never fires again once the
+         * page is top-level, and the Welcome Email tab's media uploader simply
+         * stops loading with no error anywhere.
+         */
+        add_menu_page(
             'LG Member Sync',
             'LG Member Sync',
             'manage_options',
             self::OPT_PAGE,
             [ self::class, 'render' ],
-        );
-
-        add_menu_page(
-            'Affiliates',
-            'Affiliates',
-            'manage_options',
-            self::AFF_PAGE,
-            [ self::class, 'renderAffiliatePage' ],
             'dashicons-groups',
             30,
         );
+    }
+
+    /**
+     * THE OLD SETTINGS URL STILL WORKS (#190).
+     *
+     * This dash lived at options-general.php?page=lg-member-sync for its whole
+     * life, and moving it top-level makes that URL answer "Sorry, you are not
+     * allowed to access this page" — WordPress no longer registers a Settings
+     * page by that name. That is a broken link for every bookmark, and for
+     * every "Settings -> LG Member Sync" in docs/domains/MEMBERSHIP.md, the
+     * handoffs, and the instructions already given to Ian.
+     *
+     * A moved page that leaves its old address dead is a worse outcome than not
+     * moving it, so the old address redirects instead. Costs one string compare
+     * on admin_init and nothing at all on the front end.
+     *
+     * ONLY `tab` IS CARRIED OVER, deliberately: it is the one parameter a real
+     * bookmark holds, and forwarding arbitrary query args from a URL into a
+     * redirect is how an open redirect gets built by accident. wp_safe_redirect
+     * would catch the host, but not carrying them is simpler than trusting it.
+     */
+    public static function redirectLegacySettingsUrl(): void
+    {
+        global $pagenow;
+        if ( $pagenow !== 'options-general.php' ) { return; }
+        if ( ! isset( $_GET['page'] ) || $_GET['page'] !== self::OPT_PAGE ) { return; }
+
+        $args = [];
+        if ( isset( $_GET['tab'] ) ) {
+            $tab = sanitize_key( (string) $_GET['tab'] );
+            if ( $tab !== '' ) { $args['tab'] = $tab; }
+        }
+        wp_safe_redirect( self::pageUrl( $args ), 301 );
+        exit;
     }
 
     public static function registerSettings(): void
@@ -106,7 +149,12 @@ final class Admin
 
     public static function enqueueScripts( string $hook ): void
     {
-        if ( $hook === 'settings_page_' . self::OPT_PAGE ) {
+        /* 'toplevel_page_', not 'settings_page_' — WordPress builds the hook
+           suffix from where the page is REGISTERED, so this string had to change
+           in the same commit as add_menu_page. Getting it wrong breaks nothing
+           visibly: the page still renders, and the Welcome Email tab's media
+           library button just quietly never opens. */
+        if ( $hook === 'toplevel_page_' . self::OPT_PAGE ) {
             $tab = isset( $_GET['tab'] ) ? sanitize_key( (string) $_GET['tab'] ) : 'settings';
             if ( $tab === 'welcome_email' ) {
                 wp_enqueue_media();

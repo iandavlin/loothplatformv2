@@ -355,7 +355,10 @@ final class Plugin
     public static function pluginActionLinks( array $links ): array
     {
         $extra = [
-            '<a href="' . esc_url( admin_url( 'options-general.php?page=lg-member-sync' ) ) . '">Settings</a>',
+            // admin.php, not options-general.php: #190 moved this page to a top-level
+            // menu on Ian's ruling, and a plugin action link pointing at the old
+            // parent lands on a Settings page that no longer exists.
+            '<a href="' . esc_url( admin_url( 'admin.php?page=lg-member-sync' ) ) . '">Settings</a>',
             '<a href="' . esc_url( admin_url( 'tools.php?page=lg-member-tools' ) ) . '">Member tools</a>',
         ];
         return array_merge( $extra, $links );

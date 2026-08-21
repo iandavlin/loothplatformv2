@@ -2185,9 +2185,19 @@ echo "=== GATE 90: the tester link is recoverable, and rotating kills the old on
 # loaded reader really is the branch's, because nothing else here means anything
 # if it is not.
 #
-# G1 REPORTS rather than asserts while the dash is still under Settings, so it
-# cannot redden a lane that has not reached the menu move; it becomes four hard
-# assertions the moment add_menu_page lands.
+# SECTION G IS THE MENU MOVE, and it is HARD rather than a report. An earlier
+# draft asserted the placement only when the page ALREADY looked top-level and
+# reported otherwise, so that it could not redden a lane which had not done the
+# move yet -- and red-first M24 put the dash straight back under Settings and the
+# gate stayed GREEN, because the revert flipped it back into report mode. A gate
+# that stops watching the moment the thing it watches breaks is not a gate. G5-G7
+# are BEHAVIOURAL and run in subprocesses: they load Admin.php with WP's menu and
+# redirect functions stubbed and drive the real methods, so a fatal in that file
+# becomes a failed assertion instead of killing the run. G6/G7 are a pair -- the
+# OLD Settings URL must redirect (the dash lived there its whole life and that
+# URL is in MEMBERSHIP.md, the handoffs, and Ian's bookmarks) and the handler
+# must NOT fire anywhere else, or "it redirects" is satisfied by a build that
+# bounces the whole of wp-admin into this dash.
 #
 # TWO OF ITS OWN ASSERTIONS FAILED ON THEIR OWN WARNINGS first time (F4 resolved
 # the reader's source order by strpos and found the docblock EXPLAINING the
@@ -2198,7 +2208,7 @@ echo "=== GATE 90: the tester link is recoverable, and rotating kills the old on
 # rotate's nonce check stayed green on the neighbour's; the body is brace-matched
 # now.
 #
-# RED-FIRST: 23 mutations + 2 no-op controls, 25/25 -- tools/gates/tester-dash-redfirst.py.
+# RED-FIRST: 28 mutations + 2 no-op controls, 30/30 -- tools/gates/tester-dash-redfirst.py.
 run "tester-dash" php "$(dirname "$0")/tester-dash-gate.php"
 echo
 

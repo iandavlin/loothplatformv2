@@ -617,33 +617,83 @@ is_( $heavy === [],
      'F5  the panel drags in none of the dash\'s heavy collaborators' . ( $heavy ? ' — ' . implode( ', ', $heavy ) : '' ) );
 
 // ---------------------------------------------------------------------------
-section( '§G  PLACEMENT — Ian ruled top-level; this records where it actually is' );
+section( '§G  PLACEMENT — top-level, its own icon, and the old URL still works' );
 // ---------------------------------------------------------------------------
 
-$topLevel = (bool) preg_match( '/add_menu_page\(\s*\n\s*\'LG Member Sync\'/', $admin );
-$underSettings = (bool) preg_match( '/add_options_page\(\s*\n\s*\'LG Member Sync\'/', $admin );
+/* HARD, NOT A REPORT — and that distinction cost a red-first miss.
+   An earlier draft asserted this only when the page ALREADY looked top-level
+   and reported otherwise, so that it could not redden a lane which had not
+   reached the move. The move has landed, and that shape means a REVERT flips
+   the gate back into report mode and says nothing: mutation M24 put the dash
+   back under Settings and the gate stayed GREEN. A gate that stops watching
+   the moment the thing it watches breaks is not a gate. */
+is_( (bool) preg_match( '/add_menu_page\(\s*\n\s*\'LG Member Sync\'/', $admin ),
+     'G1  LG Member Sync is a TOP-LEVEL menu (Ian: "I want it in main dash, not in settings or tool")' );
+is_( ! preg_match( '/add_options_page\(\s*\n\s*\'LG Member Sync\'/', $admin ),
+     'G1b and it is NOT also registered under Settings' );
+is_( str_contains( $admin, "private const PARENT_FILE = 'admin.php'" ),
+     'G2  PARENT_FILE agrees, so every redirect lands on the page that exists' );
+is_( str_contains( $admin, "'toplevel_page_' . self::OPT_PAGE" ),
+     'G3  the enqueue hook is toplevel_page_ — the silent one (media uploader)' );
 
-if ( $topLevel && ! $underSettings ) {
-    ok( 'G1  LG Member Sync is a TOP-LEVEL menu (Ian: "I want it in main dash, not in settings or tool")' );
-    is_( str_contains( $admin, "private const PARENT_FILE = 'admin.php'" ),
-         'G2  and PARENT_FILE agrees, so every redirect lands on the page that exists' );
-    is_( str_contains( $admin, "'toplevel_page_' . self::OPT_PAGE" ) || str_contains( $admin, 'toplevel_page_' ),
-         'G3  and the enqueue hook is toplevel_page_ — the silent one (media uploader)' );
-    $tools = (string) file_get_contents( $GATE_ROOT . '/platform/mu-plugins/lg-admin-tools.php' );
-    is_( str_contains( $tools, "admin.php?page=lg-member-sync" ),
-         'G4  lg-admin-tools\' link to this page is no longer dead' );
-} else {
-    report( 'G1 NOT YET TOP-LEVEL. Admin.php still registers LG Member Sync with add_options_page, so it '
-          . 'sits under Settings — the one place Ian ruled against ("I want it in main dash, not in settings '
-          . 'or tool"). #190 says it is already add_menu_page; measured 2026-08-21, it is not. Reported rather '
-          . 'than asserted so this gate does not redden a lane that has not reached the move yet; it turns '
-          . 'into four hard assertions the moment it does. Corollary, live right now: '
-          . 'platform/mu-plugins/lg-admin-tools.php:67 links to admin.php?page=lg-member-sync, which 404s.' );
-    is_( str_contains( $admin, 'private const PARENT_FILE' ),
-         'G2  the parent file is a single constant, so the move is one line and cannot half-land' );
-    is_( substr_count( $admin, "admin_url( 'options-general.php' )" ) === 0,
-         'G3  no redirect hardcodes the parent file behind that constant\'s back' );
-}
+$tools = (string) file_get_contents( $GATE_ROOT . '/platform/mu-plugins/lg-admin-tools.php' );
+is_( str_contains( $tools, 'admin.php?page=lg-member-sync' ),
+     'G4  lg-admin-tools\' link to this page is no longer dead' );
+
+/* G8 USED TO LIVE IN THE not-yet-moved BRANCH AND VANISHED WHEN THE MOVE
+   LANDED — the second red-first miss (M22). It is true in BOTH worlds: the
+   parent file belongs in the constant, whatever the constant says, or the move
+   half-lands and one stray redirect points at a page that no longer exists. */
+is_( substr_count( $admin, "admin_url( 'options-general.php' )" ) === 0,
+     'G8  no redirect hardcodes a parent file behind the constant\'s back' );
+
+/* G5-G7 ARE THE BEHAVIOURAL ONES, and they run in SUBPROCESSES on purpose.
+   G1-G4 and G8 are regexes over source, and a regex cannot tell a call that is
+   made from one that is unreachable. These actually load Admin.php with WP's
+   menu and redirect functions stubbed and drive the real methods.
+
+   Out of process because loading Admin.php is exactly what this gate's header
+   says it will not do: that file reaches StripeLifecycle, StripePrice, Invites
+   and CompExpiry, and the sibling test file has died at exit 255 with no FAIL
+   line three times for that reason. In a subprocess a fatal becomes a FAILED
+   ASSERTION with the error attached instead of killing the run. */
+$probe = 'function add_menu_page(...$a){ echo "MENU:".$a[3]."\n"; return ""; }'
+       . 'function add_options_page(...$a){ echo "OPTIONS:".$a[3]."\n"; return ""; }'
+       . 'function add_submenu_page(...$a){ return ""; }'
+       . 'function add_action(...$a){} function add_filter(...$a){}'
+       . 'require ' . var_export( $GATE_ROOT . '/lg-patreon-stripe-poller/src/Admin.php', true ) . ';'
+       . 'LGMS\Admin::menu();';
+$seen = trim( (string) shell_exec( 'php -r ' . escapeshellarg( $probe ) . ' 2>&1' ) );
+is_( str_contains( $seen, 'MENU:lg-member-sync' ) && ! str_contains( $seen, 'OPTIONS:lg-member-sync' ),
+     'G5  BEHAVIOURAL — menu() really registers lg-member-sync top-level, not under Settings'
+     . ( str_contains( $seen, 'MENU:lg-member-sync' ) ? '' : ' — got: ' . str_replace( "\n", ' | ', $seen ) ) );
+
+/* G6 — THE MOVE MUST NOT LEAVE ITS OLD ADDRESS DEAD. This page lived at
+   options-general.php?page=lg-member-sync for its whole life, and that URL is
+   in MEMBERSHIP.md, in the handoffs, and in whatever Ian has bookmarked.
+   Without the redirect it answers "Sorry, you are not allowed to access this
+   page" — a moved page that strands its old address is a worse outcome than one
+   that never moved. Driven, not read. */
+$probe6 = '$pagenow = "options-general.php"; $_GET = ["page"=>"lg-member-sync","tab"=>"stripe_cohort"];'
+        . 'function admin_url($p=""){ return "https://x/wp-admin/".$p; }'
+        . 'function add_query_arg($a,$u=""){ return $u."?".http_build_query($a); }'
+        . 'function sanitize_key($k){ return preg_replace("/[^a-z0-9_\-]/","",strtolower($k)); }'
+        . 'function wp_safe_redirect($u,$c=302){ echo "REDIRECT:$c:$u\n"; }'
+        . 'function add_action(...$a){} function add_filter(...$a){}'
+        . 'require ' . var_export( $GATE_ROOT . '/lg-patreon-stripe-poller/src/Admin.php', true ) . ';'
+        . 'LGMS\Admin::redirectLegacySettingsUrl();';
+$r6 = trim( (string) shell_exec( 'php -r ' . escapeshellarg( $probe6 ) . ' 2>&1' ) );
+is_( str_contains( $r6, 'admin.php?page=lg-member-sync' ) && str_contains( $r6, 'tab=stripe_cohort' ),
+     'G6  the OLD Settings URL redirects to the new one, carrying the tab'
+     . ( str_contains( $r6, 'REDIRECT' ) ? '' : ' — got: ' . str_replace( "\n", ' | ', $r6 ) ) );
+
+/* And it must be SCOPED. A handler that redirects on every admin_init would
+   bounce the whole of wp-admin into this dash — the liveness partner to G6,
+   without which "it redirects" is satisfied by something far worse. */
+$probe7 = str_replace( '$pagenow = "options-general.php";', '$pagenow = "plugins.php";', $probe6 );
+$r7 = trim( (string) shell_exec( 'php -r ' . escapeshellarg( $probe7 ) . ' 2>&1' ) );
+is_( ! str_contains( $r7, 'REDIRECT' ),
+     'G7  LIVENESS — and it does NOT fire on any other admin page' );
 
 // ---------------------------------------------------------------------------
 section( '§C  COUPLING — reported, never asserted' );
