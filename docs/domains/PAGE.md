@@ -560,6 +560,15 @@ photo) yields **no** dimensions rather than a square hero, and no derivable
 source width yields **no** `srcset` rather than candidates whose widths we
 invented.
 
+**Five emitters, not four.** `gallery` (71 blocks in use) was handing each tile
+the full-size original into a ~245px slot — `/loothprint/neck-side-crack-jig/`
+measured 1,093.6 → 299.4 KB at phone width, −73%. `callout` is the most-used
+block on the box (890) and needed **nothing**: zero callout items carry an
+`image_url` anywhere in the corpus, so its `<img>` branch is dead in practice.
+Ask the corpus which blocks are actually used before deciding a sweep is
+complete — and ask it with the RIGHT PROP NAME, since a query for `image`
+rather than `image_url` returns 0 for the wrong reason and reads identical.
+
 ### ⚠️ Trap: rewriting a stored URL host-relative can 404 a photo that works today
 
 PAGE.md's own ruling (8/21) is that same-site URLs go host-relative at render

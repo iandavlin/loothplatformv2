@@ -25,13 +25,21 @@ below — the gate's own numbers are wrong on these pages):
 | `post-type-videos/…evertune` | 931 → **285 KB** (−69%) | — |
 | `post-imgcap/68-jazz-bass…` | — | 5,730 → **2,901 KB** (−49%) |
 
-Two commits:
+Plus the gallery block, found by asking the corpus which image-emitting blocks
+real layouts use rather than assuming the three audited pages covered them:
+**`/loothprint/neck-side-crack-jig/` 1,093.6 → 299.4 KB at phone width (−73%)**.
+The `callout` block — 890 instances, the most-used block on the box — needed
+nothing: zero callout items carry an `image_url` anywhere in the corpus.
+
+Four commits:
 
 1. **`c10c379` — the gate first, deliberately before any fix.** CPT singles were
    the one family `craft-gate.py` had never audited, so CLAUDE.md's image law had
    never been evaluated where members read. **RED on main: 12 violations.**
 2. **`39a0004` — the fix.** One helper (`Img`), four emitters. **GREEN on the
    branch.**
+3. **`f3628a0`** — handoff, domain rule, and the measurement trap.
+4. **`46c0efc`** — the gallery block (71 in use), the fifth emitter.
 
 ## Gate state
 
