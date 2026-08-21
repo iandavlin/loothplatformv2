@@ -50,7 +50,19 @@ foreach ($imageIds as $id) {
     if (function_exists('wp_get_attachment_caption')) {
         $cap = (string) wp_get_attachment_caption($id);
     }
-    $tiles[] = ['url' => $url, 'alt' => $alt, 'cap' => $cap];
+    /* Tiles are small — a 3-column grid inside the ~760px article column is a
+       ~245px slot — and this block was handing them the FULL-SIZE original
+       (#187). `url` stays the untouched original because the lightbox opens it
+       on click; `src` is what the grid actually loads. */
+    $mediaSizes = is_array($media['sizes'] ?? null) ? $media['sizes'] : [];
+    $tiles[] = [
+        'url'    => $url,
+        'src'    => \LG\LayoutV2\Img::src($url, 600, $mediaSizes),
+        'srcset' => \LG\LayoutV2\Img::srcset($url, $mediaSizes, [240, 400, 480, 600, 800]),
+        'dims'   => \LG\LayoutV2\Img::dims($url, $mediaSizes, 600),
+        'alt'    => $alt,
+        'cap'    => $cap,
+    ];
 }
 
 /* Three-tile minimum: pad with placeholders if the author hasn't filled the
@@ -97,10 +109,18 @@ ob_start();
 <?php else: ?>
 <?= $ind ?>    <div class="lg-gallery__tile">
 <?= $ind ?>      <img class="lg-gallery__img"
-<?= $ind ?>           src="<?= Renderer::attr($t['url']) ?>"
+<?= $ind ?>           src="<?= Renderer::attr($t['src']) ?>"
+<?php if (($t['srcset'] ?? '') !== ''): ?>
+<?= $ind ?>           srcset="<?= Renderer::attr($t['srcset']) ?>"
+<?= $ind ?>           sizes="(min-width: 960px) <?= (int) round(760 / $columns) ?>px, <?= (int) round(100 / $columns) ?>vw"
+<?php endif; ?>
+<?php if (($t['dims'] ?? '') !== ''): ?>
+<?= $ind ?>          <?= ltrim($t['dims']) ?>
+<?php endif; ?>
 <?= $ind ?>           alt="<?= Renderer::attr($t['alt']) ?>"
 <?= $ind ?>           loading="lazy"
 <?= $ind ?>           data-lg-lightbox
+<?= $ind ?>           data-lg-fullsize-src="<?= Renderer::attr($t['url']) ?>"
 <?= $ind ?>           data-lg-caption="<?= Renderer::attr($t['cap']) ?>" />
 <?= $ind ?>    </div>
 <?php endif; ?>
