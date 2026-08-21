@@ -36,7 +36,7 @@ $ON = lg_fc_enabled();
 R('0.flagstate', true, 'lg_fc_enabled() = ' . ($ON ? 'ON' : 'OFF'));
 
 $LIM = lg_fc_limits();
-R('0.numbers', $LIM['photos'] === 10 && $LIM['photo_b'] === 10485760 && $LIM['file_b'] === 67108864,
+R('0.numbers', $LIM['photos'] === 10 && $LIM['photo_b'] === 10485760 && $LIM['file_b'] === 134217728,
   sprintf('photos=%d photo_b=%d file_b=%d', $LIM['photos'], $LIM['photo_b'], $LIM['file_b']));
 
 /* ── the per-run fixtures ─────────────────────────────────────────────────────
@@ -122,11 +122,18 @@ foreach (['wp_handle_sideload_prefilter' => 'sideload', 'wp_handle_upload_prefil
           'flag OFF must not refuse: ' . (string) ($big['error'] ?? 'passed'));
     }
 }
-$bigzip = lg186_prefilter(65 * 1024 * 1024, 'application/zip', 'wp_handle_sideload_prefilter');
-$okzip  = lg186_prefilter(60 * 1024 * 1024, 'application/zip', 'wp_handle_sideload_prefilter');
+$bigzip = lg186_prefilter(129 * 1024 * 1024, 'application/zip', 'wp_handle_sideload_prefilter');
+$okzip  = lg186_prefilter(120 * 1024 * 1024, 'application/zip', 'wp_handle_sideload_prefilter');
 if ($ON) {
     R('A.file.refused', !empty($bigzip['error']), (string) ($bigzip['error'] ?? '(none)'));
-    R('A.file.says64', !empty($bigzip['error']) && strpos((string) $bigzip['error'], '64MB') !== false, '');
+    R('A.file.says128', !empty($bigzip['error']) && strpos((string) $bigzip['error'], '128MB') !== false, '');
+    /* ⚠️ 65MB MUST NOW PASS. It is over FPM's 64M upload_max_filesize, which is
+       exactly the number Ian was first given as a hard ceiling and which the
+       chunker walks straight past. If this ever reddens, someone has "restored"
+       a limit the box does not actually impose. */
+    $sixtyfive = lg186_prefilter(65 * 1024 * 1024, 'application/zip', 'wp_handle_sideload_prefilter');
+    R('A.file.65mb_passes', empty($sixtyfive['error']),
+      'over FPM 64M but under Ian\'s 128MB — the chunker makes this legal');
     R('A.file.under_ok', empty($okzip['error']), (string) ($okzip['error'] ?? 'passed'));
     /* An STL is NOT refused: members upload bare STLs today (48 of them) and this
        lane was asked for a count and a size, not a type change. */
@@ -135,6 +142,101 @@ if ($ON) {
 } else {
     R('A.file.off_inert', empty($bigzip['error']), 'flag OFF must not refuse');
 }
+
+/* ── §G REFUSED BEFORE THE BYTES, NOT AFTER ──────────────────────────────────
+   wp-content/uploads is a SYMLINK to an rclone FUSE mount of Cloudflare R2, and
+   the chunker's spool (wp-content/bfu-temp) is the box's ROOT DISK — measured at
+   84% used with 4.6G free, against a 5GB effective member limit. The prefilter
+   above refuses only on the LAST chunk, once the whole file is already assembled
+   locally: perfect for R2 (not one byte reaches the mount) and far too late for
+   the spool. lg_fc_chunk_refusal() is the early decision, kept pure so it can be
+   asserted here without a request. */
+$cap_f = $LIM['file_b'];
+$cap_p = $LIM['photo_b'];
+R('G.early.first_chunk_over', lg_fc_chunk_refusal('big.zip', 0, $cap_f + 1) !== '',
+  'a first chunk already over the cap must be refused outright');
+R('G.early.accumulates', lg_fc_chunk_refusal('big.zip', $cap_f - 100, 200) !== '',
+  'the cap is on the RUNNING TOTAL, not on one chunk');
+R('G.early.under_passes', lg_fc_chunk_refusal('big.zip', $cap_f - 100, 50) === '',
+  'a chunk that keeps the total under the cap must pass');
+R('G.early.says_the_number', strpos(lg_fc_chunk_refusal('big.zip', 0, $cap_f + 1), '128MB') !== false,
+  'the early refusal must name the limit too');
+/* The cap is chosen from the NAME here, because plupload sends every chunk as
+   application/octet-stream and a mime-based guess would put photos under the
+   print-file cap. */
+R('G.early.photo_by_extension', lg_fc_chunk_cap('shot.JPG') === $cap_p,
+  'an image extension must take the photo cap, case-insensitively');
+R('G.early.zip_by_extension', lg_fc_chunk_cap('print.zip') === $cap_f, '');
+R('G.early.stl_by_extension', lg_fc_chunk_cap('thing.stl') === $cap_f,
+  'a bare STL is a print file, not a photo');
+/* A photo just over the PHOTO cap must be refused even though it is far under
+   the file cap — the two caps must not collapse into one. */
+R('G.early.photo_cap_distinct', lg_fc_chunk_refusal('shot.jpg', 0, $cap_p + 1) !== ''
+    && lg_fc_chunk_refusal('print.zip', 0, $cap_p + 1) === '',
+  'the photo cap and the print-file cap must stay separate');
+/* ⚠️ AND IT MUST ACTUALLY BE HOOKED, EARLY. Everything above asserts the pure
+   decision function; none of it would notice the add_action being deleted, or
+   being registered at a late priority where BFU has already appended the chunk.
+   has_action() returns the PRIORITY, so this asserts earliness, not just
+   presence — the entire point of the guard is that it runs before the write. */
+R('G.early.hooked_at_1', has_action('wp_ajax_bfu_chunker', 'lg_fc_chunk_guard') === 1,
+  'must be registered on the chunker action at priority 1, before BFU appends: got '
+  . var_export(has_action('wp_ajax_bfu_chunker', 'lg_fc_chunk_guard'), true));
+
+/* ── §H THE GUARD ITSELF, RUN. ────────────────────────────────────────────────
+   ⚠️ EVERYTHING IN §G IS ABOUT A PURE FUNCTION AND A HOOK NAME. None of it would
+   notice lg_fc_chunk_guard() refusing a PERFECTLY LEGAL upload — and because it
+   sits at priority 1 on the chunker's own action, a bug there does not degrade
+   the limits, it breaks EVERY compose upload on the site. So the guard is
+   actually executed, both ways.
+
+   ⚠️ AND IT HAS TO BE RUN AS A LOGGED-IN MEMBER OR IT IS VACUOUS. The guard
+   returns early for anyone without upload_files, so a probe running as uid 0
+   would sail past "it did not refuse" having measured the auth check instead of
+   the size. The capability is asserted FIRST, for exactly that reason. */
+$who_was = get_current_user_id();
+wp_set_current_user($user->ID);
+R('H.liveness_member_can_upload', current_user_can('upload_files'),
+  'without this the two assertions below would pass by refusing nothing for the wrong reason');
+
+/* ⚠️ wp_send_json() ENDS IN A BARE `die` UNLESS wp_doing_ajax() IS TRUE, and no
+   wp_die_* handler can catch that one. Filtering only the handlers left the ON run
+   dying silently at this exact line — 56 assertions became 26 and the gate still
+   said GREEN, because a probe that stops early emits fewer PASSes and no FAILs.
+   That is what the Z.end sentinel below now exists to catch. Arming
+   wp_doing_ajax sends wp_send_json down the wp_die() path instead, where the
+   handler filter reaches it. */
+$boom = static function () { return static function () { throw new RuntimeException('WPDIE'); }; };
+add_filter('wp_doing_ajax', '__return_true', 99);
+foreach (['wp_die_handler', 'wp_die_ajax_handler', 'wp_die_json_handler'] as $h) {
+    add_filter($h, $boom, 99);
+}
+$run_guard = static function (int $size) {
+    $_REQUEST['post_id'] = $GLOBALS['lg186_post'];
+    $_REQUEST['name']    = 'guardprobe.zip';
+    $_REQUEST['chunk']   = 0;
+    $_FILES['async-upload'] = ['name' => 'guardprobe.zip', 'type' => 'application/octet-stream',
+                               'tmp_name' => '/dev/null', 'error' => 0, 'size' => $size];
+    ob_start();
+    try { lg_fc_chunk_guard(); $out = 'returned'; }
+    catch (Throwable $e) { $out = 'refused'; }
+    ob_end_clean();
+    unset($_FILES['async-upload']);
+    return $out;
+};
+$GLOBALS['lg186_post'] = $POST;
+$legal = $run_guard(2 * 1024 * 1024);
+$over  = $run_guard($LIM['file_b'] + 1);
+R('H.legal_upload_passes', $legal === 'returned',
+  'a 2MB zip must go straight through the guard — got ' . $legal);
+R('H.oversize_is_stopped', $ON ? ($over === 'refused') : ($over === 'returned'),
+  ($ON ? 'an oversize first chunk must be stopped here' : 'flag OFF must not stop it') . ' — got ' . $over);
+foreach (['wp_die_handler', 'wp_die_ajax_handler', 'wp_die_json_handler'] as $h) {
+    remove_filter($h, $boom, 99);
+}
+remove_filter('wp_doing_ajax', '__return_true', 99);
+wp_set_current_user($who_was);
+
 
 /* An upload aimed at a post that is NOT ours must be untouched in either state. */
 $_REQUEST['post_id'] = 0;
@@ -170,6 +272,49 @@ foreach ($cases as $lbl => $val) {
 $real = apply_filters('acf/validate_value/name=_post_content', true, '<p>It holds a fret rocker.</p>', $cf, 'x');
 R('C.writeup.real_ok', $real === true, var_export($real, true));
 
+/* ── §C2 IS THE VALIDATOR ACTUALLY WIRED INTO ACF? ────────────────────────────
+   ⚠️ §B AND §C ABOVE ARE NOT ENOUGH ON THEIR OWN, and the distinction is the
+   difference between a gate and a decoration. Calling apply_filters() with the
+   hook name ourselves proves the CALLBACK refuses when called — it says nothing
+   about whether ACF ever calls it. A filter registered on a mistyped hook, or
+   scoped to a name that does not match $field['_name'], passes everything above
+   and refuses NOTHING on a real submission. So this drives ACF's own dispatcher
+   with a real $_POST payload: acf_validate_save_post() fires the action,
+   ACF_Validation::acf_validate_save_post() reads $_POST['acf'], and
+   acf_validate_values() resolves each field and applies the name filter.
+
+   It also covers something worth knowing: `required` is set on the write-up at
+   RENDER time (acf/prepare_field), and that hook does NOT run during validation —
+   so ACF's own required check is absent here, and the refusal can only be coming
+   from our own filter. */
+$c2_att = lg186_att($POST, "c2-$TAG.jpg", 'image/jpeg', true);
+$post_backup = $_POST ?? [];
+foreach ([['<p></p>', 'empty'], ['<p>It holds a fret rocker.</p>', 'real']] as [$body, $lbl]) {
+    acf_reset_validation_errors();
+    $_POST['acf'] = [
+        '_post_content'       => $body,
+        'field_6547dafd3f5d6' => array_fill(0, 11, (string) $c2_att),
+    ];
+    acf_validate_save_post(false);
+    $blob = (string) json_encode(acf_get_validation_errors());
+    $hit_body  = strpos($blob, 'Tell people about it') !== false;
+    $hit_count = strpos($blob, 'you can add up to 10') !== false;
+    if ($lbl === 'empty') {
+        R('C2.acf_reaches_writeup', $ON ? $hit_body : !$hit_body,
+          "ACF's dispatcher must reach our refusal: " . substr($blob, 0, 200));
+        R('C2.acf_reaches_count', $ON ? $hit_count : !$hit_count,
+          "eleven photos through ACF's dispatcher: " . substr($blob, 0, 200));
+    } else {
+        R('C2.real_body_accepted', !$hit_body, 'a real write-up must raise no write-up error');
+    }
+}
+acf_reset_validation_errors();
+$_POST = $post_backup;
+/* ⚠️ REMOVED BEFORE §D RUNS. It is stamped and unreferenced, so leaving it here
+   would make the collector below take TWO files and D.collect.count would read 2
+   — the probe inventing the very over-deletion it exists to rule out. */
+wp_delete_attachment($c2_att, true);
+
 /* ── §D THE STAMP AND THE COLLECTOR — keeper's evidence items 2 and 3 ─────────
    Every reference kind gets its own file. If any of these is collected, the scan
    is wrong and a member has lost a file. */
@@ -192,7 +337,15 @@ R('D.stamp.applied', (int) get_post_meta($A['gallery'], LG_FC_UPLOAD_STAMP, true
 R('D.stamp.absent_outside', get_post_meta($A['unstamped'], LG_FC_UPLOAD_STAMP, true) === '',
   'an attachment created outside the upload context must NOT be stamped');
 
-update_post_meta($POST, 'loothprint_more_images', [(string) $A['gallery']]);
+/* ⚠️ THE GALLERY FIXTURE USES THE REAL SERIALIZED SHAPE, and that is the whole
+   point of it. On this box post 61698 stores a:6:{i:61697;s:5:"69502";…} — the
+   KEY is one attachment id and the VALUE is a different one, and only the value
+   is a file the post uses. A fixture keyed 0,1,2 cannot tell a values-only walk
+   from one that reads keys too: the red-first proved exactly that, with the
+   keys-reading mutation staying GREEN against the tidy fixture. So the unused
+   file's id is planted as the KEY here. Values-only leaves it collectable; a walk
+   that reads keys wrongly preserves it and D.collect.unused_gone goes red. */
+update_post_meta($POST, 'loothprint_more_images', [$A['unused'] => (string) $A['gallery']]);
 update_post_meta($POST, 'loothprint_3d_file', (string) $A['zipfield']);
 update_post_meta($POST, '_thumbnail_id', (string) $A['thumb']);
 /* THE ONE THAT WAS FOUND THE HARD WAY. This repeater row is a reference kind the
@@ -219,6 +372,31 @@ foreach ($A as $kind => $id) {
     }
 }
 R('D.collect.count', $ON ? ($gone === 1) : ($gone === 0), "collector removed $gone");
+
+/* ── §D2 IS THE COLLECTOR WIRED TO THE SAVE? ──────────────────────────────────
+   Same gap as §C2, one layer down: §D calls lg_fc_collect_unused() directly, so
+   it proves the RULE. It does not prove that pressing Post ever reaches it.
+   The collection is deliberately deferred to `shutdown` (lg-article-materializer
+   writes _lg_layout_v2 after the post is inserted, so a collector running inside
+   the save decides "unused" against meta that is not finished being written), and
+   WordPress registers shutdown_action_hook via register_shutdown_function in
+   wp-settings.php:164 — which PHP runs even on ACF's redirect+exit.
+
+   Asserted by COUNTING the shutdown callbacks either side of acf/save_post rather
+   than by firing `shutdown` here, because firing it would run every other
+   plugin's shutdown handler early inside a probe. */
+$before_n = 0;
+foreach (($GLOBALS['wp_filter']['shutdown']->callbacks ?? []) as $prio => $cbs) { $before_n += count($cbs); }
+do_action('acf/save_post', $POST);
+$after_n = 0;
+foreach (($GLOBALS['wp_filter']['shutdown']->callbacks ?? []) as $prio => $cbs) { $after_n += count($cbs); }
+R('D2.queued_on_save', $ON ? ($after_n === $before_n + 1) : ($after_n === $before_n),
+  "shutdown callbacks $before_n -> $after_n on acf/save_post");
+/* And only ONCE, however many times the save fires. */
+do_action('acf/save_post', $POST);
+$again_n = 0;
+foreach (($GLOBALS['wp_filter']['shutdown']->callbacks ?? []) as $prio => $cbs) { $again_n += count($cbs); }
+R('D2.queued_once', $again_n === $after_n, "a second save must not queue a second collection ($after_n -> $again_n)");
 
 /* ── §E THE 36-POST GUARANTEE, as an assertion rather than a memory ───────────
    Run read-only over the REAL corpus: no attachment on any pre-existing post
@@ -265,3 +443,10 @@ wp_delete_user($user->ID);
 $left = (int) $wpdb->get_var($wpdb->prepare(
     "SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE meta_key = %s", LG_FC_UPLOAD_STAMP));
 R('Z.teardown_clean', $left === 0, "$left stamped row(s) left behind");
+
+/* ⚠️ THE SENTINEL. It asserts nothing about the feature — it asserts that THIS
+   FILE RAN TO THE END. A probe that dies half way emits fewer PASSes and zero
+   FAILs, which scores as a clean green: exactly what happened when wp_send_json's
+   bare `die` cut the flag-ON run from 56 assertions to 26 and the gate reported
+   GREEN anyway. The gate now refuses to score a run that does not end here. */
+R('Z.end', true, 'probe ran to completion');

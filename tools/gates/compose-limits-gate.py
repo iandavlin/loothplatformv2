@@ -189,6 +189,16 @@ def main():
         if not live.get("0.loaded") or not live.get("0.branch"):
             detail = [d for i, _, d in rows if i.startswith("0.")]
             die("the %s run did not load the branch's plugin: %s" % (label, "; ".join(detail)))
+        # ⚠️ DID THE PROBE FINISH? A run that dies part way through emits fewer
+        # PASSes and NO FAILs, which scores as a clean green — this gate reported
+        # GREEN on a flag-ON run that had been cut from 56 assertions to 26 by
+        # wp_send_json()'s bare `die`. Silence is not success; the sentinel is the
+        # difference between "nothing failed" and "nothing was measured".
+        if not live.get("Z.end"):
+            die("the %s run did not reach its end sentinel — it stopped after %d "
+                "assertions, so a green verdict here would mean nothing. "
+                "stderr=%r" % (label, len(rows), (raw.stderr or "")[-300:]))
+
         state = [d for i, _, d in rows if i == "0.flagstate"]
         want = "ON" if flag_on else "OFF"
         if state and want not in state[0]:

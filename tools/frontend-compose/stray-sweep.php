@@ -25,6 +25,15 @@
  *
  * The reference test is NOT reimplemented here: it calls the very functions the
  * live collector uses, so this report and the running rule can never drift apart.
+ *
+ * ⚠️ RUN IT ON A QUIET BOX, AND READ THE POST TITLES BEFORE BELIEVING THE COUNT.
+ * It reports LIVE state, so anything mid-flight is in it. The first real run
+ * picked up `lg186 probe 391680on` — a PID-keyed fixture belonging to gate 88,
+ * which was running at that moment — and counted its two files among the strays.
+ * Nothing was at risk (this is a dry run and applying needs two explicit flags
+ * plus a human), but a count taken during a gate run is a count of somebody
+ * else's temporary rows as well as the backlog. Baseline with the box idle:
+ * 44 in category A (39 of them safe) and 67 in category B across 36 posts.
  */
 
 global $wpdb;

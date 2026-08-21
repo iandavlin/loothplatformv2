@@ -870,10 +870,21 @@ add_filter('acf/load_field/name=loothprint_more_images', 'lg_fc_gallery_cap');
 /**
  * THE NUMBERS, in one place, because a limit stated twice is a limit that drifts.
  *
- * Ian named 10 photos and 1 print file. The sizes are his ruling of 2026-08-21
- * (64MB) plus the photo number measured against the corpus: the largest photo on
- * the whole box is 2.03MB, so the previous 4MB cap had never once been reached
- * and 10MB is roughly five times the worst real case.
+ * Ian named 10 photos and 1 print file. The photo size is measured against the
+ * corpus: the largest photo on the whole box is 2.03MB, so the previous 4MB cap
+ * had never once been reached and 10MB is roughly five times the worst real case.
+ *
+ * ⚠️ 128MB IS A CHOICE, NOT A CEILING, and the distinction is worth keeping because
+ * it was got wrong once. Ian first held 64MB on the claim that FPM's 64M
+ * upload_max_filesize was the box's hard limit. It is not: tuxedo-big-file-uploads
+ * CHUNKS uploads straight past it, and its own by_role table lists none of the
+ * looth1-looth4 or bbp_participant roles our members hold, so get_upload_limit()
+ * falls through to its `all` bucket -- 5,242,880,000 bytes. Members had FIVE
+ * GIGABYTES. Told that the box was not the constraint, Ian picked 128MB
+ * ("128 is fine"), which is the number that fits every print file that exists:
+ * measured over 174 of them, median 0.3MB, p90 4.7MB, largest 128.4MB, and 128MB
+ * refuses exactly ONE -- that same 128.4MB outlier, which could never have come
+ * through this form anyway.
  *
  * PRINT FILES ARE **NOT** MIME-RESTRICTED HERE, and that is deliberate. The ACF
  * field declares `mime_types = zip`, but the field holds 127 zips AND 48 .stl
@@ -886,7 +897,7 @@ function lg_fc_limits(): array
     return [
         'photos'    => 10,                    // Ian's number
         'photo_b'   => 10 * 1024 * 1024,      // 10MB
-        'file_b'    => 64 * 1024 * 1024,      // 64MB — Ian, 2026-08-21
+        'file_b'    => 128 * 1024 * 1024,     // 128MB — Ian, 2026-08-21: "128 is fine"
     ];
 }
 
@@ -971,6 +982,110 @@ function lg_fc_upload_prefilter(array $file): array
 }
 add_filter('wp_handle_upload_prefilter',   'lg_fc_upload_prefilter');
 add_filter('wp_handle_sideload_prefilter', 'lg_fc_upload_prefilter');
+
+/**
+ * WHICH CAP APPLIES, decided from the FILENAME rather than the mime type.
+ *
+ * At chunk time the only honest signal is the name: plupload sends each chunk as
+ * `application/octet-stream` regardless of what the file is, so reading
+ * $_FILES['async-upload']['type'] here would put every photo under the print-file
+ * cap. The prefilter above still decides on the real mime once the file is whole;
+ * this is the early, cheaper guess, and it errs toward the LARGER cap.
+ */
+function lg_fc_chunk_cap(string $name): int
+{
+    static $images = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tif', 'tiff', 'heic', 'heif', 'avif'];
+    $lim = lg_fc_limits();
+    return in_array(strtolower((string) pathinfo($name, PATHINFO_EXTENSION)), $images, true)
+        ? $lim['photo_b'] : $lim['file_b'];
+}
+
+/**
+ * The refusal decision, kept pure so a gate can assert it without a request.
+ * Returns '' to allow, or the member-facing sentence to refuse with.
+ */
+function lg_fc_chunk_refusal(string $name, int $sofar, int $incoming): string
+{
+    $cap = lg_fc_chunk_cap($name);
+    if ($sofar + $incoming <= $cap) {
+        return '';
+    }
+    return sprintf('That file is bigger than %s, so it can\'t go up here. %s is the limit.',
+                   lg_fc_mb($cap), lg_fc_mb($cap));
+}
+
+/**
+ * ⚠️ REFUSE BEFORE THE BYTES LAND, NOT AFTER — and the reason is the storage
+ * layout, which is not obvious from this file.
+ *
+ * `wp-content/uploads` is a SYMLINK to /mnt/loothgroup-uploads-dev, an rclone FUSE
+ * mount of Cloudflare R2. Member uploads do not live on this box. But the CHUNKER
+ * SPOOL DOES: tuxedo-big-file-uploads accumulates parts in
+ * `wp-content/bfu-temp/<blog>-<sha1(name)>.part`, and wp-content is on the root
+ * filesystem — measured 2026-08-21 at 29G, 84% used, **4.6G free**.
+ *
+ * Put those two facts together with the 5GB effective member limit above and the
+ * consequence is not subtle: **one member uploading one large file can fill this
+ * box's root disk.** That is true today, before this lane, and it is reported as
+ * its own finding rather than treated as something this cap fixes.
+ *
+ * lg_fc_upload_prefilter() cannot help with it. It runs from
+ * `wp_handle_sideload_prefilter`, which BFU only reaches on the LAST chunk, once
+ * the whole file is already assembled on local disk. So the prefilter's refusal
+ * is perfectly placed for R2 — **not one byte reaches the mount** — and far too
+ * late for the spool.
+ *
+ * This runs at priority 1 on the chunker's own action, before BFU appends
+ * anything, so a file that will be too big is refused at the FIRST chunk that
+ * crosses the line: at most one chunk of overshoot ever touches the disk.
+ *
+ * ⚠️ ON CHUNK 0 THE ACCUMULATED SIZE IS TREATED AS ZERO, and that is not a
+ * micro-optimisation. BFU opens the part file with 'wb' on chunk 0, truncating
+ * it. Reading the stale size instead would mean a member who was refused once
+ * could never upload ANY file of that name again, however small — the refusal
+ * would latch on the leftover part until BFU's 24-hour reaper cleared it.
+ *
+ * ⚠️ IT DOES NOT DELETE THE PART FILE, deliberately. BFU keys that path on
+ * `sha1($fileName)` with NO user or session in it, so two members uploading files
+ * with the same name share one path. Unlinking would let one member's refusal
+ * destroy another's upload in flight. The leftover is bounded by the cap and BFU
+ * reaps parts older than 24 hours. (That shared path is a BFU collision bug in its
+ * own right — reported, not fixed here.)
+ */
+function lg_fc_chunk_guard(): void
+{
+    $post_id = lg_fc_upload_target();
+    if (!$post_id) {
+        return;
+    }
+    // BFU does its own auth immediately after this; refusing early for someone it
+    // would reject anyway would only change which error they see.
+    if (!is_user_logged_in() || !current_user_can('upload_files')) {
+        return;
+    }
+    if (empty($_FILES['async-upload']) || !empty($_FILES['async-upload']['error'])) {
+        return;
+    }
+
+    $name  = isset($_REQUEST['name'])                                   // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- BFU checks the nonce; this only reads a length
+        ? (string) $_REQUEST['name']
+        : (string) $_FILES['async-upload']['name'];
+    $chunk = isset($_REQUEST['chunk']) ? (int) $_REQUEST['chunk'] : 0;   // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+
+    $part  = sprintf('%s/%d-%s.part',
+                     apply_filters('bfu_temp_dir', WP_CONTENT_DIR . '/bfu-temp'),
+                     get_current_blog_id(), sha1($name));
+    $sofar = ($chunk === 0 || !file_exists($part)) ? 0 : (int) filesize($part);
+
+    $refusal = lg_fc_chunk_refusal($name, $sofar, (int) ($_FILES['async-upload']['size'] ?? 0));
+    if ($refusal === '') {
+        return;
+    }
+    /* The same envelope BFU's own size refusal uses, so plupload's error handler
+       shows it exactly as it shows theirs. */
+    wp_send_json_error(['message' => $refusal, 'filename' => $name]);
+}
+add_action('wp_ajax_bfu_chunker', 'lg_fc_chunk_guard', 1);
 
 /**
  * Make the number the form ADVERTISES match the number it enforces.

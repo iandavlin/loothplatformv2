@@ -133,7 +133,7 @@ MUTATIONS = [
     ("M10 the write-up validator stops stripping tags (ACF's own blind spot)",
      "    $text = trim(html_entity_decode(wp_strip_all_tags((string) $value), ENT_QUOTES, 'UTF-8'));",
      "    $text = (string) $value;",
-     ["C.writeup.p_tags", "C.writeup.nbsp", "C.writeup.br"], False),
+     ["C.writeup.p_tags.refused", "C.writeup.nbsp.refused", "C.writeup.br.refused"], False),
 
     ("M11 the photo count validator stops refusing",
      "    if (count($value) <= $max) {",
@@ -144,6 +144,63 @@ MUTATIONS = [
      "function lg_fc_collect_unused(int $post_id): int\n{\n    if (!lg_fc_enabled()) {\n        return 0;\n    }",
      "function lg_fc_collect_unused(int $post_id): int\n{\n    if (false) {\n        return 0;\n    }",
      ["D.collect.unused_gone"], False),
+
+    # ── the three below exist because §C2 and §D2 PASSED ON THEIR FIRST RUN, and a
+    # new assertion that has never been red is a decoration until proven otherwise
+    # (feedback-red-first-that-stays-green). Each is chosen to be invisible to the
+    # older, weaker assertion it supersedes — that is what makes the newer one
+    # worth its runtime.
+    ("M13 the write-up validator bails unless the field says required",
+     "function lg_fc_validate_writeup($valid, $value, $field, $input)\n"
+     "{\n"
+     "    if ($valid !== true || !lg_fc_enabled()) {",
+     "function lg_fc_validate_writeup($valid, $value, $field, $input)\n"
+     "{\n"
+     "    if ($valid !== true || !lg_fc_enabled() || empty($field['required'])) {",
+     ["C2.acf_reaches_writeup"], False),
+
+    ("M14 the collector is never queued by a save",
+     "add_action('acf/save_post', 'lg_fc_queue_collection', 30);",
+     "// mutation: nothing queues the collection",
+     ["D2.queued_on_save"], False),
+
+    ("M15 the collection is queued once per SAVE instead of once per post",
+     "    if ($post_id <= 0 || isset($queued[$post_id])) {",
+     "    if ($post_id <= 0) {",
+     ["D2.queued_once"], False),
+
+    # ── §G: the early refusal. The prefilter cannot protect the SPOOL (it runs on
+    # the last chunk, once the file is already assembled on a root disk with 4.6G
+    # free), so these three prove the early guard is real and correctly placed.
+    ("M16 the early guard forgets the running total",
+     "    $cap = lg_fc_chunk_cap($name);\n"
+     "    if ($sofar + $incoming <= $cap) {",
+     "    $cap = lg_fc_chunk_cap($name);\n"
+     "    if ($incoming <= $cap) {",
+     ["G.early.accumulates"], False),
+
+    ("M17 the two caps collapse into one",
+     "    return in_array(strtolower((string) pathinfo($name, PATHINFO_EXTENSION)), $images, true)\n"
+     "        ? $lim['photo_b'] : $lim['file_b'];",
+     "    return $lim['file_b'];",
+     ["G.early.photo_by_extension", "G.early.photo_cap_distinct"], False),
+
+    ("M18 the guard runs AFTER BFU has already written the chunk",
+     "add_action('wp_ajax_bfu_chunker', 'lg_fc_chunk_guard', 1);",
+     "add_action('wp_ajax_bfu_chunker', 'lg_fc_chunk_guard', 99);",
+     ["G.early.hooked_at_1"], False),
+
+    ("M19 the early guard refuses everything, legal uploads included",
+     "    $refusal = lg_fc_chunk_refusal($name, $sofar, (int) ($_FILES['async-upload']['size'] ?? 0));\n"
+     "    if ($refusal === '') {\n"
+     "        return;\n"
+     "    }",
+     "    $refusal = lg_fc_chunk_refusal($name, $sofar, (int) ($_FILES['async-upload']['size'] ?? 0));\n"
+     "    if (false) {\n"
+     "        return;\n"
+     "    }\n"
+     "    $refusal = $refusal ?: 'refused';",
+     ["H.legal_upload_passes"], False),
 
     ("N1  CONTROL: a comment is reworded",
      "/** The stamp that makes the collector safe. See lg_fc_collect_unused(). */",

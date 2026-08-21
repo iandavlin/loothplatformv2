@@ -376,6 +376,24 @@ instead of hardcoding a state.
    a box whose FPM caps at 64M). Its `by_role` table lists none of the `looth*`
    roles, so members fall through to its `all` bucket: **5,242,880,000 bytes**.
    Any reasoning about upload sizes that starts from `php.ini` is wrong here.
+
+   ⚠️ **AND THAT IS AN AVAILABILITY RISK, NOT JUST A WRONG NUMBER.**
+   `wp-content/uploads` is a **symlink to `/mnt/loothgroup-uploads-dev`**, an
+   rclone FUSE mount of Cloudflare R2 — so member files never land on this box.
+   But the chunker's **spool does**: `wp-content/bfu-temp` is on the root
+   filesystem, measured 2026-08-21 at **29G, 84% used, 4.6G free**. A 5GB allowed
+   upload against 4.6G free means **one member uploading one large file can fill
+   the box's root disk**, through wp-admin or any other form the chunker serves.
+   #186 caps compose uploads at the first chunk that crosses the limit, but that
+   guard is deliberately scoped to its own post types — everything else on the box
+   still spools against 4.6G. Wants a `bfu_temp_dir` relocation or a sane
+   `by_role` entry; nobody has taken it.
+
+   Two smaller ones from the same read: BFU's `.part` path is
+   `sha1($fileName)` with **no user or session in it**, so two members uploading
+   files with the same name share one spool file and interleave — which is why a
+   size guard must never `unlink()` the part on refusal. And BFU only reaps
+   `.part` files older than 24 hours, and only on chunk 0.
 3. **ACF's `max_size` / `mime_types` are inert on any form this chunker serves**,
    because the chunker calls `media_handle_upload()` with
    `overrides['action'] = 'wp_handle_sideload'` and core dispatches the prefilter
