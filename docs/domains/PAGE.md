@@ -260,3 +260,70 @@ open defect blocks every lane.
 
 Fixing it means moving the article's left padding or the dock's x at those
 widths — a layout change that deserves Ian's eyes on its own.
+
+---
+
+## ⚠️ #185 wears the `page` label and is NOT a lanes-page issue either (8/21)
+
+**The third in three days**, after #171 (Patreon/join dark mode → MEMBERSHIP.md)
+and #179 (the Loothprint bundle). #185 is the **compose form's write-up editor**:
+nothing in it touches `/lanes/`, `tools/lanes-page.py`, `lanes.json` or the timer.
+Recorded here rather than silently relabelled, because the domain rule says a
+domain-labelled issue updates its domain file in the same commit — so this line
+IS that update. **Three `page`-labelled issues in three days have belonged to
+other domains; the label needs Ian's ruling, not another footnote.**
+
+### What #185 actually was, and the one thing worth carrying forward
+
+Ian screenshotted the form showing a grey bar reading *"Click to initialize
+TinyMCE"* above his write-up rendered as literal `<p>test</p>`. **Two fixes had
+already been attempted and neither reached the served bytes.**
+
+The cause was **our own file**: `lg_fc_relabel()`'s `_post_content` block in
+`platform/mu-plugins/lg-frontend-compose.php` sets `$field['delay'] = 1`
+explicitly. ACF's own default is `0` and the pseudo-field registration sets none,
+so that assignment was the only thing that ever turned it on.
+
+**THE TRANSFERABLE LESSON — how to find this class of thing in one pass.** Both
+earlier attempts adjusted filters *blind* and were reasoned about rather than
+measured. What settled it in minutes was **bisecting the filter chain by
+priority**: register a probe at a ladder of priorities on the same hook and print
+the value at each rung.
+
+    prio 19 → delay=0  label="Content"
+    prio 21 → delay=1  label="Tell people about it"
+
+The only callback between those rungs was ours. When a value "keeps coming back",
+do not hunt for who restores it — **bracket it**, and the bracket names the
+culprit even when the culprit is the fix you already wrote. It also answered the
+question the issue opened with (*does `acf/prepare_field` fire at all for the
+pseudo `_post_content` field?*) as a by-product: **it does.**
+
+Both dead attempts were deleted — lane 179's `delay = 0` at the top of
+`lg_fc_relabel` (overwritten ~40 lines below, in its own function) and keeper's
+`lg_fc_no_delay` on `acf/prepare_field/type=wysiwyg` at 99 (the type-scoped
+variation is dispatched from `_acf_apply_hook_variations` at **generic priority
+10**, so it fired *before* `lg_fc_relabel` at 20). ⚠️ **A type-scoped ACF filter
+is not "later" than a generic one** — it runs inside the generic hook's priority
+10 slot. That is a general fact about ACF, not a fact about this form.
+
+### Two traps this lane paid for that the next lane on ANY surface will meet
+
+1. **A flag that lives in a gitignored `.local.php` makes a branch render
+   NOTHING.** `lg_fc_enabled()` fail-closes when its config is unreadable, and the
+   `enabled` switch is in `platform/config/frontend-compose.local.php`, which
+   exists **only in the serving checkout**. Rendering a worktree copy therefore
+   produced a 0-byte page in which "0 placeholders" was perfectly true and
+   perfectly meaningless. Only a **liveness assertion** ("the form arrived")
+   caught it. Arm the flag (`LG_FC_PREVIEW=1`, and remember `sudo` strips the env
+   — use `sudo -u looth-dev env VAR=1 wp …`).
+2. **You CAN render a branch's mu-plugin without touching the serve.** WP-CLI's
+   `--require=<file>` runs before WordPress boots, so a file that does
+   `define('WPMU_PLUGIN_DIR', '/tmp/…')` redirects the whole mu-plugin set. Mirror
+   the serve's symlinks into that dir, swap the ONE file for the branch's, and the
+   identical render path runs the branch's code — `ReflectionFunction` proves which
+   file was loaded. This is the answer to "the serve only carries merged code" for
+   anything that renders server-side, and it is non-mutating: nothing on the serve
+   changes. It does **not** substitute for a browser: `user_can_richedit()` is
+   false under curl and wp-cli, so ACF renders `html-active` where a real browser
+   gets `tmce-active` — assert something that does not depend on it.
