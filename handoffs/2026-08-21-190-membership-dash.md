@@ -118,6 +118,23 @@ install -d -o looth-dev -g looth-dev -m 755 /srv/lg-shared-state
 
 Live writes remain Ian's.
 
+## One more thing the move broke, and it was invisible
+
+Moving the menu made **thirteen files confidently wrong** — every
+"Settings → LG Member Sync" navigation instruction in the repo. Gate 79
+printed one back at me in its own report the run after the move landed.
+
+Nothing is *broken* (the old URL redirects), but an instruction naming a menu
+that does not exist is worse than a dead link: whoever follows it concludes the
+feature is missing rather than that the pointer is stale. Swept in the same
+window — including **two runtime exception messages a person is meant to act
+on** (`Db.php`, `Stripe/Client.php`), the cohort hint in `UserProvisioner`, both
+copies of the admin test checklist, and gate 79's report line.
+
+**Deliberately not swept:** `handoffs/` and `docs/archive/`. Those record what
+was true when written, and rewriting history to match today is how a record
+stops being evidence.
+
 ## Files touched
 
 ```
@@ -133,7 +150,30 @@ tools/gates/run-all.sh
 docs/CRAFT-STANDARD.md
 docs/domains/MEMBERSHIP.md
 handoffs/2026-08-21-190-membership-dash.md           (this file)
+
+  — the stale-pointer sweep (menu name only, no behaviour):
+docs/FLAGS.md · docs/STRIPE-LANE-BRIEF.md · docs/runbooks/STRIPE-GO-LIVE.md
+lg-patreon-stripe-poller/docs/ENV-AND-SECRETS.md
+lg-patreon-stripe-poller/src/Db.php · src/Stripe/Client.php
+lg-patreon-stripe-poller/src/Wp/TestChecklist.php · src/Wp/UserProvisioner.php
+lg-stripe-billing/PROD-CUTOVER.md · membership-pages/web/test-checklist.php
+platform/config/header-join-stripe.php · tools/gates/header-join-gate.py
 ```
 
-All were in the approved plan except `Plugin.php` (its action link pointed at
-the old Settings URL and would have died with the move) and this handoff.
+Everything was in the approved plan except `Plugin.php` (its action link pointed
+at the old Settings URL and would have died with the move), this handoff, and
+the sweep above — which is a consequence of the menu move rather than new scope.
+
+## Gates run
+
+| gate | result |
+|---|---|
+| **90** tester-dash (new) | GREEN, 93 assertions · red-first **35/35** |
+| 85 tester-unlock | GREEN, 116 |
+| 79 header-join | GREEN, 156 |
+| 86 checkout-audience | GREEN, 159 |
+| 89 comp-expiry (loads `Admin.php`) | GREEN, 96 |
+| stripe-testgroup-pages | GREEN, 116 |
+
+`run-all.sh` was **not** run end to end — it exits early on main's gate-72 red
+(#175), which is why the charter says to run gates individually.
