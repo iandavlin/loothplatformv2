@@ -54,6 +54,22 @@ if (!$user) {
 }
 if (!$user) { R('0.fixture', false, 'could not make the per-run member'); return; }
 
+/* ⚠️ THE MEMBER IS UNMADE EVEN IF THIS PROBE NEVER REACHES ITS TEARDOWN.
+   #189 found two `lg186probe-*` accounts still on the box. Several assertions
+   below `return` early on a bad fixture, and every one of those jumps straight
+   past the teardown at the bottom. A leaked per-run account is not harmless: the
+   whole point of keying fixtures to the PID is that two runs cannot see each
+   other, and accounts that accumulate make a later run's counts wrong for
+   reasons nobody can trace back to here. A shutdown function runs on every exit
+   path, including the early ones — the teardown at the bottom still does the
+   thorough job, and this is the floor beneath it. */
+$LG186_UID = (int) $user->ID;
+register_shutdown_function(static function () use ($LG186_UID) {
+    if (!get_userdata($LG186_UID)) { return; }
+    require_once ABSPATH . 'wp-admin/includes/user.php';
+    wp_delete_user($LG186_UID);
+});
+
 $POST = wp_insert_post([
     'post_type' => 'loothprint', 'post_status' => 'draft',
     'post_title' => 'lg186 probe ' . $TAG, 'post_author' => $user->ID,
