@@ -43,6 +43,15 @@
 
 declare(strict_types=1);
 
+/**
+ * THE ANONYMOUS TESTER'S UNLOCK (#180). Defines functions only and emits
+ * nothing; is_readable-guarded because a deploy can land code before config and
+ * because gate 79 renders origin/main's copy of this partial from a temp path
+ * where the sibling does not exist. Absent, lg_tester_unlock_marked() below is
+ * simply undefined and the header behaves exactly as it does today.
+ */
+if (is_readable(__DIR__ . '/tester-unlock.php')) { require_once __DIR__ . '/tester-unlock.php'; }
+
 if (!function_exists('lg_shared_h')) {
     function lg_shared_h(string $s): string {
         return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8');
@@ -256,9 +265,33 @@ function lg_shared_render_site_header(array $ctx): void
      * its copy of this control in the PWA account sheet, so the two cannot
      * disagree about a link they both draw.
      */
+    /**
+     * THE ANONYMOUS TESTER'S UNLOCK (#180). Ian 2026-08-21: "I need it to go to
+     * patreon unless the user has some kind of token url or something to unlock
+     * the whitelisted pages."
+     *
+     * The gap it closes is the one the paragraph above describes as a feature:
+     * $stripe_tester is a per-viewer capability an anonymous ctx never carries,
+     * so under 'allowlist' an anonymous TESTER was indistinguishable from the
+     * public and got patreon.com. There was no way to hand one anonymous browser
+     * the Stripe door without handing it to everybody. This is that way — a
+     * cookie, set by a shareable link, read here and nowhere else in this file.
+     *
+     * It WIDENS 'allowlist' and adds no state: 'off' still means nobody (the
+     * cookie is not consulted), 'on' already means everybody. Fails closed to
+     * false when the reader is absent, the flag is off, or no token is armed.
+     *
+     * ⚠️ IT MOVES THE HREF, NOT THE PILL — deliberately. $join_pill_authed below
+     * is untouched, so the unlock's whole visible effect is on the ANONYMOUS
+     * header, which is the only viewer it exists for. A marked browser that then
+     * signs in as a non-cohort member sees exactly what #170 proved it sees, and
+     * every byte-identity proof of the authed header survives this change.
+     */
+    $join_unlocked = function_exists('lg_tester_unlock_marked') && lg_tester_unlock_marked();
+
     $join_state    = lg_shared_header_join_stripe_state();
     $join_stripe   = ($join_state === 'on')
-                     || ($join_state === 'allowlist' && $stripe_tester);
+                     || ($join_state === 'allowlist' && ($stripe_tester || $join_unlocked));
     $join_href     = $join_stripe
                      ? '/lgjoin/'
                      : 'https://www.patreon.com/c/theloothgroup/membership';

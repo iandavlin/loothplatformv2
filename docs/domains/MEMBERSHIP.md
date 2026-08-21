@@ -180,6 +180,77 @@
   `PatreonStanding` without either being added to its require list. Revived:
   20 assertions, including the *"body chooses NOTHING"* section.
 
+## State (8/21, #180 — the anonymous tester's unlock link)
+- **#180 BUILT** on `180-tester-token-url`, flag `tester-unlock` defaulted OFF
+  twice over (`enabled => false` AND an empty hash), gate **85** (116
+  assertions; red-first **25/25**). One shareable URL marks ONE browser with
+  the cookie `lg_join_unlock`; for that browser only, the header's Join points
+  at `/lgjoin/` and the join-flow door admits it.
+- **THE LAW THIS CLOSES A HOLE IN, WITHOUT BREAKING IT.** #170's `allowlist`
+  recognises a tester by `$caps['stripe_testgroup']`, a per-viewer capability an
+  anonymous ctx never carries — the caching law working as designed, and also
+  the whole gap: there was no way to hand ONE anonymous browser the Stripe door
+  without handing it to everybody. The unlock **widens `allowlist` and adds no
+  state**: in `'off'` the cookie is not consulted at all, so **'off' still means
+  NOBODY** (#170's ruling, and live's tracked default), and in `'on'` it is
+  redundant. Verified on the serving checkout 8/21: dev2 resolves `allowlist`
+  and an anon on `/hub/` correctly gets patreon.com — the exact baseline Ian
+  described.
+- ⚠️ **IAN'S SAFETY NET IS REAL TODAY BUT IT IS NOT A WHITELIST — measured on
+  BOTH boxes 8/21, and this supersedes any reading of "no one can sign up
+  unless they are white listed" as a code fact.** Nothing in the signup or
+  checkout path consults the cohort list; there are **zero** references to it in
+  the poller's REST controller or the Slim billing app. Three unrelated
+  accidents do the refusing: **(1)** page gating, which the unlock deliberately
+  opens; **(2)** BuddyBoss's global **`bb-enable-private-rest-apis = 1`** (dev2
+  AND live) making `POST /wp-json/lg-member-sync/v1/auth` answer anon **401
+  `bb_rest_authorization_required`** — a setting re-armed by every DB reload,
+  not a membership control; **(3)** LIVE ONLY, an **EMPTY Stripe catalogue** (0
+  active products, 0 prices, 0 customers), so every checkout call refuses
+  *"not mapped to a membership tier"* — **and that prop is removed on purpose at
+  go-live.**
+- ⚠️ **IN THE BROWSER THE REFUSAL HOLDS; AT THE API IT DOES NOT.** lgjoin's JS
+  requires the auth call to return ok before it calls checkout, so a marked anon
+  reaches the tier picker and dead-ends at *"Sign-in failed"* — **that is the
+  safety net in practice, and it is what a tester will hit; it is not a defect.**
+  But `POST /billing/v1/checkout` answered a bogus price **400 about price
+  mapping, not 401**, and `/billing/v1/products` is **200 to anon**, so the real
+  price ids are public. A real price id mints a Stripe session with **no account
+  and no whitelist**; paying it runs `Sync::customer` →
+  `UserProvisioner::findOrProvision`, which **creates a WP user by email** and
+  grants the tier. **This is true with or without the unlock** — the unlock
+  changes page visibility only and touches no checkout or signup path, which is
+  why #180 shipped on that structural argument rather than on the whitelist
+  premise. **The API gap is now issue #181, and Ian ruled FIX BEFORE GO-LIVE
+  (8/21).** Do not treat it as closed by #180, and do not re-derive it from
+  scratch — the probe evidence is the four bullets above.
+- **NO SECOND SWITCH, and that is the deliberate difference from #165 and #170.**
+  The admission lives in `lg_membership_testgroup_gate_or_exit` — the ONE gate
+  both doors delegate to, exactly where invites plug in — so a marked browser is
+  admitted regardless of `lgms_stripe_testgroup_pages`, and there is no state
+  where Join is wired perfectly and lands on *"This page isn't available yet"*.
+- ⚠️ **THE CLAIM RUNS BEFORE THAT GATE'S `manage_options` EARLY-RETURN.** An
+  admin returns on the next line, so a claim handled below it would silently
+  mark **nobody** for the one person most likely to click the link to check it —
+  and Ian is an administrator. He would see the join page he can always see,
+  conclude it worked, and hand out a dead URL. Gate 85 §A5.
+- **The phone door needed no work**: `webroot/bottom-nav.js` reads
+  `.lg-chrome__join` at runtime (`hdrHref`), so the PWA account sheet follows
+  the header and cannot drift.
+- **CONFIG COUPLING (declared)**: `platform/nginx/lg-microcache.conf` bypasses
+  the anon microcache for `lg_join_unlock`. A marked browser **is** anonymous, so
+  without it `/hub/` serves a 60s-cached header still pointing at patreon.com —
+  the feature silently doing nothing on the surface most likely to be looked at
+  first. Inert until the flag is armed.
+- **The token never enters the repo.** The config stores sha256 and compares with
+  `hash_equals`; the raw token lives only in the URL and the gitignored
+  `.local.php`. Gate 85 asserts no tracked file pairs `token_sha256` with a
+  64-hex value, and that the override really is gitignored.
+- **Owed:** keeper places `platform/config/tester-unlock.local.php` on dev2 after
+  the merge (`php -l` it first — a parse error there is a site-wide 500, since
+  this partial renders on every page of seven apps), then hands Ian the
+  TEST-URL. The 821–904px dead band from #165 is still open and still Ian's call.
+
 ## State (8/20, #170 — three states for the header Join)
 - **#170 BUILT** on `170-live-header-allowlist`, flag `header-join-stripe`
   three-state and defaulted `'off'`, gate **79** extended (157 assertions with

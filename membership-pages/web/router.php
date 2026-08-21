@@ -113,6 +113,20 @@ if (!is_readable($target)) {
     exit;
 }
 
+/**
+ * THE UNLOCK CLAIM (#180) — before the visibility decision, before any output.
+ *
+ * This is where /lgjoin/?lgtester=<token> is turned into a cookie and a 302 to
+ * the clean URL, so the token leaves the address bar, the history and every
+ * onward Referer, and the next request proves the COOKIE works rather than the
+ * parameter working. A no-op on every request that does not carry the parameter.
+ *
+ * Deliberately ahead of the gate: the claim must not depend on whether this
+ * visitor would have been admitted, or the first request with a good token would
+ * be answered with the stub and the mark would never be set.
+ */
+if (function_exists('lg_tester_unlock_handle_claim')) { lg_tester_unlock_handle_claim(); }
+
 // The global admin toggle picks which visibility column applies. Default off
 // (fail-safe → prelaunch/admin) so a DB hiccup never exposes a half-built page.
 $visibility = lg_membership_stripe_pages_live() ? $live_vis : $prelaunch_vis;

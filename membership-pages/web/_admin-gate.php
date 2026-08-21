@@ -29,6 +29,15 @@ declare(strict_types=1);
  */
 if (is_readable(__DIR__ . '/_invites.php')) { require_once __DIR__ . '/_invites.php'; }
 
+/**
+ * The unlock reader (#180). Every caller of this gate already requires
+ * /srv/lg-shared/site-header.php, which requires this — but this gate exists
+ * BECAUSE two doors that resolve the same rule differently drift apart, so it
+ * takes its own dependency rather than inheriting one from its callers'
+ * include order. require_once, so it costs nothing when it is already in.
+ */
+if (is_readable('/srv/lg-shared/tester-unlock.php')) { require_once '/srv/lg-shared/tester-unlock.php'; }
+
 
 if (!function_exists('lg_membership_admin_gate_or_exit')) {
 function lg_membership_admin_gate_or_exit(array $ctx): void
@@ -98,6 +107,21 @@ html[data-lguser-theme='dark'] .lg-gate__main p { color: var(--lg-mute, #a6ac9f)
 if (!function_exists('lg_membership_testgroup_gate_or_exit')) {
 function lg_membership_testgroup_gate_or_exit(array $ctx): void
 {
+    /**
+     * THE UNLOCK CLAIM RUNS BEFORE THE ADMIN EARLY-RETURN (#180), and the order
+     * is the whole point rather than a detail. An administrator returns from
+     * every gate on the next line, so a claim handled below it would silently do
+     * nothing for the one person most likely to click the link to check that it
+     * works — and Ian is an administrator. He would see the join page (as he
+     * always does), conclude the link worked, and hand out a URL that marks
+     * nobody.
+     *
+     * A no-op on every request that does not carry the parameter, which is all
+     * of them but one; it sets a cookie and 302s, or it returns. router.php
+     * calls it earlier still, for the routed path.
+     */
+    if (function_exists('lg_tester_unlock_handle_claim')) { lg_tester_unlock_handle_claim(); }
+
     if (($ctx['capabilities']['manage_options'] ?? false) === true) {
         return; // admin — unchanged, and never gated behind the list
     }
@@ -126,6 +150,38 @@ function lg_membership_testgroup_gate_or_exit(array $ctx): void
      * byte-identical to today.
      */
     if (function_exists('lg_membership_invite_admits') && lg_membership_invite_admits()) {
+        return;
+    }
+
+    /**
+     * A BROWSER HOLDING THE UNLOCK MARK — Ian, 2026-08-21 (#180).
+     *
+     * Here for the same reason the invite check is here, and it is the reason
+     * this feature needs no second switch: the router decides who may REACH a
+     * page and then every page file re-checks on its own authority, so a rule
+     * placed in only one of them produces a visitor who is admitted by the
+     * router and thrown out by their own page. Both doors delegate to this
+     * function, so this is the one place that cannot be half-applied.
+     *
+     * Placing it HERE rather than in a wp_option is also what kills the coupling
+     * that bit #165 and #170: a marked browser is admitted whatever
+     * lgms_stripe_testgroup_pages says, so arming the unlock opens the header's
+     * button and this page together, in one act, and there is no state where
+     * Join is wired perfectly and lands on "This page isn't available yet".
+     *
+     * LAST, like the invite: an admin and a listed member are already through
+     * above, so an unlock only ever WIDENS and never decides for someone who had
+     * another way in. Not armed ⇒ false before reading a cookie ⇒ this whole
+     * block is a no-op and the page is byte-identical to today.
+     *
+     * Scope is the join flow only (LG_TESTER_UNLOCK_SCOPE) — manage-subscription
+     * and request-refund stay shut, because a marked browser has no subscription
+     * to manage and a token opening those would be a pre-launch bypass wearing
+     * an unlock's costume.
+     */
+    if (function_exists('lg_tester_unlock_marked')
+        && lg_tester_unlock_marked()
+        && in_array(lg_tester_unlock_slug(), LG_TESTER_UNLOCK_SCOPE, true)) {
         return;
     }
     lg_membership_admin_gate_or_exit($ctx); // everyone else: today's stub, verbatim
