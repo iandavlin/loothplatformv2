@@ -1959,6 +1959,49 @@ echo "=== GATE 86: the soft-launch cohort is REAL in the checkout path (#181) ==
 run "checkout-audience" php "$(dirname "$0")/checkout-audience-gate.php"
 echo
 
+echo "=== GATE 87: the header's account chip is ONE LINE, and the name survives it ==="
+# #173. Ian 8/20, signed in as "Massimiliano Monterosso Maxmonte Guitars":
+# "Verbose names in the profile icon in the header? Maybe do a ....."  Again 8/21
+# as "Ian Davlin The Looth Group": "Something changed in the header. We are
+# stacking words that used to be inline."
+#
+# ⚠️ SECOND DISCOVERY OF THE CLASS, which is why it is a gate. site-header.css's
+# own <=820 rule says "the display name is the first thing to drop (it's what
+# tips a busy admin aside into a two-line wrap)" -- that was #1, answered by
+# hiding the name on tablets. This is the same defect at desktop widths.
+#
+# ⚠️ THE OBVIOUS ASSERTION IS GREEN ON THE BROKEN STATE. The header BAR never
+# changed height: .lg-chrome__inner is height:60px FIXED. What grew was the
+# button inside it -- 40px -> 49 -> 62 -> 88 -- and it spilled OUT. So "the
+# header is still 60px" is true of Ian's screenshot. This measures the BUTTON
+# and the LINE COUNT instead.
+#
+# §D is the leg that earns the gate its keep: a 71-character name must add NO
+# horizontal scroll over a 3-character one. The max-width is derived from the
+# logo, the nav's min-content and the aside, none of which a gate can pin down
+# forever, so the CONSEQUENCE is asserted rather than the number -- add a
+# seventh nav item and this reddens instead of the constant silently going bad.
+#
+# The Join pill is the second aggravator (#170): it costs ~76px of headroom, so
+# every cell runs with AND without it. Ian's own name with the pill is asserted
+# by itself, because that is the exact combination that produced the report.
+#
+# NO WORDPRESS, NO DB, NO LOGIN, NO NETWORK beyond the loopback CDP port: the
+# header is EXECUTED by php in hermetic temp trees with normalised mtimes (the
+# partial embeds a filemtime cache-buster, so an un-normalised copy would read
+# as a byte leak). Every browser cell asserts liveness first -- a blank page
+# satisfies "nothing wrapped" perfectly. Exits 2, never 0, if Chrome is down.
+#
+# It opens its OWN CDP target and closes it; it never navigates to dev2, never
+# touches cookies, and sets the theme as an attribute on its own document, so
+# it cannot poison the shared chrome profile.
+#
+# RED-FIRST: 10 mutations + 2 no-op controls -- tools/gates/header-name-clamp-redfirst.py.
+# M10 is labelled SOURCE-ONLY on purpose: the <=820 rule is subsumed by the
+# <=1000 one, so no browser cell can see it go.
+run "header-name-clamp" python3 "$(dirname "$0")/header-name-clamp-gate.py"
+echo
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"

@@ -317,3 +317,103 @@ exception to the meta tags.
   card's resolver uses it as the public-safe fallback), which is why the
   generic description may name it. If that ever changes, this description and
   the featured card change together.
+
+---
+
+## The header's account chip is ONE LINE — #173, CLOSED 2026-08-21
+
+Ian, 8/20, with a screenshot, signed in as *Massimiliano Monterosso Maxmonte
+Guitars*: *"Verbose names in the profile icon in the header? Maybe do a ....."*
+Ian, 8/21, hitting it himself as *Ian Davlin The Looth Group*: *"Something
+changed in the header. We are stacking words that used to be inline."*
+
+**What it was.** `.lg-chrome__account-name` carried exactly one declaration — a
+font. No `white-space`, no cap. It is a blockified flex item inside
+`.lg-chrome__account`, so a long `wp_users.display_name` simply wrapped.
+
+### ⚠️ THE HEADER BAR NEVER CHANGED HEIGHT, AND THAT IS THE TRAP
+
+`.lg-chrome__inner` is `height: 60px` **fixed**. So *"the header is still 60px
+tall"* is true of the broken state and of the fixed one — an assertion built on
+it would have been green on the very screenshot Ian sent. What grew was the
+**button inside** the bar: 40px → 49 → 62 → 88, spilling out of it. Measure the
+button and the line count, never the bar.
+
+**Measured on the real table** (`wp_users` on dev2, 1,933 rows). The long tail
+here is business-suffixed names, not long personal ones — the worst is 71
+characters, `Dave Staudte (rhymms with "Howdy") NB Guitar Repair (New Braunfels,
+TX)`. Lines rendered by the name span, before the fix:
+
+| name | 1440 | 1280 | 1200 | 1100 | 1024 | 900 | 640 |
+|---|---|---|---|---|---|---|---|
+| Ian Davlin The Looth Group, **Join pill on** | 1 | 1 | 1 | **2** | **2** | **3** | hidden |
+| same, no Join pill | 1 | 1 | 1 | 1 | **2** | **2** | hidden |
+| Massimiliano … Maxmonte Guitars | 1 | 1 | **2** | **2** | **3** | **3** | hidden |
+| Dave Staudte (71 ch) | **2** | **2** | **2** | **3** | **4** | **6** | hidden |
+
+**The Join pill is the second aggravator and it is worth ~76px of headroom.**
+Ian's name holds one line to 1100 without it and breaks at 1100 with it. Keeper
+added him to the Stripe cohort at ~13:30 on 8/21 so he could test checkout under
+#181, and under #170's `allowlist` state a signed-in cohort member gets a real
+Join pill — working as designed. **His name had not changed; the row had.**
+
+### The max-width is a measurement, not a number someone liked
+
+```css
+max-width: clamp(0px, calc(100vw - 934px), 220px);
+white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+```
+
+Space left for the name at viewport `W` is `W − 934`, where 934 = logo 138.3 +
+nav min-content 419.2 + aside-without-name 269.5 + the inner's two 18px gaps +
+its 48px padding + 15px scrollbar + the chip's own 8px gap. The **220 cap is
+Ian's own name** (200.3px rendered) plus room, so he never sees his own name
+truncated on a desktop; the 40- and 71-character business names get the ellipsis.
+
+⚠️ **A FLAT `max-width` CANNOT BE RIGHT AT 1440 AND 1024 AT ONCE.** One generous
+enough for the wide case turns the vertical wrap into a **horizontal** overflow
+at the narrow one — the same defect pointing sideways. That is what gate 87 §D
+mutation M3 demonstrates.
+
+Below **1000** the clamp has under half a dozen characters left to give (66px at
+1000, 16px at 950, 0 by 934), so the name drops there rather than rendering a
+chip that says only `…` while still spending 8px of gap. The **≤820 rule stays**:
+subsumed, not replaced — `archive.css` and `forums.css` mirror it.
+
+**The full name is hidden, never lost**: `title=` on the span (hover) and its own
+`role="presentation"` row at the top of the opened account menu (touch, and the
+only path left at ≤1000 where the chip has no name at all). That row wraps on
+purpose. Before #173 the menu carried **no name at all**.
+
+### Traps this leaves behind
+
+- ⚠️ **THE MENU'S CSS RULE MUST NOT GO IN `site-header.php`'s INLINE CRITICAL
+  BLOCK.** That block is emitted on **every** render including the anonymous
+  one, so the first draft grew the anon response by **745 bytes**. Caught by the
+  byte-identity check, not by review. The panel tokens still resolve from the
+  stylesheet — they are declared on `.lg-chrome` in dark by that block and fall
+  back to the app's own tokens in light.
+- **`archive-poc/web/archive.css` carries a second copy of the chrome block.**
+  The front page loads it *before* `site-header.css`, so that copy wins there —
+  but a surface loading archive.css alone would keep the defect. Both are fixed;
+  gate 87 §A asserts both. `lg-shell/lg-shared/*` is a stale 23KB fork of a 66KB
+  file that nothing serves — left alone.
+- ⚠️ **PRE-EXISTING, FILED SEPARATELY, AND NO NAME CAP CAN FIX IT**: with the
+  Join pill present, **821–885px already overflows horizontally with a
+  THREE-character name** — `documentElement.scrollWidth` **872** at a 821px
+  viewport with the name `Ian`, against 806 usable. Logo 138.3 + nav min-content
+  419.2 + aside 269.5 + gaps 36 + padding 48 = 911. It is the **pill's** width,
+  not the name's, and it predates #173. (The fix incidentally *reduces* it to
+  841, because the name is hidden at that width.)
+- **Gate 79's authed byte-identity leg was re-anchored** from `origin/main` to
+  the tree's own `absent` render. It meant *"the join flag moves no bytes for
+  this viewer"*, but anchoring it to a historical file made it *"the authed
+  header may never change again"* — #173 reddened eleven of them at once. The
+  **anon** leg keeps its `origin/main` anchor: that is #170's cacheability
+  claim, and it is what red-first mutation 7 fires at.
+- **Gate 79 was reading PROSE as a selector.** Its `.lg-chrome__join` scan
+  matched the words `(lg-shared/site-header.css .lg-chrome__join)` inside a `/* */`
+  comment — a standing RED on main, re-diagnosed twice. Comments are stripped
+  now. ⚠️ It was in **two** files, not the one the charter named:
+  `membership-pages/web/` and `lg-patreon-stripe-poller/assets/` both carry a
+  copy of `lg-shortcodes.css`.
