@@ -84,6 +84,48 @@ def wp(php):
     return "\n".join(l for l in r.stdout.splitlines() if not l.startswith(("PHP ", "Warning"))).strip()
 
 
+def member_cookies():
+    """A SHORT-LIVED member session, minted on this box, never stored.
+
+    ── WHY THIS IS NOT A VULNERABILITY, and what would have made it one ────────
+    Ian asked exactly the right question ("can you do this without shipping a
+    vulnerability to live?"). Three properties keep it safe:
+
+      1. NOTHING IS ADDED TO THE PRODUCT. No route, no header check, no
+         "skip auth if you send this" shortcut — the shipped code is untouched.
+         Only this harness changes, and a harness is not a surface: it runs when
+         a human runs it, from a shell that already has the box.
+      2. NO CREDENTIAL EXISTS TO LEAK. WordPress mints the cookie the same way
+         it mints yours at login, from keys already on the box, and it EXPIRES
+         in ten minutes. There is no password in the repo, no permanent test
+         account with a weak one, nothing to rotate if this file is read.
+      3. IT REFUSES TO RUN ANYWHERE BUT DEV2. The siteurl is checked first, so
+         the same file pulled onto live — and it WILL be, live pulls all of
+         main — mints nothing there.
+
+    Degrades honestly: any failure returns None and the caller reports NO
+    VERDICT rather than guessing.
+    """
+    php = (
+        "if (strpos(get_option('siteurl'), 'dev2.loothgroup.com') === false) { echo 'NOTDEV2'; exit; }"
+        "$u = get_user_by('login', 'qa-disposable');"
+        "if (!$u) { echo 'NOUSER'; exit; }"
+        "$exp = time() + 600;"
+        "echo LOGGED_IN_COOKIE . '=' . wp_generate_auth_cookie($u->ID, $exp, 'logged_in') . ';' . "
+        "SECURE_AUTH_COOKIE . '=' . wp_generate_auth_cookie($u->ID, $exp, 'secure_auth');"
+    )
+    try:
+        r = subprocess.run(["sudo", "-n", "-u", "looth-dev", "wp", "--path=/var/www/dev",
+                            "eval", php], capture_output=True, text=True, timeout=60)
+    except Exception:
+        return None
+    out = (r.stdout or "").strip().splitlines()
+    out = out[-1] if out else ""
+    if not out or "=" not in out or out in ("NOTDEV2", "NOUSER"):
+        return None
+    return out
+
+
 def curl(env, url, cookie=True):
     cmd = ["curl", "-s", "--resolve", f"{env['LG_GATE_DOMAIN']}:443:{env['LG_GATE_ADDR']}"]
     if cookie:
@@ -178,7 +220,15 @@ def main() -> int:
         print("  (mu-plugin symlinked out of the serving checkout — merge + pull, then "
               "re-run. Neither a red nor a green: this leg has no verdict.)")
     else:
-        body = curl(env, f"{env['LG_GATE_HOST']}/compose/?type=loothprint")
+        mc = member_cookies()
+        url = f"{env['LG_GATE_HOST']}/compose/?type=loothprint"
+        if mc:
+            body = sh(["curl", "-s", "--resolve",
+                       f"{env['LG_GATE_DOMAIN']}:443:{env['LG_GATE_ADDR']}",
+                       "-H", f"Cookie: loothdev_auth={env['LG_GATE_TOKEN']};{mc}",
+                       url]).stdout
+        else:
+            body = curl(env, url)
         live = 'name="lg_fc_paywall"' in body
         # ⚠️ THIS FETCH CARRIES THE DEV-GATE COOKIE ONLY, NEVER A WP LOGIN, and
         # /compose/ is members-only — so an unauthenticated run reads the login
