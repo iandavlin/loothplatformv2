@@ -100,16 +100,48 @@ final class TesterUnlock
     {
         if ( function_exists( 'lg_tester_unlock_armed' ) ) { return true; }
 
-        foreach ( [
-            '/srv/lg-shared/tester-unlock.php',
-            __DIR__ . '/../../lg-shared/tester-unlock.php',
-        ] as $path ) {
-            if ( is_readable( $path ) ) {
-                require_once $path;
-                if ( function_exists( 'lg_tester_unlock_armed' ) ) { return true; }
+        foreach ( [ '/srv/lg-shared', __DIR__ . '/../../lg-shared' ] as $dir ) {
+            /* site-header.php is preferred because it REQUIRES tester-unlock.php
+               from its own __DIR__ — so both function families arrive from the
+               SAME tree and cannot be mixed. That matters more than it looks:
+               tester-unlock.php declares top-level `const`s, and require_once
+               keys on the resolved path, so pulling one copy from /srv and
+               another from a worktree defines them twice and emits warnings on
+               every page of seven apps. Loading both from one directory makes
+               that impossible rather than unlikely.
+
+               It is also how the tab learns the header's join state, which is
+               the pairing a person needs: in header state 'off' the unlock
+               changes nothing (#170's ruling), and a tab that could not say so
+               would show an armed link that does nothing. */
+            if ( is_readable( $dir . '/site-header.php' ) ) {
+                require_once $dir . '/site-header.php';
+            } elseif ( is_readable( $dir . '/tester-unlock.php' ) ) {
+                require_once $dir . '/tester-unlock.php';
             }
+            if ( function_exists( 'lg_tester_unlock_armed' ) ) { return true; }
         }
         return false;
+    }
+
+    /**
+     * What the header's Join is doing on this box: 'off' | 'allowlist' | 'on',
+     * or 'unknown' when the shared partial could not be loaded.
+     *
+     * Asked of lg_shared_header_join_stripe_state() rather than re-resolved
+     * here, for the reason this whole issue exists: a second copy of "what
+     * state is the header in" is how two answers drift apart.
+     *
+     * 'unknown' is returned rather than guessed, and the tab prints it as such.
+     * A tab that quietly said 'off' when it simply could not tell would send
+     * whoever read it to fix the wrong thing.
+     */
+    public static function headerJoinState(): string
+    {
+        self::loadReader();
+        return function_exists( 'lg_shared_header_join_stripe_state' )
+            ? lg_shared_header_join_stripe_state()
+            : 'unknown';
     }
 
     /** Where the operator store lives, asked of the reader so there is one answer. */

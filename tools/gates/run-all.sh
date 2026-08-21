@@ -2144,6 +2144,64 @@ echo "=== GATE 88: compose uploads have limits, and the cleanup cannot eat a fil
 run "compose-limits" python3 "$(dirname "$0")/compose-limits-gate.py"
 echo
 
+echo "=== GATE 90: the tester link is recoverable, and rotating kills the old one ==="
+# #190, Ian 2026-08-21: "Can we put the token link in there with the whitlist ?"
+# #180 stored sha256(token) on purpose, so reading the config hands nobody a
+# working link -- and the consequence nobody had said out loud is that THE
+# WORKING LINK EXISTED ONLY IN A CHAT MESSAGE. A hash cannot be turned back into
+# a URL, so losing the message loses the link, for a feature about to be handed
+# to real testers. The Testers tab is the write half; this gate is what keeps it
+# honest.
+#
+# THE ASSERTION THAT BITES IS THE REFUSAL, NOT THE GRANT. "Rotate produces a new
+# token" passes on code that never writes it anywhere, on code that writes the
+# token but not the hash, and on code where the OLD hash keeps working --
+# random_bytes is not the part that breaks. A9 is the one that means something:
+# AFTER ROTATING, THE OLD LINK STOPS WORKING, measured in a SUBPROCESS so no
+# cached config can flatter it. Same family as #148's "a PRO purchase grants
+# looth3" passing on a constant.
+#
+# THE SECOND VACUOUS GREEN, and the reason the panel is tested at all: "the panel
+# shows a link" is satisfied by one that ALWAYS prints TesterUnlock::url(). On a
+# box armed by a hand-placed tester-unlock.local.php -- which is what dev2 carries
+# TODAY -- that prints a link built from a token whose hash is not the armed one.
+# It looks completely live and does not work. D6 requires that no lgtester= URL
+# appears at all in that state, and its fixture HOLDS A TOKEN, because a fixture
+# with none leaves nothing for a broken panel to leak (red-first M6/M13 found
+# exactly that, twice).
+#
+# THE THIRD: turning it off must survive a box file. An absent operator store
+# applies NOTHING, so a Clear implemented as "delete the file" leaves a box armed
+# by a .local.php still armed while the dash says off. B7/B7b arm a real box file
+# and require the token to stop matching -- B7b with the VALID hash still in
+# place, so only the `enabled` half can do the refusing.
+#
+# No browser, no DB, no WordPress, no FPM, no network, and every store under a
+# PER-RUN temp dir keyed to the PID, so concurrent suites cannot collide. It
+# loads the BRANCH's shared reader first on purpose: TesterUnlock::loadReader()
+# prefers /srv/lg-shared, which is the SERVING CHECKOUT (main) sitting beside
+# dev2's armed .local.php -- the first run measured that and called a disarmed
+# box armed (trap-harness-and-serve-answer-from-main). Section H asserts the
+# loaded reader really is the branch's, because nothing else here means anything
+# if it is not.
+#
+# G1 REPORTS rather than asserts while the dash is still under Settings, so it
+# cannot redden a lane that has not reached the menu move; it becomes four hard
+# assertions the moment add_menu_page lands.
+#
+# TWO OF ITS OWN ASSERTIONS FAILED ON THEIR OWN WARNINGS first time (F4 resolved
+# the reader's source order by strpos and found the docblock EXPLAINING the
+# order; F5 matched the panel comment saying it avoids StripeLifecycle), so every
+# source check now runs on php_code_only() -- PHP's tokenizer, not a regex,
+# because these files contain '//' inside strings. And E2/E3 read a FIXED-WIDTH
+# window that ran past the end of one handler into its neighbour, so deleting
+# rotate's nonce check stayed green on the neighbour's; the body is brace-matched
+# now.
+#
+# RED-FIRST: 23 mutations + 2 no-op controls, 25/25 -- tools/gates/tester-dash-redfirst.py.
+run "tester-dash" php "$(dirname "$0")/tester-dash-gate.php"
+echo
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"

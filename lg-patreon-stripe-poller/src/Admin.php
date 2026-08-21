@@ -10,6 +10,36 @@ final class Admin
     private const OPT_PAGE  = 'lg-member-sync';
     private const AFF_PAGE  = 'lg-affiliates';
 
+    /**
+     * The admin file this page hangs off — ONE definition, because it appears
+     * in seven redirect targets and every one of them is a silent breakage if
+     * it disagrees with how menu() registered the page (#190).
+     *
+     * ⚠️ IT IS 'options-general.php' TODAY, WHICH IS SETTINGS — the one place
+     * Ian ruled this dash must NOT live: "I want it in main dash, not in
+     * settings or tool." #190's own issue text says this page already uses
+     * add_menu_page and is top-level; measured 2026-08-21, it does not and it
+     * is not. Only Affiliates is top-level. The corroboration is a link that is
+     * dead right now: platform/mu-plugins/lg-admin-tools.php:67 points at
+     * admin.php?page=lg-member-sync, the top-level URL this page does not have.
+     *
+     * Promoting it means changing this constant, the registration in menu(),
+     * and the enqueue hook prefix in enqueueScripts() — TOGETHER. The hook is
+     * the one that fails quietly: 'settings_page_' becomes 'toplevel_page_',
+     * and if it is missed the Welcome Email tab's media uploader stops loading
+     * with no error at all.
+     */
+    private const PARENT_FILE = 'options-general.php';
+
+    /** The dash's own URL, optionally on a given tab. */
+    private static function pageUrl( array $args = [] ): string
+    {
+        return add_query_arg(
+            array_merge( [ 'page' => self::OPT_PAGE ], $args ),
+            admin_url( self::PARENT_FILE )
+        );
+    }
+
     public static function boot(): void
     {
         add_action( 'admin_menu',  [ self::class, 'menu' ] );
@@ -28,6 +58,8 @@ final class Admin
         add_action( 'admin_post_lgms_invite_mint',   [ self::class, 'handleInviteMint' ] );
         add_action( 'admin_post_lgms_price_set', [ self::class, 'handlePriceSet' ] );
         add_action( 'admin_post_lgms_comp_timer_set', [ self::class, 'handleCompTimerSet' ] );
+        add_action( 'admin_post_lgms_tester_rotate', [ self::class, 'handleTesterRotate' ] );
+        add_action( 'admin_post_lgms_tester_clear',  [ self::class, 'handleTesterClear' ] );
     }
 
     public static function menu(): void
@@ -103,7 +135,7 @@ final class Admin
 
         wp_safe_redirect( add_query_arg(
             [ 'page' => self::OPT_PAGE, 'lgms_pages' => rawurlencode( $msg ) ],
-            admin_url( 'options-general.php' )
+            admin_url( self::PARENT_FILE )
         ) );
         exit;
     }
@@ -124,7 +156,7 @@ final class Admin
 
         wp_safe_redirect( add_query_arg(
             [ 'page' => self::OPT_PAGE, 'tab' => 'welcome_email', 'lgms_mosaic_saved' => '1' ],
-            admin_url( 'options-general.php' )
+            admin_url( self::PARENT_FILE )
         ) );
         exit;
     }
@@ -156,7 +188,7 @@ final class Admin
     {
         wp_safe_redirect( add_query_arg(
             array_merge( [ 'page' => self::OPT_PAGE, 'tab' => 'stripe_cohort' ], $extra ),
-            admin_url( 'options-general.php' )
+            admin_url( self::PARENT_FILE )
         ) );
         exit;
     }
@@ -255,6 +287,75 @@ final class Admin
                                 'lgms_invite_exp'  => (string) $inv['expires'] ] );
     }
 
+    // -------------------------------------------------------------------------
+    // The tester unlock link (#190) — the write half of #180
+    //
+    // Ian, 2026-08-21: "Can we put the token link in there with the whitlist ?"
+    // The link existed only in a chat message, because the store holds sha256
+    // and cannot be read back. These two buttons are what make it recoverable.
+    // The store, and why it is shaped the way it is, live in LGMS\TesterUnlock.
+    // -------------------------------------------------------------------------
+
+    /**
+     * ROTATE — mint a new link, arm the site on it, and show it once on screen.
+     *
+     * ⚠️ THE RAW TOKEN IS NOT PUT IN THE REDIRECT. The invite panel next door
+     * passes its token through a query arg (lgms_invite_link), which lands in
+     * the admin URL, in browser history, and in any onward Referer. This one is
+     * read back out of the option by the tab instead, so the only place it ever
+     * appears is the rendered page. (The invite panel's shape is noted on #190
+     * as observed and deliberately NOT changed here — different token, and
+     * changing it is not this issue.)
+     */
+    public static function handleTesterRotate(): void
+    {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( 'Insufficient permissions.', 403 );
+        }
+        check_admin_referer( 'lgms_tester_rotate' );
+
+        $had = TesterUnlock::token() !== '';
+        $r   = TesterUnlock::mint();
+
+        if ( ! $r['ok'] ) {
+            self::cohortRedirect( [ 'lgms_cohort_err' => rawurlencode( $r['error'] ) ] );
+        }
+
+        /* CONFIRM RATHER THAN ASSUME. mint() wrote two stores; this asks the
+           SHARED READER — the same code the seven apps run — whether the box is
+           actually armed now. Without the cache reset in writeState() this read
+           would answer from before the write, which is exactly how a dash comes
+           to report success on a box where nothing happened. */
+        $armed = TesterUnlock::siteArmed();
+        $note  = $armed
+            ? 'A new tester link is live on this box.'
+            : 'The new link was stored, but this box does not read as armed — check the Testers tab state below before sending it to anyone.';
+
+        self::cohortRedirect( [ 'lgms_tester_ok' => rawurlencode(
+            $note . ( $had ? ' Every link sent before now has stopped working.' : '' )
+        ) ] );
+    }
+
+    /** TURN IT OFF — disarm the site and forget the token. */
+    public static function handleTesterClear(): void
+    {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( 'Insufficient permissions.', 403 );
+        }
+        check_admin_referer( 'lgms_tester_clear' );
+
+        $r = TesterUnlock::clear();
+        if ( ! $r['ok'] ) {
+            self::cohortRedirect( [ 'lgms_cohort_err' => rawurlencode( $r['error'] ) ] );
+        }
+
+        $armed = TesterUnlock::siteArmed();
+        self::cohortRedirect( [ 'lgms_tester_ok' => rawurlencode( $armed
+            ? 'The token was cleared, but this box STILL reads as armed — something other than this dash is arming it (a hand-placed platform/config/tester-unlock.local.php, or an environment override). See the state below.'
+            : 'The tester link is off. Every link sent has stopped working, and anyone still carrying the mark sees the ordinary site.'
+        ) ] );
+    }
+
     public static function handleCohortRemove(): void
     {
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -284,7 +385,7 @@ final class Admin
     {
         wp_safe_redirect( add_query_arg(
             array_merge( [ 'page' => self::OPT_PAGE, 'tab' => 'stripe_price' ], $extra ),
-            admin_url( 'options-general.php' )
+            admin_url( self::PARENT_FILE )
         ) );
         exit;
     }
@@ -505,6 +606,8 @@ final class Admin
 
     private static function renderStripeCohortTab(): void
     {
+        TesterUnlockPanel::render();
+
         $ok  = isset( $_GET['lgms_cohort_ok'] )  ? rawurldecode( (string) $_GET['lgms_cohort_ok'] )  : '';
         $err = isset( $_GET['lgms_cohort_err'] ) ? rawurldecode( (string) $_GET['lgms_cohort_err'] ) : '';
         $confirmId = (int) ( $_GET['lgms_cohort_confirm'] ?? 0 );
@@ -601,7 +704,7 @@ final class Admin
                         <input type="hidden" name="cohort_user_id" value="<?php echo (int) $cu->ID; ?>">
                         <button type="submit" class="button button-primary">Add #<?php echo (int) $cu->ID; ?> to the cohort</button>
                     </form>
-                    <a class="button" href="<?php echo esc_url( add_query_arg( [ 'page' => self::OPT_PAGE, 'tab' => 'stripe_cohort' ], admin_url( 'options-general.php' ) ) ); ?>">Cancel</a>
+                    <a class="button" href="<?php echo esc_url( add_query_arg( [ 'page' => self::OPT_PAGE, 'tab' => 'stripe_cohort' ], admin_url( self::PARENT_FILE ) ) ); ?>">Cancel</a>
                 </div>
             <?php endif; ?>
         <?php endif; ?>
@@ -797,7 +900,11 @@ final class Admin
             'settings'      => 'Settings',
             'member_tools'  => 'Member Tools',
             'welcome_email' => 'Welcome Email',
-            'stripe_cohort' => 'Stripe Test Group',
+            // #190: renamed for what it now answers end to end — the link that
+            // lets ONE anonymous browser in, and the list of who may buy. The
+            // SLUG deliberately stays 'stripe_cohort': three redirect helpers and
+            // any bookmark or linked notice already address it by that name.
+            'stripe_cohort' => 'Testers',
             'stripe_price'  => 'Stripe Price',
             'dual_payers'   => 'Dual Payers',
             'comp_timers'   => 'Comp Timers',
@@ -808,7 +915,7 @@ final class Admin
 
             <nav class="nav-tab-wrapper" style="margin-bottom:1.5em;">
                 <?php foreach ( $tabs as $slug => $label ) : ?>
-                    <a href="<?php echo esc_url( add_query_arg( [ 'page' => self::OPT_PAGE, 'tab' => $slug ], admin_url( 'options-general.php' ) ) ); ?>"
+                    <a href="<?php echo esc_url( add_query_arg( [ 'page' => self::OPT_PAGE, 'tab' => $slug ], admin_url( self::PARENT_FILE ) ) ); ?>"
                        class="nav-tab<?php echo $tab === $slug ? ' nav-tab-active' : ''; ?>">
                         <?php echo esc_html( $label ); ?>
                     </a>
@@ -1115,7 +1222,7 @@ final class Admin
         $back = static function ( array $extra ): void {
             wp_safe_redirect( add_query_arg(
                 array_merge( [ 'page' => self::OPT_PAGE, 'tab' => 'comp_timers' ], $extra ),
-                admin_url( 'options-general.php' )
+                admin_url( self::PARENT_FILE )
             ) );
             exit;
         };
