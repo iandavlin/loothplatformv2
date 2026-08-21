@@ -186,14 +186,18 @@ def main() -> int:
         # nothing to do with the code. That is the harness-must-run-as-the-real
         # -user trap, and a gate that reports its own blind spot as RED teaches
         # people to ignore it. NO VERDICT unless the form actually arrived.
-        if 'name="lg_fc_comments"' not in body:
+        form_arrived = 'name="lg_fc_comments"' in body
+        if not form_arrived:
+            # ⚠️ SKIP THIS LEG, NEVER THE REST. An early return here would have
+            # taken P3 — the only leg that proves the choice reaches the SERVED
+            # BYTES — down with it, which is a worse gate than the red it
+            # replaced. Skip the sub-assertions, keep walking.
             print(f"  NO VERDICT: the form did not arrive ({len(body)}B) — this leg "
                   "needs a logged-in member cookie, which this harness does not mint. "
                   "P1 and P3 still carry real verdicts.")
-            return fails
-        chk("the form is alive (so an absence is not vacuous)",
-            'name="lg_fc_comments"' in body, f"{len(body)}B")
-        if state == "ON":
+        else:
+            chk("the form is alive (so an absence is not vacuous)", True, f"{len(body)}B")
+        if form_arrived and state == "ON":
             chk("ON: the toggle is rendered", live)
             # The DEFAULT, read off the rendered input rather than assumed: the
             # attribute sits immediately after value="behind" in the heredoc.
