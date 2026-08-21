@@ -2126,21 +2126,45 @@ html[data-lguser-theme="dark"] .lgfc{--lg-paper:#20241f;--lg-rust-tint:#3a2320}
    identical defect and appear the moment a member picks anything. One cause, so
    one fix — but the shade is Ian's to adjust, not load-bearing.
 
-   ⚠️ THERE WERE FOUR, AND THE FOURTH IS THE SUBMIT BUTTON (#179, 2026-08-21).
-   Corrected by looking rather than by trusting the record: #179's charter carried
-   the finding forward as "hardcoded #fff on --lg-sage-d at ~1617/1675/1683", and
-   at those lines it is already FIXED — the licence label and the chip are covered
-   by the selector above, and the taxonomy picker got its own override 200 lines
-   up. The one that was never covered is `.lgfc__submit`, which is not a
-   `:has(input:checked)` rule and so fell outside every sweep of that shape. It is
-   the form's PRIMARY control: "Post it", white on #b0c693 at 1.85:1 in dark, on
-   every render rather than only after a member picks something. Same cause, same
-   cure, same shade. */
+   ⚠️ #179 (2026-08-21) WENT LOOKING FOR A FOURTH SITE AND THERE ISN'T ONE — and
+   the way that was established is the point. The charter carried this forward as
+   "hardcoded #fff on --lg-sage-d, still present at ~1617/1675/1683". Reading the
+   source, `.lgfc__submit` (below) looks like a fourth instance of exactly this
+   pair and is NOT covered by the selector here, so it was written up as one.
+
+   MEASURED ON THE SERVED PAGE IN DARK INSTEAD, which is what this comment block
+   argues for three paragraphs up, and the reasoning was wrong:
+
+       .lgfc__submit   background #222629   colour #e5e7e1   ratio 12.23:1
+       --lg-sage-d resolves to #b0c693, as documented — the button just is not
+       painted with it; something later in the cascade wins.
+
+   So the button is FINE in dark, no override was added for it, and the charter's
+   item is CLOSED as already-fixed rather than fixed again. A rule that pairs
+   var(--lg-sage-d) with #fff in the source is a candidate, not a finding.
+
+   ⚠️ AND A REAL GATE BLIND SPOT, FOUND ON THE WAY: the dark sweep reports "88
+   text elements measured" and never looked at this button at all, because an
+   <input>'s label is a `value` attribute and not a text node. The form's PRIMARY
+   control is invisible to its own contrast gate. It happens to be fine; the next
+   input-valued control on this form would not be checked either. Recorded, not
+   fixed here — it is the gate's shape, not this file's. */
 html[data-lguser-theme="dark"] .lgfc li:has(input:checked)>label,
-html[data-lguser-theme="dark"] .lgfc__chip:has(input:checked),
-html[data-lguser-theme="dark"] .lgfc__submit,
-html[data-lguser-theme="dark"] .lgfc .acf-form-submit input[type=submit]{
+html[data-lguser-theme="dark"] .lgfc__chip:has(input:checked){
   background:#3d5233;border-color:#3d5233;color:#fff}
+/* THE ACTUAL OPEN GATE-47 RED, measured on main 2026-08-21: the WYSIWYG toolbar
+   is a 712x40 slab of #f5f5f5 in dark mode. It carries no text, so the contrast
+   pass never looks at it and only the bright-surface leg catches it. ACF's own
+   stylesheet paints it, so it is corrected here rather than there.
+   ⚠️ NOT VERIFIABLE FROM A BRANCH ON THIS BOX: this mu-plugin is symlinked out of
+   the serving checkout, so gate 47 measures MAIN until a merge and a pull. Re-run
+   after the pull with:
+     python3 tools/frontend-compose/dark-contrast-sweep.py --width 1280
+     python3 tools/frontend-compose/dark-contrast-sweep.py --width 390 */
+html[data-lguser-theme="dark"] .lgfc .acf-editor-toolbar,
+html[data-lguser-theme="dark"] .lgfc .mce-toolbar-grp,
+html[data-lguser-theme="dark"] .lgfc .mce-panel{
+  background:#222629;border-color:#2c312d}
 html[data-lguser-theme="dark"] .lgfc__card{box-shadow:0 10px 34px rgba(0,0,0,.28)}
 CSS;
 }
