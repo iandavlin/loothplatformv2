@@ -457,3 +457,32 @@
   family is INVISIBLE to gate 62 (it only scans `LG_*` symbols and
   `platform/config/*.php`), so registering those flags is a discipline here
   and not an enforced one.
+
+## looth4 is the everything-bypass, and Stripe must respect it (Ian, 2026-08-21)
+Verbatim: *"looth4 is the everything bypass the stripe side of membeship needs
+to respect what we have built there."*
+
+looth4 = the comp/staff pass carried over from the cutover (15 holders on live,
+managed by `lg-looth4-expiry`). It is an EXISTING GRANTED MEMBERSHIP, not an
+administrative privilege — which is why it outranks the Stripe machinery while
+`manage_options` deliberately does NOT (see the no-admin-bypass ruling on #181:
+an admin passes the money door and cannot see the failure).
+
+Already true on the reading side — verified 8/21: `lg-viewer-tier.php` maps
+`looth4 => pro` ("poller bypass — same access as looth3") and
+`lg-membership-chrome.php` carries the same pairing. So content gating, and the
+#179 loothprint paywall toggle that rides on the same tier resolution, honour it
+already.
+
+**The standing requirement on every Stripe-side change:** a looth4 holder is
+never told to pay, never demoted, never loses access for having no Stripe
+subscription, and no sweep or reconcile may strip the role. `EntitlementManager
+::revokeForSubscription` revokes BY SOURCE (subscription id) so it should not
+touch what it never granted — verify, do not assume. The live-harm case is 15
+real people with staff among them.
+
+**Do not confuse the two axes.** The tester allowlist (`stripe_testgroup` =
+`manage_options || inCohort`) decides WHO MAY TRANSACT during the soft launch.
+The looth roles decide WHAT A MEMBER SEES afterwards. Ian's 8/21 go-live ruling
+on the first axis: testers **really buy** — real checkout, real cards — because
+comping them leaves the money path, the receipts and the grant untested.
