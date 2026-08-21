@@ -66,7 +66,32 @@ R("member.is.looth1", M["roles"] == ["looth1"],
   % (M["id"], M["roles"]))
 
 def cleanup():
-    wpcli('require_once ABSPATH."wp-admin/includes/user.php"; wp_delete_user(%d);' % M["id"])
+    """⚠️ EXPLICIT, AND ASSERTED. The first version deleted only the user and
+    trusted WordPress to take the rest. It mostly did — but this run's uploads
+    are STAMPED, and a stamped row left behind makes gate 88's §E report someone
+    else's files as strays the collector could eat. Everything this run makes is
+    named for it, deleted by name, and the leftovers are counted."""
+    out = wpcli(
+        '$u=%d;'
+        '$posts=get_posts(["post_type"=>array_keys(lg_fc_types()),"post_status"=>"any",'
+        '"numberposts"=>-1,"author"=>$u,"fields"=>"ids"]);'
+        '$n=0;'
+        'foreach($posts as $p){'
+        '  foreach(get_children(["post_parent"=>$p,"post_type"=>"attachment",'
+        '                        "numberposts"=>-1,"fields"=>"ids"]) as $c){'
+        '    wp_delete_attachment((int)$c,true); $n++; }'
+        '  wp_delete_post($p,true); }'
+        'require_once ABSPATH."wp-admin/includes/user.php"; wp_delete_user($u);'
+        'global $wpdb;'
+        '$left=(int)$wpdb->get_var($wpdb->prepare('
+        '  "SELECT COUNT(*) FROM {$wpdb->postmeta} m JOIN {$wpdb->posts} a ON a.ID=m.post_id"'
+        '  ." WHERE m.meta_key=%%s AND a.post_author=%%d", "_lg_fc_upload", $u));'
+        'printf("CLEANUP|posts=%%d files=%%d stamped_left=%%d", count($posts), $n, $left);'
+        % M["id"])
+    line = [l for l in (out.stdout or "").splitlines() if l.startswith("CLEANUP|")]
+    R("Z.teardown", bool(line) and line[0].endswith("stamped_left=0"),
+      (line[0] if line else "the teardown produced no report — assume it did not run")
+      + " — a leaked stamped row makes gate 88 §E blame the feature")
 
 gate = subprocess.run(["sudo", "-n", "grep", "-oP", r'loothdev_token\s+"\K[^"]+',
                        "/etc/nginx/snippets/loothdev-tokens.conf"],

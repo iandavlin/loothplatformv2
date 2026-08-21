@@ -73,11 +73,16 @@ MUTATIONS = [
      "    $cap = PHP_INT_MAX;",
      ["A.photo.sideload.refused", "A.file.refused"], False),
 
+    # ⚠️ RETARGETED BY #189. The refusal used to be built inline inside
+    # lg_fc_upload_prefilter(); it now lives in lg_fc_size_refusal_template()
+    # so the browser can be handed the SAME sentence. The old anchor stopped
+    # matching, which the anchor check reports as SKIPPED — a mutation that no
+    # longer applies is a leg no longer under test, and it reads exactly like a
+    # leg that passed.
     ("M2  the refusal stops naming the number",
-     "            ? sprintf('That photo is %s — a bit big. Photos need to be %s or smaller.',\n"
-     "                      lg_fc_mb($size), lg_fc_mb($cap))",
-     "            ? 'That photo is too big.'",
-     ["A.photo.sideload.says10"], False),
+     "        ? 'That photo is %s — a bit big. Photos need to be %s or smaller.'",
+     "        ? 'That photo is too big.'",
+     ["A.photo.sideload.says10", "I5.templates_have_both_numbers"], False),
 
     ("M3  ONLY ACF's hook is registered — the original defect, exactly",
      "add_filter('wp_handle_sideload_prefilter', 'lg_fc_upload_prefilter');",
@@ -201,6 +206,57 @@ MUTATIONS = [
      "    }\n"
      "    $refusal = $refusal ?: 'refused';",
      ["H.legal_upload_passes"], False),
+
+    # ── #189, the form's own uploader ────────────────────────────────────────
+    # Four of these six are defects this lane ACTUALLY MADE. They are here so the
+    # next person meets them as a red line rather than as a screenshot.
+
+    ("M20 the print file posts acf[key][] instead of a scalar (the real bug)",
+     "        echo lg_fc_upload_tile_html($t, $name, $say['swap_this']);",
+     "        echo lg_fc_upload_tile_html($t, $name . '[]', $say['swap_this']);",
+     ["I2.printfile_decodes_to_a_SCALAR"], False),
+
+    ("M21 the photos control loses its empty sentinel",
+     '  <input type="hidden" name="<?php echo esc_attr($name); ?>" value="">\n'
+     '  <ul class="lgfc-up__strip"><?php\n    foreach ($ids as $id) {',
+     '  <ul class="lgfc-up__strip"><?php\n    foreach ($ids as $id) {',
+     ["I2.empty_gallery_still_posts"], False),
+
+    ("M22 the door-closer arms ACF's latch — TinyMCE dies with it",
+     "    add_action('wp_footer',               'lg_fc_drop_media_modal', 1);",
+     "    acf_has_done('ACF_Assets::enqueue_uploader');\n"
+     "    add_action('wp_footer',               'lg_fc_drop_media_modal', 1);",
+     ["I4.latch_not_armed"], False),
+
+    ("M23 the render swap never happens — ACF's gallery comes back",
+     "    if ($field['type'] === 'gallery') {\n        $field['type'] = 'lg_fc_photos';",
+     "    if (false) {\n        $field['type'] = 'lg_fc_photos';",
+     ["I1.gallery_becomes_ours"], False),
+
+    ("M24 the uploader posts to a SECOND route of its own",
+     "        'action'  => 'bfu_chunker',",
+     "        'action'  => 'lg_fc_upload',",
+     ["I5.action_is_the_chunker"], False),
+
+    ("M25 the browser is handed a nonce BFU does not check",
+     "        'nonce'   => wp_create_nonce('media-form'),",
+     "        'nonce'   => wp_create_nonce('lg-fc-upload'),",
+     ["I5.nonce_is_media_form"], False),
+
+    ("M26 the JS byte formatter drifts from lg_fc_mb()",
+     "    return (m >= 10 ? String(Math.round(m)) : (Math.round(m * 10) / 10).toFixed(1)) + 'MB';",
+     "    return (Math.round(m * 10) / 10).toFixed(1) + 'MB';",
+     ["J.mb.agrees"], False),
+
+    ("M27 the dequeue is hooked too early to dequeue anything",
+     "    add_action('wp_print_footer_scripts', 'lg_fc_drop_media_modal', 0);",
+     "    add_action('wp_enqueue_scripts',      'lg_fc_drop_media_modal', 0);",
+     ["I3.hooked_at_footer_scripts_0", "I3.not_on_enqueue_scripts"], False),
+
+    ("M28 the media modal is left on the queue",
+     "    wp_dequeue_script('media-editor');\n    wp_dequeue_script('media-audiovideo');",
+     "    /* mutation: the roots are left enqueued */",
+     ["I3.media_is_gone"], False),
 
     ("N1  CONTROL: a comment is reworded",
      "/** The stamp that makes the collector safe. See lg_fc_collect_unused(). */",

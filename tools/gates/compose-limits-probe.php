@@ -399,16 +399,51 @@ foreach (($GLOBALS['wp_filter']['shutdown']->callbacks ?? []) as $prio => $cbs) 
 R('D2.queued_once', $again_n === $after_n, "a second save must not queue a second collection ($after_n -> $again_n)");
 
 /* ── §E THE 36-POST GUARANTEE, as an assertion rather than a memory ───────────
-   Run read-only over the REAL corpus: no attachment on any pre-existing post
-   carries a stamp, so the collector cannot reach one however it is called. */
+   Run read-only over the REAL corpus. The property being protected is that the
+   collector can only ever reach files THIS FORM created, on the post it created
+   them for — which is what puts the 65 historical leftovers on 36 published
+   loothprints structurally out of its reach.
+
+   ⚠️ THIS LEG USED TO REQUIRE ZERO STAMPED ROWS OUTSIDE THE RUN'S OWN FIXTURES,
+   AND THAT WAS ONLY TRUE UNTIL SOMEBODY USED THE FORM. Measured 2026-08-21:
+   eleven stamped attachments on ONE member's in-progress auto-draft, uploaded
+   through the real compose form on the serve minutes earlier. Nothing was wrong
+   — that is the feature working — but the gate called them "files the collector
+   could delete" and went RED, which blocks every lane on a box where a member is
+   composing. It is restated rather than loosened: a stamp must AGREE with the
+   attachment's post_parent, and that parent must be one of the types this form
+   composes. A stamp pointing anywhere else is a real defect and still fails. */
 global $wpdb;
-$strays = (int) $wpdb->get_var($wpdb->prepare(
+$types = array_map(static fn($t) => "'" . esc_sql($t) . "'", array_keys(lg_fc_types()));
+$bad = (int) $wpdb->get_var($wpdb->prepare(
     "SELECT COUNT(*) FROM {$wpdb->postmeta} m
      JOIN {$wpdb->posts} a ON a.ID = m.post_id AND a.post_type = 'attachment'
-     WHERE m.meta_key = %s AND a.post_parent NOT IN (%d, %d)",
-    LG_FC_UPLOAD_STAMP, $POST, $OTHER));
-R('E.legacy_unreachable', $strays === 0,
-  "$strays stamped attachment(s) outside this run's fixtures — every one is a file the collector could delete");
+     LEFT JOIN {$wpdb->posts} p ON p.ID = a.post_parent
+     WHERE m.meta_key = %s
+       AND ( m.meta_value + 0 <> a.post_parent
+             OR p.ID IS NULL
+             OR p.post_type NOT IN (" . implode(',', $types) . ") )",
+    LG_FC_UPLOAD_STAMP));
+$live = (int) $wpdb->get_var($wpdb->prepare(
+    "SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE meta_key = %s", LG_FC_UPLOAD_STAMP));
+R('E.stamp_agrees_with_parent', $bad === 0,
+  "$bad of $live stamped attachment(s) name a post that is not their own parent, or is "
+  . "not a type this form composes — each of those is a file the collector could reach "
+  . "on the wrong post");
+
+/* AND THE OTHER HALF, which is the one the 36 posts depend on: nothing that
+   predates this feature can carry a stamp, because a stamp is only ever written
+   by lg_fc_stamp_upload() on add_attachment. Asserted on the corpus rather than
+   remembered: every stamped row must be NEWER than the oldest loothprint. */
+$legacy = (int) $wpdb->get_var($wpdb->prepare(
+    "SELECT COUNT(*) FROM {$wpdb->postmeta} m
+     JOIN {$wpdb->posts} a ON a.ID = m.post_id AND a.post_type = 'attachment'
+     WHERE m.meta_key = %s AND a.post_date_gmt < %s",
+    LG_FC_UPLOAD_STAMP, '2026-08-21 00:00:00'));
+R('E.legacy_unreachable', $legacy === 0,
+  "$legacy stamped attachment(s) predate this feature — none can exist, because the stamp "
+  . "is only ever written on add_attachment, and this is what keeps the 65 historical "
+  . "leftovers on 36 published loothprints out of the collector's reach");
 
 /* ── §F TRASH IS NOT DELETION ────────────────────────────────────────────────
    The explicit ruling, asserted: a member's undo must still have its files. */
@@ -422,6 +457,289 @@ R('F.untrash_restores', (bool) get_post($TA), 'and the restored post still has i
 wp_delete_post($T, true);
 R('F.delete_takes_files', $ON ? !get_post($TA) : (bool) get_post($TA),
   $ON ? 'permanent delete must take the files' : 'flag OFF must leave them');
+
+
+/* ══ §I #189 — THE FORM'S OWN UPLOADER, AND THE STORAGE MODEL IT MUST NOT MOVE ══
+ *
+ * The whole feature is a RENDER swap. So the assertions that matter are:
+ * (1) the swap reaches the renderer and NOTHING else,
+ * (2) the markup it produces decodes, through PHP's own form parser, into the
+ *     exact value shape ACF stores today,
+ * (3) the media modal is gone from the ENQUEUE, not merely unstyled,
+ * (4) the write-up editor still gets TinyMCE, and
+ * (5) the browser is still pointed at #186's chunker and no second route.
+ *
+ * Every one of these is a defect this lane actually made and had to find. The
+ * gate exists so the next person finds them in a second, not in a screenshot.
+ */
+
+/* ── §I1 THE SWAP REACHES THE RENDERER ─────────────────────────────────────── */
+$GLOBALS['lg_fc_editing'] = 0;
+$fld_gal  = acf_get_field('loothprint_more_images');
+$fld_file = acf_get_field('loothprint_3d_file');
+if (!$fld_gal || !$fld_file) {
+    R('I1.fields', false, 'the two upload fields do not resolve — nothing below can mean anything');
+} else {
+    R('I1.fields', true, $fld_gal['key'] . ' (' . $fld_gal['type'] . ') · '
+                       . $fld_file['key'] . ' (' . $fld_file['type'] . ')');
+    /* ⚠️ THROUGH acf_prepare_field(), NOT lg_fc_relabel() DIRECTLY, and the first
+       version of this leg got it wrong. Calling our filter by hand proves the
+       CALLBACK swaps a type; it proves nothing about the dispatch, and it leaves
+       $field['name'] as the bare field name — acf_prepare_field() is what
+       rewrites it to acf[<key>], so the §I2 decode came back NULL and looked
+       like a markup bug. Driving ACF's own chain is the same choice §C2 made
+       for validation, and for the same reason. */
+    add_filter('acf/prepare_field', 'lg_fc_relabel', 20);
+    $sw_gal  = acf_prepare_field($fld_gal);
+    $sw_file = acf_prepare_field($fld_file);
+    remove_filter('acf/prepare_field', 'lg_fc_relabel', 20);
+    R('I1.name_is_acf_keyed', ($sw_gal['name'] ?? '') === 'acf[' . $fld_gal['key'] . ']',
+      'the prepared input name is ' . var_export($sw_gal['name'] ?? null, true)
+      . ' — this is what ACF\'s save handler reads');
+    R('I1.gallery_becomes_ours', ($sw_gal['type'] ?? '') === 'lg_fc_photos',
+      'prepare-time type: ' . ($sw_gal['type'] ?? '(none)'));
+    R('I1.file_becomes_ours', ($sw_file['type'] ?? '') === 'lg_fc_printfile',
+      'prepare-time type: ' . ($sw_file['type'] ?? '(none)'));
+
+    /* ⚠️ AND THE STORED FIELD IS UNTOUCHED. This is the line between a UI swap and
+       a storage change: validation and update load the field through
+       acf/load_field, so a fresh read must still say gallery/file. If this ever
+       goes red, ACF's own update_value is no longer running and the ids are being
+       written by something else. */
+    R('I1.stored_type_untouched',
+      acf_get_field('loothprint_more_images')['type'] === 'gallery'
+      && acf_get_field('loothprint_3d_file')['type'] === 'file',
+      'a fresh acf_get_field still reads gallery/file — the swap is render-only');
+
+    R('I1.renderers_hooked',
+      has_action('acf/render_field/type=lg_fc_photos', 'lg_fc_render_photos') !== false
+      && has_action('acf/render_field/type=lg_fc_printfile', 'lg_fc_render_printfile') !== false,
+      'both renderers answer the type variations the swap dispatches to');
+}
+
+/* ── §I2 THE MARKUP DECODES TO TODAY'S VALUE SHAPE ──────────────────────────
+   ⚠️ THIS IS THE LEG THAT PROTECTS THE FOUR THINGS THE ISSUE NAMES. It does not
+   read the markup with a regex and hope: it feeds the rendered hidden inputs
+   through parse_str(), which IS the decoder PHP uses on a real POST, and asserts
+   the array that comes out.
+
+   It caught a real bug in this lane's first build: the print-file tile posted
+   `acf[key][]`. ACF's file update_value runs the value through acf_idval(), and
+   acf_idval(['54773']) looks for an 'ID' key, finds none and returns 0 — so the
+   field would have SAVED EMPTY while the tile on screen showed the file. */
+$g1 = lg186_att($POST, "i2-a-$TAG.jpg", 'image/jpeg', true);
+$g2 = lg186_att($POST, "i2-b-$TAG.jpg", 'image/jpeg', true);
+$f1 = lg186_att($POST, "i2-c-$TAG.zip", 'application/zip', true);
+$A['i2a'] = $g1; $A['i2b'] = $g2; $A['i2c'] = $f1;
+
+function lg189_decode(string $html): array {
+    /* Every hidden input in document order, turned into the query string a
+       browser would send, then decoded by PHP itself. */
+    if (!preg_match_all('/<input[^>]*type="hidden"[^>]*>/i', $html, $m)) { return []; }
+    $pairs = [];
+    foreach ($m[0] as $tag) {
+        if (stripos($tag, 'disabled') !== false) { continue; }
+        preg_match('/\bname="([^"]*)"/i', $tag, $n);
+        preg_match('/\bvalue="([^"]*)"/i', $tag, $v);
+        if (!isset($n[1])) { continue; }
+        $pairs[] = urlencode(html_entity_decode($n[1])) . '=' . urlencode(html_entity_decode($v[1] ?? ''));
+    }
+    parse_str(implode('&', $pairs), $out);
+    return $out;
+}
+
+function lg189_prepare(array $f): array {
+    add_filter('acf/prepare_field', 'lg_fc_relabel', 20);
+    $p = acf_prepare_field($f);
+    remove_filter('acf/prepare_field', 'lg_fc_relabel', 20);
+    return $p;
+}
+$fld_gal['value'] = [$g1, $g2];
+ob_start(); lg_fc_render_photos(lg189_prepare($fld_gal)); $html_gal = ob_get_clean();
+$dec_gal = lg189_decode($html_gal);
+$got_gal = $dec_gal['acf'][$fld_gal['key']] ?? null;
+R('I2.gallery_decodes_to_a_list', $got_gal === [(string) $g1, (string) $g2],
+  'parse_str over the rendered inputs gives ' . var_export($got_gal, true)
+  . ' (want the two ids, in order)');
+
+$fld_file['value'] = $f1;
+ob_start(); lg_fc_render_printfile(lg189_prepare($fld_file)); $html_file = ob_get_clean();
+$dec_file = lg189_decode($html_file);
+$got_file = $dec_file['acf'][$fld_file['key']] ?? null;
+R('I2.printfile_decodes_to_a_SCALAR', $got_file === (string) $f1,
+  'parse_str gives ' . var_export($got_file, true) . ' — an ARRAY here means acf_idval() '
+  . 'returns 0 and the field saves EMPTY while the tile shows the file');
+
+/* An emptied control must still POST, or ACF never learns the member cleared it
+   and the old value survives. The empty sentinel is what carries that. */
+$fld_gal['value'] = [];
+ob_start(); lg_fc_render_photos(lg189_prepare($fld_gal)); $html_none = ob_get_clean();
+$dec_none = lg189_decode($html_none);
+R('I2.empty_gallery_still_posts',
+  array_key_exists($fld_gal['key'], $dec_none['acf'] ?? []) && $dec_none['acf'][$fld_gal['key']] === '',
+  'an emptied strip posts an empty value: ' . var_export($dec_none['acf'][$fld_gal['key']] ?? '(absent)', true));
+$fld_file['value'] = 0;
+ob_start(); lg_fc_render_printfile(lg189_prepare($fld_file)); $html_nofile = ob_get_clean();
+$dec_nofile = lg189_decode($html_nofile);
+R('I2.empty_printfile_still_posts',
+  ($dec_nofile['acf'][$fld_file['key']] ?? null) === '',
+  'an emptied slot posts an empty value: ' . var_export($dec_nofile['acf'][$fld_file['key']] ?? '(absent)', true));
+
+/* ⚠️ AND THE VALUE ACTUALLY SAVES. Decoding proves the shape; this proves ACF's
+   own update_value accepts it and writes the same rows it writes today. */
+acf_update_value([(string) $g1, (string) $g2], $POST, acf_get_field('loothprint_more_images'));
+acf_update_value((string) $f1, $POST, acf_get_field('loothprint_3d_file'));
+R('I2.gallery_saves_ids', get_post_meta($POST, 'loothprint_more_images', true) === [(string) $g1, (string) $g2],
+  var_export(get_post_meta($POST, 'loothprint_more_images', true), true));
+R('I2.printfile_saves_id', (string) get_post_meta($POST, 'loothprint_3d_file', true) === (string) $f1,
+  var_export(get_post_meta($POST, 'loothprint_3d_file', true), true));
+
+/* ── §I3 NO MODAL, AND NO OTHER CONTROL ─────────────────────────────────────── */
+R('I3.no_gallery_markup', stripos($html_gal, 'acf-gallery') === false,
+  'the swapped render emits no ACF gallery markup');
+R('I3.no_file_uploader_markup', stripos($html_file, 'acf-file-uploader') === false,
+  'nor ACF\'s file control');
+R('I3.has_a_visible_file_input',
+  preg_match('/<input[^>]*type="file"[^>]*class="lgfc-up__file"/i', $html_gal) === 1
+  && stripos($html_gal, 'lgfc-up__zone') !== false,
+  'the drop-zone carries a real file input — the keyboard path and the no-drag fallback');
+R('I3.drop_zone_wording_is_markup',
+  stripos($html_gal, 'Drag photos here') !== false && stripos($html_file, 'Drag your print file here') !== false,
+  'the zone text is real markup a screen reader reaches, not CSS ::before content');
+
+/* THE DEQUEUE, BEHAVIOURALLY. wp_enqueue_media() is called for real and then the
+   two hooks are run, exactly as they run on the page. A CSS-hidden modal would
+   pass every visual check and fail Ian's actual ask, so the assertion is about
+   the SCRIPT QUEUE.
+
+   ⚠️ AND THE HOOKS ARE ASSERTED BY NAME AND PRIORITY, because WHEN this runs is
+   half the fix. The wysiwyg enqueues the uploader during the BODY, so a dequeue
+   on wp_enqueue_scripts fires before there is anything to dequeue and does
+   nothing at all — while still passing any assertion that only asks whether the
+   function works when called. (The first version of this leg read
+   `has_action(...) === false || === 1`, which is true either way: a tautology
+   that the red-first would have caught and I caught first by reading it.) */
+lg_fc_close_uploader_door();
+R('I3.hooked_at_wp_footer_1', has_action('wp_footer', 'lg_fc_drop_media_modal') === 1,
+  'the templates unhook runs at wp_footer:1, before wp_print_media_templates at 10; got '
+  . var_export(has_action('wp_footer', 'lg_fc_drop_media_modal'), true));
+R('I3.hooked_at_footer_scripts_0',
+  has_action('wp_print_footer_scripts', 'lg_fc_drop_media_modal') === 0,
+  'and the dequeue runs at wp_print_footer_scripts:0, the last moment before the '
+  . 'footer scripts print; got '
+  . var_export(has_action('wp_print_footer_scripts', 'lg_fc_drop_media_modal'), true));
+R('I3.not_on_enqueue_scripts',
+  has_action('wp_enqueue_scripts', 'lg_fc_drop_media_modal') === false,
+  'and NOT on wp_enqueue_scripts, which fires long before the wysiwyg enqueues '
+  . 'anything and would be a dequeue of nothing');
+
+if (function_exists('wp_enqueue_media') && !did_action('wp_enqueue_media')) {
+    wp_enqueue_media();
+}
+R('I3.media_was_enqueued', wp_script_is('media-editor', 'enqueued'),
+  'wp_enqueue_media() really did enqueue media-editor — without this the next '
+  . 'assertion is vacuously green, which is how the first version of it passed');
+lg_fc_drop_media_modal();
+R('I3.media_is_gone',
+  !wp_script_is('media-editor', 'enqueued') && !wp_script_is('media-audiovideo', 'enqueued')
+  && !wp_style_is('media-views', 'enqueued'),
+  'and lg_fc_drop_media_modal() takes the roots back off the queue');
+R('I3.media_templates_gone', has_action('wp_footer', 'wp_print_media_templates') === false,
+  'the footer media templates are unhooked too');
+/* ── §I4 THE WRITE-UP EDITOR SURVIVES IT ────────────────────────────────────
+   ⚠️ THE DEFECT THIS CATCHES SHIPPED FOR AN HOUR AND A 26-ASSERTION BROWSER
+   SUITE WENT GREEN OVER IT. Arming ACF's enqueue_uploader latch stops
+   wp_enqueue_media() AND print_uploader_scripts() — and the hidden
+   wp_editor('','acf_content') that second one prints is the ONLY thing that
+   brings TinyMCE to this page, because ACF's front-end wysiwyg hand-renders a
+   textarea and clones its settings. Latch it and the write-up is a bare box.
+
+   acf_raw_setting() READS the latch without arming it; acf_has_done() would arm
+   it and the gate would cause the very state it is testing for. §I3 has already
+   called lg_fc_close_uploader_door(). */
+R('I4.latch_not_armed',
+  !acf_raw_setting('has_done_ACF_Assets::enqueue_uploader'),
+  'lg_fc_close_uploader_door() must NOT arm ACF\'s uploader latch — arming it '
+  . 'takes TinyMCE with it (#185\'s defect class, by a different route)');
+R('I4.toolbar_still_registered',
+  has_action('acf/enqueue_uploader') !== false,
+  'ACF\'s wysiwyg callback is still on acf/enqueue_uploader — that is where '
+  . 'acf.data.toolbars, including lgfc_light, is localized');
+$tb = apply_filters('acf/fields/wysiwyg/toolbars', []);
+R('I4.lgfc_light_exists', isset($tb['lgfc_light']),
+  'the light toolbar is still declared: ' . implode(',', array_keys($tb)));
+
+/* ── §I5 THE BROWSER IS POINTED AT #186's CHUNKER, AND NOWHERE ELSE ─────────
+   "A second upload route with its own limits" is how a field declaring
+   mime_types=zip came to hold 48 .stl files. The config the JS reads is asserted
+   here, not described. */
+$cfg = lg_fc_upload_config($POST);
+R('I5.action_is_the_chunker', ($cfg['action'] ?? '') === 'bfu_chunker',
+  'the JS posts action=' . var_export($cfg['action'] ?? null, true));
+R('I5.url_is_admin_ajax', strpos((string) ($cfg['url'] ?? ''), 'admin-ajax.php') !== false,
+  (string) ($cfg['url'] ?? '(none)'));
+R('I5.nonce_is_media_form', (bool) wp_verify_nonce($cfg['nonce'] ?? '', 'media-form'),
+  'the nonce verifies as media-form — the one BFU\'s check_admin_referer tests. '
+  . 'wp_enqueue_media() no longer runs, so _wpPluploadSettings does not exist '
+  . 'and this is where the uploader gets it');
+R('I5.post_id_is_the_composing_post', (int) ($cfg['post_id'] ?? 0) === $POST,
+  'uploads are parented to ' . var_export($cfg['post_id'] ?? null, true)
+  . ' — post_parent and the #186 stamp both key on this');
+R('I5.guard_still_at_priority_1', has_action('wp_ajax_bfu_chunker', 'lg_fc_chunk_guard') === 1,
+  'the priority-1 chunk guard still meets every byte this uploader sends');
+R('I5.prefilter_on_both_hooks',
+  has_filter('wp_handle_sideload_prefilter', 'lg_fc_upload_prefilter') !== false
+  && has_filter('wp_handle_upload_prefilter', 'lg_fc_upload_prefilter') !== false,
+  'and so does the size prefilter, on both hooks');
+R('I5.chunk_smaller_than_bfu', (int) ($cfg['chunk_b'] ?? 0) > 0 && (int) $cfg['chunk_b'] <= 4 * 1024 * 1024,
+  sprintf('chunk = %s. It is the OVERSHOOT BOUND: the guard refuses at the first '
+          . 'chunk that crosses the cap, and the spool is on the root disk',
+          lg_fc_mb((int) ($cfg['chunk_b'] ?? 0))));
+
+/* THE WORDING TRAVELS, THE FORMATTER IS MIRRORED. The client refuses before the
+   bytes leave, in the same sentence the server refuses with — so the templates
+   must be the server's own, with both numbers still to fill. The gate's own
+   §J (python) runs the SHIPPED JS formatter against lg_fc_mb() for real byte
+   values, which is the half this side cannot see. */
+R('I5.refusal_templates_are_the_servers',
+  ($cfg['say']['photo_big'] ?? '') === lg_fc_size_refusal_template(true)
+  && ($cfg['say']['file_big'] ?? '') === lg_fc_size_refusal_template(false),
+  'the browser is handed the server\'s own sentences, not a second wording');
+R('I5.templates_have_both_numbers',
+  substr_count((string) ($cfg['say']['photo_big'] ?? ''), '%s') === 2,
+  'each carries %s twice — the actual size and the limit');
+R('I5.server_refusal_names_the_number',
+  strpos(lg_fc_size_refusal(true, 12 * 1024 * 1024, $LIM['photo_b']), '10MB') !== false
+  && strpos(lg_fc_size_refusal(true, 12 * 1024 * 1024, $LIM['photo_b']), '12MB') !== false,
+  lg_fc_size_refusal(true, 12 * 1024 * 1024, $LIM['photo_b']));
+
+/* THE BYTE FORMATTER EXISTS ON BOTH SIDES, so it is held to agreement rather
+   than trusted. The probe emits what lg_fc_mb() says for a spread of real byte
+   values; the python gate runs the SHIPPED JS mb() over the same values in node
+   and compares. This is the one place a duplication was accepted — the wording
+   travels from PHP, only the formatter is mirrored — and this is the price. */
+$mb = [];
+foreach ([0, 999, 1048576, 1310720, 1415578, 9003535, 10485760, 12586447,
+          134217728, 5242880000] as $b) {
+    $mb[(string) $b] = lg_fc_mb((int) $b);
+}
+echo 'MB|' . wp_json_encode($mb) . "\n";
+
+/* ── §I6 THE FLAG ──────────────────────────────────────────────────────────
+   The uploader has no flag of its own and must not grow one: it is reached only
+   through lg_fc_render(), which is reached only through lg_fc_route(), which
+   lg_fc_enabled() gates. So the honest OFF assertion is that the ROUTE is shut,
+   not that the renderer refuses. */
+R('I6.route_follows_the_flag', lg_fc_enabled() === $ON,
+  $ON ? 'flag ON — /compose/ is served and the uploader is reachable'
+      : 'flag OFF — lg_fc_route() never renders, so the swap never happens and '
+        . 'nothing on this page changes for anybody');
+R('I6.no_second_flag',
+  ($cfg['post_id'] ?? null) !== null && !array_key_exists('enabled', $cfg),
+  'the uploader carries no switch of its own — one flag, one door');
+
+/* stamps made by §I2's fixtures are cleaned by the teardown below, which walks
+   $A and every child of $POST. */
 
 /* ── teardown ────────────────────────────────────────────────────────────────
    Runs whatever happened above. A probe that leaves rows behind poisons the next
@@ -440,9 +758,14 @@ foreach ([$POST, $OTHER, $T] as $p) {
 }
 require_once ABSPATH . 'wp-admin/includes/user.php';
 wp_delete_user($user->ID);
+/* ⚠️ COUNTS THIS RUN'S OWN ROWS, NOT EVERY ROW ON THE BOX. The original counted
+   all of them and required zero, which was a teardown assertion only while
+   nobody had ever used the form — a member composing on the serve made it RED
+   for reasons that had nothing to do with the harness. */
 $left = (int) $wpdb->get_var($wpdb->prepare(
-    "SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE meta_key = %s", LG_FC_UPLOAD_STAMP));
-R('Z.teardown_clean', $left === 0, "$left stamped row(s) left behind");
+    "SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value IN (%d,%d,%d)",
+    LG_FC_UPLOAD_STAMP, $POST, $OTHER, $T));
+R('Z.teardown_clean', $left === 0, "$left stamped row(s) from this run left behind");
 
 /* ⚠️ THE SENTINEL. It asserts nothing about the feature — it asserts that THIS
    FILE RAN TO THE END. A probe that dies half way emits fewer PASSes and zero
