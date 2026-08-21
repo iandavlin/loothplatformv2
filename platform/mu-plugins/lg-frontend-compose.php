@@ -2259,44 +2259,67 @@ function lg_fc_relabel($field)
  * SHUT THE ONE DOOR THE RENDER SWAP CANNOT REACH.
  *
  * ACF's wysiwyg `render_field()` calls `acf_enqueue_uploader()` before it does
- * anything else, so the write-up field alone would put the whole media modal —
- * media-models, media-views, media-editor, plupload, wp-plupload and the footer
- * templates — back on a page that has nothing to open it with. Measured on the
- * rendered page, not inferred.
+ * anything else (class-acf-field-wysiwyg.php:189) — `media_upload = 0` does not
+ * stop it — so the write-up field alone would put the whole media modal back on
+ * a page that has nothing to open it with. Measured on the rendered page, not
+ * inferred: the first build of this feature still served media-models,
+ * media-views, media-editor, plupload, moxie, wp-plupload and the footer
+ * templates.
  *
- * `ACF_Assets::enqueue_uploader()` is guarded by exactly one latch, and
- * `acf_has_done()` is the supported way to set it: it returns false the first
- * time and marks it done. Arming it before the form renders means ACF's own call
- * returns immediately and `wp_enqueue_media()` is never reached.
+ * ⚠️⚠️ THE OBVIOUS FIX IS WRONG AND IT TAKES THE WRITE-UP EDITOR WITH IT.
+ * `ACF_Assets::enqueue_uploader()` is guarded by one latch, and `acf_has_done()`
+ * is the supported way to arm it. Arming it does stop `wp_enqueue_media()` — and
+ * it also stops `print_uploader_scripts()`, which is the ONLY thing on this page
+ * that brings TinyMCE. **ACF's front-end wysiwyg does not call `wp_editor()`
+ * for the field**: it hand-renders a bare textarea and relies on the HIDDEN
+ * `wp_editor('', 'acf_content')` that `print_uploader_scripts()` prints, then
+ * clones its settings client-side. Behind the same latch. So the latch produced
+ * exactly #185's defect again — a write-up rendered as a plain textarea with no
+ * toolbar — and it was caught by LOOKING at a screenshot, after a 26-assertion
+ * browser suite had gone green without ever asserting the editor.
  *
- * ⚠️ BUT THE LATCH ALONE WOULD BREAK THE WRITE-UP EDITOR, and that is the whole
- * reason this is a function rather than one line. `acf/enqueue_uploader` is where
- * ACF's wysiwyg field localizes `acf.data.toolbars` — including OUR `lgfc_light`
- * toolbar (class-acf-field-wysiwyg.php:51). Latch without firing it and the
- * write-up renders with no toolbar at all: #185's defect class, reintroduced by
- * the fix for this one. So this mirrors ACF's own method body exactly, minus the
- * two things we do not want:
+ * Bisected through the same nginx preview, one variant per row:
  *
- *     ACF                                 here
- *     ── latch ──────────────────────     latch (via acf_has_done)
- *     wp_enqueue_media()                  — dropped, this is the point
- *     add_action(admin_footer, …)         — already inert: admin_footer does not
- *                                           fire on the front end
- *     do_action('acf/enqueue_uploader')   do_action('acf/enqueue_uploader')
+ *     variant                        bytes  tmce-active  tinymce  media js
+ *     ─────────────────────────────────────────────────────────────────────
+ *     main                          254068            2        8         4
+ *     door-closer removed           272348            2        8         4
+ *     do_action only, no latch      254068            2        8         4
+ *     LATCH ONLY                    191494            0        0         0   ← both
  *
- * If ACF ever renames that latch, media comes back silently — so gate 88 asserts
- * the ABSENCE of the media handles from the served page and the PRESENCE of the
- * toolbar, rather than trusting this comment.
+ * The latch is the whole difference, and it is all-or-nothing.
+ *
+ * SO THE SEAM IS CORE's, NOT ACF's. Let `enqueue_uploader()` run in full — the
+ * hidden editor, the toolbars localization, all of it — and take back only what
+ * `wp_enqueue_media()` added. Core enqueues exactly two script roots on the
+ * front end (`wp-includes/media.php`, wp_enqueue_media): `media-editor` and
+ * `media-audiovideo`. media-views, media-models, wp-plupload, plupload and moxie
+ * are on the page ONLY as dependencies of those two, so dropping the roots drops
+ * the tree. `mce-view` and `image-edit` are `is_admin()`-only and never reach us.
+ *
+ * ⚠️ A NAME LIST IS A LIST THAT ROTS, so gate 88 asserts the ABSENCE of every
+ * media handle from the served page and the PRESENCE of TinyMCE and the toolbar,
+ * rather than trusting this list to stay complete.
+ *
+ * ⚠️ TIMING: the wysiwyg enqueues during the BODY, long after `wp_enqueue_scripts`
+ * has fired, so the ordinary dequeue hook is far too early. `wp_footer` at 1 is
+ * before `wp_print_media_templates` (10), and `wp_print_footer_scripts` at 0 is
+ * the last moment before the footer scripts are printed.
  */
 function lg_fc_close_uploader_door(): void
 {
-    /* acf_has_done() latches AND reports in one call: false means we are first,
-       true means something already enqueued the uploader and this cannot help —
-       in which case firing the action again would only duplicate a localization
-       that has already happened. */
-    if (!acf_has_done('ACF_Assets::enqueue_uploader')) {
-        do_action('acf/enqueue_uploader');
-    }
+    add_action('wp_footer',               'lg_fc_drop_media_modal', 1);
+    add_action('wp_print_footer_scripts', 'lg_fc_drop_media_modal', 0);
+}
+
+/** Idempotent: it runs twice, once at each of the two moments above. */
+function lg_fc_drop_media_modal(): void
+{
+    wp_dequeue_script('media-editor');
+    wp_dequeue_script('media-audiovideo');
+    wp_dequeue_style('media-views');
+    wp_dequeue_style('imgareaselect');
+    remove_action('wp_footer', 'wp_print_media_templates');
 }
 
 /**
@@ -2828,6 +2851,18 @@ function lg_fc_css(): string
   border-top:0;margin:0;float:none!important;width:100%!important;
   min-height:0;clear:both;display:block}
 .lgfc .acf-fields>.acf-field:last-of-type{border-bottom:0}
+/* ⚠️ AN AUTHOR `display` BEATS THE UA's `[hidden]{display:none}` OUTRIGHT, whatever
+   the specificity — so the rule above was overriding the `hidden` attribute on
+   every field that carries one. The hero picker ("Which photo leads?") renders
+   with `hidden` and is un-hidden by script only once there are two photos to
+   choose between; it was therefore on screen, with an empty strip under it, on
+   an empty form. PRE-EXISTING — the rule, the markup and the hero script are all
+   unchanged by #189, and main renders it the same way. Fixed here rather than
+   only reported because it is one line, it is in this lane's own file, and the
+   control sits directly beneath the photo strip this lane rewrote: it is in
+   every picture Ian is being given. Found by LOOKING at a screenshot after a
+   26-assertion browser suite went green. */
+.lgfc .acf-fields>.acf-field[hidden]{display:none}
 .lgfc .acf-fields{border:0;padding-left:21px;padding-right:21px}
 .lgfc .acf-field[data-name="_validate_email"]{display:none!important}
 .lgfc .acf-label{margin:0 0 3px;padding:0}
@@ -3203,16 +3238,30 @@ html[data-lguser-theme="dark"] .lgfc__card{box-shadow:0 10px 34px rgba(0,0,0,.28
 .lgfc-up__x:hover{background:rgba(26,29,26,.85)}
 .lgfc-up__x:focus-visible{outline:2px solid var(--lg-sage,#87986a);outline-offset:2px}
 
-/* SWAP MODE. The whole tile becomes one button, because "pick one to swap out"
-   is a choice between tiles and not a choice inside one. */
-.lgfc-up__swap{position:absolute;inset:0;width:100%;border:0;border-radius:11px;
-  background:rgba(26,29,26,.72);color:#fff;font:600 11.5px/1.3 inherit;padding:6px;
+/* SWAP MODE. Each tile becomes one button, because "pick one to swap out" is a
+   choice BETWEEN tiles and not a choice inside one.
+
+   ⚠️ THE OVERLAY COVERS THE THUMBNAIL ONLY, AND IS TRANSLUCENT. The first build
+   used inset:0 at 72% black, and the screenshot made the mistake obvious: every
+   tile went to a dark slab reading "Swap this one out", so the member was asked
+   to choose between ten photos they could no longer see, with the filenames
+   covered too. A control that hides the thing it is asking about is not a
+   choice. The scrim is now light enough to read the photo through, the filename
+   stays uncovered below it, and the text carries a shadow so it holds up over a
+   pale image. */
+.lgfc-up__swap{position:absolute;left:6px;right:6px;top:6px;height:72px;padding:4px;
+  border:0;border-radius:7px;background:rgba(26,29,26,.42);color:#fff;
+  font:600 10.5px/1.2 inherit;text-shadow:0 1px 2px rgba(0,0,0,.6);
   cursor:pointer;display:flex;align-items:center;justify-content:center;text-align:center}
 .lgfc-up__swap[hidden]{display:none}
 .lgfc-up.is-swapping .lgfc-up__x{display:none}
-.lgfc-up__swap:hover{background:var(--lg-sage,#87986a)}
+.lgfc-up__swap:hover,.lgfc-up__swap:focus-visible{background:rgba(135,152,106,.8)}
 .lgfc-up__swap:focus-visible{outline:2px solid var(--lg-sage,#87986a);outline-offset:2px}
+/* the print file is one row and never enters swap mode (a single slot replaces
+   outright), but if it ever did the overlay must fit the row, not a 72px tile */
+.lgfc-up--file .lgfc-up__swap{inset:0;height:auto;border-radius:11px}
 
+.lgfc-up__swapbar[hidden]{display:none}
 .lgfc-up__swapbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
   margin:0 0 11px;padding:10px 12px;border-radius:10px;
   border:1px solid var(--lg-sage,#87986a);background:var(--lg-sage-tint,#f1f4ec)}
