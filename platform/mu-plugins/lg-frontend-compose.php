@@ -837,6 +837,568 @@ add_filter('acf/load_field/name=loothprint_3d_file',     'lg_fc_scope_library');
 add_filter('acf/load_field/name=loothcut_cnc_file',      'lg_fc_scope_library');
 
 /**
+ * THE PICKER STOPS AT TEN. Ian named the number; this is the half a member can
+ * see — ACF's gallery JS reads `max` and disables Add once the strip is full.
+ *
+ * ⚠️ IT IS NOT THE ENFORCEMENT. ACF's own gallery validate_value() checks `min`
+ * and NEVER `max` (class-acf-field-gallery.php:789-798, measured), so a
+ * submission carrying eleven simply saves. lg_fc_validate_photo_count() is what
+ * makes the limit real; this is what stops a member reaching it by accident.
+ *
+ * Forced here rather than in the field config for the reason lg_fc_scope_library
+ * gives: the config is data in the database, and an admin widening it back would
+ * fail silently.
+ */
+function lg_fc_gallery_cap(array $field): array
+{
+    $field['max'] = lg_fc_limits()['photos'];
+    return $field;
+}
+add_filter('acf/load_field/name=loothprint_more_images', 'lg_fc_gallery_cap');
+
+/* ═══════════════════════════════════════════════ #186 — LIMITS AND LIFECYCLE ══
+ *
+ * Ian, 2026-08-21: "There is a library being generated which is going to lead to
+ * orphans. Can we make limits, post only and in and out?" and, sharpening it the
+ * same day: "Basically if it doesn't launch with the post, does it get deleted on
+ * publish?" — yes.
+ *
+ * Four things live below: the limits, the stamp, the publish-time collector, and
+ * what happens when a post goes. Read the two warnings before changing any of it.
+ */
+
+/**
+ * THE NUMBERS, in one place, because a limit stated twice is a limit that drifts.
+ *
+ * Ian named 10 photos and 1 print file. The photo size is measured against the
+ * corpus: the largest photo on the whole box is 2.03MB, so the previous 4MB cap
+ * had never once been reached and 10MB is roughly five times the worst real case.
+ *
+ * ⚠️ 128MB IS A CHOICE, NOT A CEILING, and the distinction is worth keeping because
+ * it was got wrong once. Ian first held 64MB on the claim that FPM's 64M
+ * upload_max_filesize was the box's hard limit. It is not: tuxedo-big-file-uploads
+ * CHUNKS uploads straight past it, and its own by_role table lists none of the
+ * looth1-looth4 or bbp_participant roles our members hold, so get_upload_limit()
+ * falls through to its `all` bucket -- 5,242,880,000 bytes. Members had FIVE
+ * GIGABYTES. Told that the box was not the constraint, Ian picked 128MB
+ * ("128 is fine"), which is the number that fits every print file that exists:
+ * measured over 174 of them, median 0.3MB, p90 4.7MB, largest 128.4MB, and 128MB
+ * refuses exactly ONE -- that same 128.4MB outlier, which could never have come
+ * through this form anyway.
+ *
+ * PRINT FILES ARE **NOT** MIME-RESTRICTED HERE, and that is deliberate. The ACF
+ * field declares `mime_types = zip`, but the field holds 127 zips AND 48 .stl
+ * files (measured 2026-08-21) — members plainly upload bare STLs and always have.
+ * Ian asked for a COUNT and a SIZE, so enforcing zip-only now would be this lane
+ * quietly refusing something members do today. Flagged for his ruling, not fixed.
+ */
+function lg_fc_limits(): array
+{
+    return [
+        'photos'    => 10,                    // Ian's number
+        'photo_b'   => 10 * 1024 * 1024,      // 10MB
+        'file_b'    => 128 * 1024 * 1024,     // 128MB — Ian, 2026-08-21: "128 is fine"
+    ];
+}
+
+/** Human wording for a byte count, in the form's register (never "1.0 MB"). */
+function lg_fc_mb(int $bytes): string
+{
+    $mb = $bytes / (1024 * 1024);
+    return ($mb >= 10 ? (string) round($mb) : number_format($mb, 1)) . 'MB';
+}
+
+/** The stamp that makes the collector safe. See lg_fc_collect_unused(). */
+const LG_FC_UPLOAD_STAMP = '_lg_fc_upload';
+
+/**
+ * The post an upload is aimed at, IF it is one this form composes — else 0.
+ *
+ * `post_id` is the parameter both WordPress's own uploader and the Big File
+ * Uploads chunker read to set post_parent, so it is the honest signal for "which
+ * post is this upload for". The post TYPE is then checked against our registry,
+ * which is what keeps every hook below off every other upload on the site.
+ */
+function lg_fc_upload_target(): int
+{
+    if (!lg_fc_enabled()) {
+        return 0;
+    }
+    $id = isset($_REQUEST['post_id']) ? absint($_REQUEST['post_id']) : 0;   // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only; the uploader nonce is checked upstream
+    if (!$id) {
+        return 0;
+    }
+    return isset(lg_fc_types()[get_post_type($id)]) ? $id : 0;
+}
+
+/**
+ * ⚠️⚠️ THE SIZE CAP IS ENFORCED HERE, AND **NOT** BY ACF's `max_size`. THIS IS
+ * THE MOST IMPORTANT COMMENT IN THIS FILE — the obvious implementation is inert.
+ *
+ * ACF validates attachments from `wp_handle_upload_prefilter` alone
+ * (includes/media.php:38). This site runs tuxedo-big-file-uploads, whose chunker
+ * calls `media_handle_upload()` with `overrides['action'] = 'wp_handle_sideload'`,
+ * and WordPress dispatches that filter DYNAMICALLY as `"{$action}_prefilter"`
+ * (wp-admin/includes/file.php, _wp_handle_upload). So the hook that actually
+ * fires on this form is **wp_handle_sideload_prefilter**, and ACF is not on it.
+ *
+ * PROVED FROM THE DATA, not from reading: the print-file field declares
+ * `mime_types = zip` and currently holds 48 `.stl` files. Forty-eight files ACF
+ * says are impossible. Setting `max_size` on the field would have produced a
+ * setting a gate could read back happily while a member uploaded five gigabytes.
+ *
+ * Five gigabytes is not hyperbole. The chunker bypasses PHP's 64M
+ * upload_max_filesize entirely, and its own by_role table lists none of the
+ * looth1–looth4 or bbp_participant roles our members hold, so `get_upload_limit()`
+ * falls through to its `all` bucket: 5,242,880,000 bytes. That is the limit this
+ * function replaces, and it is why 64MB is a real tightening rather than a tidy-up.
+ *
+ * Registered on BOTH prefilters so it cannot be routed around by a future change
+ * to which uploader is active.
+ */
+function lg_fc_upload_prefilter(array $file): array
+{
+    $post_id = lg_fc_upload_target();
+    if (!$post_id || !empty($file['error'])) {
+        return $file;
+    }
+    $lim   = lg_fc_limits();
+    $size  = (int) ($file['size'] ?? 0);
+    $type  = (string) ($file['type'] ?? '');
+    $photo = strpos($type, 'image/') === 0;
+
+    $cap = $photo ? $lim['photo_b'] : $lim['file_b'];
+    if ($size > $cap) {
+        /* THE REFUSAL NAMES THE LIMIT AND THE ACTUAL SIZE. A refusal that only
+           says "too big" makes the member guess, and guessing at an upload is
+           how a silent drop feels from the outside. */
+        $file['error'] = $photo
+            ? sprintf('That photo is %s — a bit big. Photos need to be %s or smaller.',
+                      lg_fc_mb($size), lg_fc_mb($cap))
+            : sprintf('That file is %s — a bit big. Print files need to be %s or smaller.',
+                      lg_fc_mb($size), lg_fc_mb($cap));
+    }
+    return $file;
+}
+add_filter('wp_handle_upload_prefilter',   'lg_fc_upload_prefilter');
+add_filter('wp_handle_sideload_prefilter', 'lg_fc_upload_prefilter');
+
+/**
+ * WHICH CAP APPLIES, decided from the FILENAME rather than the mime type.
+ *
+ * At chunk time the only honest signal is the name: plupload sends each chunk as
+ * `application/octet-stream` regardless of what the file is, so reading
+ * $_FILES['async-upload']['type'] here would put every photo under the print-file
+ * cap. The prefilter above still decides on the real mime once the file is whole;
+ * this is the early, cheaper guess, and it errs toward the LARGER cap.
+ */
+function lg_fc_chunk_cap(string $name): int
+{
+    static $images = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tif', 'tiff', 'heic', 'heif', 'avif'];
+    $lim = lg_fc_limits();
+    return in_array(strtolower((string) pathinfo($name, PATHINFO_EXTENSION)), $images, true)
+        ? $lim['photo_b'] : $lim['file_b'];
+}
+
+/**
+ * The refusal decision, kept pure so a gate can assert it without a request.
+ * Returns '' to allow, or the member-facing sentence to refuse with.
+ */
+function lg_fc_chunk_refusal(string $name, int $sofar, int $incoming): string
+{
+    $cap = lg_fc_chunk_cap($name);
+    if ($sofar + $incoming <= $cap) {
+        return '';
+    }
+    return sprintf('That file is bigger than %s, so it can\'t go up here. %s is the limit.',
+                   lg_fc_mb($cap), lg_fc_mb($cap));
+}
+
+/**
+ * ⚠️ REFUSE BEFORE THE BYTES LAND, NOT AFTER — and the reason is the storage
+ * layout, which is not obvious from this file.
+ *
+ * `wp-content/uploads` is a SYMLINK to /mnt/loothgroup-uploads-dev, an rclone FUSE
+ * mount of Cloudflare R2. Member uploads do not live on this box. But the CHUNKER
+ * SPOOL DOES: tuxedo-big-file-uploads accumulates parts in
+ * `wp-content/bfu-temp/<blog>-<sha1(name)>.part`, and wp-content is on the root
+ * filesystem — measured 2026-08-21 at 29G, 84% used, **4.6G free**.
+ *
+ * Put those two facts together with the 5GB effective member limit above and the
+ * consequence is not subtle: **one member uploading one large file can fill this
+ * box's root disk.** That is true today, before this lane, and it is reported as
+ * its own finding rather than treated as something this cap fixes.
+ *
+ * lg_fc_upload_prefilter() cannot help with it. It runs from
+ * `wp_handle_sideload_prefilter`, which BFU only reaches on the LAST chunk, once
+ * the whole file is already assembled on local disk. So the prefilter's refusal
+ * is perfectly placed for R2 — **not one byte reaches the mount** — and far too
+ * late for the spool.
+ *
+ * This runs at priority 1 on the chunker's own action, before BFU appends
+ * anything, so a file that will be too big is refused at the FIRST chunk that
+ * crosses the line: at most one chunk of overshoot ever touches the disk.
+ *
+ * ⚠️ ON CHUNK 0 THE ACCUMULATED SIZE IS TREATED AS ZERO, and that is not a
+ * micro-optimisation. BFU opens the part file with 'wb' on chunk 0, truncating
+ * it. Reading the stale size instead would mean a member who was refused once
+ * could never upload ANY file of that name again, however small — the refusal
+ * would latch on the leftover part until BFU's 24-hour reaper cleared it.
+ *
+ * ⚠️ IT DOES NOT DELETE THE PART FILE, deliberately. BFU keys that path on
+ * `sha1($fileName)` with NO user or session in it, so two members uploading files
+ * with the same name share one path. Unlinking would let one member's refusal
+ * destroy another's upload in flight. The leftover is bounded by the cap and BFU
+ * reaps parts older than 24 hours. (That shared path is a BFU collision bug in its
+ * own right — reported, not fixed here.)
+ */
+function lg_fc_chunk_guard(): void
+{
+    $post_id = lg_fc_upload_target();
+    if (!$post_id) {
+        return;
+    }
+    // BFU does its own auth immediately after this; refusing early for someone it
+    // would reject anyway would only change which error they see.
+    if (!is_user_logged_in() || !current_user_can('upload_files')) {
+        return;
+    }
+    if (empty($_FILES['async-upload']) || !empty($_FILES['async-upload']['error'])) {
+        return;
+    }
+
+    $name  = isset($_REQUEST['name'])                                   // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- BFU checks the nonce; this only reads a length
+        ? (string) $_REQUEST['name']
+        : (string) $_FILES['async-upload']['name'];
+    $chunk = isset($_REQUEST['chunk']) ? (int) $_REQUEST['chunk'] : 0;   // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+
+    $part  = sprintf('%s/%d-%s.part',
+                     apply_filters('bfu_temp_dir', WP_CONTENT_DIR . '/bfu-temp'),
+                     get_current_blog_id(), sha1($name));
+    $sofar = ($chunk === 0 || !file_exists($part)) ? 0 : (int) filesize($part);
+
+    $refusal = lg_fc_chunk_refusal($name, $sofar, (int) ($_FILES['async-upload']['size'] ?? 0));
+    if ($refusal === '') {
+        return;
+    }
+    /* The same envelope BFU's own size refusal uses, so plupload's error handler
+       shows it exactly as it shows theirs. */
+    wp_send_json_error(['message' => $refusal, 'filename' => $name]);
+}
+add_action('wp_ajax_bfu_chunker', 'lg_fc_chunk_guard', 1);
+
+/**
+ * Make the number the form ADVERTISES match the number it enforces.
+ *
+ * Measured before this existed: the same page told BuddyBoss 5MB, ACF 200MB and
+ * the chunker 5GB. Three numbers, none of them true, and the one the uploader's
+ * own error message quotes is the chunker's. Scoped to our own posts so an
+ * administrator working in wp-admin is unaffected.
+ */
+function lg_fc_advertised_upload_limit($bytes)
+{
+    if (!lg_fc_upload_target()) {
+        return $bytes;
+    }
+    $lim = lg_fc_limits();
+    return max($lim['photo_b'], $lim['file_b']);
+}
+add_filter('upload_size_limit', 'lg_fc_advertised_upload_limit', PHP_INT_MAX);
+
+/**
+ * THE STAMP. Every attachment this form creates is marked with the post it was
+ * uploaded into, at the moment it is created.
+ *
+ * ⚠️ THIS IS THE ONLY THING THAT MAKES THE COLLECTOR BELOW SAFE, so it is worth
+ * understanding why it exists rather than tidying it away.
+ *
+ * The collector deletes what a post does not use. Run unrestricted over the real
+ * corpus on 2026-08-21 — read-only, before any of this was built — that rule
+ * wanted to delete 65 attachments across 36 HEALTHY PUBLISHED loothprints. They
+ * are genuine historical leftovers (one post carries six superseded FretSander
+ * zips), but destroying them the moment an author pressed Post, on work from
+ * months ago, with no undo, is not a cleanup — it is data loss wearing a green
+ * gate.
+ *
+ * With the stamp, the collector cannot see them: nothing that existed before this
+ * shipped carries one. Legacy and imported files are structurally out of reach
+ * rather than merely filtered out, and the difference matters — a filter can be
+ * loosened by a later edit, an absent stamp cannot be conjured.
+ */
+function lg_fc_stamp_upload(int $att_id): void
+{
+    $post_id = lg_fc_upload_target();
+    if (!$post_id) {
+        return;
+    }
+    if ((int) wp_get_post_parent_id($att_id) !== $post_id) {
+        return;   // not parented where we think — never stamp what we cannot place
+    }
+    update_post_meta($att_id, LG_FC_UPLOAD_STAMP, $post_id);
+}
+add_action('add_attachment', 'lg_fc_stamp_upload');
+
+/**
+ * EVERY ATTACHMENT ID THIS POST REFERS TO, BY ANY MEANS.
+ *
+ * ⚠️ IT DELIBERATELY NAMES NO FIELDS, AND THAT CORRECTION WAS EARNED. The first
+ * version enumerated the reference kinds — gallery, ZIP, thumbnail, layout blob.
+ * Run read-only over the real corpus it was caught out by
+ * `post_related_links_repeater_0_related_link_image`, a reference kind nobody had
+ * listed, on post 52343: only the loose text leg stopped a real file being called
+ * unused. A name list cannot be trusted, because the next field added to this
+ * form is not in it.
+ *
+ * So leg one walks every one of the post's meta values and treats any integer
+ * VALUE as a reference. That covers the gallery, the print file, `_thumbnail_id`,
+ * every repeater row, ACF's `featured_image` and anything added later — by shape
+ * rather than by name.
+ *
+ * ⚠️ VALUES ONLY. NEVER KEYS, NEVER STRING LENGTHS. Real example from this box:
+ * `a:6:{i:61697;s:5:"69502";…}` — 61697 is an array KEY and 69502 is the value,
+ * and only one of those is a file the post uses. A regex over serialized text
+ * matches both, and also matches the `5` in `s:5:` as though it were an id.
+ *
+ * Leg two is the post body and the materialized HTML, matched on the attachment's
+ * filename stem and on its id. That is what catches an image embedded in a
+ * write-up, and it is not decoration: 7 files on real posts are kept by this leg
+ * and by nothing else.
+ *
+ * The `_lg_layout_v2` blob is covered by leg one, because it is PHP-SERIALIZED
+ * postmeta and unserializes into the same walk. Measured: it yields ids on 167 of
+ * 170 posts, and every one of them is ALREADY KNOWN to the other legs — so today
+ * it adds nothing. Recorded as redundant rather than left to read as load-bearing.
+ *
+ * The bias throughout is toward over-preserving. A false "used" costs disk. A
+ * false "unused" destroys a member's file.
+ */
+function lg_fc_referenced_ids(int $post_id): array
+{
+    global $wpdb;
+    $ids = [];
+
+    $walk = function ($v) use (&$walk, &$ids) {
+        if (is_array($v)) {
+            foreach ($v as $x) {           // VALUES only — a key is not a reference
+                $walk($x);
+            }
+            return;
+        }
+        if (is_int($v)) {
+            if ($v > 0) { $ids[$v] = true; }
+            return;
+        }
+        if (is_string($v)) {
+            if (ctype_digit($v)) {
+                $n = (int) $v;
+                if ($n > 0) { $ids[$n] = true; }
+                return;
+            }
+            $u = @unserialize($v);
+            if ($u !== false || $v === 'b:0;') { $walk($u); return; }
+            $j = json_decode($v, true);
+            if (is_array($j)) { $walk($j); }
+        }
+    };
+
+    foreach ($wpdb->get_results($wpdb->prepare(
+        "SELECT meta_key, meta_value FROM {$wpdb->postmeta} WHERE post_id = %d", $post_id)) as $m) {
+        if ($m->meta_key === '_lg_layout_v2_rendered_html') {
+            continue;   // HTML, not structure — leg two reads it
+        }
+        $walk($m->meta_value);
+    }
+    return $ids;
+}
+
+/** The post's prose surfaces, as one haystack for the filename/id leg. */
+function lg_fc_referenced_text(int $post_id): string
+{
+    $p = get_post($post_id);
+    return ($p ? (string) $p->post_content . "\n" . (string) $p->post_excerpt : '')
+         . "\n" . (string) get_post_meta($post_id, '_lg_layout_v2_rendered_html', true);
+}
+
+/**
+ * THE COLLECTOR. At publish, a file this form uploaded into this post, which this
+ * post does not use, is deleted.
+ *
+ * Ian, 2026-08-21: "Basically if it doesn't launch with the post, does it get
+ * deleted on publish?" This is that rule. "Delete the old one when a file is
+ * replaced" is a CASE of it rather than a second mechanism: swap the ZIP, press
+ * Post, and the previous one is stamped and unreferenced, so it goes.
+ *
+ * Runs on `shutdown` rather than inside the save. lg-article-materializer writes
+ * `_lg_layout_v2` after the post is inserted, so a collector running mid-save
+ * would decide "unused" against meta that is not finished being written. By
+ * shutdown everything has been stored.
+ */
+function lg_fc_collect_unused(int $post_id): int
+{
+    if (!lg_fc_enabled()) {
+        return 0;
+    }
+    if (!isset(lg_fc_types()[get_post_type($post_id)])) {
+        return 0;
+    }
+    global $wpdb;
+    $atts = $wpdb->get_col($wpdb->prepare(
+        "SELECT p.ID FROM {$wpdb->posts} p
+         JOIN {$wpdb->postmeta} m ON m.post_id = p.ID AND m.meta_key = %s
+         WHERE p.post_type = 'attachment' AND p.post_parent = %d AND m.meta_value = %d",
+        LG_FC_UPLOAD_STAMP, $post_id, $post_id));
+    if (!$atts) {
+        return 0;
+    }
+
+    $refs = lg_fc_referenced_ids($post_id);
+    $text = null;
+    $gone = 0;
+
+    foreach ($atts as $aid) {
+        $aid = (int) $aid;
+        if (isset($refs[$aid])) {
+            continue;
+        }
+        if ($text === null) {
+            $text = lg_fc_referenced_text($post_id);
+        }
+        $file = (string) get_post_meta($aid, '_wp_attached_file', true);
+        $stem = $file !== '' ? preg_replace('/\.[a-z0-9]+$/i', '', basename($file)) : '';
+        if (($stem !== '' && strpos($text, $stem) !== false)
+            || preg_match('/\b' . $aid . '\b/', $text)) {
+            continue;
+        }
+        /* LAST GUARD: never take a file some OTHER post is using as its lead
+           image. Cheap (one indexed meta_key lookup) and it closes the only
+           cross-post case a stamped file can realistically be in. */
+        if ((int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$wpdb->postmeta}
+                 WHERE meta_key = '_thumbnail_id' AND meta_value = %d AND post_id <> %d",
+                $aid, $post_id)) > 0) {
+            continue;
+        }
+        wp_delete_attachment($aid, true);
+        $gone++;
+    }
+    return $gone;
+}
+
+/**
+ * Queue the collection for shutdown, once per post per request.
+ *
+ * Scoped by post TYPE rather than by "was this our form", matching how
+ * lg_fc_hero_from_gallery() scopes: an admin saving a loothprint has made the
+ * same statement about what the post uses, and a stamped file they have removed
+ * is as unused as one a member removed.
+ */
+function lg_fc_queue_collection($post_id): void
+{
+    static $queued = [];
+    if (!is_numeric($post_id)) {
+        return;
+    }
+    $post_id = (int) $post_id;
+    if ($post_id <= 0 || isset($queued[$post_id])) {
+        return;
+    }
+    if (!lg_fc_enabled() || !isset(lg_fc_types()[get_post_type($post_id)])) {
+        return;
+    }
+    $queued[$post_id] = true;
+    add_action('shutdown', static function () use ($post_id) {
+        lg_fc_collect_unused($post_id);
+    });
+}
+add_action('acf/save_post', 'lg_fc_queue_collection', 30);
+
+/**
+ * WHEN THE POST GOES, ITS FILES GO — AND "GOES" MEANS PERMANENTLY DELETED.
+ *
+ * ⚠️ TRASHING A POST DELETES NOTHING, ON PURPOSE. This is the decision the issue
+ * asked to be made explicitly, so here it is in one sentence: the trash is a
+ * member's undo, and a cleanup that destroys files on the way into the bin turns
+ * "restore" into a post with a dead download and missing photos, with no way back.
+ * WordPress empties the trash by itself after EMPTY_TRASH_DAYS and that fires
+ * `before_delete_post`, so the files DO go — with a grace period instead of on a
+ * misclick. Ian said "when the post goes", and a post in the bin has not gone yet.
+ *
+ * Unlike the collector this takes ALL of the post's attachments, not only stamped
+ * ones: the post is being destroyed, so "which of its files does it still use" is
+ * no longer a meaningful question. That mirrors what the draft reaper already
+ * does, and it is why WordPress's own wp_delete_post() leaving children behind is
+ * the orphan this whole change exists to stop.
+ */
+function lg_fc_delete_post_files(int $post_id): void
+{
+    if (!lg_fc_enabled()) {
+        return;
+    }
+    if (!isset(lg_fc_types()[get_post_type($post_id)])) {
+        return;
+    }
+    foreach (get_children([
+        'post_parent' => $post_id,
+        'post_type'   => 'attachment',
+        'numberposts' => -1,
+        'fields'      => 'ids',
+    ]) as $att) {
+        wp_delete_attachment((int) $att, true);
+    }
+}
+add_action('before_delete_post', 'lg_fc_delete_post_files');
+
+/**
+ * THE PHOTO COUNT, SERVER-SIDE — because ACF's gallery `max` is client-side only.
+ *
+ * Measured in ACF's own source: class-acf-field-gallery.php::validate_value()
+ * checks `min` and never `max`. So `max` disables the picker's Add button and
+ * nothing else; a submission that arrives with more simply saves. This is the
+ * assertion that makes the limit real.
+ */
+function lg_fc_validate_photo_count($valid, $value, $field, $input)
+{
+    if ($valid !== true || !lg_fc_enabled() || !is_array($value)) {
+        return $valid;
+    }
+    $max = lg_fc_limits()['photos'];
+    if (count($value) <= $max) {
+        return $valid;
+    }
+    return sprintf('That\'s %d photos — you can add up to %d, so take %d off.',
+                   count($value), $max, count($value) - $max);
+}
+add_filter('acf/validate_value/name=loothprint_more_images', 'lg_fc_validate_photo_count', 10, 4);
+
+/**
+ * THE WRITE-UP IS REQUIRED. Ian, 2026-08-21: "We also need to make the tiny mce
+ * needed for tell us about it."
+ *
+ * ⚠️ ACF's own `required` check would PASS ON AN EMPTY EDITOR. TinyMCE submits
+ * `<p></p>`, and a member who types and deletes leaves `<p>&nbsp;</p>` — both are
+ * non-empty strings, so `empty($value)` is false and the field validates. The tags
+ * are stripped and the entities decoded before deciding, which is what makes this
+ * a statement about whether anything was WRITTEN.
+ *
+ * MEASURED CONSEQUENCE, recorded because real people will meet it: 56 of the 174
+ * existing loothprints have an empty body today. Their authors will be asked for
+ * a write-up the first time they open the form to edit.
+ */
+function lg_fc_validate_writeup($valid, $value, $field, $input)
+{
+    if ($valid !== true || !lg_fc_enabled()) {
+        return $valid;
+    }
+    $text = trim(html_entity_decode(wp_strip_all_tags((string) $value), ENT_QUOTES, 'UTF-8'));
+    $text = trim(str_replace("\xc2\xa0", ' ', $text));   // &nbsp; survives strip_tags as a real character
+    if ($text !== '') {
+        return $valid;
+    }
+    return 'Tell people about it — a line or two on what it does and what it\'s for.';
+}
+add_filter('acf/validate_value/name=_post_content', 'lg_fc_validate_writeup', 10, 4);
+
+/**
  * THE REAPER. A never-returned draft and everything uploaded into it, cleared
  * after LG_FC_DRAFT_TTL_DAYS.
  *
@@ -1357,6 +1919,14 @@ function lg_fc_render(string $type, int $edit = 0, bool $embed = false): void
     // see lg_fc_relabel()'s prefill block for why ACF does not do it for us here.
     $GLOBALS['lg_fc_editing'] = $edit;
     add_filter('acf/prepare_field', 'lg_fc_relabel', 20);
+    /* ACF's picker refusal is the literal string "Maximum selection reached",
+       which names no number — so a member who hits the cap is told they have hit
+       something without being told what. Ian's rule for this lane is that a
+       refusal says the limit, so the one string is replaced for the duration of
+       this render. It is localized via acf_localize_text() during the gallery
+       field's enqueue (class-acf-field-gallery.php:82), which is inside this
+       render, so a scoped gettext filter reaches it. */
+    add_filter('gettext', 'lg_fc_gallery_max_wording', 10, 3);
 
     lg_fc_page_open($t['title'], $embed);
     ?>
@@ -1421,7 +1991,17 @@ function lg_fc_render(string $type, int $edit = 0, bool $embed = false): void
     <?php
     lg_fc_page_close($embed);
     remove_filter('acf/prepare_field', 'lg_fc_relabel', 20);
+    remove_filter('gettext', 'lg_fc_gallery_max_wording', 10);
     unset($GLOBALS['lg_fc_editing']);
+}
+
+/** ACF's wording for a full gallery, replaced with one that names the number. */
+function lg_fc_gallery_max_wording($translated, $text, $domain)
+{
+    if ($domain === 'acf' && $text === 'Maximum selection reached') {
+        return sprintf('That\'s the limit — %d photos.', lg_fc_limits()['photos']);
+    }
+    return $translated;
 }
 
 /**
@@ -1510,6 +2090,16 @@ function lg_fc_relabel($field)
         $field['media_upload'] = 0;
         $field['tabs']         = 'visual';
         $field['delay']        = 0;
+        /* REQUIRED (#186). Ian, 2026-08-21: "We also need to make the tiny mce
+           needed for tell us about it." This line is the half a member SEES —
+           the "needed" pill the mock draws, from .acf-required. The refusal
+           itself is lg_fc_validate_writeup(), and it has to be separate because
+           ACF's own required check passes on an empty TinyMCE: the editor
+           submits <p></p>, which is not an empty string.
+           ⚠️ SET HERE AND NOT ON acf/load_field ON PURPOSE. This form's write-up
+           is required; the SAME pseudo-field serves every other acf_form() on the
+           site, and load_field is not scoped to this render. */
+        $field['required']     = 1;
     }
 
     // ⚠️ PREFILL THE PSEUDO-FIELDS OURSELVES ON EDIT. ACF only fills _post_title

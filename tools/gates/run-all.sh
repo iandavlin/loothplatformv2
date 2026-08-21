@@ -2071,6 +2071,77 @@ echo "=== GATE 89: comp timers run out, and the already-overdue are HELD ==="
 # stripe coexistence guard; and "UTC appears somewhere" passed on the table
 # header after the visible field label was removed.
 run "comp-expiry" php "$(dirname "$0")/comp-expiry-gate.php"
+echo "=== GATE 88: compose uploads have limits, and the cleanup cannot eat a file ==="
+# #186. Ian 8/21: "There is a library being generated which is going to lead to
+# orphans. Can we make limits, post only and in and out?" -- then, sharpening it:
+# "Basically if it doesn't launch with the post, does it get deleted on publish?"
+#
+# ⚠️ THE OBVIOUS GATE IS GREEN ON THE BROKEN BUILD, and that is the whole reason
+# this one is shaped the way it is. Reading max_size back off the ACF field is
+# TRUE of a form that enforces nothing: ACF validates attachments from
+# wp_handle_upload_prefilter alone (includes/media.php:38), this box runs
+# tuxedo-big-file-uploads whose chunker calls media_handle_upload() with
+# overrides['action'] = 'wp_handle_sideload', and core dispatches the prefilter
+# DYNAMICALLY as "{action}_prefilter". So ACF's validator never runs here.
+# MEASURED, not reasoned: the print-file field declares mime_types = zip and
+# holds 127 zips AND 48 .stl files. Every limit below is therefore proved by
+# pushing a real oversize file through the real filter and reading the refusal.
+#
+# ⚠️ §E IS THE ONE THAT PROTECTS OTHER PEOPLE'S WORK. Run unrestricted over the
+# real corpus, "delete what the post does not use" wanted to remove 67
+# attachments across 36 HEALTHY PUBLISHED loothprints. The shipped collector is
+# stamp-scoped so it cannot see them; §E counts stamped attachments outside the
+# run's own fixtures and requires ZERO, so "legacy files are unreachable" is
+# re-checked every run instead of being remembered.
+#
+# READS THE FLAG, NEVER HARDCODES A STATE. It runs the same build TWICE and
+# asserts the OFF build refuses nothing, deletes nothing and requires nothing --
+# free from the harness, because lg_fc_enabled() resolves its config relative to
+# the mu-plugin FILE and the `enabled => true` override is a gitignored
+# .local.php that exists only in the serving checkout. LG_FC_PREVIEW=1 arms it,
+# through `env` because sudo strips the environment.
+#
+# Nothing on the serve is modified: the branch's mu-plugin is loaded by mirroring
+# the mu-plugin dir with that one file swapped and pointing WPMU_PLUGIN_DIR at
+# it. The mirror is ASSERTED (ReflectionFunction), because a gate that cannot say
+# which file it measured has measured main.
+#
+# Every fixture is PID-keyed and torn down; §Z asserts the teardown, because a
+# leaked stamped row would make the NEXT run's §E blame the feature.
+#
+# ⚠️ §C2 AND §D2 EXIST BECAUSE THE OBVIOUS ASSERTION IS TAUTOLOGICAL. Calling
+# apply_filters() with a hook name ourselves proves the CALLBACK refuses when it
+# is called; it proves nothing about whether ACF ever calls it, or whether
+# acf/save_post ever reaches the collector. So §C2 drives ACF's own dispatcher
+# with a real $_POST payload and §D2 asserts the collection is queued by a save
+# (and queued once). M13-M15 are the mutations that only those legs can see.
+#
+# ⚠️ §G REFUSES BEFORE THE BYTES, AND THE STORAGE LAYOUT IS WHY. wp-content/uploads
+# is a SYMLINK to an rclone FUSE mount of Cloudflare R2, while the chunker's spool
+# (wp-content/bfu-temp) is the ROOT DISK -- measured 29G, 84% used, 4.6G free,
+# against a 5GB effective member limit. The prefilter runs only on the LAST chunk,
+# once the file is already assembled locally: perfect for R2 (not one byte reaches
+# the mount) and far too late for the spool. §G asserts the early guard, INCLUDING
+# that it is hooked at priority 1 -- has_action() returns the priority, so
+# earliness is asserted, not just presence.
+#
+# ⚠️ THE Z.end SENTINEL IS NOT CEREMONY — this gate reported GREEN on a run it had
+# not finished. A probe that dies part way emits fewer PASSes and ZERO FAILs, which
+# scores as a clean pass: the flag-ON run was cut from 56 assertions to 26 by
+# wp_send_json()'s bare `die` (it only goes through wp_die(), and therefore through
+# a catchable handler, when wp_doing_ajax() is true) and the gate said GREEN. The
+# probe now ends with a sentinel assertion and the gate refuses to SCORE a run that
+# does not reach it -- exit 2, CANNOT RUN, never a verdict. Verified by truncating
+# the probe on purpose: 30 assertions, no failures, and the gate refused to score.
+#
+# RED-FIRST: 19 mutations + 2 no-op controls -- tools/gates/compose-limits-redfirst.py.
+# M3 is the one that matters most: it registers ONLY ACF's hook, which is the
+# original defect exactly, and the gate must go red on it. M6 earned its keep the
+# hard way -- it STAYED GREEN first time, because the fixture was keyed 0,1,2 and
+# so could not tell a values-only walk from one that reads keys. The gallery
+# fixture now uses the real shape from post 61698 (key is one attachment id, value
+# is another) and the mutation bites.
+run "compose-limits" python3 "$(dirname "$0")/compose-limits-gate.py"
 echo
 
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
