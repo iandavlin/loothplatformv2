@@ -2042,6 +2042,50 @@ echo "=== GATE 87: the header's account chip is ONE LINE, and the name survives 
 run "header-name-clamp" python3 "$(dirname "$0")/header-name-clamp-gate.py"
 echo
 
+echo "=== GATE 88: compose uploads have limits, and the cleanup cannot eat a file ==="
+# #186. Ian 8/21: "There is a library being generated which is going to lead to
+# orphans. Can we make limits, post only and in and out?" -- then, sharpening it:
+# "Basically if it doesn't launch with the post, does it get deleted on publish?"
+#
+# ⚠️ THE OBVIOUS GATE IS GREEN ON THE BROKEN BUILD, and that is the whole reason
+# this one is shaped the way it is. Reading max_size back off the ACF field is
+# TRUE of a form that enforces nothing: ACF validates attachments from
+# wp_handle_upload_prefilter alone (includes/media.php:38), this box runs
+# tuxedo-big-file-uploads whose chunker calls media_handle_upload() with
+# overrides['action'] = 'wp_handle_sideload', and core dispatches the prefilter
+# DYNAMICALLY as "{action}_prefilter". So ACF's validator never runs here.
+# MEASURED, not reasoned: the print-file field declares mime_types = zip and
+# holds 127 zips AND 48 .stl files. Every limit below is therefore proved by
+# pushing a real oversize file through the real filter and reading the refusal.
+#
+# ⚠️ §E IS THE ONE THAT PROTECTS OTHER PEOPLE'S WORK. Run unrestricted over the
+# real corpus, "delete what the post does not use" wanted to remove 67
+# attachments across 36 HEALTHY PUBLISHED loothprints. The shipped collector is
+# stamp-scoped so it cannot see them; §E counts stamped attachments outside the
+# run's own fixtures and requires ZERO, so "legacy files are unreachable" is
+# re-checked every run instead of being remembered.
+#
+# READS THE FLAG, NEVER HARDCODES A STATE. It runs the same build TWICE and
+# asserts the OFF build refuses nothing, deletes nothing and requires nothing --
+# free from the harness, because lg_fc_enabled() resolves its config relative to
+# the mu-plugin FILE and the `enabled => true` override is a gitignored
+# .local.php that exists only in the serving checkout. LG_FC_PREVIEW=1 arms it,
+# through `env` because sudo strips the environment.
+#
+# Nothing on the serve is modified: the branch's mu-plugin is loaded by mirroring
+# the mu-plugin dir with that one file swapped and pointing WPMU_PLUGIN_DIR at
+# it. The mirror is ASSERTED (ReflectionFunction), because a gate that cannot say
+# which file it measured has measured main.
+#
+# Every fixture is PID-keyed and torn down; §Z asserts the teardown, because a
+# leaked stamped row would make the NEXT run's §E blame the feature.
+#
+# RED-FIRST: 12 mutations + 2 no-op controls -- tools/gates/compose-limits-redfirst.py.
+# M3 is the one that matters most: it registers ONLY ACF's hook, which is the
+# original defect exactly, and the gate must go red on it.
+run "compose-limits" python3 "$(dirname "$0")/compose-limits-gate.py"
+echo
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"

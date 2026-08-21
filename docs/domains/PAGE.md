@@ -327,3 +327,58 @@ is not "later" than a generic one** — it runs inside the generic hook's priori
    changes. It does **not** substitute for a browser: `user_can_richedit()` is
    false under curl and wp-cli, so ACF renders `html-active` where a real browser
    gets `tmce-active` — assert something that does not depend on it.
+
+---
+
+## ⚠️ #186 wears the `page` label and is NOT a lanes-page issue — the FOURTH in four days
+
+After #171 (Patreon/join dark mode → MEMBERSHIP.md), #179 (the Loothprint bundle)
+and #185 (the compose write-up editor). **#186 is compose uploads** — limits, the
+publish-time cleanup, and the write-up becoming required. Nothing in it touches
+`/lanes/`, `tools/lanes-page.py`, `lanes.json` or the timer. Recorded here rather
+than silently relabelled, because the domain rule says a domain-labelled issue
+updates its domain file in the same commit — so this line IS that update.
+
+**Four in four days is no longer a footnote.** Three separate lanes have now each
+spent a paragraph explaining why the `page` label did not mean what it says. The
+label needs Ian's ruling, not a fifth footnote.
+
+### The one thing from #186 a lanes-page reader might actually want
+
+**A gate can load a BRANCH's mu-plugin without touching the serving checkout**,
+and gate 88 does it: mirror `/var/www/dev/wp-content/mu-plugins` into a per-run
+directory with the one file swapped, then `wp --require=<file>` a bootstrap that
+`define()`s `WPMU_PLUGIN_DIR` at the mirror — core only sets that constant
+`if ( ! defined(...) )`, so the bootstrap wins. Real WordPress, real DB, branch
+code, nothing on the serve modified. It is the general answer to "the serve only
+carries merged code" for anything that runs server-side, and it is the same
+question the deploy-gap strip on the lanes page exists to surface.
+
+⚠️ **And it hands you both flag states for free.** `lg_fc_enabled()` resolves its
+config relative to the mu-plugin FILE, and the `enabled => true` override lives in
+a **gitignored `.local.php` that exists only in the serving checkout** — so a
+mirror pointed at a worktree reads the TRACKED default (false). That is the #185
+trap turned into an asset: the OFF state is what a branch renders by default, and
+`LG_FC_PREVIEW=1` (through `env`, because **sudo strips the environment**) arms
+the ON state. A gate that runs the same build twice this way reads the flag
+instead of hardcoding a state.
+
+### Reported by #186, not fixed — three findings that outlive the issue
+
+1. **`member_cookies()` in `loothprint-paywall-gate.py` does not mint a member.**
+   It mints a session for `qa-disposable`, which is `administrator` +
+   `bbp_keymaster` + `looth1`. Any gate that copies it and calls the result "as a
+   real member" is measuring the ADMIN path. On #186's own feature the difference
+   was 5MB versus 5GB. Real member roles on this box are `looth1`–`looth4`,
+   `bbp_participant` and `subscriber`.
+2. **`tuxedo-big-file-uploads` is active and replaces the uploader**, chunking
+   around PHP's `upload_max_filesize` entirely (which is how a 128MB ZIP exists on
+   a box whose FPM caps at 64M). Its `by_role` table lists none of the `looth*`
+   roles, so members fall through to its `all` bucket: **5,242,880,000 bytes**.
+   Any reasoning about upload sizes that starts from `php.ini` is wrong here.
+3. **ACF's `max_size` / `mime_types` are inert on any form this chunker serves**,
+   because the chunker calls `media_handle_upload()` with
+   `overrides['action'] = 'wp_handle_sideload'` and core dispatches the prefilter
+   dynamically as `"{$action}_prefilter"`, while ACF only listens on
+   `wp_handle_upload_prefilter`. Proof that needs no reading: the print-file field
+   declares `mime_types = zip` and holds **48 `.stl` files**.
