@@ -340,7 +340,26 @@ so my edit there is one appended paragraph.
 # WHAT WAS ACTUALLY BUILT — closing handoff, 2026-08-21
 
 All three ruled deliverables plus both riders. Branch `179-loothprint-bundle`,
-7 commits, 13 files. Not merged; the worktree and the preview are left standing.
+10 commits, 13 files. Not merged; the worktree and the preview are left standing.
+
+> ⚠️ **SUPERSEDED, 2026-08-21 evening — read this before the table below.** Ian
+> reversed the "members one, admins two" answer after looking at the running
+> page: *"The text is handled on the form. I don't know how we got to the modal
+> thing."* There is now **ONE Edit control for everyone, cap-holders included**,
+> and the page-text pill is deleted — markup, CSS, parameter and entitlement
+> branch. He took that shape from a description and rejected it from the thing;
+> the description was mine, so this is a plan error, not a change of mind.
+>
+> Gate 69 still runs three viewers on purpose. The cap-holder is the only viewer
+> for whom a second door could have survived, so dropping that leg is exactly
+> what would make *"not even for admins"* untestable. The assertion is inverted,
+> not removed.
+>
+> Also landed with it: the rich-text editor no longer arrives un-initialised.
+> Ian's screenshot showed *"Click to initialize TinyMCE"* above his write-up as
+> literal `<p>test</p>` — ACF's `delay` placeholder. **That is the same element as
+> gate 47's open red** (`div.acf-editor-toolbar`, a 712×40 `#f5f5f5` slab): one
+> object, two symptoms. `delay = 0` removes it entirely.
 
 ## Deviations from the plan above, each traceable
 
