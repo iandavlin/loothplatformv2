@@ -143,8 +143,8 @@ def main() -> int:
       define('LG_FC_PAYWALL_PUBLIC','public'); define('LG_FC_PAYWALL_BEHIND','looth-lite');
       eval($m[0]);
       $cases = [
-        [[], 'behind', 'looth-lite'], [[], 'public', null],
-        [['public'], 'behind', 'looth-lite'], [['public'], 'public', null],
+        [[], 'behind', 'looth-lite'], [[], 'public', 'public'],
+        [['public'], 'behind', 'looth-lite'], [['public'], 'public', 'public'],
         [['looth-lite'], 'behind', null], [['looth-lite'], 'public', 'public'],
         [['looth-pro'], 'behind', null], [['looth-pro'], 'public', 'public'],
         [['public','looth-pro'], 'behind', null], [['public','looth-pro'], 'public', 'public'],
@@ -159,6 +159,12 @@ def main() -> int:
     out = sh(["php", "-r", php]).stdout.strip()
     if out == "NOFUNC":
         raise CannotRun("lg_fc_paywall_target() not found in the plugin")
+    # Ian, 8/21, after a submitted print came back with an EMPTY Tiers box:
+    # "It should either be public for anyone looth lite for paywalled." So
+    # 'public' ALWAYS writes public — the old table wanted NULL on a post that
+    # was not already paywalled, which is precisely the untiered post he saw.
+    # The surviving NULLs are 'behind' on something already behind (Lite/Pro):
+    # keeping Pro there is a preserve, not a miss.
     chk("all 10 rule cases (incl. every looth-pro case) hold", out == "ALLPASS", out[:120])
 
     # ── P2: the control agrees with the flag, per state ──────────────────────
@@ -174,6 +180,17 @@ def main() -> int:
     else:
         body = curl(env, f"{env['LG_GATE_HOST']}/compose/?type=loothprint")
         live = 'name="lg_fc_paywall"' in body
+        # ⚠️ THIS FETCH CARRIES THE DEV-GATE COOKIE ONLY, NEVER A WP LOGIN, and
+        # /compose/ is members-only — so an unauthenticated run reads the login
+        # 404 and every assertion below it would fail for a reason that has
+        # nothing to do with the code. That is the harness-must-run-as-the-real
+        # -user trap, and a gate that reports its own blind spot as RED teaches
+        # people to ignore it. NO VERDICT unless the form actually arrived.
+        if 'name="lg_fc_comments"' not in body:
+            print(f"  NO VERDICT: the form did not arrive ({len(body)}B) — this leg "
+                  "needs a logged-in member cookie, which this harness does not mint. "
+                  "P1 and P3 still carry real verdicts.")
+            return fails
         chk("the form is alive (so an absence is not vacuous)",
             'name="lg_fc_comments"' in body, f"{len(body)}B")
         if state == "ON":
