@@ -791,24 +791,37 @@ def leg_e():
 
 # ───────────────────────────── §F  COUPLING ───────────────────────────────────
 def leg_f():
+    """COUPLING — reported, never asserted.
+
+    ⚠️ IT MUST READ THE SERVING CHECKOUT, NOT THIS WORKTREE. The first version
+    required the WORKTREE's site-header.php, whose __DIR__ resolves to the
+    worktree's platform/config — so it read the TRACKED default and reported
+    "this box is 'off'" on a box keeper had deliberately set to 'allowlist'.
+    A report that names the wrong subject is worse than no report: it is the
+    "verify the thing, not the thing next to it" trap, and here it would have
+    told a reader the unlock was inert on a box where it is live.
+    """
     log("§F  COUPLING — reported, never asserted")
+    served = "/srv/lg-shared/site-header.php"
+    if not os.path.exists(served):
+        report("§F no serving checkout at /srv/lg-shared — cannot report this "
+               "box's header-join-stripe state. NOT a finding.")
+        return
+    env = {k: v for k, v in os.environ.items() if k != "LG_HEADER_JOIN_STRIPE"}
     r = subprocess.run(
-        ["php", "-r",
-         "require $argv[1]; echo lg_shared_header_join_stripe_state();",
-         f"{REPO}/{HEADER_REL}"],
-        capture_output=True, text=True,
-        env={k: v for k, v in os.environ.items()
-             if k not in ("LG_HEADER_JOIN_STRIPE",)})
+        ["php", "-r", "require $argv[1]; echo lg_shared_header_join_stripe_state();",
+         served],
+        capture_output=True, text=True, env=env)
     state = r.stdout.strip() or "unknown"
     if state == "off":
-        report("§F this box's header-join-stripe is 'off', so the unlock is "
-               "INERT here however it is configured. That is correct behaviour "
-               "('off' means nobody), not a defect — but a flip of the unlock "
-               "alone will appear to do nothing. Both boxes are meant to sit in "
-               "'allowlist' during the soft launch.")
+        report("§F THE SERVING CHECKOUT's header-join-stripe is 'off', so the "
+               "unlock is INERT on this box however it is configured. That is "
+               "correct behaviour ('off' means nobody), not a defect — but "
+               "arming the unlock alone will appear to do nothing. Both boxes "
+               "are meant to sit in 'allowlist' during the soft launch.")
     else:
-        report(f"§F this box's header-join-stripe is '{state}' — the unlock is "
-               f"live here once armed.")
+        report(f"§F THE SERVING CHECKOUT's header-join-stripe is '{state}' — the "
+               f"unlock is live on this box once armed.")
 
 
 def main():
