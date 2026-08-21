@@ -417,3 +417,14 @@ purpose. Before #173 the menu carried **no name at all**.
   now. ⚠️ It was in **two** files, not the one the charter named:
   `membership-pages/web/` and `lg-patreon-stripe-poller/assets/` both carry a
   copy of `lg-shortcodes.css`.
+- ⚠️ **THE ACCOUNT NAME WAS NOT THE ONLY THING STACKING IN IAN'S BAND.** With
+  the Join pill on, the `Looth Group` wordmark stacked at 1100/1024 (fixed by
+  this change — the narrower chip gave the row its space back) and the nav's
+  two-word items `The Hub` / `The Map` stack from 1154 down (**not** fixed, and
+  identical on main). Without the pill this change un-stacks the nav too, at
+  1100/1024/1010. `white-space: nowrap` on `.lg-chrome__menu a` is not the
+  answer: it raises the nav's min-content floor from 419.2 to ~460 and converts
+  the stack into a ~40px horizontal overflow — the same trade gate 87's M3
+  mutation demonstrates. What frees real room is hiding the wordmark earlier,
+  collapsing the nav below 820, or shortening those two labels; all three are
+  Ian's calls and belong with the 821–885px finding, decided once for both.
