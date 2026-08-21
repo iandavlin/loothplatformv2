@@ -798,6 +798,21 @@ echo "=== GATE 35/35: front-end compose+edit reaches the right people, and OFF i
 run "compose" python3 "$(dirname "$0")/compose-gate.py" \
     --type loothprint --allowed bangers --denied erin.vogel \
     --owner patreon_77159883 --stranger bangers --post 72155
+# 35b — the PAYWALL TOGGLE on that same form (#179, Ian 2026-08-21: "a toggle for
+# the user to decide if behind the paywall... Default to behind the paywall").
+# Under 35 rather than a new number: it is a control ON this form, and two lanes
+# have already collided by both minting the next free one.
+#
+# ⚠️ ITS FLAG/CONTROL LEG IS DEPLOY-COUPLED AND SAYS SO. lg-frontend-compose.php is
+# a mu-plugin symlinked out of the serving checkout, so dev2 runs MAIN's copy: until
+# a merge AND a pull, the served form cannot carry the control however correct the
+# branch is. That leg prints NOT DEPLOYED — never a red (the box being behind is not
+# a defect) and never a green (that would be a vacuous pass on the claim under test).
+# The rule leg and the served-bytes leg both run regardless.
+run "loothprint-paywall" python3 "$(dirname "$0")/loothprint-paywall-gate.py"
+# 35c — the re-bake ordering the toggle depends on. Stubbed hook harness, no box
+# state, because that mu-plugin is ALSO symlinked out of the serving checkout.
+run "materializer-queue" php "$(dirname "$0")/materializer-queue-harness.php"
 
 # THE GATE-NUMBER LEDGER (single source of truth; keeper mints, lanes never):
 #   34 stripe (34a webhook + 34b pages + 34c price + 34d sweep) · 35 compose/v2 · 36 dark-anon · 37 guitardle claim · 38 insert
@@ -1537,10 +1552,35 @@ echo "=== GATE 68: the compose page wears the site chrome, in BOTH themes ==="
 # leg ok non-vacuously, 4 of 5, exit 1.
 run "compose-chrome" python3 "$(dirname "$0")/compose-chrome-gate.py"
 
-echo "=== GATE 69: the loothprint EDIT DOOR — two named editors, and only for the entitled ==="
-# Ruled scope item 4, shape picked by Ian 2026-08-16: the Edit button on a
-# Loothprint opens a two-line choice — "Details & files" (the acf_form that edits
-# the print's own fields) and "Page text" (the layout editor it always opened).
+echo "=== GATE 69: the loothprint EDIT DOOR — one pill in the dock, and only for the entitled ==="
+# ⚠️ RE-AIMED 2026-08-21 (#179), NOT RENUMBERED — same control, new shape, so its
+# gate moved with it rather than a second number being minted (the #172 precedent).
+# Ian superseded his own Option A: "I don't think we need the option for text and
+# data. It can be one button that kicks to the form they filled out", and the night
+# before: "could we put it in the bottom stack of sticky buttons ?"
+#
+# IT NOW NEEDS THREE VIEWERS. "Members one, admins two" is unfalsifiable against a
+# single account: the old gate's "entitled" user held edit_archive_poc, so it could
+# never have caught a build that showed everyone both doors. The post's OWN author
+# WITHOUT the cap must get exactly 1, a cap-holder exactly 2, a stranger 0.
+#
+# IT ALSO CARRIES #179's PILL-FAMILY ASSERTIONS, because they are about the same
+# control: one height, one radius, a shared edge on the axis the dock is laid out
+# on, a phone row that fits and does not wrap — and HK-027 asserted against the
+# leftmost RENDERED BODY TEXT rather than the article wrapper box, which has padding
+# and would have passed a dock sitting on the words.
+# ⚠️ It deliberately does NOT assert 641-700px, where MAIN IS ALREADY RED: measured
+# 2026-08-21, body text starts at x=41.6/44.0 against a dock right edge of 82, so the
+# compact stack already covers ~40px of copy at the bottom of its own media query.
+# Pre-existing, reported not fixed by #179; asserting it here would make this gate
+# red for another bug and block every lane.
+#
+# --path lets it measure a lane preview: /srv/archive-poc is a symlink into the
+# serving checkout, so the default path always reads MAIN.
+#
+# (Historic, for the record: the shape Ian picked on 2026-08-16 was a two-line
+# choice — "Details & files" and "Page text". That is what this gate used to
+# assert.)
 #
 # THE DOOR IS WHAT THIS GUARDS, deliberately. The form and its permission check
 # existed for months and were reachable by NOBODY; the way in is the part that was
