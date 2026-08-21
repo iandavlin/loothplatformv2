@@ -1357,6 +1357,14 @@ function lg_fc_render(string $type, int $edit = 0, bool $embed = false): void
     // see lg_fc_relabel()'s prefill block for why ACF does not do it for us here.
     $GLOBALS['lg_fc_editing'] = $edit;
     add_filter('acf/prepare_field', 'lg_fc_relabel', 20);
+    /* ⚠️ AND AGAIN, TYPE-SCOPED AND LAST. Setting delay inside lg_fc_relabel was
+       not enough on the served form — measured 8/21 with a real member session:
+       the placeholder "Click to initialize TinyMCE" was still in the bytes, over
+       the member's own markup, which is exactly what Ian screenshotted. Something
+       downstream of priority 20 restores ACF's own delay. This runs on the
+       type-scoped hook at 99, so it is the last word for wysiwyg fields, and it
+       is removed with the others when the render ends. */
+    add_filter('acf/prepare_field/type=wysiwyg', 'lg_fc_no_delay', 99);
 
     lg_fc_page_open($t['title'], $embed);
     ?>
@@ -1421,6 +1429,7 @@ function lg_fc_render(string $type, int $edit = 0, bool $embed = false): void
     <?php
     lg_fc_page_close($embed);
     remove_filter('acf/prepare_field', 'lg_fc_relabel', 20);
+    remove_filter('acf/prepare_field/type=wysiwyg', 'lg_fc_no_delay', 99);
     unset($GLOBALS['lg_fc_editing']);
 }
 
@@ -1431,6 +1440,15 @@ function lg_fc_render(string $type, int $edit = 0, bool $embed = false): void
  * Only fields this route knows about are touched, and the filter is added and
  * removed around the render, so nothing else on the site can see it.
  */
+/** The editor boots with the form, never on a click — see the registration. */
+function lg_fc_no_delay($field)
+{
+    if (is_array($field)) {
+        $field['delay'] = 0;
+    }
+    return $field;
+}
+
 function lg_fc_relabel($field)
 {
     if (empty($field['name']) && empty($field['_name'])) {
