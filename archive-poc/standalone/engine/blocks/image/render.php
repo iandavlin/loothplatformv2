@@ -48,25 +48,20 @@ if ($url === '' && $imageId > 0) {
     $url   = $media['url'] ?? '';
     if ($alt === '') $alt = $media['alt'] ?? '';
 
-    /* Pick the smallest reasonable display size that still looks crisp on
-       a 1.5x DPR phone — `medium_large` (default 768w) or `large` (1024w).
-       Falls back to full on attachments without these (anything imported
-       before WP started generating intermediate sizes). */
-    $sizes = is_array($media['sizes'] ?? null) ? $media['sizes'] : [];
-    foreach (['large', 'medium_large', 'medium'] as $key) {
-        if (!empty($sizes[$key]['url'])) { $displayUrl = (string) $sizes[$key]['url']; break; }
-    }
-    /* Build a srcset so retina screens pull `large` and small viewports
-       can take `medium`. Browsers pick the right one per the sizes attr. */
-    $srcsetEntries = [];
-    foreach (['medium', 'medium_large', 'large'] as $key) {
-        if (!empty($sizes[$key]['url']) && !empty($sizes[$key]['width'])) {
-            $srcsetEntries[] = $sizes[$key]['url'] . ' ' . (int) $sizes[$key]['width'] . 'w';
-        }
-    }
-    if (count($srcsetEntries) > 1) $srcset = implode(', ', array_unique($srcsetEntries));
+    /* WP's generated variants were the right instinct and the wrong delivery:
+       they are still RAW uploads, so they bypass the resizer, ship at whatever
+       widths WordPress happened to generate, and carry no dimensions (#187).
+       Img answers all three from the same metadata — the resizer's own buckets,
+       capped so it never offers a candidate wider than the source. */
+    $mediaSizes = is_array($media['sizes'] ?? null) ? $media['sizes'] : [];
+    $displayUrl = \LG\LayoutV2\Img::src($url, 800, $mediaSizes);
+    $srcset     = \LG\LayoutV2\Img::srcset($url, $mediaSizes, [400, 800, 1200, 1600]);
+    $imgDims    = \LG\LayoutV2\Img::dims($url, $mediaSizes, 800);
 }
-if ($displayUrl === '') $displayUrl = $url;   /* fallback when no intermediate sizes */
+/* An explicit `url` prop (no image_id) has no metadata behind it, but it is
+   still one of our uploads and still worth resizing. */
+if ($displayUrl === '') $displayUrl = \LG\LayoutV2\Img::src($url, 800);
+if (!isset($imgDims)) $imgDims = \LG\LayoutV2\Img::dims($url, [], 800);
 
 /* Lightbox caption: the per-instance image_text — same prose that lives
    in the figcaption underneath. Newlines collapsed to spaces so the
@@ -126,6 +121,9 @@ $figureCls = 'lg-image lg-image--' . $variant . ($aspect !== '' ? ' lg-image--ha
 <?php if ($srcset !== ''): ?>
 <?= $ind ?>           srcset="<?= Renderer::attr($srcset) ?>"
 <?= $ind ?>           sizes="(min-width: 960px) 760px, 100vw"
+<?php endif; ?>
+<?php if ($imgDims !== ''): ?>
+<?= $ind ?>          <?= ltrim($imgDims) ?>
 <?php endif; ?>
 <?= $ind ?>           alt="<?= Renderer::attr($alt) ?>"
 <?= $ind ?>           loading="lazy"

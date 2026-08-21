@@ -76,6 +76,37 @@ PAGES = {
     # which is exactly the shape that quietly gains weight over time. Measured at
     # 178KB total / 40KB images with twelve rows rendered.
     "account": ("/manage-subscription/", ["member"]),
+
+    # ── CPT SINGLES (#187) ────────────────────────────────────────────────
+    # The articles themselves — the surface members actually read — and until
+    # 2026-08-21 the ONE family this gate had never looked at. Every managed CPT
+    # single (loothprint, post-imgcap, post-type-videos, sponsor-post, loothcuts,
+    # useful_links, member-benefit, shorty, document) is served by the SAME
+    # standalone renderer and the SAME block set
+    # (platform/nginx/strangler-archive-poc.conf routes all nine to
+    # archive-poc/standalone/render.php), so THREE pages cover the code path that
+    # nine would. Nine were considered and declined on purpose: each page costs
+    # every lane ~9s on a shared gate to re-prove one renderer. That is a
+    # deliberate scope, not an oversight — the emitters were fixed for ALL the
+    # variants, including the sponsor hero that no page here exercises.
+    #
+    # Pinned to specific slugs, which is safe ONLY because wrong_document()
+    # refuses a "Page not found" title: a deleted post's branded 404 has a
+    # 553-char body, just over the near-empty floor, so without that check an
+    # unpublished post would silently turn this into a green over nothing.
+    #
+    # loothprint: the page the issue measured. ANON *AND* MEMBER because both
+    # render the article here (fret-sander-v2 is looth-lite, and anon still gets
+    # the header + hero), so the two viewers audit two real documents.
+    "loothprint": ("/loothprint/fret-sander-v2/", ["anon", "member"]),
+    # post-imgcap: the heaviest article shape on the box (27 attachments in its
+    # media map) — the case where a per-image regression compounds.
+    "article":    ("/post-imgcap/68-jazz-bass-truss-rod-reclamation/", ["anon"]),
+    # post-type-videos: the ONLY family that renders the embed block's poster,
+    # which is a separate emitter from the hero. Measured 2026-08-21 shipping a
+    # 318KB raw original into a 590px slot — the worst single image on the box.
+    # Public tier, so anon and member render the same document; anon alone.
+    "video":      ("/post-type-videos/perfect-balance-the-magic-of-evertune/", ["anon"]),
 }
 
 # Surfaces that only EXIST when a flag is on. CLAUDE.md requires every new content
@@ -191,12 +222,25 @@ new Promise(res => setTimeout(() => {
 # itself), so per CRAFT-STANDARD it is encoded rather than remembered.
 CHALLENGE_TITLES = ("just a moment", "attention required", "access denied", "checking your browser")
 
+# And the same failure one step closer to home: a page pinned by SLUG that has
+# been unpublished, retitled or deleted answers with the branded 404. MEASURED
+# 2026-08-21 on /loothprint/<missing>/: HTTP 404, and a body of 553 characters —
+# FIFTY-THREE over the near-empty floor below, so it would have sailed past
+# wrong_document() and been audited as a light, image-free, editor-free page.
+# That is a PASS on a document the gate never asked for, which is the exact class
+# CHALLENGE_TITLES exists to stop. Cheap to close, and it protects every
+# slug-pinned entry in PAGES, not only the CPT singles that forced it.
+NOT_FOUND_TITLES = ("page not found",)
+
 
 def wrong_document(data, path):
     """Return a reason string if this is not our page, else ''."""
     title = (data.get("title") or "").strip().lower()
     if any(c in title for c in CHALLENGE_TITLES):
         return f"edge challenge page (title {data.get('title')!r}) — chrome resolved {DOMAIN} publicly"
+    if any(c in title for c in NOT_FOUND_TITLES):
+        return (f"404 page (title {data.get('title')!r}) at {path} — the pinned post is gone or "
+                "unpublished. Repoint this entry at a live one; auditing the 404 would pass.")
     if data.get("bodyLen", 0) < 500:
         return f"near-empty document ({data.get('bodyLen')} bytes of body) at {data.get('href')}"
     return ""

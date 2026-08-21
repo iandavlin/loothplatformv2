@@ -51,20 +51,51 @@ if (!function_exists('lg_embed_yt_best_poster')) {
  * sizes]; src is '' when the post has no featured image (caller falls back).
  */
 if (!function_exists('lg_embed_featured_poster')) {
+    /**
+     * The facade poster, through the resizer.
+     *
+     * ⚠️ THE OLD `'large'` ARGUMENTS WERE DECORATION HERE. This block renders
+     * standalone, where wp_get_attachment_image_url() is a shim that reads the
+     * blob's media map and IGNORES the size argument — so asking for `large`
+     * returned the full-size original, and wp_get_attachment_image_srcset()
+     * does not exist at all, so the srcset was always ''. MEASURED 2026-08-21 on
+     * /post-type-videos/perfect-balance-the-magic-of-evertune/: a 318KB, 1280px
+     * original drawn into a 590px slot — the single heaviest image on the box,
+     * and the code read as if it had asked for something sensible.
+     *
+     * Resolved through media_resolver instead, which is the one path that hands
+     * back the size metadata Img needs. Falls back to the WP functions so the
+     * in-plugin render path is unchanged.
+     */
     function lg_embed_featured_poster(array $ctx): array {
         $postId = (int) ($ctx['post_id'] ?? 0);
-        if ($postId <= 0 || !function_exists('get_post_thumbnail_id')) return ['', '', ''];
+        if ($postId <= 0 || !function_exists('get_post_thumbnail_id')) return ['', '', '', ''];
         $thumbId = (int) get_post_thumbnail_id($postId);
-        if ($thumbId <= 0 || !function_exists('wp_get_attachment_image_url')) return ['', '', ''];
-        $src = (string) (wp_get_attachment_image_url($thumbId, 'large') ?: '');
-        if ($src === '') return ['', '', ''];
-        $srcset = function_exists('wp_get_attachment_image_srcset')
-            ? (string) (wp_get_attachment_image_srcset($thumbId, 'large') ?: '')
-            : '';
-        $sizes = ($srcset !== '' && function_exists('wp_get_attachment_image_sizes'))
-            ? (string) (wp_get_attachment_image_sizes($thumbId, 'large') ?: '100vw')
-            : '100vw';
-        return [$src, $srcset, $sizes];
+        if ($thumbId <= 0) return ['', '', '', ''];
+
+        $url = ''; $mediaSizes = [];
+        $resolver = $ctx['media_resolver'] ?? null;
+        if (is_callable($resolver)) {
+            $m = $resolver($thumbId);
+            $url = (string) ($m['url'] ?? '');
+            $mediaSizes = is_array($m['sizes'] ?? null) ? $m['sizes'] : [];
+        }
+        if ($url === '' && function_exists('wp_get_attachment_image_url')) {
+            $url = (string) (wp_get_attachment_image_url($thumbId, 'large') ?: '');
+        }
+        if ($url === '') return ['', '', '', ''];
+
+        /* The facade sits in the article column, not full-bleed — the same slot
+           the image block declares. The 4th element is width/height: the poster
+           is position:absolute/inset:0 inside an aspect-ratio frame, so CSS owns
+           the box and these attrs cannot move anything — they are here for the
+           law, not for layout reservation. */
+        return [
+            \LG\LayoutV2\Img::src($url, 800, $mediaSizes),
+            \LG\LayoutV2\Img::srcset($url, $mediaSizes, [400, 800, 1200]),
+            '(min-width: 960px) 760px, 100vw',
+            \LG\LayoutV2\Img::dims($url, $mediaSizes, 800),
+        ];
     }
 }
 
@@ -183,11 +214,12 @@ if ($ytId !== '') {
        uploads. Fall back to the provider thumbnail (probed maxres -> sd -> hq,
        hqdefault floor) only when the post has no featured image. Matches the
        gate-card poster behavior. */
-    [$featSrc, $featSrcset, $featSizes] = lg_embed_featured_poster($ctx);
+    [$featSrc, $featSrcset, $featSizes, $featDims] = lg_embed_featured_poster($ctx);
     if ($featSrc !== '') {
         $posterSrc    = htmlspecialchars($featSrc, ENT_QUOTES, 'UTF-8');
         $posterSrcset = $featSrcset !== '' ? htmlspecialchars($featSrcset, ENT_QUOTES, 'UTF-8') : '';
         $posterSizes  = htmlspecialchars($featSizes !== '' ? $featSizes : '100vw', ENT_QUOTES, 'UTF-8');
+        $posterDims   = $featDims;
     } else {
         $thumbLo = "https://i.ytimg.com/vi/{$safeYtId}/hqdefault.jpg";
         [$thumbHi, $hiW] = lg_embed_yt_best_poster($ytId);
@@ -195,11 +227,12 @@ if ($ytId !== '') {
         $posterSrcset = htmlspecialchars($thumbHi, ENT_QUOTES, 'UTF-8') . ' ' . (int) $hiW . 'w, '
                       . htmlspecialchars($thumbLo, ENT_QUOTES, 'UTF-8') . ' 480w';
         $posterSizes  = '100vw';
+        $posterDims   = '';   /* cross-origin provider thumb: dimensions unknown */
     }
     ?>
 <figure class="lg-embed lg-embed--<?= $variant ?> lg-embed--youtube<?= $isShorts ? ' lg-embed--shorts' : '' ?>">
   <div class="lg-embed__frame lg-embed__facade" style="aspect-ratio: <?= $aspectCss ?>;" data-yt-id="<?= $safeYtId ?>" data-yt-start="<?= (int) $ytStart ?>">
-    <img class="lg-embed__poster" src="<?= $posterSrc ?>"<?= $posterSrcset !== '' ? ' srcset="' . $posterSrcset . '"' : '' ?> sizes="<?= $posterSizes ?>" loading="lazy" alt="" />
+    <img class="lg-embed__poster" src="<?= $posterSrc ?>"<?= $posterSrcset !== '' ? ' srcset="' . $posterSrcset . '"' : '' ?> sizes="<?= $posterSizes ?>"<?= $posterDims ?> loading="lazy" alt="" />
     <button type="button" class="lg-embed__play" aria-label="Play video"><?= $playSvg ?></button>
   </div>
 <?php if ($caption !== ''): ?>
@@ -217,7 +250,7 @@ if ($vimeoId !== '') {
     /* FEATURED IMAGE PREFERRED (see YouTube branch). When the post has a
        featured image we skip the Vimeo oembed hop entirely; only fall back to
        the provider thumbnail (cached 12h) when none is set. */
-    [$featSrc, $featSrcset, $featSizes] = lg_embed_featured_poster($ctx);
+    [$featSrc, $featSrcset, $featSizes, $featDims] = lg_embed_featured_poster($ctx);
     $thumb = '';
     if ($featSrc === '' && function_exists('get_transient')) {
         $tk = 'lg_v2_vimeo_thumb_' . $vimeoId;
@@ -239,7 +272,7 @@ if ($vimeoId !== '') {
 <figure class="lg-embed lg-embed--<?= $variant ?> lg-embed--vimeo">
   <div class="lg-embed__frame lg-embed__facade" style="aspect-ratio: <?= $aspectCss ?>;" data-vimeo-id="<?= $safeVimeoId ?>">
 <?php if ($featSrc !== ''): ?>
-    <img class="lg-embed__poster" src="<?= htmlspecialchars($featSrc, ENT_QUOTES, 'UTF-8') ?>"<?php if ($featSrcset !== ''): ?> srcset="<?= htmlspecialchars($featSrcset, ENT_QUOTES, 'UTF-8') ?>" sizes="<?= htmlspecialchars($featSizes !== '' ? $featSizes : '100vw', ENT_QUOTES, 'UTF-8') ?>"<?php endif; ?> loading="lazy" alt="" />
+    <img class="lg-embed__poster" src="<?= htmlspecialchars($featSrc, ENT_QUOTES, 'UTF-8') ?>"<?php if ($featSrcset !== ''): ?> srcset="<?= htmlspecialchars($featSrcset, ENT_QUOTES, 'UTF-8') ?>" sizes="<?= htmlspecialchars($featSizes !== '' ? $featSizes : '100vw', ENT_QUOTES, 'UTF-8') ?>"<?php endif; ?><?= $featDims ?> loading="lazy" alt="" />
 <?php elseif ($thumb !== ''): ?>
     <img class="lg-embed__poster" src="<?= htmlspecialchars($thumb, ENT_QUOTES, 'UTF-8') ?>" loading="lazy" alt="" />
 <?php endif; ?>
