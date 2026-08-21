@@ -27,6 +27,7 @@ final class Admin
         add_action( 'admin_post_lgms_cohort_remove', [ self::class, 'handleCohortRemove' ] );
         add_action( 'admin_post_lgms_invite_mint',   [ self::class, 'handleInviteMint' ] );
         add_action( 'admin_post_lgms_price_set', [ self::class, 'handlePriceSet' ] );
+        add_action( 'admin_post_lgms_comp_timer_set', [ self::class, 'handleCompTimerSet' ] );
     }
 
     public static function menu(): void
@@ -799,6 +800,7 @@ final class Admin
             'stripe_cohort' => 'Stripe Test Group',
             'stripe_price'  => 'Stripe Price',
             'dual_payers'   => 'Dual Payers',
+            'comp_timers'   => 'Comp Timers',
         ];
         ?>
         <div class="wrap">
@@ -820,6 +822,7 @@ final class Admin
                 'stripe_cohort' => self::renderStripeCohortTab(),
                 'stripe_price'  => self::renderStripePriceTab(),
                 'dual_payers'   => self::renderDualPayersTab(),
+                'comp_timers'   => self::renderCompTimersTab(),
                 default         => self::renderSettingsTab(),
             };
             ?>
@@ -932,6 +935,224 @@ final class Admin
             slot — and no verdict here is taken from it.
         </p>
         <?php endif;
+    }
+
+    // -------------------------------------------------------------------------
+    // Comp Timers tab (#183) — the half that has been missing since the cutover
+    // -------------------------------------------------------------------------
+
+    /**
+     * looth4 comp memberships and their expiry dates.
+     *
+     * ⚠️ THIS SCREEN EXISTS BECAUSE THERE WAS NO OTHER WAY TO SET ONE. Measured
+     * 2026-08-21, both sides: `lg-looth4-expiry` is gone from live (no file under
+     * wp-content, absent from `active_plugins`, `recently_activated` empty, no
+     * cron event in the 13,182-byte `cron` option), and nothing replaced it — no
+     * ACF field (there is no `_looth4_expires_at` companion row), no code
+     * snippet, no option. The only two occurrences of the meta on live are the
+     * two data rows themselves, both written at grant time in April and May by
+     * the plugin that was still installed then. So until this tab, a comp
+     * end-date could only be set with direct SQL, and Ian grants comps by hand.
+     *
+     * ⚠️ IT WRITES THE META AND NOTHING ELSE. No role is touched here, ever.
+     * `Arbiter::sync` is the only writer of `wp_capabilities` and this screen
+     * must not become a second one — that is precisely the mistake the old
+     * plugin made. Setting a date in the past does not demote anybody on save;
+     * it makes them due, and the sweep and its cutover decide the rest.
+     *
+     * ⚠️ EVERY TIME ON THIS SCREEN IS UTC, stated on the field rather than
+     * assumed. The stored values are bare `Y-m-d H:i:s` with no offset and both
+     * boxes run America/New_York, so an operator typing local time would set a
+     * timer four hours off. Input is parsed by the SAME code that reads it back
+     * (`CompStanding::parse`), so what you type and what the sweep sees cannot
+     * drift apart.
+     */
+    private static function renderCompTimersTab(): void
+    {
+        $enabled  = \LGMS\Membership\CompExpiry::enabled();
+        $cutover  = \LGMS\Membership\CompExpiry::effectiveFrom();
+        $subjects = \LGMS\Membership\CompExpiry::subjects();
+
+        $labels = [
+            \LGMS\Membership\CompExpiry::STATE_NO_TIMER => 'No timer',
+            \LGMS\Membership\CompExpiry::STATE_RUNNING  => 'Running',
+            \LGMS\Membership\CompExpiry::STATE_HELD     => 'Ran out &mdash; HELD',
+            \LGMS\Membership\CompExpiry::STATE_DUE      => 'Ran out &mdash; DUE',
+            \LGMS\Membership\CompExpiry::STATE_DISARMED => 'Ran out &mdash; enforcement OFF',
+            \LGMS\Membership\CompExpiry::STATE_LAPSED   => 'No longer a comp',
+        ];
+
+        $err = isset( $_GET['lgms_comp_err'] ) ? sanitize_text_field( wp_unslash( (string) $_GET['lgms_comp_err'] ) ) : '';
+        $msg = isset( $_GET['lgms_comp_msg'] ) ? sanitize_text_field( wp_unslash( (string) $_GET['lgms_comp_msg'] ) ) : '';
+        ?>
+        <h2>Comp timers</h2>
+
+        <?php if ( $err !== '' ) : ?>
+            <div class="notice notice-error"><p><?php echo esc_html( $err ); ?></p></div>
+        <?php endif; ?>
+        <?php if ( $msg !== '' ) : ?>
+            <div class="notice notice-success"><p><?php echo esc_html( $msg ); ?></p></div>
+        <?php endif; ?>
+
+        <p>
+            <code>looth4</code> is the everything-pass. Ian, 2026-08-21:
+            <em>&ldquo;looth4 is the everything bypass the stripe side of membeship needs to respect.&rdquo;</em>
+            A comp with no timer never runs out. A comp with a timer runs out at that moment
+            and is then arbitrated like any other member.
+        </p>
+
+        <h3>Enforcement</h3>
+        <p>
+            Sweep is <strong><?php echo $enabled ? 'ON' : 'OFF'; ?></strong>
+            (<code>platform/config/comp-expiry.php</code><?php
+                echo $enabled ? '' : ' &mdash; while it is off, nothing here demotes anybody'; ?>).
+            Enforcement cutover:
+            <strong><?php echo $cutover === null ? 'not set' : esc_html( gmdate( 'Y-m-d', $cutover ) ); ?></strong><?php
+                if ( $cutover === null ) {
+                    echo ' &mdash; with no cutover set, every lapsed timer is reported and none is acted on.';
+                } else {
+                    echo ' &mdash; a timer that ran out BEFORE this date is held, whatever its value.';
+                } ?>
+        </p>
+        <p class="description">
+            The cutover is a date rather than a list of user IDs on purpose: it protects every account whose
+            timer had already run out when enforcement was re-armed, including any nobody has looked at,
+            and a mistyped ID cannot defeat it. Ian ruled the two already-overdue accounts are
+            <strong>left alone</strong> until he decides case by case.
+        </p>
+
+        <h3>Comp members</h3>
+        <?php if ( $subjects === [] ) : ?>
+            <p><strong>Nobody.</strong> No account holds <code>looth4</code> or carries a comp timer.</p>
+        <?php else : ?>
+        <table class="widefat striped">
+            <thead>
+                <tr>
+                    <th>Member</th>
+                    <th>Holds <code>looth4</code></th>
+                    <th>Timer (UTC)</th>
+                    <th>State</th>
+                    <th>What happens</th>
+                    <th>Set / clear</th>
+                </tr>
+            </thead>
+            <tbody>
+            <?php foreach ( $subjects as $uid ) :
+                $u      = get_user_by( 'id', $uid );
+                if ( ! $u ) { continue; }
+                $status = \LGMS\Membership\CompExpiry::statusFor( $uid );
+                $holds  = \LGMS\Membership\CompStanding::holdsComp( $uid );
+                $state  = (string) $status['state'];
+                ?>
+                <tr>
+                    <td>
+                        <a href="<?php echo esc_url( admin_url( 'user-edit.php?user_id=' . $uid ) ); ?>">
+                            <?php echo esc_html( $u->user_login ); ?></a><br>
+                        <span class="description">#<?php echo (int) $uid; ?> &middot; <?php echo esc_html( $u->user_email ); ?></span>
+                    </td>
+                    <td><?php echo $holds ? 'yes' : '<span class="description">no</span>'; ?><br>
+                        <span class="description"><?php
+                            $tiers = array_values( array_intersect( (array) $u->roles, [ 'looth1', 'looth2', 'looth3', 'looth4' ] ) );
+                            echo esc_html( $tiers === [] ? '(no tier role)' : implode( ', ', $tiers ) );
+                        ?></span>
+                    </td>
+                    <td><?php echo $status['expires_raw'] === ''
+                            ? '<span class="description">&mdash;</span>'
+                            : '<code>' . esc_html( (string) $status['expires_raw'] ) . '</code>'; ?></td>
+                    <td><?php
+                        echo wp_kses( (string) ( $labels[ $state ] ?? $state ), [ 'span' => [] ] );
+                        ?></td>
+                    <td><span class="description"><?php echo esc_html( (string) $status['reason'] ); ?></span></td>
+                    <td>
+                        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:flex;gap:.4em;align-items:center;">
+                            <?php wp_nonce_field( 'lgms_comp_timer_set' ); ?>
+                            <input type="hidden" name="action" value="lgms_comp_timer_set">
+                            <input type="hidden" name="comp_user" value="<?php echo (int) $uid; ?>">
+                            <input type="text" name="comp_expires"
+                                   value="<?php echo esc_attr( (string) $status['expires_raw'] ); ?>"
+                                   placeholder="YYYY-MM-DD HH:MM" size="17"
+                                   aria-label="Comp expiry for <?php echo esc_attr( $u->user_login ); ?>, UTC">
+                            <button type="submit" class="button">Save</button>
+                        </form>
+                        <span class="description">UTC. Empty = never expires.</span>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+        <p class="description">
+            Saving writes the <code>looth4_expires_at</code> user meta and nothing else &mdash; no role is
+            changed on this screen. A date in the past makes a member <em>due</em>; whether they are actually
+            expired is decided by the sweep and the cutover above, and the work is done by
+            <code>Arbiter::sync</code>, which is the only thing on this site that writes a tier role.
+        </p>
+        <p class="description">
+            <strong>What an expired comp becomes:</strong> whatever their payment sources already say. A comp
+            who also pays on Patreon lands back on their real paid tier; one with no paying source lands on
+            <code>looth1</code>, the starter tier. Never no tier at all.
+        </p>
+        <?php endif;
+    }
+
+    /**
+     * Set or clear one member's comp timer.
+     *
+     * Writes the meta only. Parses through CompStanding::parse so that what an
+     * operator types is validated by the same code the sweep reads it back
+     * with, and stores the normalised `Y-m-d H:i:s` UTC shape so the store
+     * never accumulates formats the reader has to guess at.
+     */
+    public static function handleCompTimerSet(): void
+    {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( 'Insufficient permissions.', 403 );
+        }
+        check_admin_referer( 'lgms_comp_timer_set' );
+
+        $uid = isset( $_POST['comp_user'] ) ? absint( $_POST['comp_user'] ) : 0;
+        $raw = trim( sanitize_text_field( wp_unslash( (string) ( $_POST['comp_expires'] ?? '' ) ) ) );
+
+        $back = static function ( array $extra ): void {
+            wp_safe_redirect( add_query_arg(
+                array_merge( [ 'page' => self::OPT_PAGE, 'tab' => 'comp_timers' ], $extra ),
+                admin_url( 'options-general.php' )
+            ) );
+            exit;
+        };
+
+        $user = $uid > 0 ? get_user_by( 'id', $uid ) : false;
+        if ( ! $user ) {
+            $back( [ 'lgms_comp_err' => rawurlencode( 'No such user on this box — nothing written. User IDs differ per box.' ) ] );
+        }
+
+        if ( $raw === '' ) {
+            delete_user_meta( $uid, \LGMS\Membership\CompStanding::META );
+            $back( [ 'lgms_comp_msg' => rawurlencode(
+                sprintf( 'Timer cleared for %s — this comp no longer runs out.', $user->user_login )
+            ) ] );
+        }
+
+        $ts = \LGMS\Membership\CompStanding::parse( $raw );
+        if ( $ts === null ) {
+            // Refused rather than stored. An unparseable value reads as "no
+            // expiry" everywhere downstream, so silently accepting it would
+            // show a date on this screen while the sweep saw none at all.
+            $back( [ 'lgms_comp_err' => rawurlencode( sprintf(
+                'Could not read "%s" as a date — nothing written. Use YYYY-MM-DD HH:MM, in UTC.', $raw
+            ) ) ] );
+        }
+
+        $normalised = gmdate( 'Y-m-d H:i:s', $ts );
+        update_user_meta( $uid, \LGMS\Membership\CompStanding::META, $normalised );
+
+        $back( [ 'lgms_comp_msg' => rawurlencode( sprintf(
+            'Timer for %s set to %s UTC. %s',
+            $user->user_login,
+            $normalised,
+            $ts <= time()
+                ? 'That is in the past, so they are now due — the sweep and the cutover decide whether it is acted on.'
+                : 'No role has changed.'
+        ) ) ] );
     }
 
     // -------------------------------------------------------------------------

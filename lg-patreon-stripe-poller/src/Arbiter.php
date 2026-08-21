@@ -11,7 +11,11 @@ namespace LGMS;
  * (highest across active sources), and writes wp_capabilities
  * preserving every non-tier role (administrator, bbp_participant, etc.).
  *
- * looth4 users are protected: never modified.
+ * looth4 (comp/staff) users are protected — with ONE exception, added by #183:
+ * a comp whose timer has run out is no longer a protected comp. The decision is
+ * CompExpiry's (flag, enforcement cutover, timezone); the write is still only
+ * ever this file's. See the looth4 block in sync() for the split and why it
+ * matters.
  */
 final class Arbiter
 {
@@ -30,15 +34,52 @@ final class Arbiter
         // looth4 and left looth1 behind (and a later Patreon sub then added
         // looth3 on top) — the root of the double-role bug. De-dupe down to
         // looth4 here, then leave looth4 itself untouched.
+        //
+        // ── #183: PROTECTED MEANS *UNEXPIRED* ───────────────────────────────
+        // Ian, 2026-08-21: "comp timers need to work." The one thing that
+        // changes here is that this early-return now asks whether the comp is
+        // still running. CompExpiry owns that decision and every fence in it —
+        // the flag, the enforcement cutover holding the already-overdue, and
+        // the timezone. This file stays the ONLY writer of wp_capabilities:
+        // the sweep decides WHO has lapsed, and the code below decides WHAT
+        // they become. That is exactly the split the old lg-looth4-expiry
+        // plugin did not have, and the comment above is the bill for it.
+        $compExpired = false;
         if ( in_array( 'looth4', $user->roles, true ) ) {
-            $deduped = false;
-            foreach ( [ 'looth1', 'looth2', 'looth3' ] as $lower ) {
-                if ( in_array( $lower, $user->roles, true ) ) {
-                    $user->remove_role( $lower );
-                    $deduped = true;
-                }
+            $lapsed = \LGMS\Membership\CompExpiry::shouldExpire( $wpUserId );
+
+            // ⚠️ A LAPSED COMP WHO LOOKS LIKE A PAYER IS HELD, NOT DEMOTED.
+            // The guard below this block exists because a member who owns
+            // their tier through Stripe but carries no lg_role_sources row
+            // would arbitrate to null and be silently downgraded. An expired
+            // comp in that same shape would be downgraded by US, which is the
+            // one outcome decision #2 forbids: an expiry returns a member to
+            // their real tier, it never flattens a payer. So we hold, and say
+            // so out loud rather than skipping quietly.
+            if ( $lapsed
+                 && get_user_meta( $wpUserId, 'payment_source', true ) === 'stripe'
+                 && RoleSourceWriter::readAllForUser( $wpUserId ) === [] ) {
+                return [
+                    'ok'     => true,
+                    'reason' => 'comp timer lapsed, but payment_source=stripe with NO source row — HELD, never demoted',
+                ];
             }
-            return [ 'ok' => true, 'reason' => $deduped ? 'looth4 protected, deduped lower tiers' : 'looth4 protected, skipped' ];
+
+            if ( $lapsed ) {
+                // The comp comes off, and then this member is arbitrated like
+                // anybody else. No special demotion path, no flat looth1.
+                $user->remove_role( 'looth4' );
+                $compExpired = true;
+            } else {
+                $deduped = false;
+                foreach ( [ 'looth1', 'looth2', 'looth3' ] as $lower ) {
+                    if ( in_array( $lower, $user->roles, true ) ) {
+                        $user->remove_role( $lower );
+                        $deduped = true;
+                    }
+                }
+                return [ 'ok' => true, 'reason' => $deduped ? 'looth4 protected, deduped lower tiers' : 'looth4 protected, skipped' ];
+            }
         }
 
         // Stripe-source coexistence guard (mirrors LGPO's existing skip):
@@ -48,14 +89,40 @@ final class Arbiter
         // writer-system carryover, or replay edge cases), the Arbiter
         // would otherwise compute winning_tier=null from empty sources
         // and silently downgrade them. Skip instead.
-        if ( get_user_meta( $wpUserId, 'payment_source', true ) === 'stripe'
+        //
+        // ⚠️ #183: `! $compExpired` is load-bearing. A comp whose role we just
+        // removed holds no tier at all for a moment, so `empty(intersect
+        // looth1)` is TRUE for them and this guard would return early and
+        // leave them with NO looth role whatsoever — worse than any demotion.
+        // The genuinely ambiguous version of that case was already held above,
+        // before the role came off.
+        if ( ! $compExpired
+             && get_user_meta( $wpUserId, 'payment_source', true ) === 'stripe'
              && empty( array_intersect( $user->roles, [ 'looth1' ] ) ) ) {
             return [ 'ok' => true, 'reason' => 'stripe-source w/o source row, skipped' ];
         }
 
-        $oldTier = self::currentTier( (array) $user->roles );
+        // The transition is reported from where the member STARTED. A comp that
+        // just lapsed started at looth4, and reading the roles back now would
+        // say looth1-or-nothing — so looth_tier_changed would fire with the
+        // wrong `from`, and profile-app's cache would purge against a tier the
+        // member never held.
+        $oldTier = $compExpired ? 'looth4' : self::currentTier( (array) $user->roles );
         $sources = RoleSourceWriter::readAllForUser( $wpUserId );
         $winning = self::computeWinningTier( $sources );
+
+        // THE FLOOR, and it is the whole of "what an expired comp becomes".
+        // Arbitration answers first: a comp who also pays on Patreon or Stripe
+        // lands on their real tier, because their source rows say so and this
+        // code never looked at the comp at all. Only when there is no paying
+        // opinion anywhere does the floor apply — looth1, the starter tier,
+        // which is also what the old lg-looth4-expiry plugin documented
+        // ("Expired users are demoted to looth1"). Never no tier at all: a
+        // member stripped to nothing is not a lapsed comp, it is a broken
+        // account.
+        if ( $compExpired && $winning === null ) {
+            $winning = 'looth1';
+        }
 
         // SINGLE-TIER ENFORCEMENT (de-dupe). A user must never hold two or more
         // looth1..4 roles at once. Remove every tier role that isn't the winner.
