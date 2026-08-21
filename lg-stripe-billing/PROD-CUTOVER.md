@@ -56,7 +56,7 @@ If you do ever edit the allowlist by hand at WP Admin → BuddyBoss → Settings
 
 If the registry needs a new page added, edit `Pages::PAGES`, push, then click "Re-create / sync membership pages" in the LG Member Sync settings page. The seeder will both insert the page and append its slug to the allowlist.
 
-## WordPress Plugin Settings (Settings → LG Member Sync)
+## WordPress Plugin Settings (LG Member Sync)
 
 - [ ] DB connection: host, name, user, password (`lg_membership_prod`)
 - [ ] Stripe secret key (live)
@@ -78,7 +78,7 @@ If the registry needs a new page added, edit `Pages::PAGES`, push, then click "R
 
 **Nothing to do manually.** The plugin's `LGMS\Wp\Pages::ensureAll()` runs on activation and creates every shortcode-hosting page with the right `[lg_member_nav][shortcode]` content, the right slug, the right `_wp_page_template`, and adds public-facing slugs to the BuddyBoss public-content allowlist (see section above).
 
-If you ever need to re-sync (after editing `src/Wp/Pages.php`'s `PAGES` registry, for example), use the "Re-create / sync membership pages" button at WP Admin → Settings → LG Member Sync. Idempotent — existing pages are left alone (admins may have customized layout); only missing ones are inserted.
+If you ever need to re-sync (after editing `src/Wp/Pages.php`'s `PAGES` registry, for example), use the "Re-create / sync membership pages" button at WP Admin → LG Member Sync. Idempotent — existing pages are left alone (admins may have customized layout); only missing ones are inserted.
 
 The seeded pages are:
 

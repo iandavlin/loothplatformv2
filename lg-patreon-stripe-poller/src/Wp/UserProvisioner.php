@@ -77,7 +77,7 @@ final class UserProvisioner
                 'Stripe customer %d (%s — %s) is outside the soft-launch cohort, and the checkout '
                 . 'audience is `%s`, so no WordPress account was created and no membership was '
                 . 'granted. If this purchase is genuine it needs a refund, or the buyer needs '
-                . 'adding to the cohort (Settings -> LG Member Sync -> Test Group).',
+                . 'adding to the cohort (LG Member Sync -> Test Group).',
                 $customerId,
                 $email,
                 $who,

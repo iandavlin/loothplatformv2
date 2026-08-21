@@ -1365,7 +1365,7 @@ def leg_e(base, served):
         if not reachable:
             report("⚠️  FLIPPING THIS FLAG ALONE WOULD SEND ANON TO A REFUSAL",
                    "turn on wp_option lgms_stripe_pages_live in the same window "
-                   "(WP admin: Settings -> LG Member Sync)")
+                   "(WP admin: LG Member Sync)")
     log("")
 
 

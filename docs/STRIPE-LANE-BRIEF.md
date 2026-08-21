@@ -47,7 +47,7 @@ All of this is in `main` today (verified with `git merge-base --is-ancestor`):
 | **Plain-English rename** (`f840d95`) | "Cohort" became "Stripe Test Group" everywhere on screen. Ian asked what cohort meant; that was the answer. |
 | **The member pages** (`membership-pages/`) | Built and serving, behind an admin-only pre-launch gate. |
 | **Test Group unlocks the pages** (gate 34b) | Built 8/15, **switched off**. Adds a `testgroup` visibility to the pages router. |
-| **Price in the dash** (gate 34c) | Built 8/15, **no price set**. Settings → LG Member Sync → Stripe Price. |
+| **Price in the dash** (gate 34c) | Built 8/15, **no price set**. LG Member Sync → Stripe Price. |
 | **The gift bypass, closed** (gate 34d) | Built 8/15, **switched off**. The list now fences the entitlement sweep, not just the webhook. |
 
 The bespoke private signup page that the 8/12 chat was building is **dead** —

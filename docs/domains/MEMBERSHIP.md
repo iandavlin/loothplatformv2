@@ -317,7 +317,7 @@
   no code-snippet, no ACF field group, no wp_option names the key; the only two
   occurrences on live are the two data rows. Enforcement without a setter is
   half a feature and **Ian grants comps by hand**, so #183 ships the **Comp
-  Timers tab** (Settings → LG Member Sync) alongside it. It writes the meta and
+  Timers tab** (LG Member Sync) alongside it. It writes the meta and
   **never a role**.
 - **THE TIMEZONE IS UTC, AND THE OLD READER WAS FOUR HOURS LATE.** Two
   independent proofs: the old plugin's own source
@@ -621,7 +621,7 @@
   every state including ON, so the flag cannot reach a signed-in member at all.
   ON differs from main by exactly one line.
 - **THE FLIP IS TWO SWITCHES, NOT ONE.** `header-join-stripe.local.php` on the
-  box **and** `lgms_stripe_pages_live` in WP admin (Settings → LG Member Sync),
+  box **and** `lgms_stripe_pages_live` in WP admin (LG Member Sync),
   in the same window, or Ian's logged-out Join lands on the pre-launch stub.
   Gate 79 §E turns from a report into a hard assertion the moment the header
   flag goes ON, so the pairing cannot be half-done quietly.
@@ -717,7 +717,7 @@
   OFF state is the WordPress route not existing (404 ⇒ unknown ⇒ proceed),
   so there is no second switch. Fail-open by design: an unknown answer never
   blocks a sale. The unblockable reverse direction is surfaced BOTH ways: a
-  read-only "Dual Payers" tab on Settings → LG Member Sync for Ian, and a
+  read-only "Dual Payers" tab on LG Member Sync for Ian, and a
   notice on /manage-subscription/ for the member — so the first person to
   notice a double charge is the one paying it. Never reconciled silently.
 - **Dual-payer census (read-only, 8/19). LIVE: ZERO.** 1,737 Patreon rows /
@@ -742,7 +742,7 @@
 - Live catalogue EMPTY (planned 8/11 reset; zz_truncsnap_20260811 snapshots
   hold the old test rows). Dev2 registers Looth LITE ($5/$60) + Looth PRO
   (placeholder $11/$132). Registration at go-live gates on IAN'S PRICE
-  DECISION (dash: Settings → LG Member Sync). Per-tier control is BUILT (#148):
+  DECISION (dash: LG Member Sync). Per-tier control is BUILT (#148):
   the options are now lgms_stripe_price_<tier>_<cadence>, and the old
   lgms_stripe_price_month/_year pair is a read-only fallback for the DEFAULT
   tier only. Dev2's pair currently names PRO's $9/$99 — worth knowing when
