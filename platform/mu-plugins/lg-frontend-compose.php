@@ -328,10 +328,23 @@ function lg_fc_paywall_target(array $current, string $choice): ?string
             break;
         }
     }
+    /* Ian, 8/21, after a submitted print came back with NO tier at all:
+       "It should either be public for anyone looth lite for paywalled."
+       So the control always lands on ONE of the two — never nothing.
+
+       THE BUG THIS REPLACES: 'public' returned null unless the post was ALREADY
+       paywalled, so a brand-new post (no terms yet) got no write and shipped
+       untiered — which is what he screenshotted.
+
+       The one preserve that survives, and why: choosing 'behind' on a post that
+       is already Looth PRO keeps PRO. Pro is behind the paywall, so the member's
+       intent is already satisfied, and writing Lite there would be a silent
+       DEMOTION nobody asked for. Choosing 'public' is always honoured — that is
+       an explicit member decision to open it up. */
     if ($choice === 'behind') {
         return $nonPublic ? null : LG_FC_PAYWALL_BEHIND;
     }
-    return $nonPublic ? LG_FC_PAYWALL_PUBLIC : null;
+    return LG_FC_PAYWALL_PUBLIC;
 }
 
 /**
@@ -1017,7 +1030,12 @@ function lg_fc_route(): void
         'return'             => $edit
             ? add_query_arg('lg_fc', 'saved', get_permalink($edit) ?: home_url('/'))
             : (lg_fc_post_status($type, get_current_user_id()) === 'pending'
-                ? add_query_arg('lg_fc', 'review', home_url('/compose/' . $type . '/'))
+                /* ⚠️ THE ROUTE IS /compose/?type=<t>, NOT /compose/<t>/. The path
+                   form 404s, and WP's redirect_canonical then GUESSES the post-type
+                   archive — which is how a member landed on the OLD THEME's bare
+                   /loothprint/ page instead of their thank-you (Ian, 8/21, with a
+                   screenshot). Build the route the way the route is registered. */
+                ? add_query_arg(['type' => $type, 'lg_fc' => 'review'], home_url('/compose/'))
                 : add_query_arg('lg_fc', 'posted', get_permalink() ?: home_url('/'))),
     ]);
 
@@ -1369,7 +1387,26 @@ function lg_fc_render(string $type, int $edit = 0, bool $embed = false): void
       <strong>Submitted — thank you!</strong>
       Your loothprint is in for review and will appear on the site once it’s
       approved. You’ll find it under your profile after that.
+      <p class="lgfc__backhub">
+        Taking you back to the Hub…
+        <a class="lgfc__backhub-link" href="/hub/">Go now</a>
+      </p>
     </div>
+    <?php /* Ian, 8/21: "It should just say thank you for your post and then revert
+             to the hub", and "also something about awaiting approval". The message
+             carries the approval line; this returns them.
+
+             THE LINK IS NOT DECORATION — it is the whole behaviour when scripting
+             is off or the timer never fires, which is why it ships in the markup
+             rather than being written by the script. The delay is long enough to
+             read two sentences; a member who clicks first simply wins the race. */ ?>
+    <script>
+    (function () {
+      var el = document.querySelector('.lgfc__backhub');
+      if (!el) return;
+      setTimeout(function () { window.location.href = '/hub/'; }, 5000);
+    })();
+    </script>
   <?php endif; ?>
   <?php if ($edit && lg_fc_page_is_frozen($edit)): ?>
     <div class="lgfc__frozen" role="status">
