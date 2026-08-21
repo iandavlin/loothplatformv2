@@ -1842,6 +1842,35 @@ echo "=== GATE 82: approval starts work by itself — for PRE-STAGED work, and n
 run "approved-autospin" python3 "$(dirname "$0")/approved-autospin-gate.py"
 echo
 
+echo "=== GATE 84: the stuffing detector bans at the LOGIN DOOR — and nothing else does ==="
+# #162. Ian 8/20: "can we just add it to a file of known offenders and nip it at
+# our webserver?" — narrowed the same day to "this should only block ips that try
+# several different logins in one block".
+#
+# ⚠️ THE OBVIOUS IMPLEMENTATION TAKES THE SITE OFF THE INTERNET. Neither box
+# restores real client IPs, so $remote_addr is a CLOUDFLARE EDGE NODE; a deny
+# list keyed on it bans the edge and with it every visitor behind that edge. The
+# real client is in CF-Connecting-IP — a header anyone can forge by connecting
+# straight to the world-knockable origin, which would let an attacker put an
+# address of their choosing behind our own deny rule. §C and §G8 are those two
+# facts, asserted: the address that gets banned is what the connection PROVES.
+#
+# Runs the real mu-plugins against a stubbed WordPress, and the real generated
+# nginx config on a THROWAWAY unprivileged nginx on a per-run port with the door
+# pointed at a socket that does not exist — 403 means refused, 502 means it
+# reached the hand-off to PHP. No network, no root, no DB, no WordPress, no FPM,
+# nothing shared with the box, so two suites at once cannot make each other red.
+#
+# Every absence is paired with a liveness control one condition away, because
+# "nothing was banned" is equally true of a working guard and a harness that can
+# never ban anything. Red-first: tools/gates/auto-ban-redfirst.py, 32 mutations
+# each reddening its OWN named assertion plus 4 no-ops proven inert, on file
+# snapshots and never `git checkout --`. It found a real renderer bug (an empty
+# env value read as unset, so the nginx test could not be switched off and every
+# offline render rolled itself back) and two ways the gate had defeated itself.
+run "auto-ban" python3 "$(dirname "$0")/auto-ban-gate.py"
+echo
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"

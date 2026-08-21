@@ -20,7 +20,10 @@
  *     - Dedup: at most one alert per (user_id + IP) per 60 minutes.
  *     - Credential-stuffing: if ONE IP fails against many DISTINCT real accounts
  *       in a short window, the per-account alerts are suppressed and a single
- *       "possible credential stuffing from <IP>" alert is sent instead.
+ *       "possible credential stuffing from <IP>" alert is sent instead. At that
+ *       same moment — and at no other — it fires do_action('lg_login_stuffing_detected'),
+ *       the decoupled signal the #162 auto-ban listens for. Nothing here decides
+ *       to block anyone; see lg-auto-ban.php.
  *
  *   Delivery: every alert carries the header `X-LG-Poller-Intent: notify`, the
  *   agreed marker that bypasses BOTH the poller pre_wp_mail gate
@@ -197,6 +200,36 @@ function lg_login_monitor_wp_failed( $username ): void {
 				set_transient( $stuff_key, $now, lg_login_monitor_stuffing_alert_ttl() );
 				lg_login_monitor_send_stuffing_alert( $ip, $ua, count( $set ), $now );
 				$alerted = true;
+
+				/**
+				 * #162 — the auto-ban signal, fired at exactly this moment and
+				 * nowhere else. Same threshold, same window, no new detection:
+				 * Ian's narrowing was "this should only block ips that try
+				 * several different logins in one block", and this `if` is that
+				 * sentence in code.
+				 *
+				 * DECOUPLED on purpose, same shape as `lg_login_blocked` above.
+				 * This file's job is to notice and to tell Ian; deciding what to
+				 * do about it belongs to whoever is listening, and on a box where
+				 * nothing listens this line costs nothing and changes nothing.
+				 *
+				 * ⚠️ `ip` HERE IS NOT TRUSTWORTHY AND MUST NOT BE BANNED. It comes
+				 * from lg_login_monitor_client_ip(), which honours CF-Connecting-IP
+				 * without checking who sent it — fine for decorating an alert, an
+				 * attack when it selects who gets blocked, because the origin is
+				 * reachable directly and anyone may forge that header. It is passed
+				 * only so a listener can record what was CLAIMED. The listener
+				 * derives the address it acts on from the connection itself; see
+				 * lg_ab_vouched_ip() in lg-auto-ban.php.
+				 */
+				do_action( 'lg_login_stuffing_detected', array(
+					'ip'         => $ip,
+					'ua'         => $ua,
+					'accounts'   => count( $set ),
+					'window'     => $window,
+					'first_seen' => $set ? min( array_map( 'intval', $set ) ) : $now,
+					'time'       => $now,
+				) );
 			}
 			$suppressed = 'stuffing';
 			lg_login_monitor_log_event( array(

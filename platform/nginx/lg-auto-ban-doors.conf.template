@@ -1,0 +1,68 @@
+# === lg-auto-ban — SERVER-CONTEXT half: the doors (#162) ==================
+# TEMPLATE. tools/infra/install-auto-ban.sh renders this to the box-local
+# /etc/nginx/snippets/lg-auto-ban-doors.conf, substituting the box's FPM socket
+# and docroot. The main vhost pulls it in with
+#     include /etc/nginx/snippets/lg-auto-ban-*.conf;
+# — a glob, so a box that has never run the installer matches nothing and serves
+# these endpoints exactly as it does today. That is what protects live by absence.
+#
+# ⚠️ REQUIRES conf.d/lg-auto-ban-maps.conf, which defines every $lg_ab_* variable
+# used below. Installed and removed as a pair; see that file's header.
+#
+# SCOPE: THE LOGIN DOOR, NEVER THE SITE. Ian's 8/20 revision, after asking "are
+# there any other ways building this will block a real user?" — stuffing rents
+# hacked home routers, one carrier-NAT address fronts thousands of members, and a
+# shared VPN exit is one address for everybody on it. So a caught innocent keeps
+# reading the site, keeps any session they already have, and can still get in
+# through Patreon. The attacker loses the only thing they came for.
+
+# ── The WordPress password form ───────────────────────────────────────────────
+# An exact-match location outranks the vhost's `location ~ \.php$`, so this is
+# the same FastCGI hand-off with one question asked first.
+location = /wp-login.php {
+    error_page 462 =403 /lg-error/login-blocked.html;
+    if ($lg_ab_block) { return 462; }
+
+    include snippets/fastcgi-php.conf;
+    fastcgi_pass unix:@FPM_SOCK@;
+    fastcgi_read_timeout 300;
+}
+
+# ── The membership app's password endpoint ────────────────────────────────────
+# A second password door, approved into scope by Ian 2026-08-20. The stuffing
+# detector has never watched it — it checks passwords with wp_check_password()
+# and so fires no wp_login_failed hook — but a blocklist with an unlocked door
+# beside it is a blocklist that only reads as working. It keeps its own existing
+# throttle (6 per email / 15 min, 21 per IP / hour) in every state.
+#
+# EVERY request here is a password attempt, so there is no door/not-door
+# question: $lg_ab_listed alone decides.
+#
+# JSON, NOT THE HTML PAGE. This endpoint is called by fetch() and its caller does
+# res.json(); handing it the branded error page would surface as an unexplained
+# script failure instead of the sentence the person needs to read.
+#
+# ⚠️ The FastCGI lines below MIRROR the vhost's `location ^~ /wp-json/lg-member-sync/`
+# block. An exact-match location wins over that prefix, so if the parent ever
+# changes, this must change with it — gate 84 asserts the two stay in step.
+location = /wp-json/lg-member-sync/v1/auth {
+    default_type application/json;
+    if ($lg_ab_listed) { return 403 '{"code":"lg_login_blocked","blocked":true,"message":"Sign-in from your network is paused for a day after several failed password attempts. You can still sign in with Patreon, or email info@loothgroup.com and we will lift it."}'; }
+
+    include fastcgi.conf;
+    fastcgi_param SCRIPT_FILENAME @DOCROOT@/index.php;
+    fastcgi_param SCRIPT_NAME /index.php;
+    fastcgi_pass unix:@FPM_SOCK@;
+    fastcgi_read_timeout 300;
+}
+
+location = /wp-json/lg-member-sync/v1/gift-auth {
+    default_type application/json;
+    if ($lg_ab_listed) { return 403 '{"code":"lg_login_blocked","blocked":true,"message":"Sign-in from your network is paused for a day after several failed password attempts. You can still sign in with Patreon, or email info@loothgroup.com and we will lift it."}'; }
+
+    include fastcgi.conf;
+    fastcgi_param SCRIPT_FILENAME @DOCROOT@/index.php;
+    fastcgi_param SCRIPT_NAME /index.php;
+    fastcgi_pass unix:@FPM_SOCK@;
+    fastcgi_read_timeout 300;
+}
