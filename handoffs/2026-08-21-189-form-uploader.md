@@ -2,6 +2,13 @@
 
 Branch `189-form-uploader`. Issue #189. Gate **88, extended** (no number minted).
 
+TEST-URL #189: /footer-mockups/189-uploader/
+ACTION #189: Look at the form's new uploader — four pictures, then try it
+
+*(Those two lines are `lanes-page.py` records, not prose — see PAGE.md's TEST-URL
+convention. The door is the shot gallery rather than the form itself because Ian
+decides from pictures, and the gallery links straight through to the live form.)*
+
 Ian, 2026-08-21: *"Would it be worth it to forsake the wordpress media pool and
 put our on interface right on the form 1 in 1 out if over ?"* — offered the
 deeper version (our own storage) and the interface-only version, he chose the
