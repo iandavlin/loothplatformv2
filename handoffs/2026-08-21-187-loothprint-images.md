@@ -39,7 +39,7 @@ Four commits:
 2. **`39a0004` — the fix.** One helper (`Img`), four emitters. **GREEN on the
    branch.**
 3. **`f3628a0`** — handoff, domain rule, and the measurement trap.
-4. **`46c0efc`** — the gallery block (71 in use), the fifth emitter.
+4. **`f0da8a8`** — the gallery block (71 in use), the fifth emitter.
 
 ## Gate state
 
