@@ -916,7 +916,30 @@ body.view-grid .lg-chrome__back { display: inline-flex; }
   display: inline-flex; align-items: center; justify-content: center;
   font: 700 12px/1 var(--lg-font-sans);
 }
-.lg-chrome__account-name { font: 600 13px/1 var(--lg-font-sans); }
+/* One line, always (#173) — the mirror of lg-shared/site-header.css's rule; the
+   long derivation of the 934 lives there. Surfaces that load archive.css also
+   load site-header.css AFTER it, so that copy wins here — this one exists so a
+   surface loading archive.css alone does not keep the defect. */
+.lg-chrome__account-name {
+  font: 600 13px/1 var(--lg-font-sans);
+  max-width: clamp(0px, calc(100vw - 934px), 220px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ⚠️ ONE STEP EARLIER THAN THE ≤820 HIDE, AND FOR A DIFFERENT REASON.
+   Below ~1000 the clamp has fewer than half a dozen characters left to give,
+   and measured, that is what it hands over: 66px at 1000, 16px at 950, 0 by
+   934. A chip showing nothing but "…" is worse than no chip — it spends the
+   row's last 8px of gap to say nothing, and at 0px it spends them to render
+   literally nothing. So the name drops here and the account menu carries it,
+   which is the same trade the ≤820 rule below already makes for the tablet.
+   That rule stays where it is: it is subsumed by this one, not replaced by it,
+   and archive.css mirrors it. */
+@media (max-width: 1000px) {
+  .lg-chrome__account-name { display: none; }
+}
 .lg-chrome__tier {
   display: inline-flex; align-items: center;
   padding: 3px 8px; border-radius: 999px;
