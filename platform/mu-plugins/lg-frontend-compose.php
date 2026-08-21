@@ -544,7 +544,7 @@ function lg_fc_types(): array
                 'label'  => 'Who can get the files?',
                 'behind' => 'Members only',
                 'public' => 'Anyone',
-                'hint'   => 'Members only keeps your print files behind the paywall. This is the usual choice.',
+                'hint'   => 'Members only keeps your print files behind the paywall.',
             ],
             // The mock drops the featured_image control and promises the footer
             // line above instead. lg_fc_hero_from_gallery() is what keeps that
