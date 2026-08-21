@@ -77,6 +77,42 @@ each price id.
 
 ---
 
+## 4b. The catalogue to recreate, exactly (Ian ruled the FULL set, 8/21)
+
+Measured out of dev2's own tables 8/21 — this IS the sandbox you already built,
+so live day is copy-work, not design work.
+
+**SIX products, not two.** Regional pricing is carried on the PRODUCT
+(`products.region_tag`), and routing picks a different product rather than a
+different price on the same one.
+
+| tier ref | product name | region_tag | monthly | yearly |
+|---|---|---|---|---|
+| `looth2` | Looth LITE | *(none)* | $5.00 | $55.00 |
+| `looth2` | Looth LITE — Regional A | `regional_a` | $4.00 | $30.00 |
+| `looth2` | Looth LITE — Regional B | `regional_b` | $3.00 | $20.00 |
+| `looth3` | Looth PRO | *(none)* | $11.00 | $120.00 |
+| `looth3` | Looth PRO — Regional A | `regional_a` | $8.00 | $65.00 |
+| `looth3` | Looth PRO — Regional B | `regional_b` | $6.00 | $40.00 |
+
+All USD, priority 100, recurring. Twelve prices in total.
+
+⚠️ **THE TIER LINK IS OURS, NOT STRIPE'S.** `products.ref` (`looth2`/`looth3`)
+is what makes a price mean a membership; Stripe only syncs `name` and `active`
+down. A price created in Stripe and left unmapped **grants nothing** and
+checkout refuses it with "not mapped to a membership tier" — which is precisely
+what has been protecting live while the catalogue was empty.
+
+⚠️ **NONE of the dev2 IDs transfer.** They are test-mode objects
+(`prod_RerXcVx8RqqS0P`, `price_1U6YbG…`); live mode issues its own. Record the
+live IDs as they are created.
+
+**Housekeeping while in there:** two stale prices are still `active=1` on dev2
+with no interval — $66.00 and $145.00, left from early setup. Do not recreate
+them, and deactivate them on dev2 so nothing can select them.
+
+---
+
 ## 5. The allowlist — the door (Ian)
 
 Testers must each have a WordPress account, then:
