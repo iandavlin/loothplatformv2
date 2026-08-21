@@ -320,3 +320,83 @@ throughout this lane. It is the cheapest attribution tool on this box.
    not a sixth footnote.
 5. **`member_cookies()` in `loothprint-paywall-gate.py` still does not mint a
    member** (#186's finding). It mints `qa-disposable`, an administrator.
+
+---
+
+## ⚠️ MY DARK SCREENSHOTS WERE WRONG, and that is worth more than the fix
+
+The harness set `data-lguser-theme="dark"` on `<html>` and shot the page. On this
+platform that is **not how dark is applied**: `app-settings.js` **re-points the
+`--lg-*` tokens as inline style on `<html>`** and only then stamps the attribute
+(this file's own CSS header says so — *"Dark re-points the `--lg-*` tokens as
+inline styles on `<html>`, so a file that reads tokens follows automatically"*).
+
+Set the attribute alone and every `var(--lg-…, <light fallback>)` stays light.
+So each "dark" shot was **a light page wearing a dark attribute** — a white card
+with dark inputs — and it read as a defect in the new controls.
+
+The harness now **reads the dark palette out of `webroot/app-settings.js`** and
+applies it inline, so a retuned palette cannot leave it photographing last
+month's dark. Nothing is written to `localStorage`: a stamped theme key persists
+on the **shared** chrome profile and would take every other lane's browser dark
+with it. And it asserts the delta before believing any dark picture —
+`rgb(255,255,255)` in light, `rgb(30,33,36)` in dark.
+
+### What a true dark render then showed: three colours that never go dark
+
+Audited every `var(--lg-*)` the stylesheet reads against what dark actually
+re-points (app palette ∪ the page's own dark block):
+
+| token | uses | |
+|---|---|---|
+| `--lg-card` | 3 | one of them the type toggle — **pre-existing** |
+| `--lg-error` | 3 | |
+| `--lg-ink-soft` | 4 | dark grey text on a dark background |
+
+All three now re-pointed in the page's own dark block, **one line**. `--lg-paper`
+and `--lg-rust-tint` were already there, which is why only these three were left.
+
+**So the nine hardcoded per-element dark overrides I had written are deleted.**
+They existed to compensate for the missing `--lg-card`; keeping them would have
+frozen this control at one palette while the site was retuned around it. One
+survives with its reason stated: the thumbnail well wants to be a shade *darker*
+than the tile it sits in, and there is no token for "one step down".
+
+### Gate 88 §K makes the class automatic
+
+Every colour token `lg_fc_css()` reads must have a dark value in
+`app-settings.js` or in the page's own re-point. A **cross-file** check, which is
+why it is not a browser test — and it says plainly what it **cannot** see:
+whether the value is a *good* colour. That is gate 47's job and a human's.
+
+`M29` reddens it.
+
+## Two more found by looking, not by the suite
+
+- **`.is-full` dimmed the drop-zone to `opacity:.72`** — which says *disabled*
+  about a control that is fully live: dropping another photo at the limit is what
+  offers the swap, the whole feature. Removed. The class is kept as a state hook
+  so the note saying *do not re-add a dim* has somewhere to live.
+- **The shots harness teardown reported `posts=0 files=0`** while quietly relying
+  on `wp_delete_user`'s cascade — the exact trust it exists to replace.
+  **`WP_Query`'s `'any'` EXCLUDES `auto-draft`**, and the composing post is an
+  auto-draft. The numbers were true and meaningless. Now `posts=1 files=11
+  stamped_left=0`.
+
+## A tooling trap this lane paid for twice in one hour
+
+**`pgrep -f '<pattern>'` matches the harness WRAPPER whose command line contains
+your literal command text.** The bracket trick (`compose[-]limits`) protects
+against matching `pgrep` itself; it does **not** protect against the shell
+wrapper that carries the pattern verbatim. I watched the wrapper, it exited
+immediately, and I was told a 35-minute run had "finished" while it was still on
+its first mutation. Capture `$!` of the job, or pick the interpreter line out of
+`ps -eo pid,cmd` — never `pgrep -f` on your own command text.
+
+## Final numbers
+
+- **Gate 88: 189 assertions, both flag states, GREEN** (was 110).
+- **Red-first: 31 mutations, 2 no-op controls**, restore verified byte-for-byte.
+- **Browser suite: 33/33**, as a per-run real `looth1` member.
+- **Transport: proven through the real `bfu_chunker`**, refusal at the crossing
+  chunk, spool bounded at 8MB for a 12MB file.

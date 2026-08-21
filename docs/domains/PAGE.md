@@ -444,6 +444,30 @@ pre-existing on main. Any surface that hides a control by setting `hidden` from
 script needs `[hidden]{display:none}` in its own stylesheet, or the attribute
 does nothing.
 
+### Two more from #189 that reach every surface on this box
+
+**3. Setting `data-lguser-theme` is NOT setting the theme.** Dark is applied by
+`app-settings.js` **re-pointing the `--lg-*` tokens as inline style on `<html>`**,
+and only then stamping the attribute. A harness that stamps the attribute alone
+photographs a **light page wearing a dark attribute** — every
+`var(--lg-…, <light fallback>)` stays light — and the result reads as a defect in
+whatever is drawn on top. Read the palette out of `webroot/app-settings.js` and
+apply it inline; never write `lg-set-theme` to localStorage, which persists on
+the **shared** chrome profile and takes every other lane's browser dark. Assert
+the delta (a card colour that changes) before believing any dark shot.
+
+⚠️ And the corollary: **a colour token with no dark value silently stays light.**
+Auditing the compose stylesheet that way found three — `--lg-card` (used by the
+type toggle since before #189), `--lg-error`, `--lg-ink-soft`. Gate 88 §K now
+checks that class automatically for that file; **any other stylesheet on this box
+has the same exposure and nothing checking it.**
+
+**4. `pgrep -f '<your command>'` matches the harness WRAPPER.** The bracket trick
+(`foo[-]bar`) stops `pgrep` matching itself; it does **not** stop it matching the
+shell wrapper that carries your command text verbatim. #189 watched the wrapper,
+it exited at once, and a 35-minute run was reported "finished" on its first step.
+Capture `$!`, or pick the interpreter line out of `ps -eo pid,cmd`.
+
 ### Reported by #189, not fixed
 
 - **Gate 88 §E was RED on main** and would have blocked every lane: it required
