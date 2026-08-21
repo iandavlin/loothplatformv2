@@ -105,9 +105,13 @@ final class TesterUnlockPanel
 
         <?php if ( $u['mode'] === 'dash' ) : ?>
             <p style="margin-bottom:.35em;"><strong>The live link — send this to a tester:</strong></p>
-            <p style="display:flex;gap:.5em;align-items:center;max-width:760px;">
+            <?php /* Wide enough for the WHOLE URL at this font — host + /lgjoin/
+                     + a 48-hex token is ~92 characters, and a visibly clipped
+                     link undermines the one thing this panel is for. Copy and
+                     click-to-select both take the full value either way. */ ?>
+            <p style="display:flex;gap:.5em;align-items:center;max-width:900px;">
                 <input type="text" id="lgms-tester-url" readonly
-                       style="flex:1;font-family:monospace;font-size:13px;"
+                       style="flex:1;font-family:monospace;font-size:12.5px;"
                        value="<?php echo esc_attr( $u['url'] ); ?>"
                        onclick="this.select()">
                 <button type="button" class="button" id="lgms-tester-copy">Copy</button>
