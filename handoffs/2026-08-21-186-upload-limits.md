@@ -328,6 +328,10 @@ insert. **A fixture must actually be in the state it claims.**
 
 ## Reported, NOT fixed
 
+0. **⚠️ A 5GB member upload limit against 4.6G free on root** — see *A live risk
+   this lane did not create* above. The single most consequential thing found
+   here, and it is not this lane's to fix.
+
 1. **`member_cookies()` does not mint a member — copy the pattern below instead.**
    `loothprint-paywall-gate.py` mints a session for `qa-disposable`, which is
    `administrator` + `bbp_keymaster` + `looth1`. Any gate copying it and calling
@@ -358,5 +362,19 @@ insert. **A fixture must actually be in the state it claims.**
 2. **The print-file field's declared `mime_types = zip` is not enforced** and 48
    STLs are already stored. Ian's ruling needed on whether STLs are welcome
    (they appear to be, in practice).
-3. **The `page` label on #186 is wrong** — the fourth in four days. Recorded in
+3. **`compose-richtext-gate.py` CANNOT RUN on this box, and it is NOT mine.**
+   It dies with `could not run the shipped functions inside WordPress: PHP
+   Warning: Constant DISABLE_WP_CRON already defined …` — a wp-cli warning it
+   treats as fatal output. **Attributed properly rather than assumed**: I
+   snapshotted my file, put `origin/main`'s copy of `lg-frontend-compose.php` in
+   its place, re-ran, got the identical CANNOT RUN and exit 2, and restored
+   byte-for-byte. It fails the same way on main. It matters because a CANNOT RUN
+   is exit 2, which makes `run-all.sh` report GATES INCOMPLETE — not red, but not
+   green either.
+   *(`compose-gate.py` also exits 2, but only because it requires `--allowed` /
+   `--denied` or `--baseline`; that is its documented usage, not a failure.
+   `compose-media-gate.py` — the one that actually covers this lane's territory,
+   "no orphans, and each post keeps its own library" — is **GREEN**.)*
+
+4. **The `page` label on #186 is wrong** — the fourth in four days. Recorded in
    `docs/domains/PAGE.md`; it needs a ruling, not a fifth footnote.
