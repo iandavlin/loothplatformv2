@@ -57,6 +57,7 @@ foreach ( [ '/src/StripeLifecycle.php', '/src/Wp/CheckoutRestController.php',
 if ( ! defined( 'ABSPATH' ) ) { define( 'ABSPATH', '/stub/' ); }
 
 $GLOBALS['OPTS'] = []; $GLOBALS['LOG'] = []; $GLOBALS['ROUTES'] = [];
+$GLOBALS['OPTS'][ 'lgms_checkout_audience' ] = 'off';   // #181: this file's subject is not the audience
 $GLOBALS['CUR_UID'] = 0; $GLOBALS['USERMETA'] = []; $GLOBALS['CREATED'] = [];
 
 function get_option( $n, $d = false ) {
@@ -105,6 +106,12 @@ require_once $BASE . '/src/Membership/PatreonStanding.php';
 // SINGLE-tier behaviour, which is the flag's OFF state and stays the default —
 // so nothing below arms it, and every assertion here is unchanged.
 require_once $BASE . '/src/Membership/MultiTier.php';
+// THE THIRD TIME (#181). The door now asks CheckoutAudience who may buy, and
+// that option DEFAULTS TO `allowlist` — enforcing — so this file needs the
+// class AND needs the audience pinned OFF: its subject is what the session
+// metadata carries, not who is invited. Gate 86 owns the audience, including
+// the 403 at this door.
+require_once $BASE . '/src/Membership/CheckoutAudience.php';
 require_once $BASE . '/src/Wp/CheckoutRestController.php';
 
 use LGMS\StripeLifecycle;
@@ -117,6 +124,7 @@ function scenario(): void {
     $pdo->exec( 'CREATE TABLE wp_user_bridge (customer_id INTEGER PRIMARY KEY, wp_user_id INTEGER UNIQUE, synced_at TEXT)' );
     $GLOBALS['PDO'] = $pdo;
     $GLOBALS['OPTS'] = []; $GLOBALS['LOG'] = []; $GLOBALS['ROUTES'] = [];
+$GLOBALS['OPTS'][ 'lgms_checkout_audience' ] = 'off';   // #181: this file's subject is not the audience
     $GLOBALS['CUR_UID'] = 0; $GLOBALS['USERMETA'] = []; $GLOBALS['CREATED'] = [];
     \LGMS\Db::$calls = 0;
     StripeLifecycle::$confirmFactory = null;

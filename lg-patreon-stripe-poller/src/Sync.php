@@ -35,6 +35,15 @@ final class Sync
             return [ 'ok' => false, 'message' => "customer {$customerId} not found" ];
         }
 
+        // ⚠️ THE CHECKOUT AUDIENCE FENCE IS INSIDE THIS CALL, not beside it
+        // (#181). The soft-launch fence further down guards the GRANT, and it
+        // has never guarded the account: by the time control reaches it a
+        // stranger who paid already had a WordPress user, a bridge row and a
+        // welcome. `UserProvisioner::findOrProvision` now refuses to provision
+        // anyone outside the cohort and throws, which the catch below turns
+        // into `provision failed` — so no opinion is reported and the Arbiter
+        // never runs. Already-bridged members return before the fence and are
+        // untouched in every state.
         try {
             $wpUserId = UserProvisioner::findOrProvision(
                 $customerId,

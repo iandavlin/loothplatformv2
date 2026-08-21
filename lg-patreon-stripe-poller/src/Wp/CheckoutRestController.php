@@ -131,6 +131,37 @@ final class CheckoutRestController
             return new \WP_REST_Response( [ 'error' => 'not logged in' ], 401 );
         }
 
+        // WHO MAY BUY (#181, option `lgms_checkout_audience`, default
+        // `allowlist`). Being signed in is not the same as being invited: this
+        // route has always minted a subscription session for ANY logged-in
+        // member, which during a soft launch is every one of the ~1,900
+        // accounts on the box.
+        //
+        // Keyed on the member's SESSION user id, never on anything in the body
+        // — the id cannot be typed in, so this door has none of the
+        // email-substitution slack the Slim door has to live with.
+        //
+        // ⚠️ NO ADMIN BYPASS. An administrator sails through a gate he is
+        // trying to test and concludes it works; this repo has paid for that
+        // shape three times. CheckoutAudience asks the cohort and only the
+        // cohort — keeper's ruling (b), 2026-08-21.
+        //
+        // Placed AFTER the session resolves (there is no audience question
+        // about a caller with no identity — that is a 401) and BEFORE any
+        // Stripe call, so a refusal costs nothing and creates nothing.
+        if ( ! \LGMS\Membership\CheckoutAudience::allowsUser( $uid ) ) {
+            \LGMS\Membership\CheckoutAudience::logRefusal(
+                \LGMS\Membership\CheckoutAudience::D_WP_CHECKOUT,
+                (string) $user->user_email,
+                $uid,
+                'signed in, not in the soft-launch cohort',
+            );
+            return new \WP_REST_Response( [
+                'error'    => \LGMS\Membership\CheckoutAudience::refusalMessage(),
+                'audience' => \LGMS\Membership\CheckoutAudience::state(),
+            ], 403 );
+        }
+
         // ONE PAYMENT SOURCE PER MEMBER (Ian 2026-08-19, #150): a member whose
         // membership is already being charged on Patreon does not get to buy it
         // a second time here. Behind `lgms_double_pay_block`; with the flag off

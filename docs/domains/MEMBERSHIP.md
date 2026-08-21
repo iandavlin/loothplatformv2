@@ -180,6 +180,106 @@
   `PatreonStanding` without either being added to its require list. Revived:
   20 assertions, including the *"body chooses NOTHING"* section.
 
+## State (8/21, #181 — the cohort becomes real in the CHECKOUT path)
+
+- **THE LAW THIS ADDS (Ian 8/21, decision box):** *"Fix before go-live."* #180
+  named the gap; this closes it. **`lgms_checkout_audience`** is now the one
+  answer to *"may this person buy, and may they be provisioned"* —
+  `off` / `allowlist` / `on`, #170's audience shape, reading the ONE cohort list
+  through `StripeLifecycle::inCohort()`.
+- ⚠️ **IT DEFAULTS TO `allowlist` — ENFORCING — AND THAT IS THE ONLY FLAG ON
+  THIS RAIL THAT DOES** (keeper ruling (a), 8/21). The reason is worth keeping:
+  the enforcing state must be the state the boxes actually run, or it is never
+  exercised before the night it has to work. Everything else here defaults dark
+  so a merge lands harmlessly; this one would have shipped a fence nobody had
+  ever walked into.
+- **THE HOLE, REPRODUCED — do not re-derive it.** On dev2 as served, anon and
+  cookieless, with a real price id from the **public** `/billing/v1/products`
+  list: `POST /billing/v1/checkout` → **HTTP 200 + a live Stripe
+  `clientSecret`**. After: **403**, same request, same price id. A cohort
+  member still gets a real `clientSecret`. Gifts are fenced too.
+- **TWO HALVES, AND ONLY ONE CAN BE ROUTED AROUND.** The MINT half refuses
+  early and honestly at all three doors. The PROVISION half lives in
+  `UserProvisioner::findOrProvision` and is the backstop: it reads the option
+  in-process with **no network**, so it fails CLOSED where the Slim probe
+  cannot, and it is what stops a session minted *before* the cohort changed —
+  no user, no bridge, no grant.
+- ⚠️ **THE FENCE SITS ONE LINE BELOW THE EXISTING-BRIDGE EARLY RETURN, and the
+  placement is the design.** Below it, an already-bridged member is untouched in
+  every state, so their sweeps keep landing — **grants AND retractions**. Above
+  it, the fence would freeze real members the moment the cohort narrowed, and
+  would do it silently.
+- ⚠️ **`Sync::customer`'s EXISTING cohort fence was never the answer, and this
+  corrects a natural misreading of it.** It is real, but it sits **after**
+  `findOrProvision` and behind a **different** flag (`lgms_stripe_lifecycle`,
+  off on every box). So it has only ever withheld the ROLE: the account, the
+  bridge row, the welcome mail and `looth_tier_changed` all fired for a stranger
+  who paid.
+- ⚠️ **NO ADMIN BYPASS** (keeper ruling (b)). The header's
+  `$caps['stripe_testgroup']` is `manage_options || inCohort()` — right for a
+  *button*, wrong for a *fence*: an administrator who sails through cannot see
+  it fail, and Ian is an administrator. He is in the dev2 cohort **by list**
+  (id 1, added by keeper 8/21), not by privilege. dev2's cohort is now **6**:
+  `[854, 1887, 1938, 1953, 2047, 1]`.
+- ⚠️ **UNKNOWN REFUSES, with 503 and a DIFFERENT SENTENCE from the 403.** "We
+  could not verify" and "not open for sale yet" need opposite fixes — go and
+  find out why the loopback is failing, versus add them to the list. One shared
+  sentence sends whoever is debugging down the wrong one.
+- ⚠️ **THE SHARED-SECRET REST CHANNEL WAS DEAD, AND THIS IS THE FINDING THAT
+  OUTLIVES THIS ISSUE.** Measured on dev2 8/21, from 127.0.0.1, **with the
+  correct secret**: every server-to-server route in `lg-member-sync/v1` answers
+  **401 `bb_rest_authorization_required`**, because BuddyBoss's
+  `bb_restricate_rest_api` pre-empts the REST stack before any route's own
+  `permission_callback` whenever `bb-enable-private-rest-apis` is `1` — **and it
+  is re-armed by every DB reload**. Consequences nobody had noticed: **#150's
+  double-pay probe has been answering UNKNOWN on every call**, and the Slim
+  app's post-checkout sync ping is dead (the five-minute `Sync::all()` sweep has
+  been covering for it). #181 exempts **exactly one route** through BuddyBoss's
+  own documented `bb_exclude_endpoints_from_restriction` hook; the other three
+  are reported, not opened.
+- **looth4 IS RESPECTED, AND THE RESPECT IS THE ARBITER'S, NOT MINE.** Ian 8/21:
+  *"looth4 is the everything bypass the stripe side of membeship needs to
+  respect."* `Arbiter::sync` has an unconditional looth4 early-return and is the
+  **only** writer of `wp_capabilities`; `RetractionSweep` is detection-only and
+  never runs the Arbiter. Gate 86 §I proves it with the **real** Arbiter, paired
+  with a liveness leg showing the same sweep DOES demote a non-comp member.
+  #181's fence never calls `remove_role`/`add_role` at all.
+- **UNEXPIRED looth4, not looth4** (keeper's sharpening, 8/21).
+  **`LGMS\Membership\CompStanding`** is that predicate — `holdsComp`,
+  `expiresAt`, `isActiveComp`, `isExpiredComp`, `describe` — read-only, enforcing
+  nothing. ⚠️ **#183 SHOULD INHERIT THIS CLASS RATHER THAN WRITE A SECOND ONE.**
+  It is the first and only reference to `looth4_expires_at` in the monorepo.
+  Today it is used to make the refusal notice name a comp member instead of
+  logging them as a stranger. **Its timezone question is deliberately unsettled**
+  and is #183's to decide: the stored values are bare `Y-m-d H:i:s` with no
+  offset (`2026-07-11 15:25:00` shape), safe for a predicate nobody acts on and a
+  real decision for one that demotes people.
+- ⚠️ **AN EXPIRED COMP IS STILL PROTECTED TODAY** — measured, and gated as such
+  (§I9). Nothing enforces the date: the expiry plugin is not installed, not in
+  mu-plugins, not in `active_plugins`, and no cron event mentions it. That is
+  **#183**, ruled and queued; Ian ruled the two overdue accounts (1829, 1865)
+  are LEFT ALONE.
+- ⚠️ **THE HONEST EDGE, boarded for Ian:** a comp member who somehow reaches
+  Stripe checkout while outside the cohort **is refused like anyone else**. They
+  lose nothing — no demotion, no role write, no opinion (§I6, §I10) — and the
+  operator notice names their comp standing. Not silently changed; it is the
+  question in the handoff.
+- **DEPLOY IS ONE PULL, verified not assumed:** `/srv/lg-stripe-billing` and the
+  poller mu-plugin are BOTH symlinks into the serving checkout, so both halves
+  land atomically. The probe URL DERIVES from `LGMS_SYNC_URL`, so **no box needs
+  an env edit**.
+- **FOUR NEIGHBOURS WERE REDDENED BY THE ENFORCING DEFAULT AND ALL FOUR ARE
+  FIXED IN THE SAME COMMIT** — gates 75 and 76, plus `test-identity-gate.php`
+  and `test-checkout-session-metadata.php` (two of them **fataled at exit 255
+  with no FAIL line**; that file's own comment already warned this had happened
+  twice before — mine was the third). Each now loads the real `CheckoutAudience`
+  and pins it `off` **at every `$GLOBALS['OPTS']` reset**, never once at module
+  scope: a pin set once is silently gone by the first assertion.
+- Gate **86** (156 assertions; red-first **23/23** + 2 no-op controls).
+- **Owed:** Ian flips dev2 to the state he wants exercised (it is already
+  `allowlist` by default — no action needed to enforce; `wp option update
+  lgms_checkout_audience on` is the GA switch). #183 (comp expiry) is queued.
+
 ## State (8/21, #180 — the anonymous tester's unlock link)
 - **#180 BUILT** on `180-tester-token-url`, flag `tester-unlock` defaulted OFF
   twice over (`enabled => false` AND an empty hash), gate **85** (116

@@ -464,6 +464,17 @@ section( '§7 the checkout door chooses a tier + cadence, never a price id' );
 require_once $BASE . '/src/Membership/PatreonStanding.php';
 require_once $BASE . '/src/Wp/RestController.php';
 require_once $BASE . '/src/Wp/CheckoutRestController.php';
+$CA_FILE = dirname( __DIR__, 2 ) . '/lg-patreon-stripe-poller/src/Membership/CheckoutAudience.php';
+// ⚠️ #181 COUPLING, DECLARED RATHER THAN WORKED AROUND. `CheckoutRestController`
+// now asks LGMS\Membership\CheckoutAudience whether the signed-in member may
+// buy at all, and that option DEFAULTS TO `allowlist` — enforcing — so without
+// the two lines below every assertion in this section would get a 403 from a
+// fence this gate is not about. The real class is loaded (not stubbed) so the
+// coupling cannot drift silently, and pinned to `off` because THIS gate's
+// subject is which TIER a price sells, not who is invited. Gate 86 owns the audience
+// in all three states, including the 403 at this very door.
+require_once $CA_FILE;
+
 
 class WP_REST_Request {
     public function __construct( private array $body = [] ) {}
@@ -485,6 +496,10 @@ final class FakeCheckoutStripe {
 }
 
 function door( array $body ): WP_REST_Response {
+    // Pinned HERE, not at module scope: the per-case reset above blanks
+    // $GLOBALS['OPTS'], so a pin set once is silently gone by the first
+    // assertion — which is exactly how this read as four unrelated failures.
+    $GLOBALS['OPTS'][ \LGMS\Membership\CheckoutAudience::OPT ] = 'off';
     $GLOBALS['CURRENT_UID'] = 501;
     \LGMS\Wp\CheckoutRestController::$clientFactory = static fn (): object => new FakeCheckoutStripe();
     return \LGMS\Wp\CheckoutRestController::createSession( new WP_REST_Request( $body ) );

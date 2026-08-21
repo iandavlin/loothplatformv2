@@ -223,6 +223,21 @@ final class Plugin
         // 404 is what tells the probe to stay out of the way.
         add_action( 'rest_api_init', [ Wp\PatreonStandingRestController::class, 'maybeRegister' ] );
 
+        // WHO MAY BUY (#181, option `lgms_checkout_audience`, default
+        // `allowlist`). ⚠️ REGISTERED UNCONDITIONALLY, unlike the two above:
+        // this guard fails CLOSED, so "route missing" must not be mistakable
+        // for "audience is off" — a flushed rewrite would otherwise swing the
+        // doors open. The route always exists and reports the state instead.
+        // The filter beside it lets that one route past BuddyBoss's blanket
+        // REST restriction so its own shared-secret check is what decides;
+        // see CheckoutAudienceRestController for why that is a repair and not
+        // a bypass.
+        add_action( 'rest_api_init', [ Wp\CheckoutAudienceRestController::class, 'register' ] );
+        add_filter(
+            'bb_exclude_endpoints_from_restriction',
+            [ Wp\CheckoutAudienceRestController::class, 'exemptFromBuddyBossRestriction' ]
+        );
+
         // Front-end shortcodes (gift redemption etc.).
         add_action( 'init', [ Wp\Shortcodes::class, 'register' ] );
 

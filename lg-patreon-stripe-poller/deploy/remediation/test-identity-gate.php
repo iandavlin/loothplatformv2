@@ -35,6 +35,7 @@ foreach ( [ 'IdentityMatcher.php', 'UserProvisioner.php' ] as $f ) {
 
 $GLOBALS['USERS']   = [];   // id => ['email'=>, 'meta'=>[]]
 $GLOBALS['OPTS']    = [];
+$GLOBALS['OPTS'][ 'lgms_checkout_audience' ] = 'off';   // #181: this file's subject is not the audience
 $GLOBALS['LOG']     = [];
 $GLOBALS['MINTED']  = [];
 $GLOBALS['NOTIFY']  = [];
@@ -73,6 +74,12 @@ function lgpo_notify_onboard( ...$a ) {}
 class WP_Error {}
 
 require_once __DIR__ . '/../../src/Wp/IdentityMatcher.php';
+// #181: findOrProvision now asks CheckoutAudience whether the buyer may be
+// provisioned at all, and that option DEFAULTS TO `allowlist`. Pinned OFF
+// because this file's subject is the IDENTITY gate — a different flag, one
+// layer down. Gate 86 §C owns the audience fence, including its interaction
+// with this one (it sits ABOVE the identity gate and below the bridge return).
+require_once __DIR__ . '/../../src/Membership/CheckoutAudience.php';
 require_once __DIR__ . '/../../src/Wp/UserProvisioner.php';
 
 use LGMS\Wp\UserProvisioner;
@@ -140,6 +147,7 @@ function scenario( array $users, array $customers, array $bridges = [], $flag = 
     $GLOBALS['NOTIFY'] = [];
     $GLOBALS['LOG']    = [];
     $GLOBALS['OPTS']   = [];
+    $GLOBALS['OPTS'][ 'lgms_checkout_audience' ] = 'off';   // #181: this file's subject is not the audience
     if ( $flag !== null ) { $GLOBALS['OPTS']['lgms_identity_gate'] = $flag; }
 }
 
