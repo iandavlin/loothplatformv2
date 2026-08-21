@@ -12,10 +12,13 @@ use LGSB\Adapters\PdoEntitlementRepository;
 use LGSB\Adapters\PdoGiftCodeRepository;
 use LGSB\Adapters\PdoPendingGiftRecipientsRepository;
 use LGSB\Adapters\PdoProductRepository;
+use LGSB\Adapters\HttpCheckoutAudienceProbe;
 use LGSB\Adapters\HttpPatreonStandingProbe;
 use LGSB\Adapters\PdoSubscriptionRepository;
+use LGSB\Contracts\CheckoutAudienceProbe;
 use LGSB\Contracts\PatreonStandingProbe;
 use LGSB\Contracts\SettingsStore;
+use LGSB\Core\CheckoutAudienceGuard;
 use LGSB\Core\DoublePayGuard;
 use LGSB\Domain\Repositories\AdminActionLogRepository;
 use LGSB\Domain\Repositories\AffiliateRepository;
@@ -106,6 +109,14 @@ return [
 
     DoublePayGuard::class => fn (ContainerInterface $c): DoublePayGuard =>
         new DoublePayGuard($c->get(PatreonStandingProbe::class)),
+
+    // WHO MAY BUY (#181). Asks WordPress over the same shared-secret channel;
+    // unlike the probe above, an unknown answer REFUSES rather than proceeds.
+    CheckoutAudienceProbe::class => fn (ContainerInterface $c): CheckoutAudienceProbe =>
+        new HttpCheckoutAudienceProbe($c->get(SettingsStore::class)),
+
+    CheckoutAudienceGuard::class => fn (ContainerInterface $c): CheckoutAudienceGuard =>
+        new CheckoutAudienceGuard($c->get(CheckoutAudienceProbe::class)),
 
     /* Core services (CheckoutService, CustomerManager, EntitlementManager,
        ReturnHandler, WpSync, WpGiftMailer, BulkPricer) and HTTP controllers

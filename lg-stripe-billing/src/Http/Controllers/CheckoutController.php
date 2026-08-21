@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace LGSB\Http\Controllers;
 
 use InvalidArgumentException;
+use LGSB\Core\CheckoutAudienceGuard;
 use LGSB\Core\CheckoutService;
 use LGSB\Core\CustomerManager;
 use LGSB\Core\DoublePayGuard;
@@ -27,6 +28,7 @@ final class CheckoutController
         private readonly EntitlementRepository  $entitlements,
         private readonly BannedEmailsRepository $bannedEmails,
         private readonly DoublePayGuard         $doublePay,
+        private readonly CheckoutAudienceGuard  $audience,
     ) {}
 
     /**
@@ -100,6 +102,31 @@ final class CheckoutController
         $countryArg   = $country      !== '' ? $country      : null;
         $promoArg     = $promoCode    !== '' ? $promoCode    : null;
         $affiliateArg = $affiliateRef !== '' ? $affiliateRef : null;
+
+        // WHO MAY BUY (#181, Ian: "fix before go-live"). THE FIRST GATE ON THIS
+        // ENDPOINT, because until now there was none: this route carries no
+        // auth of any kind, `/billing/v1/products` publishes the real price
+        // ids, and the two together minted a live Stripe session for anybody
+        // who asked. Paying it created a WordPress account by email and
+        // granted the tier.
+        //
+        // Placement is deliberate and it is ABOVE the email ban, which is the
+        // one ordering choice here that differs from #150's. A banned address
+        // should hear that it is banned rather than that it is already paying
+        // (that is why DoublePayGuard sits below the ban) — but during a soft
+        // launch nobody outside the cohort is owed ANY detail about their
+        // standing with us, ban included. Refusing first is also the cheapest:
+        // no database read happens before it.
+        //
+        // Gifts are fenced too, deliberately, and the guard takes no `isGift`
+        // argument so there is no exception to forget. An unknown answer
+        // REFUSES with a 503 and its own sentence — see CheckoutAudienceGuard.
+        $audienceRefusal = $this->audience->refusalFor($emailArg);
+        if ($audienceRefusal !== null) {
+            $status = $audienceRefusal['status'];
+            unset($audienceRefusal['status']);
+            return self::json($response, $audienceRefusal, $status);
+        }
 
         // Email-level ban: independent of customers.blocked_at, survives a
         // customer record nuke. Refuses any new subscription or gift checkout.

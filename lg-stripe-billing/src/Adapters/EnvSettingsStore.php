@@ -65,6 +65,30 @@ final class EnvSettingsStore implements SettingsStore
         return substr($sync, 0, -strlen('/sync-customer')) . '/patreon-standing';
     }
 
+    public function getCheckoutAudienceUrl(): string
+    {
+        $explicit = trim(self::env('LGMS_CHECKOUT_AUDIENCE_URL'));
+        if ($explicit !== '') {
+            return $explicit;
+        }
+        // DERIVED, so no box needs an env edit for #181 to work: the routes are
+        // siblings in one REST namespace. Deriving is also what keeps the
+        // wp_option the only switch — a per-box env var would be a second one,
+        // free to disagree.
+        //
+        // ⚠️ NOTE THE MISSING 'off' ESCAPE HATCH that getPatreonStandingUrl()
+        // has. Blanking that URL stops a probe whose silence lets buyers
+        // through; blanking this one would stop a probe whose silence REFUSES
+        // them, so an operator reaching for the familiar valve would take the
+        // whole checkout down rather than relax it. The way to stop enforcing
+        // is `lgms_checkout_audience = off`, in WordPress, on the record.
+        $sync = self::env('LGMS_SYNC_URL');
+        if ($sync === '' || !str_ends_with($sync, '/sync-customer')) {
+            return '';
+        }
+        return substr($sync, 0, -strlen('/sync-customer')) . '/checkout-audience';
+    }
+
     public function getWebhookSecret(): string
     {
         return self::env('STRIPE_WEBHOOK_SECRET');

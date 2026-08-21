@@ -27,6 +27,60 @@ final class UserProvisioner
             return (int) $bridged;
         }
 
+        // WHO MAY BE PROVISIONED (#181, option `lgms_checkout_audience`,
+        // default `allowlist`). THE BACKSTOP, and the half that actually holds.
+        //
+        // The checkout doors refuse early and honestly, but they refuse a
+        // REQUEST. This refuses an OUTCOME, and it is the only one of the two
+        // that cannot be routed around: a session minted before the cohort
+        // changed, a session minted while the Slim probe could not reach
+        // WordPress, a gift redeemed by a stranger, a customer the five-minute
+        // `Sync::all()` sweep finds on its own — every one of them arrives
+        // here, and here there is no network between the question and the
+        // answer. The option is read straight out of `wp_options` in the same
+        // process, so this check FAILS CLOSED where the Slim probe cannot.
+        //
+        // ⚠️ PLACEMENT IS THE WHOLE DESIGN, and it is one line below where the
+        // obvious reading would put it. It sits AFTER the existing-bridge
+        // early return, so a member who is already linked is never touched in
+        // any state — their sweeps keep running, their grants keep landing and,
+        // just as importantly, their RETRACTIONS keep landing. A fence placed
+        // above that return would freeze existing members the moment the
+        // cohort narrowed, and would do it silently.
+        //
+        // It sits ABOVE the identity gate and the mint, which is the other
+        // half: `Sync::customer` calls this method BEFORE it reaches
+        // StripeLifecycle's cohort fence, so that fence has only ever withheld
+        // the ROLE. The account, the bridge row, the welcome mail and the
+        // `looth_tier_changed` action all fired for a stranger who paid. This
+        // is where that stops.
+        //
+        // THE REFUSAL IS A THROW because `Sync::customer` already catches one
+        // into `provision failed` — no RoleSourceWriter::report, no Arbiter, no
+        // tier — which is exactly the shape the identity gate below chose for
+        // the same reason. Nothing is half-done: no user, no bridge, no grant.
+        if ( ! \LGMS\Membership\CheckoutAudience::allowsEmail( $email ) ) {
+            $detail = sprintf(
+                'Stripe customer %d (%s) is outside the soft-launch cohort, and the checkout '
+                . 'audience is `%s`, so no WordPress account was created and no membership was '
+                . 'granted. If this purchase is genuine it needs a refund, or the buyer needs '
+                . 'adding to the cohort (Settings -> LG Member Sync -> Test Group).',
+                $customerId,
+                $email,
+                \LGMS\Membership\CheckoutAudience::state(),
+            );
+
+            \LGMS\Membership\CheckoutAudience::logRefusal(
+                \LGMS\Membership\CheckoutAudience::D_PROVISION,
+                $email,
+                0,
+                sprintf( 'customer %d — nothing minted, nothing granted', $customerId ),
+            );
+            \LGMS\Membership\CheckoutAudience::notifyRefusalOnce( $email, $detail );
+
+            throw new RuntimeException( $detail );
+        }
+
         // IDENTITY GATE (audit R1). Flag OFF (the default, and the state of
         // live today) leaves everything below byte-identical to the behaviour
         // that has always shipped. Flag ON routes the lookup through

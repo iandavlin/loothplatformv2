@@ -39,6 +39,21 @@ interface SettingsStore
      */
     public function getPatreonStandingUrl(): string;
 
+    /**
+     * URL of the WP plugin's checkout-audience REST endpoint (#181). Derived
+     * from the sync URL when unset, so no box needs an env edit — the single
+     * switch is the wp_option `lgms_checkout_audience`, which the route
+     * REPORTS rather than being registered by.
+     *
+     * ⚠️ Empty string does NOT mean "disabled" here, unlike the sibling above.
+     * It means the probe cannot ask, which is an unknown answer, and unknown
+     * REFUSES. There is no emergency valve on this one on purpose: a valve that
+     * silently opens a soft launch to the whole internet is not a valve, it is
+     * the defect. To stop enforcing, set the option to `off` in WordPress,
+     * where the change is visible and attributable.
+     */
+    public function getCheckoutAudienceUrl(): string;
+
     /** Stripe webhook signing secret (whsec_…). Empty string = signature check skipped. */
     public function getWebhookSecret(): string;
 
