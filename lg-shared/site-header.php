@@ -773,7 +773,11 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
                 <?= $h($avatar_initial) ?>
               <?php endif; ?>
             </span>
-            <span class="lg-chrome__account-name"><?= $h($display_name) ?></span>
+            <?php /* title= is the hover half of "hidden, never lost" (#173); the
+                     span itself is clamped to one line with an ellipsis. The
+                     touch half is the menu's own name row below, because a
+                     title attribute is unreachable without a pointer. */ ?>
+            <span class="lg-chrome__account-name" title="<?= $h($display_name) ?>"><?= $h($display_name) ?></span>
             <?php if ($tier_label !== null): ?>
               <span class="lg-chrome__tier lg-chrome__tier--<?= $h(strtolower($tier_label)) ?>">
                 <?= $h($tier_label) ?>
@@ -788,6 +792,14 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
 
           <ul class="lg-chrome__account-menu" id="lg-account-menu"
               role="menu" aria-label="Account menu" hidden>
+            <?php /* THE FULL NAME, WHOLE (#173). The chip above shows as much of
+                     it as the row can hold and ellipsises the rest, and at ≤820
+                     it does not render the name at all — so this row is where a
+                     verbose display_name is still readable, and it is allowed to
+                     wrap for exactly that reason. role="presentation" keeps it
+                     out of the menu's item sequence: it is a label, not a door,
+                     and arrow-key navigation must not stop on it. */ ?>
+            <li role="presentation" class="lg-chrome__account-menu-name"><?= $h($display_name) ?></li>
             <li role="none">
               <a role="menuitem" href="<?= $h($profile_url) ?>">My Profile</a>
             </li>

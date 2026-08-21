@@ -283,7 +283,54 @@ body { margin: 0; }
   width: 100%; height: 100%; object-fit: cover;
   border-radius: 50%; display: block;
 }
-.lg-chrome__account-name { font: 600 13px/1 var(--lg-font-sans); }
+/* ⚠️ THE CHIP IS ONE LINE, ALWAYS — it may never grow the row (#173).
+   Ian 8/21: "Something changed in the header. We are stacking words that used
+   to be inline." This span had exactly one declaration — a font — and it is a
+   blockified flex item, so a long wp_users.display_name simply wrapped. The bar
+   itself never moved (.lg-chrome__inner is height:60px FIXED); what grew was
+   the button inside it, 40px → 49 → 62 → 88, spilling OUT of the bar. Measured
+   on the real table (1,933 rows, longest name 71 chars): "Ian Davlin The Looth
+   Group" broke to two lines at 1100 WITH the tester Join pill and at 1024
+   without it, and the 71-char worst case was two lines even at 1440.
+
+   THE max-width IS A MEASUREMENT, NOT A NUMBER SOMEONE LIKED. Space left for
+   the name at viewport W is W − 934, where 934 = logo 138.3 + nav min-content
+   419.2 + the aside without a name 269.5 + the inner's two 18px gaps + its 48px
+   padding + 15px of scrollbar + this chip's own 8px gap. So the name gets what
+   is actually there and ellipsises when it is not: 220px (its cap) at ≥1154,
+   166px at 1100, 90px at 1024, 0 by 934 — below which the ≤820 rule hides it
+   anyway. The 220 cap is sized off Ian's own name (200.3px), so HIS name is
+   never truncated on a normal desktop; it is the 40- and 71-character business
+   names that get the ellipsis.
+
+   ⚠️ Do NOT "simplify" this to a flat max-width. One value cannot be right at
+   1440 and at 1024 — a cap generous enough for the wide case turns a vertical
+   wrap into a HORIZONTAL overflow at the narrow one, which is the same defect
+   pointing sideways. Gate 87 §D is the leg that keeps the 934 honest: it
+   asserts a 71-char name adds no scrollWidth over a 3-char one, so a seventh
+   nav item or a wider wordmark reddens a gate instead of silently invalidating
+   the constant. The full name is never lost — it is in the span's title= and in
+   its own row at the top of the opened account menu. */
+.lg-chrome__account-name {
+  font: 600 13px/1 var(--lg-font-sans);
+  max-width: clamp(0px, calc(100vw - 934px), 220px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ⚠️ ONE STEP EARLIER THAN THE ≤820 HIDE, AND FOR A DIFFERENT REASON.
+   Below ~1000 the clamp has fewer than half a dozen characters left to give,
+   and measured, that is what it hands over: 66px at 1000, 16px at 950, 0 by
+   934. A chip showing nothing but "…" is worse than no chip — it spends the
+   row's last 8px of gap to say nothing, and at 0px it spends them to render
+   literally nothing. So the name drops here and the account menu carries it,
+   which is the same trade the ≤820 rule below already makes for the tablet.
+   That rule stays where it is: it is subsumed by this one, not replaced by it,
+   and archive.css mirrors it. */
+@media (max-width: 1000px) {
+  .lg-chrome__account-name { display: none; }
+}
 
 /* --- Account dropdown menu --- */
 /* Scoped under .lg-chrome to beat BB theme's global ul rules */
@@ -320,6 +367,28 @@ body { margin: 0; }
   background: var(--lg-line);
   margin: 4px 0;
   padding: 0;
+}
+/* The full name, hidden but never lost (#173). The chip clamps to one line, and
+   at ≤820 it is not rendered at all — so this row, not the title attribute, is
+   the recovery path that works on touch. It WRAPS on purpose: the whole point
+   is that a 71-character name is readable here, having been ellipsised there.
+
+   ⚠️ THIS RULE LIVES HERE AND NOT IN site-header.php's INLINE CRITICAL BLOCK,
+   and that is not a style preference. That block is emitted on EVERY render
+   including the anonymous one, so a rule added there changes the anon response
+   by its own length — 745 bytes, caught by the byte-identity check the first
+   time this was written that way. The panel tokens still do their job: they are
+   declared on .lg-chrome in dark by that block, so var(--lg-panel-*) resolves
+   in dark and falls back to the app's own tokens in light. A rule matching a
+   class that exists only in the authed DOM cannot change what anon renders. */
+.lg-chrome ul.lg-chrome__account-menu .lg-chrome__account-menu-name {
+  padding: 8px 12px 10px;
+  margin: 0 0 4px;
+  border-bottom: 1px solid var(--lg-panel-divider, var(--lg-line));
+  font: 600 13px/1.35 var(--lg-font-sans);
+  color: var(--lg-panel-ink, var(--lg-ink));
+  max-width: 260px;
+  overflow-wrap: anywhere;
 }
 .lg-chrome ul.lg-chrome__account-menu .lg-chrome__account-menu-signout {
   color: var(--lg-rust);

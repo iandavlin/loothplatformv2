@@ -355,6 +355,13 @@ def leg_a():
             fp = os.path.join(root, fn)
             try: css = open(fp, encoding="utf-8", errors="replace").read()
             except OSError: continue
+            # ⚠️ COMMENTS FIRST — this scan reads SELECTORS, and prose is not one.
+            # #169/#171 left the words "(lg-shared/site-header.css
+            # .lg-chrome__join)" inside a /* */ block in lg-shortcodes.css, and
+            # the descendant pattern below read that sentence as a scoped
+            # selector: a standing RED on main about markup nobody had touched,
+            # re-diagnosed twice. Same instinct gate 85 uses on PHP (#173).
+            css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
             for m in re.finditer(r"([^{}\n,;]*\.lg-chrome__join[^{},]*)\s*[,{]", css):
                 sel = m.group(1).strip()
                 # a bare .lg-chrome__join, optionally with pseudo-classes, is fine;
@@ -735,10 +742,35 @@ def leg_bc(tmp):
           f"{len(anon['allowlist'])} vs {len(anon['off'])} bytes")
     # A signed-in member NOT on the list is untouched in EVERY state, allowlist
     # included. That is what makes a cohort a cohort.
+    #
+    # ⚠️ THE AUTHED BASELINE IS THIS TREE'S OWN 'absent', NOT origin/main, AND
+    # THAT IS THE ASSERTION BEING MADE CORRECTLY RATHER THAN LOOSELY. The claim
+    # here is the FLAG'S BLAST RADIUS — "no state of this flag moves a byte for
+    # this viewer" — and anchoring it to a historical file quietly turned it
+    # into "the authed header may never change again". #173 clamped the account
+    # chip to one line (+122 bytes in every state, uniformly) and reddened all
+    # eleven of these at once, on a diff that touches nothing this gate is
+    # about: the same shape as feedback-gate-reads-the-flag-not-a-hardcoded-state,
+    # where a hardcoded expectation blocks every lane behind it. Comparing each
+    # state to this tree's own no-config render still fails the instant the flag
+    # leaks into an authed render, which is the thing worth failing on.
+    #
+    # THE ANON LEG ABOVE KEEPS ITS origin/main ANCHOR, deliberately: that one is
+    # #170's cacheability claim, main is genuinely the right reference for it,
+    # and it is the leg red-first mutation 7 fires at. #173 was proven
+    # cmp-identical against it in all three states before this comment was
+    # written.
     for state in ("absent", "off", "allowlist", "allow-local", "on"):
-        same = authed[state] == authed["main"]
-        check(f"authed (not listed), {state}: byte-identical to origin/main's header",
-              same, f"{len(authed[state])} bytes vs {len(authed['main'])}")
+        same = authed[state] == authed["absent"]
+        check(f"authed (not listed), {state}: byte-identical across flag states",
+              same, f"{len(authed[state])} bytes vs {len(authed['absent'])}")
+    # Liveness, because "identical to the baseline" is trivially true of two
+    # dead renders, and the baseline is now this tree's own
+    # (feedback-absence-assertion-needs-liveness).
+    check("liveness: the authed baseline is a real signed-in header",
+          len(authed["absent"]) > 5000
+          and 'class="lg-chrome__account"' in authed["absent"],
+          f"{len(authed['absent'])} bytes")
     check("authed (not listed): no join anchor exists in ANY state",
           all(join_anchor(authed[s]) == "" for s in trees))
 
@@ -749,9 +781,9 @@ def leg_bc(tmp):
     # third is pinned by the exactly-one-line assertions in §B.
     for who, doc in (("tester", tester), ("admin", admin)):
         for state in ("absent", "off", "on"):
-            check(f"{who}, {state}: byte-identical to origin/main's header",
-                  doc[state] == doc["main"],
-                  f"{len(doc[state])} bytes vs {len(doc['main'])}")
+            check(f"{who}, {state}: byte-identical across flag states",
+                  doc[state] == doc["absent"],
+                  f"{len(doc[state])} bytes vs {len(doc['absent'])}")
 
     # Liveness beside the absence: "identical to main" is trivially true of two
     # empty strings, and of a render that died before reaching the anchor
