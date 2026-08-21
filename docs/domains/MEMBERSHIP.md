@@ -221,8 +221,9 @@
   grants the tier. **This is true with or without the unlock** — the unlock
   changes page visibility only and touches no checkout or signup path, which is
   why #180 shipped on that structural argument rather than on the whitelist
-  premise. **Keeper filed the API gap as its own go-live issue; do not treat it
-  as closed by #180, and do not re-derive it from scratch.**
+  premise. **The API gap is now issue #181, and Ian ruled FIX BEFORE GO-LIVE
+  (8/21).** Do not treat it as closed by #180, and do not re-derive it from
+  scratch — the probe evidence is the four bullets above.
 - **NO SECOND SWITCH, and that is the deliberate difference from #165 and #170.**
   The admission lives in `lg_membership_testgroup_gate_or_exit` — the ONE gate
   both doors delegate to, exactly where invites plug in — so a marked browser is

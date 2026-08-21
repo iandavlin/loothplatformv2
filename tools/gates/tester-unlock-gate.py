@@ -36,7 +36,8 @@ and the live 401 — and REPORTS the mechanism rather than asserting a whitelist
 that does not exist.  That wording is the point: if this leg ever goes green
 because someone flipped a BuddyBoss setting rather than because the funnel is
 safe, the report line says so and the assertion names what it measured.  The
-API-level gap is filed as its own go-live issue and is out of scope here.
+API-level gap is issue #181 (Ian ruled FIX BEFORE GO-LIVE, 8/21) and is out
+of scope here — this gate must not be read as evidence that #181 is closed.
 
 ── WHY THIS GATE CANNOT GO VACUOUSLY GREEN ────────────────────────────────────
 §A–§D need no browser, no DB, no WordPress, no FPM and no network: the header is
@@ -782,8 +783,8 @@ def leg_e():
            or f"some other refusal: {body[:100]}")
     report(f"§E3 the funnel's refusal is currently: {why}. It is NOT a "
            f"whitelist — nothing in the signup or checkout path consults the "
-           f"cohort list. The API-level gap is filed as its own go-live issue "
-           f"(#180 finding); this gate does not assert it is closed.")
+           f"cohort list. The API-level gap is issue #181, ruled FIX BEFORE "
+           f"GO-LIVE by Ian on 8/21; this gate does not assert it is closed.")
     report("§E4 EXPECTED, NOT A DEFECT: a tester holding the unlock link will "
            "reach the tier picker and then dead-end at \"Sign-in failed\" when "
            "they enter an email. That IS the refusal above, working.")
