@@ -1841,6 +1841,40 @@ echo "=== GATE 82: approval starts work by itself — for PRE-STAGED work, and n
 # even with the guard deleted, and a wrong claim about which leg catches what.
 run "approved-autospin" python3 "$(dirname "$0")/approved-autospin-gate.py"
 echo
+echo "=== GATE 83: a members-only one-liner does not reach the crawler-visible head ==="
+# #166, Ian 8/20: "Fix meta leak." A profile's <meta name="description">,
+# og:description and twitter:description carried users.at_a_glance VERBATIM to
+# logged-out visitors, crawlers and link unfurls while the rendered body
+# correctly withheld it behind the members gate. 42 members on LIVE, 28 on dev2.
+#
+# NOT ONE OF THE 42 HAD CHOSEN members-only. It is the platform default 1,917 of
+# 1,933 members have never opened — the head and the body simply disagreed about
+# what that default meant, which is what makes it a defect and not a policy.
+#
+# The same class lived on /p/ (practice tagline AND about, under
+# PRACTICE_HEADER_DEFAULT). Found twice, so gated: one gate, four surfaces.
+#
+# ⚠️ §B IS NOT OPTIONAL PADDING. Deleting all three meta tags outright satisfies
+# the leak check perfectly, and 14 live members have a legitimately public
+# one-liner that is good SEO. The fix is a CEILING, not a deletion, and only the
+# public-header side of the bracket can tell those apart. Every absence check is
+# likewise paired with a liveness one: >=2 description tags AND the generic
+# fallback still naming the member, so "the leak is gone" and "the page is gone"
+# cannot look the same.
+#
+# ⚠️ IT AUDITS WHAT LG_GATE_HOST SERVES, WHICH IS MAIN. /u/ and /p/ are symlinked
+# out of the serving checkout. A LANE must run tools/preview/lane-preview.sh up
+# <lane> and set LG_MGL_PREFIX=/preview/<lane>, or it will be told about main.
+#
+# §E is the head-side half of gate 39 §G7's fence: #107's consent lets the
+# FEATURED CARD republish a members-only one-liner; a tick is not permission to
+# put the line in Google. §G7 asserts the body, §E asserts the head.
+#
+# Red-first: tools/gates/meta-glance-leak-redfirst.sh, plus 4 mutations on file
+# SNAPSHOTS (never `git checkout --`) — revert-the-ceiling, withhold-from-
+# everyone, launder-the-consent, and a whitespace no-op proven inert.
+run "meta-glance-leak" python3 "$(dirname "$0")/meta-glance-leak-gate.py"
+echo
 
 echo "=== GATE 84: the stuffing detector bans at the LOGIN DOOR — and nothing else does ==="
 # #162. Ian 8/20: "can we just add it to a file of known offenders and nip it at

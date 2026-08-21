@@ -178,39 +178,6 @@ ON/old-copy → 1 "Won't show yet" (Carl) and 4 "Will publish their one-liner";
 ON/informed → 6 plain "Feature", 1 "Feature anyway". **Never a disabled button in
 any state** — #107's original ruling still holds.
 
-### 🔴 A PRE-EXISTING LEAK THIS LANE FOUND AND DID NOT FIX
-
-While proving the exception is confined, the confinement turned out to be
-narrower than the 8/16 rule assumes. **A profile's `<meta name="description">`,
-`og:description` and `twitter:description` carry `at_a_glance` verbatim to
-logged-out visitors, crawlers and link unfurls — even when the header block
-correctly withholds it from the rendered body.**
-
-Measured 2026-08-20, all four members with a default header and a written
-one-liner: absent from the visible body for anon, present in the head every time.
-**Site-wide it is 28 on dev2 — and 42 on LIVE** (of 56 who have written a glance
-at all). Confirmed on live by an anonymous fetch of `/u/bryan-parris/`: the
-one-liner is in `<meta name="description">` and absent from the body. Only 26 of
-live's 1,824 public members have EVER set a header row, so almost none of the 42
-chose this — the two surfaces simply disagree about what the default means.
-
-Source: `profile-app/web/u.php:213` — `$seoGlance` is read straight off the
-column with no visibility condition, while every other consumer applies the
-ceiling. Three tags, one variable; the public-safe `else` branch already exists.
-The JSON-LD is clean (name/url/image/worksFor only — checked).
-
-**Filed as #166** with the two coherent positions written out; it needs Ian's
-ruling, not a patch, because option 2 (accept the meta as public) would mean
-#107's tickbox copy is understating things.
-
-It predates this lane, it is member-facing, and reddening main for it would block
-every seat — so gate 39 §G7 asserts the **body** and states this in its own
-docblock rather than failing on it. It also means the featured-card republication
-is a smaller delta than it looks: for these members the one-liner is already
-reachable publicly. **That is a ruling for Ian, not a lane decision** — either the
-meta tags should honour header visibility, or the never-republish rule should be
-restated to mean the rendered page only.
-
 ### One thing that CANNOT be verified until this merges, and why
 
 The consent path was proven link by link on real infrastructure — the rule
@@ -252,3 +219,101 @@ front page re-resolves live and looks identical either way.
   every surface here is symlinked out of the serving checkout, so `/u/<slug>` on
   dev2 renders main no matter what is committed. Use **named** nginx captures —
   the dev-gate map resets `$1`-`$9` before fastcgi params are built.
+
+---
+
+## The meta tags obey the header ceiling — #166, CLOSED 2026-08-20
+
+Ian, 8/20: *"Fix meta leak."* The leak #107's lane found and filed is fixed;
+the section below records what it was, what the ruling turned out to be, and
+the two traps it leaves.
+
+**What it was.** A profile's `<meta name="description">`, `og:description` and
+`twitter:description` carried `at_a_glance` **verbatim** to logged-out
+visitors, crawlers and link unfurls, even while the header block correctly
+withheld it from the rendered body. `profile-app/web/u.php` read `$seoGlance`
+straight off the column with no visibility condition, while every other
+consumer applied the ceiling. **42 members on LIVE, 28 on dev2**, of 56 who
+have written a one-liner at all.
+
+**The number that decided it.** Of live's 42, **ZERO had chosen members-only** —
+`header_vis_explicit` is false for every one. It is the platform default that
+1,917 of 1,933 members have never opened. So this was never a policy question
+about what members had asked for: the head and the body simply disagreed about
+what the untouched default meant. That is what made it a defect rather than the
+two-coherent-positions ruling it was filed as.
+
+**The fix** is the ceiling, applied to the head:
+
+```php
+$seoGlance = Block::headerCeiling($subjectId) === 'public' ? <glance> : '';
+```
+
+`Block::headerCeiling()` is the **body's own rule, called** — not
+reimplemented. A second copy of "is the header public" is precisely how the two
+surfaces drifted apart, so the fix deliberately adds no new predicate; anything
+other than `public` fails closed. The public-safe generic branch already
+existed for members with no one-liner, so the change only alters WHICH members
+reach it. A public-header member's page is **byte-identical** across the change
+(107,851 bytes, sha 48a2360c…).
+
+**`/p/` had the same defect and it was worse per page**: practice `tagline` AND
+`about` under `PRACTICE_HEADER_DEFAULT = 'members'`, and `about` is the long
+field. 3 practices on both boxes. Fixed in the same commit via
+`practiceHeaderCeiling()` (Ian ruled 8/20 to fix both together).
+
+**Shipped UNFLAGGED, deliberately.** The flag law exists because dev2 serves
+main, so member-facing work cannot be verified before merge. Here the risk is
+inverted — **the OFF state IS the leaking state**, so a flag defaulted OFF
+merges a fix that does nothing while 42 members stay indexed. Precedent:
+789b480, the contrast fix. Worst case if the test were wrong in the strict
+direction is a public-header member getting a generic snippet: an SEO
+regression, visible and reversible, never a leak.
+
+**SEO consequence, stated not buried:** those 42 profiles' Google snippets
+change from the member's own sentence to *"Name — Business on The Looth Group…"*.
+That is the point of the fix.
+
+### ⚠️ THIS IS NOT THE #107 CONSENT EXCEPTION AND MUST NOT BECOME IT
+
+#107's ruling — *"the tick is consent"* — lets the **featured card** repeat an
+opted-in member's members-only one-liner. **A tick is not permission to put the
+line in Google.** That consent covers the card and nothing else, so the head
+reads header visibility ONLY: no flag, no `featured_opt_in`, no `consent_ack`.
+
+Two gates hold this between them and neither is redundant:
+
+| | asserts | on |
+|---|---|---|
+| gate 39 §G7 | the rendered **body** withholds it | the surface #107 reasoned about |
+| **gate 83 §E** | the **head** withholds it, for an OPTED-IN member | the surface §G7 does not fail on |
+
+Gate 83 §F additionally refuses the consent vocabulary in the SEO block's
+**code** — the laundering path, where someone "helpfully" extends the card's
+exception to the meta tags.
+
+### Traps this leaves behind
+
+- **Gate 83 audits whatever `LG_GATE_HOST` serves, which is MAIN.** `/u/` and
+  `/p/` are symlinked out of the serving checkout. A lane must run
+  `tools/preview/lane-preview.sh up <lane>` and set
+  `LG_MGL_PREFIX=/preview/<lane>`, or it is being told about main.
+  `platform/nginx/lane-preview-166-meta-leak.conf` is the worked example.
+- **§B is the assertion that makes gate 83 mean anything.** Deleting all three
+  meta tags satisfies the leak check perfectly, and 14 live members have a
+  legitimately public one-liner that is good SEO. The fix is a **ceiling, not a
+  deletion**. Never drop the public-header side of the bracket.
+- **Gate 39 §G7's liveness marker is weaker than it looks** and was left alone
+  on purpose. `"lg-idrow" not in body` is checked against the FULL response,
+  and `lg-idrow` appears **12 times in the head as CSS rules** and zero times in
+  the body of a members-only profile seen anonymously — where the body is the
+  join gate. "The page rendered" is currently proven by a stylesheet. Not wrong
+  today, but it is the assertion class that passes for the wrong reason;
+  tightening it to `lg-gate` belongs to whoever owns that fence. Gate 83 uses
+  `lg-gate` for exactly this reason.
+- **The JSON-LD is clean** (name/url/image/worksFor only) — re-checked, and it
+  stays that way only if nobody adds a `description` key to `$seoLd`.
+- **`business_name` is treated as public** across the platform (the featured
+  card's resolver uses it as the public-safe fallback), which is why the
+  generic description may name it. If that ever changes, this description and
+  the featured card change together.

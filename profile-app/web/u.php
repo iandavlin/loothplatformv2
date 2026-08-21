@@ -210,7 +210,31 @@ if ($lg_fmOn && $isOwner) {
 $seoHost   = $_SERVER['HTTP_HOST'] ?? 'loothgroup.com';
 $seoCanon  = 'https://' . $seoHost . '/u/' . rawurlencode($slugSafe);
 $seoBiz    = trim((string) ($row['business_name'] ?? ''));
-$seoGlance = trim((string) ($row['at_a_glance'] ?? ''));
+// …and the one-liner obeys the SAME rule the line above states for location
+// (#166). Until 2026-08-20 it did not: these three tags carried at_a_glance
+// verbatim to crawlers, logged-out visitors and link unfurls while the rendered
+// body correctly withheld it behind the members gate — 42 members on live, 28
+// on dev2. Not one of the 42 had CHOSEN members-only; it is the platform
+// default that 1,917 of 1,933 members have never opened. The head and the body
+// simply disagreed about what that default meant.
+//
+// Block::headerCeiling() is the body's own rule, not a copy of it — a second
+// implementation here is exactly how the two surfaces drifted apart in the
+// first place. Anything other than 'public' (members, private, or an unknown
+// value) withholds: it fails closed.
+//
+// ⚠️ THIS IS NOT THE #107 CONSENT EXCEPTION AND MUST NOT BECOME IT. That
+// ruling lets the FEATURED CARD republish a members-only one-liner, on the
+// strength of a tickbox that says so. A tick is not permission to put the line
+// in Google. So this reads header visibility ONLY — no flag, no
+// featured_opt_in, no consent_ack — and gate 83 §B/§E hold that line.
+//
+// Deliberately viewer-INDEPENDENT. Meta tags are a cached, crawled, unfurled
+// surface; "members see the real one" would leak through any shared link, any
+// unfurl, or any cache in front of this page.
+$seoGlance = Block::headerCeiling($subjectId) === 'public'
+    ? trim((string) ($row['at_a_glance'] ?? ''))
+    : '';
 $seoDescRaw = $seoGlance !== ''
     ? $seoGlance
     : $displayName . ($seoBiz !== '' ? ' — ' . $seoBiz : '')

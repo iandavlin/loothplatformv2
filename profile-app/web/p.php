@@ -64,8 +64,21 @@ $viewLink = fn(string $v): string => '/p/' . rawurlencode($slugSafe) . '?view=' 
 // closing the duplicate-canonical gap for the practice-page URL class (backlog 40).
 $seoHost    = $_SERVER['HTTP_HOST'] ?? 'loothgroup.com';
 $seoCanon   = 'https://' . $seoHost . '/p/' . rawurlencode($slugSafe);
-$seoTagline = trim((string) ($row['tagline'] ?? ''));
-$seoAbout   = trim((string) ($row['about'] ?? ''));
+// The practice header is the ceiling for this page's own text, and the head
+// obeys it (#166 — the same defect as /u/, found on this surface while
+// measuring that one). tagline AND about were both published verbatim to
+// crawlers while the rendered body sat behind the members gate; `about` is the
+// long field, so this leaked more per page than the profile did. 3 practices
+// on dev2, 3 on live — small, but it is the same class twice, which is when
+// CRAFT-STANDARD says to gate it (83 §C/§D).
+//
+// PRACTICE_HEADER_DEFAULT is 'members' and no practice on either box has ever
+// set an explicit row, so every practice with text was leaking it.
+// practiceHeaderCeiling() is the renderer's own rule — same reasoning as u.php:
+// a second copy of the test is how the surfaces drift.
+$seoPracticePublic = Block::practiceHeaderCeiling($practiceId) === 'public';
+$seoTagline = $seoPracticePublic ? trim((string) ($row['tagline'] ?? '')) : '';
+$seoAbout   = $seoPracticePublic ? trim((string) ($row['about'] ?? '')) : '';
 $seoDescRaw = $seoTagline !== ''
     ? $seoTagline
     : ($seoAbout !== ''
