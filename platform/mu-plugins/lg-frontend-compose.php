@@ -1357,14 +1357,6 @@ function lg_fc_render(string $type, int $edit = 0, bool $embed = false): void
     // see lg_fc_relabel()'s prefill block for why ACF does not do it for us here.
     $GLOBALS['lg_fc_editing'] = $edit;
     add_filter('acf/prepare_field', 'lg_fc_relabel', 20);
-    /* ⚠️ AND AGAIN, TYPE-SCOPED AND LAST. Setting delay inside lg_fc_relabel was
-       not enough on the served form — measured 8/21 with a real member session:
-       the placeholder "Click to initialize TinyMCE" was still in the bytes, over
-       the member's own markup, which is exactly what Ian screenshotted. Something
-       downstream of priority 20 restores ACF's own delay. This runs on the
-       type-scoped hook at 99, so it is the last word for wysiwyg fields, and it
-       is removed with the others when the render ends. */
-    add_filter('acf/prepare_field/type=wysiwyg', 'lg_fc_no_delay', 99);
 
     lg_fc_page_open($t['title'], $embed);
     ?>
@@ -1429,7 +1421,6 @@ function lg_fc_render(string $type, int $edit = 0, bool $embed = false): void
     <?php
     lg_fc_page_close($embed);
     remove_filter('acf/prepare_field', 'lg_fc_relabel', 20);
-    remove_filter('acf/prepare_field/type=wysiwyg', 'lg_fc_no_delay', 99);
     unset($GLOBALS['lg_fc_editing']);
 }
 
@@ -1440,52 +1431,12 @@ function lg_fc_render(string $type, int $edit = 0, bool $embed = false): void
  * Only fields this route knows about are touched, and the filter is added and
  * removed around the render, so nothing else on the site can see it.
  */
-/** The editor boots with the form, never on a click — see the registration. */
-function lg_fc_no_delay($field)
-{
-    if (is_array($field)) {
-        $field['delay'] = 0;
-    }
-    return $field;
-}
-
 function lg_fc_relabel($field)
 {
     if (empty($field['name']) && empty($field['_name'])) {
         return $field;
     }
     $name = $field['_name'] ?? $field['name'];
-
-    /* ⚠️ NO DELAYED EDITOR ON A MEMBER-FACING FORM (Ian, 2026-08-21, from his own
-       screenshot of the form: he was looking at a grey bar reading "Click to
-       initialize TinyMCE" sitting on top of his write-up rendered as LITERAL
-       <p>test</p>).
-
-       MEASURED on the served page before changing anything, which is what named
-       the cause: the form ships
-
-           <div class="acf-editor-toolbar">Click to initialize TinyMCE</div>
-           <textarea class="wp-editor-area" name="acf[_post_content]">…
-
-       That is ACF's `delay` setting (class-acf-field-wysiwyg.php:240,276-277):
-       with it on, ACF renders a PLACEHOLDER and only boots TinyMCE when the
-       member clicks. Until they do, the textarea shows the stored HTML as text —
-       so on an EDIT the member is shown their own markup, and has no way to know
-       the grey bar is a button.
-
-       ACF's own default for this field is delay => 0 (:41), and its pseudo-field
-       registration sets no delay at all (form-front.php:59-65) — so something
-       else on this box turns it on. Forced OFF here rather than chased, because
-       this filter is added and removed around THIS render only: whatever sets it,
-       and whenever that changes, this form is unaffected.
-
-       ⚠️ IT IS THE SAME ELEMENT AS GATE 47's OPEN RED. div.acf-editor-toolbar is
-       the 712x40 slab of #f5f5f5 the dark sweep flags — one object, two symptoms,
-       and this removes it entirely. The dark rule added for it stays as
-       belt-and-braces: ACF still renders that div in other configurations. */
-    if (($field['type'] ?? '') === 'wysiwyg') {
-        $field['delay'] = 0;
-    }
 
     // ACF's pseudo-fields for title and content.
     $map = [];
@@ -1518,10 +1469,36 @@ function lg_fc_relabel($field)
        lists, link/unlink and undo/redo, so the rule "nothing stored that the
        toolbar cannot make" is a statement about one list rather than a hope.
 
-       DELAYED INIT (delay => 1) IS THE CRAFT LAW, not a preference: composers load
-       on intent, never eagerly. TinyMCE is heavy and most visitors to this form
-       are filling in a title and a file. ACF only boots the editor when the field
-       is first clicked.
+       ⚠️ delay => 0, AND THIS LINE IS THE ONE THAT DECIDES IT (#185). Ian, 8/21,
+       from his own screenshot: a grey bar reading "Click to initialize TinyMCE"
+       sitting on top of his write-up rendered as LITERAL <p>test</p>. That is
+       ACF's `delay` (class-acf-field-wysiwyg.php:240, 276-277) — with it on, ACF
+       renders a PLACEHOLDER and boots TinyMCE only on click, so until the member
+       clicks, the textarea shows their stored HTML as text and nothing tells them
+       the grey bar is a button.
+
+       TWO FIXES BEFORE THIS ONE DIED HERE, so do not add a third filter to fight
+       this line — change this line. ACF's own default is already delay => 0 (:41)
+       and the pseudo-field registration sets none (form-front.php:59-65): the
+       ONLY thing that ever turned it on was this assignment.
+         · lane 179 set delay = 0 at the TOP of this same function — this block
+           runs ~40 lines later and overwrote it;
+         · keeper added lg_fc_no_delay on acf/prepare_field/type=wysiwyg at 99 —
+           the type-scoped variation is dispatched from _acf_apply_hook_variations
+           at GENERIC priority 10, so it fired BEFORE lg_fc_relabel at 20 and was
+           overwritten too.
+       Proven by bisecting acf/prepare_field by priority on a real render:
+       delay=0 at prio 19, delay=1 at prio 21, nothing between them but us.
+       Both dead filters are deleted rather than left in place.
+
+       ⚠️ THIS IS NOT THE EAGER-COMPOSER LOAD CRAFT-STANDARD:26 FORBIDS, and the
+       measurement is why. That law reads "composers, admin tooling load on intent
+       (click/focus), never for anon" — and /compose/ 404s for anon (lg_fc_route).
+       Measured 8/21 on the rendered form with user_can_richedit() true, which is
+       what a real browser gets: wp-tinymce-js is enqueued in BOTH states. The
+       delay never saved the download; it deferred one tinymce.init() call. So the
+       cost of booting with the form is that one call, on a members-only page a
+       member opened in order to write. Do not revert this on the law's authority.
 
        media_upload OFF — the photo and ZIP fields own uploads here, and the media
        modal is already scoped to this post's own library by lg_fc_scope_library().
@@ -1532,7 +1509,7 @@ function lg_fc_relabel($field)
         $field['toolbar']      = 'lgfc_light';
         $field['media_upload'] = 0;
         $field['tabs']         = 'visual';
-        $field['delay']        = 1;
+        $field['delay']        = 0;
     }
 
     // ⚠️ PREFILL THE PSEUDO-FIELDS OURSELVES ON EDIT. ACF only fills _post_title
@@ -1909,8 +1886,11 @@ function lg_fc_css(): string
 .lgfc .mce-ico{color:var(--lg-ink,#323532)}
 .lgfc .mce-btn:hover,.lgfc .mce-btn.mce-active{background:var(--lg-sage-tint,#eef2e3)}
 .lgfc .mce-statusbar,.lgfc .mce-path{display:none}
-/* The delayed editor shows a plain textarea until it is clicked; make that
-   placeholder read like the other fields rather than like a bare box. */
+/* TinyMCE's source textarea. Since #185 the editor boots with the form, so this
+   is hidden behind the iframe in the ordinary case — it is still what a member
+   sees whenever user_can_richedit() is false (rich editing off in their profile,
+   or a browser WordPress does not recognise), and that fallback should read like
+   the other fields rather than like a bare box. */
 .lgfc .acf-editor-wrap .wp-editor-area{border:0;background:var(--lg-paper,#fdfdfa);
   color:var(--lg-ink,#323532);min-height:120px;padding:10px 12px;
   font:500 14px/1.5 var(--lg-font-sans,system-ui,sans-serif)}
@@ -2238,10 +2218,18 @@ html[data-lguser-theme="dark"] .lgfc{--lg-paper:#20241f;--lg-rust-tint:#3a2320}
 html[data-lguser-theme="dark"] .lgfc li:has(input:checked)>label,
 html[data-lguser-theme="dark"] .lgfc__chip:has(input:checked){
   background:#3d5233;border-color:#3d5233;color:#fff}
-/* THE ACTUAL OPEN GATE-47 RED, measured on main 2026-08-21: the WYSIWYG toolbar
-   is a 712x40 slab of #f5f5f5 in dark mode. It carries no text, so the contrast
-   pass never looks at it and only the bright-surface leg catches it. ACF's own
+/* GATE 47's OPEN RED, measured on main 2026-08-21: the WYSIWYG toolbar is a
+   712x40 slab of #f5f5f5 in dark mode. It carries no text, so the contrast pass
+   never looks at it and only the bright-surface leg catches it. ACF's own
    stylesheet paints it, so it is corrected here rather than there.
+
+   ⚠️ SINCE #185 THIS FORM NO LONGER RENDERS div.acf-editor-toolbar AT ALL — it is
+   emitted only under `delay`, and delay is now 0 (see lg_fc_relabel). So gate 47's
+   red on THAT element should clear because the element is gone, not because this
+   rule paints it; the rule stays as belt-and-braces, since ACF still renders that
+   div in other configurations. The .mce-* selectors beside it are NOT redundant —
+   they are the live TinyMCE chrome, which is now on screen from first paint.
+
    ⚠️ NOT VERIFIABLE FROM A BRANCH ON THIS BOX: this mu-plugin is symlinked out of
    the serving checkout, so gate 47 measures MAIN until a merge and a pull. Re-run
    after the pull with:
