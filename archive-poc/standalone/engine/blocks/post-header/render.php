@@ -56,18 +56,41 @@ $type_label = [
 /* ── Hero image: explicit image_id, else featured image, else nothing. ── */
 $photo_url = '';
 $photo_alt = '';
+/* The attachment's generated-size map, carried alongside the URL so the hero can
+   be served at the width it is actually drawn at (#187). Empty is a valid state —
+   Img degrades to one resized src and emits no guessed dimensions. */
+$photo_sizes = [];
 if ($image_id > 0) {
     $media = ($ctx['media_resolver'] ?? null);
     if (is_callable($media)) {
         $m = $media($image_id);
         $photo_url = (string) ($m['url'] ?? '');
         $photo_alt = (string) ($m['alt'] ?? '');
+        $photo_sizes = is_array($m['sizes'] ?? null) ? $m['sizes'] : [];
     }
 } elseif ($post_id > 0 && function_exists('get_the_post_thumbnail_url')) {
     $photo_url = (string) (get_the_post_thumbnail_url($post_id, 'full') ?: '');
     $thumb_id  = (int) (get_post_thumbnail_id($post_id) ?: 0);
     if ($thumb_id) $photo_alt = (string) (get_post_meta($thumb_id, '_wp_attachment_image_alt', true) ?: '');
 }
+
+/* ── Hero delivery (#187) ──────────────────────────────────────────────
+   MEASURED before this change, on /loothprint/fret-sander-v2/: a 2000px
+   original landing in a 780px slot, 105,396 bytes, no srcset, no dimensions —
+   and downloaded a second time by the embed block's poster. The same photo
+   through the resizer is 18,132 bytes at the width a phone renders.
+
+   The photo is full-bleed (.lg-post-header__photo is width:100%), so the slot
+   is the viewport and sizes="100vw" is the truth rather than a guess. src= is
+   the no-srcset fallback, deliberately mid-ladder: a browser old enough to
+   ignore srcset should not be handed the 1600. */
+$hero_widths = [400, 800, 1200, 1600];
+$hero_src    = \LG\LayoutV2\Img::src($photo_url, 800, $photo_sizes);
+$hero_srcset = \LG\LayoutV2\Img::srcset($photo_url, $photo_sizes, $hero_widths);
+$hero_dims   = \LG\LayoutV2\Img::dims($photo_url, $photo_sizes, 800);
+$hero_attrs  = ' src="' . Renderer::attr($hero_src) . '"'
+             . ($hero_srcset !== '' ? ' srcset="' . Renderer::attr($hero_srcset) . '" sizes="100vw"' : '')
+             . $hero_dims;
 
 /* ── Title + author ────────────────────────────────────────────────── */
 $title = $post_id > 0 && function_exists('get_the_title') ? (string) get_the_title($post_id) : '';
@@ -348,7 +371,7 @@ if ($variant === 'sponsor') {
 <?= $ind ?><header class="lg-post-header lg-post-header--sponsor">
 <?php if ($photo_url !== ''): ?>
 <?= $ind ?>  <div class="lg-post-header__spr-hero">
-<?= $ind ?>    <img src="<?= Renderer::attr($photo_url) ?>" alt="<?= Renderer::attr($photo_alt) ?>" loading="eager" fetchpriority="high" />
+<?= $ind ?>    <img<?= $hero_attrs ?> alt="<?= Renderer::attr($photo_alt) ?>" loading="eager" fetchpriority="high" />
 <?php if ($tier_terms): ?>
 <?= $ind ?>    <div class="lg-post-header__eyebrow">
 <?php foreach ($tier_terms as $tier): ?>
@@ -373,7 +396,7 @@ if ($variant === 'sponsor') {
 <?= $ind ?>  <div class="lg-post-header__spr-brand" style="border-bottom-color:<?= Renderer::attr($sp_color_1) ?>">
 <?php if ($sp_logo_url !== ''): ?>
 <?= $ind ?>    <div class="lg-post-header__spr-logo" style="border-color:<?= Renderer::attr($sp_color_1) ?>">
-<?= $ind ?>      <img src="<?= Renderer::attr($sp_logo_url) ?>" alt="<?= Renderer::attr($sp_brand_name) ?> logo" loading="lazy" />
+<?= $ind ?>      <img src="<?= Renderer::attr(\LG\LayoutV2\Img::src($sp_logo_url, 240)) ?>" alt="<?= Renderer::attr($sp_brand_name) ?> logo" loading="lazy" />
 <?= $ind ?>    </div>
 <?php endif; ?>
 <?= $ind ?>    <div class="lg-post-header__spr-id">
@@ -420,7 +443,7 @@ if ($variant === 'sponsor') {
 <?= $ind ?><header class="lg-post-header lg-post-header--<?= $variant ?>">
 <?= $ind ?>  <div class="lg-post-header__hero">
 <?php if ($photo_url !== ''): ?>
-<?= $ind ?>    <img class="lg-post-header__photo" src="<?= Renderer::attr($photo_url) ?>" alt="<?= Renderer::attr($photo_alt) ?>" loading="eager" fetchpriority="high" />
+<?= $ind ?>    <img class="lg-post-header__photo"<?= $hero_attrs ?> alt="<?= Renderer::attr($photo_alt) ?>" loading="eager" fetchpriority="high" />
 <?php endif; ?>
 <?= $ind ?>    <div class="lg-post-header__scrim" aria-hidden="true"></div>
 <?php if ($tier_terms || $type_label !== ''): ?>

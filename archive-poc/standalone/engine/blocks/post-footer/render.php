@@ -188,6 +188,9 @@ if (isset($GLOBALS['LG_PC']['related']) && is_array($GLOBALS['LG_PC']['related']
         $related_cards[] = [
             'url'         => (string) get_permalink($rid),
             'title'       => (string) get_the_title($rid),
+            /* A bare URL, no size metadata — which is fine: the variant filename
+               (`-768x576.webp`) carries the dimensions, and Img reads them there
+               (#187). Nothing here needs to change to get srcset + dims. */
             'img'         => (string) (get_the_post_thumbnail_url($rid, 'medium_large') ?: ''),
             'author_name' => $r_auth ? (string) get_the_author_meta('display_name', $r_auth) : '',
         ];
@@ -289,7 +292,7 @@ if ($can_edit && $author_id) {
 ?>
 <?= $ind ?>      <a class="lg-post-footer__card" href="<?= Renderer::attr($url) ?>">
 <?php if ($img !== ''): ?>
-<?= $ind ?>        <img class="lg-post-footer__card-img" src="<?= Renderer::attr($img) ?>" alt="" loading="lazy" />
+<?= $ind ?>        <img class="lg-post-footer__card-img" src="<?= Renderer::attr(\LG\LayoutV2\Img::src($img, 480)) ?>"<?php $rcSet = \LG\LayoutV2\Img::srcset($img, [], [240, 400, 480, 600]); if ($rcSet !== ''): ?> srcset="<?= Renderer::attr($rcSet) ?>" sizes="(min-width: 1024px) 300px, 70vw"<?php endif; ?><?= \LG\LayoutV2\Img::dims($img, [], 480) ?> alt="" loading="lazy" />
 <?php else: ?>
 <?= $ind ?>        <div class="lg-post-footer__card-img" aria-hidden="true"></div>
 <?php endif; ?>
