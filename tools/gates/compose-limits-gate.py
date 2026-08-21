@@ -17,7 +17,7 @@ form is decoration. So every limit below is proved by pushing a real oversize fi
 through the real filter and reading the refusal.
 
 ⚠️ AND WHY THE COLLECTOR NEEDS §E. Run unrestricted over the real corpus,
-"delete what the post does not use" wanted to delete 67 attachments across 36
+"delete what the post does not use" wanted to delete 65 attachments across 36
 HEALTHY PUBLISHED loothprints. §E is the assertion that this can never happen: it
 counts stamped attachments outside the run's own fixtures and requires zero, so
 "legacy files are unreachable" is checked on every run rather than remembered.

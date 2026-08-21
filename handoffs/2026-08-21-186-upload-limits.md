@@ -22,7 +22,7 @@ the ZIP field, `_thumbnail_id`, the layout blob, the body.
 Before writing the deleting half, that scan was run **read-only over all 174 real
 loothprints**. Two things came back.
 
-**1. It wanted to delete 67 attachments across 36 HEALTHY PUBLISHED posts.**
+**1. It wanted to delete 65 attachments across 36 HEALTHY PUBLISHED posts.**
 Spot-checked, they are genuine leftovers — one post carries six superseded
 FretSander zips, another seven unused webp images. But destroying them the moment
 an author pressed Post, on work from months ago, with no undo, is not a cleanup.
@@ -57,9 +57,11 @@ load-bearing when it is not:
 | body + `_lg_layout_v2_rendered_html`, by filename stem and id | **7, and nothing else keeps them** | earns its place |
 | `_lg_layout_v2` blob (`image_id`/`image_ids`/`featured_image_id`) | 0 unique | **currently REDUNDANT** — it fires on 167 of 170 posts and yields 547 ids, every one already known to leg one. Kept because the blob is hand-editable in the front-end editor and tomorrow's data need not look like today's. Said plainly rather than left to read as a safety net that is carrying weight. |
 
-**Convergence:** three independently written scan designs agree — 65, 67 and 67
-unused across the same 36 posts. One scan agreeing with itself would not have
-been evidence.
+**Convergence:** four independently written scan designs agree to within two —
+65, 67, 67, and the shipped tool's 65 — across the same 36 posts. One scan
+agreeing with itself would not have been evidence. The spread is how loosely each
+matched; the shipped tool is the most conservative, because it alone holds back a
+file that is another post's lead image.
 
 **The bias is deliberate: over-preserve.** A false "used" costs disk. A false
 "unused" destroys a member's file.
@@ -216,8 +218,11 @@ very form under test:
   39 are safe: 5 are still embedded in another live page**, and the sweep holds
   them back. A missing parent is not proof a file is unused, and that check is
   the difference between a cleanup and five broken articles.
-- **Category B — 67** attachments on **36 published loothprints** that the post
-  does not use.
+- **Category B — 65** attachments on **36 published loothprints** that the post
+  does not use. *(Earlier ad-hoc scans in this lane reported 65–67. The shipped
+  tool's number is the authoritative one and is the most conservative by
+  construction: it carries a cross-post lead-image guard the throwaway scans did
+  not, so it can only ever preserve more.)*
 - **56 of 174** existing loothprints have an **empty write-up** — those authors
   will be asked for one the first time they open the form to edit. The ruling
   working as intended, but real people will meet it.

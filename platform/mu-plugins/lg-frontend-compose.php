@@ -1114,7 +1114,7 @@ add_filter('upload_size_limit', 'lg_fc_advertised_upload_limit', PHP_INT_MAX);
  *
  * The collector deletes what a post does not use. Run unrestricted over the real
  * corpus on 2026-08-21 — read-only, before any of this was built — that rule
- * wanted to delete 67 attachments across 36 HEALTHY PUBLISHED loothprints. They
+ * wanted to delete 65 attachments across 36 HEALTHY PUBLISHED loothprints. They
  * are genuine historical leftovers (one post carries six superseded FretSander
  * zips), but destroying them the moment an author pressed Post, on work from
  * months ago, with no undo, is not a cleanup — it is data loss wearing a green

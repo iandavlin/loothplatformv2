@@ -13,7 +13,7 @@
  * published.
  *
  * ⚠️ CATEGORY B IS THE DANGEROUS ONE AND IT IS WHY THIS IS A REPORT. Run
- * unrestricted, the "delete what the post does not use" rule wants to remove 67
+ * unrestricted, the "delete what the post does not use" rule wants to remove 65
  * attachments across 36 HEALTHY PUBLISHED loothprints. They really are unused —
  * one post carries six superseded FretSander zips — but that is a decision about
  * other people's work, not a cleanup a lane may take on its own authority.
@@ -33,7 +33,7 @@
  * Nothing was at risk (this is a dry run and applying needs two explicit flags
  * plus a human), but a count taken during a gate run is a count of somebody
  * else's temporary rows as well as the backlog. Baseline with the box idle:
- * 44 in category A (39 of them safe) and 67 in category B across 36 posts.
+ * 44 in category A (39 of them safe) and 65 in category B across 36 posts.
  */
 
 global $wpdb;
