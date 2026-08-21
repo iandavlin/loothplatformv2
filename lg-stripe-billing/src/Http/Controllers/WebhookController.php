@@ -7,6 +7,7 @@ namespace LGSB\Http\Controllers;
 use LGSB\Contracts\SettingsStore;
 use LGSB\Core\ProductSyncHandler;
 use LGSB\Core\ReturnHandler;
+use LGSB\Core\WebhookReceipts;
 use LGSB\Core\SubscriptionWebhookHandler;
 use LGSB\Stripe\StripeGateway;
 use Psr\Http\Message\ResponseInterface as Response;
@@ -34,14 +35,31 @@ final class WebhookController
         $secret    = $this->settings->getWebhookSecret();
 
         if ($secret === '') {
+            /* NO SECRET IS A SIGNATURE FAILURE TOO, and recording it is the
+               whole point (#192): this is the exact shape of failure #2 —
+               a value present in one half and absent in the other, failing
+               closed in silence. The flag distinguishes it from a WRONG
+               secret, which needs a different fix. */
+            WebhookReceipts::recordSignatureFailure($this->pdo, false);
             return self::json($response, ['error' => 'Webhook secret not configured.'], 500);
         }
 
         try {
             $event = $this->stripe->constructWebhookEvent($payload, $sigHeader, $secret);
         } catch (SignatureVerificationException) {
+            WebhookReceipts::recordSignatureFailure($this->pdo, true);
             return self::json($response, ['error' => 'Invalid signature.'], 400);
         }
+
+        /* THE RECEIPT (#192). Recorded BEFORE dispatch, deliberately: what this
+           answers is "did Stripe reach us", and a handler that throws must not
+           erase the evidence that it did. Dispatch failures are a different
+           question and already have error_log. */
+        WebhookReceipts::recordVerified(
+            $this->pdo,
+            (string) $event->type,
+            (string) ($event->id ?? '')
+        );
 
         $obj = $event->data->object;
 
