@@ -194,3 +194,92 @@ undone is how a refunded member keeps paid access.
   a revert is a return to today's behaviour.
 - **Money:** refunds are Stripe-side and always available; the retraction path
   is what must be proven working BEFORE volume, not after.
+
+---
+
+# THE LIVE-TESTING CHECKLIST (Ian asked for it 8/21 night)
+
+Work top to bottom. Keeper verifies after each from the read-only eye.
+**Every command here runs on LIVE, and every one of them is Ian's.**
+
+## A. Make the tester link storable  ▢
+
+The dash tells you this itself. One-time root step:
+
+    sudo install -d -o looth-dev -g looth-dev -m 755 /srv/lg-shared-state
+
+Then **Testers tab → Create the tester link**. Copy it somewhere safe — it is
+shown once and stored as a hash. Rotate remakes it and kills the old one.
+
+## B. The shared secret  ▢  ← WITHOUT THIS, CHECKOUT REFUSES EVERYONE
+
+Still ABSENT on live (measured 8/21). Copy the billing app's value into WP:
+
+    S=$(grep '^LGMS_SHARED_SECRET=' /srv/lg-stripe-billing/.env | cut -d= -f2- | tr -d '"'"'"'')
+    sudo -u looth-live wp --path=/var/www/dev eval "update_option('lgms_shared_secret', '$S'); echo strlen((string)get_option('lgms_shared_secret','')) . \"\n\";"
+
+## C. Confirm the app is in LIVE mode and points at live  ▢
+
+    grep -E '^(STRIPE_SECRET_KEY|STRIPE_PUBLISHABLE_KEY|LGMS_SYNC_URL)=' /srv/lg-stripe-billing/.env \
+      | sed -E 's/=(sk|pk)_live.*/= LIVE key/; s/=(sk|pk)_test.*/= TEST KEY  <-- WRONG/; s#=(https?://[^/]+).*#= \1#'
+
+Two LIVE keys, and a sync URL on `loothgroup.com`. **A test key here means no
+real money can be taken.** Live keys were parked at
+`/srv/lg-stripe-billing.bak-20260816-183554`.
+
+## D. The catalogue, in Stripe  ▢
+
+**Copy to live mode** on each of the six products (Lite, Lite Regional A, Lite
+Regional B, Pro, Pro Regional A, Pro Regional B) — prices ride along. Then
+**PRUNE**: dev2's Lite carries ten prices including strays ($2, $60, $66, a
+duplicate $5). Keep only the twelve wanted. **Copy once per product** — Stripe
+will happily duplicate.
+
+Add a **live-mode webhook** at `https://loothgroup.com/billing/v1/webhook` and
+put its signing secret in the app's `.env`.
+
+**Optional, for outside testers:** a temporary $1/month and $1/year price.
+Archive them and CANCEL those subscriptions afterwards — Stripe grandfathers
+people onto the price they joined at.
+
+## E. Map the tiers  ▢
+
+After the webhook creates the rows, confirm each live product's `ref`
+(`looth2`/`looth3`) on our side. **Stripe never sets this** — a price with no
+`ref` grants nothing and checkout refuses it.
+
+## F. The tester list  ▢
+
+Each tester needs a WordPress account. **Ian must be on it himself** — #181 has
+no admin bypass.
+
+    sudo -u looth-live wp --path=/var/www/dev eval '
+    $ids = [/* tester user ids */];
+    update_option("lgms_stripe_lifecycle_allowlist", array_values(array_unique(array_map("intval", $ids))));
+    echo count($ids) . " on the list\n";'
+
+## G. Open the door for them  ▢
+
+Header/join state to `allowlist` (`lgms_stripe_testgroup_pages`), leaving
+`lgms_stripe_pages_live` at `0` so the public still sees Patreon.
+⚠️ **Verify as a listed NON-ADMIN member** — an admin passes locks a tester may
+not.
+
+## H. The first real charge, by Ian  ▢
+
+One monthly and one annual, real card, as a listed tester. Confirm the role
+lands, the receipt arrives, the member sees their tier. **Then refund from
+Stripe and confirm the role is retracted.** The retraction half is the one that
+gets skipped, and it is the one that matters.
+
+## I. Then invite the testers  ▢
+
+Small group, short window. Their posts and purchases are real.
+
+## Optional, any time
+
+- **Comp timers on live** — `platform/config/comp-expiry.local.php` with
+  `enabled => true`, `effective_from => '2026-08-21'` (nothing already overdue
+  is touched).
+- **Upload cap** — Settings → EWWW Image Optimizer → Resize. Limits are `0`
+  today, i.e. none. 2560px wide + delete-originals caps what you STORE.
