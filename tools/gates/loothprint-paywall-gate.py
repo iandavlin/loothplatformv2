@@ -35,6 +35,13 @@ selector looth-lite or public."
       until then the textarea shows stored markup as text — and nothing tells the
       member the grey bar is a button. Asserted on the served form. Deploy-coupled
       with P2, for the same reason.
+      ⚠️ Asserted on MARKUP (`<div class="acf-editor-toolbar"`), never on the bare
+      class name — that string also lives in the page's own dark-mode CSS rule,
+      which deliberately stays, so the first version of this leg could not have
+      gone green on a fixed form. And it is PAIRED with the positive proof that
+      the editor is on the page at all, so "the placeholder is gone" can never be
+      satisfied by "there is no editor". Both found while fixing #185; the
+      expectation is unchanged by either, only the matcher.
 
   P3. THE CHOICE REACHES THE RENDERED PAGE. Asserted from the SERVED BYTES of the
       standalone article, not from the term store, because a write that lands in
@@ -57,7 +64,7 @@ selector looth-lite or public."
 Exit: 0 green, 1 a real defect, 2 CANNOT RUN.
 ⚠️ CANNOT RUN IS 2, NOT 3 — run-all.sh reads anything else as RED.
 """
-import json, os, subprocess, sys, time
+import json, os, re, subprocess, sys, time
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 SERVE_MU = "/srv/archive-poc/../platform/mu-plugins/lg-frontend-compose.php"
@@ -260,9 +267,40 @@ def main() -> int:
         # write-up rendered as literal <p>test</p>. That is ACF's `delay`
         # placeholder; until it is clicked the textarea shows stored markup as
         # text. Same element as gate 47's bright-surface red.
-        chk("the rich-text editor is not left un-initialised",
-            "Click to initialize TinyMCE" not in body and "acf-editor-toolbar" not in body,
-            "acf-editor-toolbar present" if "acf-editor-toolbar" in body else "")
+        #
+        # ⚠️ TWO DEFECTS IN THIS LEG'S FIRST VERSION, both found while fixing #185,
+        # and the expectation is UNCHANGED by either — only the matcher is.
+        #
+        #   1. IT COULD NEVER GO GREEN. It matched the bare string
+        #      "acf-editor-toolbar", which also lives in the page's own dark-mode
+        #      CSS rule for that class — a rule that deliberately STAYS as
+        #      belt-and-braces. So the leg would have stayed red on a correctly
+        #      fixed form, for a reason nowhere near the defect
+        #      (`feedback-red-first-that-stays-green`, the mirror image: assert
+        #      markup that can only be OUTPUT, never a string prose or CSS shares).
+        #      Measured after the fix: bare string 2, the markup 0.
+        #   2. IT COULD PASS VACUOUSLY. It sat outside the form_arrived guard, so
+        #      a login page or an empty body contains no toolbar and the one claim
+        #      under test passed having measured nothing
+        #      (`feedback-absence-assertion-needs-liveness`).
+        #
+        # So: the absence is asserted on markup, and it is PAIRED with the positive
+        # proof that the editor is actually on the page. "The placeholder is gone"
+        # and "there is no editor at all" must never read alike.
+        if form_arrived:
+            wrap = re.search(r'class="acf-editor-wrap[^"]*"', body)
+            chk("the write-up editor is on the form (so its absence is not vacuous)",
+                wrap is not None and 'name="acf[_post_content]"' in body,
+                wrap.group(0) if wrap else "no acf-editor-wrap in the body")
+            # ⚠️ NOT tmce-active: this harness is curl, so user_can_richedit() is
+            # false and ACF renders html-active. The `delay` class does not depend
+            # on that, which is why it is the thing asserted.
+            chk("the rich-text editor is not left un-initialised",
+                "Click to initialize TinyMCE" not in body
+                and '<div class="acf-editor-toolbar"' not in body
+                and not (wrap and " delay" in wrap.group(0)),
+                (wrap.group(0) if wrap else "") if wrap and " delay" in wrap.group(0)
+                else ("placeholder markup present" if '<div class="acf-editor-toolbar"' in body else ""))
 
     # ── P3: the choice reaches the RENDERED PAGE ─────────────────────────────
     print("P3 — the choice must reach the served bytes, not just the term store")
