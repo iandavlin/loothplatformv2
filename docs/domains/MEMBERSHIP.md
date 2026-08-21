@@ -180,6 +180,94 @@
   `PatreonStanding` without either being added to its require list. Revived:
   20 assertions, including the *"body chooses NOTHING"* section.
 
+## State (8/21, #183 — the comp timer runs again, through the single writer)
+
+- **THE LAW THIS ADDS (Ian 8/21):** *"comp timers need to work."* And the ruling
+  that outranks it in the same breath: **the two already-overdue accounts are
+  LEFT ALONE** — no demotion, no extension — until he decides case by case.
+- ⚠️ **THE OLD PLUGIN IS GONE, NOT DEACTIVATED, AND MUST NOT BE RESURRECTED.**
+  `lg-looth4-expiry 1.0.0` belonged to the pre-cutover platform. Measured both
+  sides 8/21 — keeper on live's filesystem, this lane on the database: no file
+  under wp-content, absent from `active_plugins`, `recently_activated` is
+  `a:0:{}`, and the 13,182-byte `cron` option names no looth4 or expiry event.
+  Reinstating it would make it a **second writer of `wp_capabilities`**, and the
+  Arbiter's own looth4 comment is the bill for that: the old timer *"stripped
+  looth4 and left looth1 behind (and a later Patreon sub then added looth3 on
+  top) — the root of the double-role bug"*.
+- ⚠️ **NOTHING "STILL SETS" THE META — the July dates are VALUES, not write
+  times, and this is worth not re-deriving.** `umeta_id` is monotonic with
+  registration on live. Row **219462** (user 1829) sits between that user's own
+  `wp_capabilities` row (registered `2026-04-21 21:11`) and user 1830's
+  (`2026-04-23 03:52`), so it was written **21/22 April**. Row **221169** (user
+  1865) sits between `221158` (reg `2026-05-10 15:26`) and `221221` (user 1866,
+  `2026-05-12 03:19`) — **10–12 May**. Both are the last row of that account's
+  setup burst: the expiry was set **at grant time**, by the plugin that was
+  still installed then (LIVE-INVENTORY, committed 2026-06-18, records it
+  active).
+- ⚠️ **SO UNTIL #183 AN ADMIN COULD NOT SET A COMP END-DATE AT ALL.** No ACF
+  field (there is **no `_looth4_expires_at` companion row**, which is the tell),
+  no code-snippet, no ACF field group, no wp_option names the key; the only two
+  occurrences on live are the two data rows. Enforcement without a setter is
+  half a feature and **Ian grants comps by hand**, so #183 ships the **Comp
+  Timers tab** (Settings → LG Member Sync) alongside it. It writes the meta and
+  **never a role**.
+- **THE TIMEZONE IS UTC, AND THE OLD READER WAS FOUR HOURS LATE.** Two
+  independent proofs: the old plugin's own source
+  (`cutover/batch-output/BATCH-04-results.md:158` — *"stored as Y-m-d H:i:s
+  UTC"*), and the data, which agrees without it — user 1829 registered
+  `2026-04-21 21:11:27` UTC with expiry `2026-07-28 21:11:00`, the **same
+  minute-of-day**; user 1865 registered `15:26:04`, expiry `15:25:00`. Two for
+  two. **Both boxes run `timezone_string = America/New_York`**, so
+  `CompStanding`'s site-zone read (left deliberately unsettled by #181) placed
+  every expiry four hours late. Harmless while nothing enforced; a real defect
+  the moment something demotes. Gate 89 asserts it against a **hostile process
+  timezone** set to America/New_York.
+- **WHAT AN EXPIRED COMP BECOMES: whatever their sources already say.** Not a
+  flat looth1. The role comes off and `Arbiter::sync` re-arbitrates normally, so
+  a comp who also pays on Patreon lands on **looth3** and a Stripe member on
+  their own tier. Only when there is no paying opinion anywhere does the
+  **looth1 floor** apply — never no tier at all, which is a broken account
+  rather than a lapsed comp. That floor is also what the old plugin documented
+  (*"Expired users are demoted to looth1"*).
+- ⚠️ **TWO PLACEMENT DETAILS IN `Arbiter::sync` ARE LOAD-BEARING**, both found
+  by building it and both gated. **(1)** `$oldTier` is captured as `looth4`
+  *before* the role comes off, or `looth_tier_changed` fires with the wrong
+  `from` and profile-app purges against a tier the member never held. **(2)**
+  the stripe coexistence guard gained `! $compExpired`: a comp whose role was
+  just removed holds no tier for an instant, so `empty(intersect looth1)` is
+  TRUE for them and that guard would return early leaving them with **no looth
+  role whatsoever**. The genuinely ambiguous version of that case —
+  `payment_source=stripe` with **no** source row — is **HELD above**, before the
+  role comes off, and says so in its reason: a payer is never flattened.
+- **THE FENCE IS A DATE, NOT A LIST.** `platform/config/comp-expiry.php`:
+  `enabled` (default **false**) and `effective_from` (default **empty**). Only a
+  timer that ran out **at or after** the cutover is enforced. Chosen over a
+  skip-list because it cannot be defeated by a mistyped id and it protects every
+  already-overdue account on every box, including any nobody enumerated — the
+  same shape as the Arbiter's own `registeredAfterCutover`. Both fences fail
+  closed, so **`enabled => true` with an empty cutover is a real
+  detect-and-report mode** with no third knob. Held accounts are surfaced in the
+  tab and in every sweep's log, never silently reconciled.
+- ⚠️ **IT MERGES OFF, UNLIKE `lgms_checkout_audience`.** #181's enforcing
+  default was right because a fence nobody walks into is never exercised. This
+  one **takes access away from real people** — 14 comp holders on live, staff
+  among them — so the merge itself must move nobody.
+- **WHY A SWEEP AND NOT JUST THE ARBITER:** `Arbiter::sync` only runs for
+  members something has an opinion about, and a pure comp holder has no payment
+  source at all, so nothing would ever visit them. Same shape as the defect
+  `RetractionSweep` exists for. Pass 4 of the 5-minute tick, in its own
+  try/catch.
+- **#183 BUILT** on `183-comp-expiry`, gate **89** (96 assertions; red-first
+  **32/32** — 30 mutations + 2 no-op controls). Gate **86 §I9 was INVERTED, not
+  deleted**: it used to record this gap, and now asserts the OFF state with a
+  liveness partner (§I9b armed ⇒ demotes, §I9c ⇒ lands on a real tier, §I9d ⇒
+  pre-cutover timers held even when armed). Gate 86 also gained `CompExpiry` on
+  its require list — without it the real Arbiter fatals on every looth4 case.
+- **Owed:** Ian looks at the Comp Timers tab on dev2, then keeper places
+  `platform/config/comp-expiry.local.php` (`php -l` it first) to arm it — start
+  with `enabled => true` and an **empty** cutover so it reports without moving
+  anybody. Live writes are Ian's.
+
 ## State (8/21, #181 — the cohort becomes real in the CHECKOUT path)
 
 - **THE LAW THIS ADDS (Ian 8/21, decision box):** *"Fix before go-live."* #180
@@ -247,18 +335,18 @@
 - **UNEXPIRED looth4, not looth4** (keeper's sharpening, 8/21).
   **`LGMS\Membership\CompStanding`** is that predicate — `holdsComp`,
   `expiresAt`, `isActiveComp`, `isExpiredComp`, `describe` — read-only, enforcing
-  nothing. ⚠️ **#183 SHOULD INHERIT THIS CLASS RATHER THAN WRITE A SECOND ONE.**
-  It is the first and only reference to `looth4_expires_at` in the monorepo.
+  nothing. ✅ **#183 DID INHERIT IT** rather than write a second one:
+  `CompExpiry` holds the policy and the sweep, this stayed the read-only predicate.
   Today it is used to make the refusal notice name a comp member instead of
-  logging them as a stranger. **Its timezone question is deliberately unsettled**
-  and is #183's to decide: the stored values are bare `Y-m-d H:i:s` with no
-  offset (`2026-07-11 15:25:00` shape), safe for a predicate nobody acts on and a
-  real decision for one that demotes people.
-- ⚠️ **AN EXPIRED COMP IS STILL PROTECTED TODAY** — measured, and gated as such
-  (§I9). Nothing enforces the date: the expiry plugin is not installed, not in
-  mu-plugins, not in `active_plugins`, and no cron event mentions it. That is
-  **#183**, ruled and queued; Ian ruled the two overdue accounts (1829, 1865)
-  are LEFT ALONE.
+  logging them as a stranger. ✅ **ITS TIMEZONE QUESTION WAS SETTLED BY
+  #183: the values are UTC**, on two independent proofs, and reading them in the
+  site zone was four hours late — see State (8/21, #183) above. The
+  "deliberately unsettled" note is superseded.
+- ✅ **CLOSED BY #183 — an expired comp is no longer protected once enforcement
+  is armed.** This line recorded the gap; gate 86 §I9 was INVERTED rather than
+  deleted to match. It stays true in the SHIPPED state, because the flag merges
+  OFF — and the two overdue accounts (1829, 1865) are still LEFT ALONE, now by
+  the enforcement cutover rather than by nothing at all. See State (8/21, #183).
 - ⚠️ **THE HONEST EDGE, boarded for Ian:** a comp member who somehow reaches
   Stripe checkout while outside the cohort **is refused like anyone else**. They
   lose nothing — no demotion, no role write, no opinion (§I6, §I10) — and the
