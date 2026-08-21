@@ -209,6 +209,40 @@ MUTATIONS = [
      "        if ( false ) { return; }",
      "G7", "the redirect fires on EVERY admin page, bouncing the whole of "
            "wp-admin into this dash"),
+
+    # ---- the Affiliates fold (#190, keeper's item 3) ---------------------
+    ("M29", ADMIN,
+     "            // #190: absorbed from its own top-level menu. Same content, same\n            // handlers, one sidebar item.\n            'affiliates'    => 'Affiliates',\n",
+     "",
+     "G9c", "Affiliates is dropped instead of folded — the tab disappears and "
+            "the payouts screen becomes unreachable from anywhere"),
+
+    ("M30", ADMIN,
+     "        if ( $pagenow !== 'admin.php' ) { return; }\n        if ( ! isset( $_GET['page'] ) || $_GET['page'] !== self::AFF_PAGE ) { return; }",
+     "        if ( true ) { return; }\n        if ( ! isset( $_GET['page'] ) || $_GET['page'] !== self::AFF_PAGE ) { return; }",
+     "G10", "the old Affiliates URL is left dead — seven inbound links, two of "
+            "them member-facing, land on 'you are not allowed to access this page'"),
+
+    ("M31", ADMIN,
+     "        if ( ! isset( $_GET['page'] ) || $_GET['page'] !== self::AFF_PAGE ) { return; }",
+     "        if ( false ) { return; }",
+     "G11", "the affiliates redirect fires for every admin.php page"),
+
+    ("M32", ADMIN,
+     """        $extra = [];
+        if ( isset( $_GET['lgms_edit_aff'] ) ) {
+            $id = (int) $_GET['lgms_edit_aff'];
+            if ( $id > 0 ) { $extra['lgms_edit_aff'] = $id; }
+        }""",
+     "        $extra = [];\n        if ( false ) {}",
+     "G10b", "the redirect drops the row being edited, landing the operator on "
+             "the list instead of the affiliate they clicked"),
+
+    ("M33", ADMIN,
+     "        self::renderAffiliatesTab();\n        self::renderPayoutsPanel();",
+     "        self::renderAffiliatePage();",
+     "G12", "the tab renders the standalone PAGE, nesting a second wrap and a "
+            "second h1 inside render()'s own"),
 ]
 
 NOOPS = [

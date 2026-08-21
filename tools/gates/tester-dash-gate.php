@@ -695,6 +695,63 @@ $r7 = trim( (string) shell_exec( 'php -r ' . escapeshellarg( $probe7 ) . ' 2>&1'
 is_( ! str_contains( $r7, 'REDIRECT' ),
      'G7  LIVENESS — and it does NOT fire on any other admin page' );
 
+/* ---- THE AFFILIATES FOLD (#190, keeper's item 3) --------------------------
+   Ian asked for ONE sidebar item: "everything a membership question could send
+   Ian to should be reachable from that one item without hunting." Affiliates
+   was a second top-level menu in this same file. */
+
+is_( substr_count( $seen, 'MENU:' ) === 1,
+     'G9  BEHAVIOURAL — this plugin registers exactly ONE top-level menu'
+     . ( substr_count( $seen, 'MENU:' ) === 1 ? '' : ' — got: ' . str_replace( "\n", ' | ', $seen ) ) );
+is_( ! str_contains( $seen, 'MENU:lg-affiliates' ),
+     'G9b and Affiliates is no longer one of them' );
+is_( str_contains( $admin, "'affiliates'    => 'Affiliates'" ),
+     'G9c it is a TAB instead — folded in, not deleted' );
+
+/* G10 — AND ITS OLD ADDRESS STILL WORKS. Nothing registers page=lg-affiliates
+   now, so wp-admin would answer "Sorry, you are not allowed to access this
+   page" for SEVEN inbound links, two of them member-facing (membership-pages'
+   affiliate-earnings.php and Wp/Shortcodes.php both tell an admin where payouts
+   live). Consolidating a menu by breaking every link into it is not
+   consolidation. Driven, with a real edit id and a real notice attached,
+   because a redirect that drops them lands the operator on a list instead of
+   the row they were editing. */
+$probe10 = '$pagenow = "admin.php"; $_GET = ["page"=>"lg-affiliates","lgms_edit_aff"=>"42","lgms_aff_ok"=>"done"];'
+         . 'function admin_url($p=""){ return "https://x/wp-admin/".$p; }'
+         . 'function add_query_arg($a,$u=""){ return $u."?".http_build_query($a); }'
+         . 'function sanitize_key($k){ return preg_replace("/[^a-z0-9_\-]/","",strtolower($k)); }'
+         . 'function wp_safe_redirect($u,$c=302){ echo "REDIRECT:$c:$u\n"; }'
+         . 'function add_action(...$a){} function add_filter(...$a){}'
+         . 'require ' . var_export( $GATE_ROOT . '/lg-patreon-stripe-poller/src/Admin.php', true ) . ';'
+         . 'LGMS\Admin::redirectLegacyAffiliatesUrl();';
+$r10 = trim( (string) shell_exec( 'php -r ' . escapeshellarg( $probe10 ) . ' 2>&1' ) );
+is_( str_contains( $r10, 'page=lg-member-sync' ) && str_contains( $r10, 'tab=affiliates' ),
+     'G10 the OLD Affiliates URL redirects to the tab'
+     . ( str_contains( $r10, 'REDIRECT' ) ? '' : ' — got: ' . str_replace( "\n", ' | ', $r10 ) ) );
+is_( str_contains( $r10, 'lgms_edit_aff=42' ) && str_contains( $r10, 'lgms_aff_ok=done' ),
+     'G10b carrying the row being edited and the notice — not just the bare tab' );
+
+$probe11 = str_replace( '"page"=>"lg-affiliates"', '"page"=>"something-else"', $probe10 );
+$r11 = trim( (string) shell_exec( 'php -r ' . escapeshellarg( $probe11 ) . ' 2>&1' ) );
+is_( ! str_contains( $r11, 'REDIRECT' ),
+     'G11 LIVENESS — and it does NOT fire for other admin.php pages' );
+
+/* G12 — the tab must not nest a second wrap/h1 inside render()'s own. Two h1s
+   on one screen is a screen reader announcing two page titles, and WordPress's
+   admin CSS laying the second one out wrongly. */
+$affContent = php_function_body( $admin, 'renderAffiliatesContent' );
+/* Both halves are needed, and red-first M33 is why: checking only for the
+   literal markup passes on a body that merely CALLS renderAffiliatePage(),
+   which carries the wrap and the h1 with it. The markup can arrive by
+   delegation as easily as by being typed. */
+is_( $affContent !== ''
+     && ! str_contains( $affContent, 'class="wrap"' )
+     && ! str_contains( $affContent, '<h1>' )
+     && ! str_contains( $affContent, 'renderAffiliatePage' ),
+     'G12 the Affiliates TAB renders no second <div class="wrap"> or <h1>, directly or by delegation' );
+is_( str_contains( php_function_body( $admin, 'renderAffiliatePage' ), 'renderAffiliatesContent' ),
+     'G12b and the standalone page reuses that same content — one definition, not two' );
+
 // ---------------------------------------------------------------------------
 section( '§C  COUPLING — reported, never asserted' );
 // ---------------------------------------------------------------------------

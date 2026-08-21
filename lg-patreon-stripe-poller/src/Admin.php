@@ -37,6 +37,7 @@ final class Admin
         add_action( 'admin_menu',  [ self::class, 'menu' ] );
         add_action( 'admin_init',  [ self::class, 'registerSettings' ] );
         add_action( 'admin_init',  [ self::class, 'redirectLegacySettingsUrl' ] );
+        add_action( 'admin_init',  [ self::class, 'redirectLegacyAffiliatesUrl' ] );
         add_action( 'admin_enqueue_scripts', [ self::class, 'enqueueScripts' ] );
         add_action( 'admin_post_lgms_rerun_pages',       [ self::class, 'handleRerunPages' ] );
         add_action( 'admin_post_lgms_save_welcome_mosaic', [ self::class, 'handleSaveMosaic' ] );
@@ -90,6 +91,20 @@ final class Admin
             'dashicons-groups',
             30,
         );
+
+        /* AFFILIATES USED TO BE A SECOND TOP-LEVEL MENU and is now a tab above
+           (#190). Ian: "one sidebar item ... everything a membership question
+           could send Ian to should be reachable from that one item without
+           hunting."
+
+           Nothing registers page=lg-affiliates any more, so that address would
+           answer "Sorry, you are not allowed to access this page" — and SEVEN
+           places point at it: four redirects inside this file and three outside
+           it (lg-admin-tools, membership-pages/web/affiliate-earnings.php, and
+           Wp/Shortcodes.php, the last two member-facing). Consolidating a menu
+           by breaking every link into it is not consolidation, so the old
+           address redirects to the tab instead — see
+           redirectLegacyAffiliatesUrl(). */
     }
 
     /**
@@ -124,6 +139,51 @@ final class Admin
         }
         wp_safe_redirect( self::pageUrl( $args ), 301 );
         exit;
+    }
+
+    /**
+     * THE OLD AFFILIATES MENU URL STILL WORKS (#190).
+     *
+     * Affiliates was its own top-level menu until this issue folded it into a
+     * tab. Nothing registers page=lg-affiliates now, so wp-admin would answer
+     * "Sorry, you are not allowed to access this page" for SEVEN inbound links
+     * — including two that are member-facing (membership-pages'
+     * affiliate-earnings.php and Wp/Shortcodes.php both tell an admin where
+     * payouts live). Consolidating a menu by breaking every link into it is not
+     * consolidation.
+     *
+     * admin_init fires BEFORE wp-admin/admin.php decides a page hook is
+     * missing, so this intercepts cleanly rather than racing that wp_die().
+     *
+     * The carried parameters are a WHITELIST, not everything in $_GET: the edit
+     * id is cast to an int and the two notices are our own strings, re-escaped
+     * where they render. Forwarding arbitrary query args out of a URL and into
+     * a redirect is how an open redirect gets built by accident.
+     */
+    public static function redirectLegacyAffiliatesUrl(): void
+    {
+        global $pagenow;
+        if ( $pagenow !== 'admin.php' ) { return; }
+        if ( ! isset( $_GET['page'] ) || $_GET['page'] !== self::AFF_PAGE ) { return; }
+
+        $extra = [];
+        if ( isset( $_GET['lgms_edit_aff'] ) ) {
+            $id = (int) $_GET['lgms_edit_aff'];
+            if ( $id > 0 ) { $extra['lgms_edit_aff'] = $id; }
+        }
+        foreach ( [ 'lgms_aff_ok', 'lgms_aff_err' ] as $k ) {
+            if ( isset( $_GET[ $k ] ) && is_string( $_GET[ $k ] ) ) {
+                $extra[ $k ] = rawurlencode( rawurldecode( $_GET[ $k ] ) );
+            }
+        }
+        wp_safe_redirect( self::affiliatesUrl( $extra ), 301 );
+        exit;
+    }
+
+    /** The Affiliates TAB's URL — the one place that knows where it now lives. */
+    private static function affiliatesUrl( array $extra = [] ): string
+    {
+        return self::pageUrl( array_merge( [ 'tab' => 'affiliates' ], $extra ) );
     }
 
     public static function registerSettings(): void
@@ -926,10 +986,10 @@ final class Admin
             }
         }
 
-        $args = [ 'page' => self::AFF_PAGE ];
+        $args = [];
         if ( $notice !== '' ) $args['lgms_aff_ok']  = rawurlencode( $notice );
         if ( $err    !== '' ) $args['lgms_aff_err'] = rawurlencode( $err );
-        wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
+        wp_safe_redirect( self::affiliatesUrl( $args ) );
         exit;
     }
 
@@ -956,6 +1016,9 @@ final class Admin
             'stripe_price'  => 'Stripe Price',
             'dual_payers'   => 'Dual Payers',
             'comp_timers'   => 'Comp Timers',
+            // #190: absorbed from its own top-level menu. Same content, same
+            // handlers, one sidebar item.
+            'affiliates'    => 'Affiliates',
         ];
         ?>
         <div class="wrap">
@@ -978,6 +1041,7 @@ final class Admin
                 'stripe_price'  => self::renderStripePriceTab(),
                 'dual_payers'   => self::renderDualPayersTab(),
                 'comp_timers'   => self::renderCompTimersTab(),
+                'affiliates'    => self::renderAffiliatesContent(),
                 default         => self::renderSettingsTab(),
             };
             ?>
@@ -1519,6 +1583,25 @@ final class Admin
     // Affiliates page (top-level menu)
     // -------------------------------------------------------------------------
 
+    /**
+     * The affiliate content WITHOUT its own <div class="wrap"><h1> (#190).
+     *
+     * render() already supplies both for every tab, and a page cannot contain
+     * two wraps or two h1s without WordPress's admin CSS laying it out wrongly
+     * and a screen reader announcing two page titles.
+     */
+    private static function renderAffiliatesContent(): void
+    {
+        self::renderAffiliatesTab();
+        self::renderPayoutsPanel();
+    }
+
+    /**
+     * The standalone Affiliates page. No longer reachable from a menu — #190
+     * folded it into the Affiliates TAB — but kept as the one definition of
+     * "the affiliate screen", so nothing that still routes here renders a bare
+     * fragment with no heading.
+     */
     public static function renderAffiliatePage(): void
     {
         if ( ! current_user_can( 'manage_options' ) ) {
@@ -1527,8 +1610,7 @@ final class Admin
         ?>
         <div class="wrap">
             <h1>Affiliates</h1>
-            <?php self::renderAffiliatesTab(); ?>
-            <?php self::renderPayoutsPanel(); ?>
+            <?php self::renderAffiliatesContent(); ?>
         </div>
         <?php
     }
@@ -1890,10 +1972,10 @@ final class Admin
             }
         }
 
-        $args = [ 'page' => self::AFF_PAGE ];
+        $args = [];
         if ( $notice !== '' ) $args['lgms_aff_ok']  = rawurlencode( $notice );
         if ( $err    !== '' ) $args['lgms_aff_err'] = rawurlencode( $err );
-        wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
+        wp_safe_redirect( self::affiliatesUrl( $args ) );
         exit;
     }
 
@@ -1946,10 +2028,10 @@ final class Admin
             }
         }
 
-        $args = [ 'page' => self::AFF_PAGE, 'lgms_edit_aff' => $id ];
+        $args = [ 'lgms_edit_aff' => $id ];
         if ( $notice !== '' ) $args['lgms_aff_ok']  = rawurlencode( $notice );
         if ( $err    !== '' ) $args['lgms_aff_err'] = rawurlencode( $err );
-        wp_safe_redirect( add_query_arg( $args, admin_url( 'admin.php' ) ) );
+        wp_safe_redirect( self::affiliatesUrl( $args ) );
         exit;
     }
 
@@ -2157,10 +2239,7 @@ final class Admin
                 $retEligible      = (int) $row['retention_eligible'];
                 $rate             = $clicks > 0 ? round( $conversions / $clicks * 100 ) . '%' : '—';
                 $debitsCents      = (int) $row['total_debits_cents'];
-                $editUrl          = add_query_arg( [
-                    'page'          => self::AFF_PAGE,
-                    'lgms_edit_aff' => $row['id'],
-                ], admin_url( 'admin.php' ) );
+                $editUrl          = self::affiliatesUrl( [ 'lgms_edit_aff' => $row['id'] ] );
             ?>
                 <tr>
                     <td>

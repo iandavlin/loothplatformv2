@@ -2208,7 +2208,19 @@ echo "=== GATE 90: the tester link is recoverable, and rotating kills the old on
 # rotate's nonce check stayed green on the neighbour's; the body is brace-matched
 # now.
 #
-# RED-FIRST: 28 mutations + 2 no-op controls, 30/30 -- tools/gates/tester-dash-redfirst.py.
+# G9-G12 ARE THE AFFILIATES FOLD. Affiliates was a SECOND top-level menu in the
+# same file; Ian asked for one sidebar item. G9 asserts behaviourally that the
+# plugin now registers exactly ONE. G10/G11 are the same pair as G6/G7 for the
+# old page=lg-affiliates address -- SEVEN links point at it, two of them
+# member-facing (membership-pages' affiliate-earnings.php and Wp/Shortcodes.php
+# both tell an admin where payouts live), and consolidating a menu by breaking
+# every link into it is not consolidation. G10b requires the redirect to carry
+# the row being edited, or the operator lands on a list instead of the affiliate
+# they clicked. G12 requires the TAB not to nest a second wrap/h1 -- and it
+# checks for delegation as well as for literal markup, because red-first M33
+# made the tab call the standalone page and the markup arrived that way.
+#
+# RED-FIRST: 33 mutations + 2 no-op controls, 35/35 -- tools/gates/tester-dash-redfirst.py.
 run "tester-dash" php "$(dirname "$0")/tester-dash-gate.php"
 echo
 
