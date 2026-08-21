@@ -1905,6 +1905,22 @@ echo "=== GATE 84: the stuffing detector bans at the LOGIN DOOR — and nothing 
 run "auto-ban" python3 "$(dirname "$0")/auto-ban-gate.py"
 echo
 
+# 85 — THE ANONYMOUS TESTER'S UNLOCK LINK (#180). Ian 8/21: "I need it to go to
+# patreon unless the user has some kind of token url or something to unlock the
+# whitelisted pages." ⚠️ THE ASSERTION THAT BITES IS THE REFUSAL: "a browser
+# holding the token sees /lgjoin/" is satisfied by a build that shows it to
+# EVERYBODY, which is the state Ian was complaining about. So the grant is one
+# assertion and the refusals are seven, plus 'off' must keep meaning NOBODY.
+# OFF is byte-proven with cmp against origin/main across 3 states x 3 viewers x
+# 2 config shapes, on a tree that already carries the microcache change. §E
+# measures the funnel's refusal AS IT ACTUALLY IS and reports the mechanism
+# rather than asserting a whitelist that does not exist. No browser, no DB, no
+# WordPress, no FPM, per-run port — it cannot flake under load or go vacuously
+# green. Red-first 25/25 (22 mutations, 3 no-ops); it found one assertion that
+# passed on its own defect and one mutation absorbed by a duplicate guard.
+run "tester-unlock" python3 "$(dirname "$0")/tester-unlock-gate.py"
+echo
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"
