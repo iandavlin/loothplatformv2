@@ -1401,6 +1401,37 @@ function lg_fc_relabel($field)
     }
     $name = $field['_name'] ?? $field['name'];
 
+    /* ⚠️ NO DELAYED EDITOR ON A MEMBER-FACING FORM (Ian, 2026-08-21, from his own
+       screenshot of the form: he was looking at a grey bar reading "Click to
+       initialize TinyMCE" sitting on top of his write-up rendered as LITERAL
+       <p>test</p>).
+
+       MEASURED on the served page before changing anything, which is what named
+       the cause: the form ships
+
+           <div class="acf-editor-toolbar">Click to initialize TinyMCE</div>
+           <textarea class="wp-editor-area" name="acf[_post_content]">…
+
+       That is ACF's `delay` setting (class-acf-field-wysiwyg.php:240,276-277):
+       with it on, ACF renders a PLACEHOLDER and only boots TinyMCE when the
+       member clicks. Until they do, the textarea shows the stored HTML as text —
+       so on an EDIT the member is shown their own markup, and has no way to know
+       the grey bar is a button.
+
+       ACF's own default for this field is delay => 0 (:41), and its pseudo-field
+       registration sets no delay at all (form-front.php:59-65) — so something
+       else on this box turns it on. Forced OFF here rather than chased, because
+       this filter is added and removed around THIS render only: whatever sets it,
+       and whenever that changes, this form is unaffected.
+
+       ⚠️ IT IS THE SAME ELEMENT AS GATE 47's OPEN RED. div.acf-editor-toolbar is
+       the 712x40 slab of #f5f5f5 the dark sweep flags — one object, two symptoms,
+       and this removes it entirely. The dark rule added for it stays as
+       belt-and-braces: ACF still renders that div in other configurations. */
+    if (($field['type'] ?? '') === 'wysiwyg') {
+        $field['delay'] = 0;
+    }
+
     // ACF's pseudo-fields for title and content.
     $map = [];
     foreach (lg_fc_types() as $t) {

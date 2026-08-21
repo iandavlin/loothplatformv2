@@ -146,11 +146,6 @@ if ($previewAs !== '') {
    the real plugin editor + capability check take over. Hidden in preview mode. */
 $editUrl = '';
 $composeUrl = '';
-/* "Members one, admins two" (Ian, 2026-08-21). Non-empty ONLY for an
-   edit_archive_poc holder, so the entitlement is decided exactly here — beside
-   the whoami read that already answers it — and the renderer never has to ask
-   who anybody is. */
-$pageTextUrl = '';
 if (!$IS_CLI && $previewAs === '') {
     $who = lg_archive_poc_whoami();   // static-cached this request — no second HTTP call
     if (!empty($who['authenticated'])) {
@@ -159,15 +154,6 @@ if (!$IS_CLI && $previewAs === '') {
         $isAuthor = $vid > 0 && $vid === (int) ($postContext['author']['id'] ?? -1);
         if ($capEdit || $isAuthor) {
             $editUrl = rtrim((string) ($postContext['permalink'] ?? ''), '/') . '/?lg_edit=1';
-            /* The layout editor stays ONE CLICK away for a cap-holder and for
-               nobody else. Ian ruled the single door for MEMBERS on 2026-08-21
-               ("It can be one button that kicks to the form they filled out"),
-               having been shown that collapsing it for everyone would leave the
-               page-text editor with no click-path at all: the site header's Edit
-               button is not it — measured the same day, it opens /wp-admin/. */
-            if ($capEdit) {
-                $pageTextUrl = $editUrl;
-            }
             /* IAN SUPERSEDED OPTION A, 2026-08-21: "I don't think we need the option
                for text and data." The two-line menu is gone; $composeUrl is now the
                Edit pill's own destination rather than one row of a choice.
@@ -262,7 +248,7 @@ $articleHtml = lg_standalone_render_article($layout, $postContext, $viewer, $aut
 $css         = $GLOBALS['LG_STANDALONE_LAST_CSS'] ?? '';
 
 if (!$IS_CLI) header('Content-Type: text/html; charset=utf-8');
-echo lg_standalone_page($postContext, $articleHtml, $css, $authed, $shellTier, $viewerName, $previewAs, $editUrl, $commentsUrl, $commentsCount, $composeUrl, $pageTextUrl);
+echo lg_standalone_page($postContext, $articleHtml, $css, $authed, $shellTier, $viewerName, $previewAs, $editUrl, $commentsUrl, $commentsCount, $composeUrl);
 
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -467,7 +453,7 @@ function lg_standalone_front_js_href(): string {
     return $url;
 }
 
-function lg_standalone_page(array $pc, string $articleHtml, string $css, bool $authed, string $tier, string $viewerName, string $previewAs, string $editUrl = '', string $commentsUrl = '', int $commentsCount = 0, string $composeUrl = '', string $pageTextUrl = ''): string {
+function lg_standalone_page(array $pc, string $articleHtml, string $css, bool $authed, string $tier, string $viewerName, string $previewAs, string $editUrl = '', string $commentsUrl = '', int $commentsCount = 0, string $composeUrl = ''): string {
     // Title: the stored title is ALREADY HTML-entity-encoded (e.g. a curly
     // apostrophe arrives as `&#8217;`). htmlspecialchars() alone re-escapes the
     // `&` → `&amp;#8217;`, which shows as literal garbage in the <title> and
@@ -578,10 +564,26 @@ body { margin: 0; background: #f0eee8; color: #323532;
 
    Edit now reuses .lg-dock__btn exactly as Save did before it, so the dock stays
    ONE row of ONE shape — the reason recorded on .lg-dock__save, applied again.
-   The page-text editor survives as a SECOND pill for edit_archive_poc holders
-   only (Ian: "members one, admins two"); see $pageTextUrl in lg_standalone_page's
-   caller, which is where the entitlement decision lives. */
-.lg-dock__edit svg, .lg-dock__pagetext svg { width: 15px; height: 15px; flex: 0 0 auto; }
+
+   ⚠️ ONE CONTROL FOR EVERYONE, INCLUDING ADMINS — and this reverses an answer
+   given hours earlier. A second "Page text" pill was built for edit_archive_poc
+   holders, on the argument that collapsing to one door would leave the layout
+   editor with no click-path (the site header's Edit goes to /wp-admin/,
+   measured). Ian was offered that from a DESCRIPTION and took it; then he looked
+   at the running page and reversed it, 2026-08-21:
+
+       "I was thinking we were moving away from the micro modal and just haveing
+        the edit button kick to the form page."
+       "The text is handled on the form."
+       "I don't know how we got to the modal thing."
+
+   He is right, and his second sentence is why: the compose form carries the
+   write-up as a rich-text field ("Tell people about it"), so the page-text editor
+   is not a second thing somebody might want — it is a second answer to a question
+   that now has one. Deleted rather than hidden, and gate 69 asserts its absence
+   FOR A CAP-HOLDER specifically, since that is the only viewer for whom it could
+   have survived. */
+.lg-dock__edit svg { width: 15px; height: 15px; flex: 0 0 auto; }
 .lg-standalone-comments { position: fixed; left: 18px; bottom: 18px; z-index: 50;
   display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; background: #fff;
   color: #323532; border: 1px solid #d8d2c4; border-radius: 999px; font-size: 14px;
@@ -798,18 +800,7 @@ html[data-lguser-theme="dark"] .lg-pf-react__opt.is-on { background: #2a2416; }
   <a class="lg-dock__btn lg-dock__edit" data-lg-edit href="<?= htmlspecialchars($composeUrl !== '' ? $composeUrl : $editUrl, ENT_QUOTES, 'UTF-8') ?>" title="Edit this post">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg><span class="lg-dock__word">Edit</span>
   </a>
-<?php /* PAGE TEXT — "members one, admins two" (Ian, same ruling). A member gets
-         exactly one door; an edit_archive_poc holder keeps the one-click layout
-         editor, because the site header's Edit is NOT it (measured 2026-08-21: it
-         goes to /wp-admin/). $pageTextUrl is empty for everyone else — the
-         entitlement is decided once, by the caller, beside the whoami read.
-         Not rendered when compose is off: the Edit pill IS the page editor then,
-         and two pills to the same place is furniture, not a choice. */
-      if ($pageTextUrl !== '' && $composeUrl !== ''): ?>
-  <a class="lg-dock__btn lg-dock__pagetext" data-lg-pagetext href="<?= htmlspecialchars($pageTextUrl, ENT_QUOTES, 'UTF-8') ?>" title="Edit the page text">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span class="lg-dock__word">Page</span>
-  </a>
-<?php endif; endif; ?>
+<?php endif; ?>
 </div>
 <?php if ($commentsUrl !== ''): ?>
 <div class="lg-cmodal" id="lg-cmodal" role="dialog" aria-modal="true" aria-label="Comments" hidden>

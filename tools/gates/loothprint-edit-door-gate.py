@@ -17,20 +17,29 @@ So the two-line choice menu is deleted and the control lives in the dock. Every
 assertion below that used to say "the menu has two items" now says something
 about ONE pill in the dock — the ruling did not weaken the gate, it re-aimed it.
 
-══ THE RULING THAT NEEDS THREE VIEWERS, NOT TWO ════════════════════════════════
+══ ONE DOOR FOR EVERYONE — AND WHY THAT STILL TAKES THREE VIEWERS ══════════════
 
-Ian ruled "members one, admins two": collapsing to a single door would have taken
-away the only click-path to the page-text editor, and the header's Edit button is
-NOT that path (measured 8/21 — it goes to /wp-admin/). So a plain author gets ONE
-pill and a cap-holder gets TWO.
+Ian first ruled "members one, admins two" from a description, then looked at the
+running page and reversed it (2026-08-21): "I was thinking we were moving away
+from the micro modal and just haveing the edit button kick to the form page. The
+text is handled on the form." So there is ONE Edit control, for everybody, and the
+page-text pill that briefly existed for cap-holders is deleted.
 
-That is only testable with a viewer who is an author and NOT a cap-holder. The old
-gate's "entitled" user was claude_admin, who holds edit_archive_poc — against that
-account alone, "members get one door" is unfalsifiable. Hence three probes:
+The absence is the assertion now, and an absence is only worth asserting against
+the viewer for whom the thing could have existed. A plain member never had the
+second pill, so proving they lack it proves nothing about the ruling; the
+cap-holder is the one case that could still be wrong. Hence three probes, and the
+middle one is the point:
 
     patreon_77159883  id 109   AUTHOR of the probe post, no cap   -> exactly 1
-    claude_admin      id 1912  edit_archive_poc                   -> exactly 2
+    claude_admin      id 1912  edit_archive_poc                   -> exactly 1, and
+                                                                     NO second door
     erin.vogel        id 1767  neither                            -> exactly 0
+
+(Keeper's note said "two viewers, not three". Kept at three deliberately: dropping
+the cap-holder leg is exactly what would make "not even for admins" untestable,
+which is the half of the ruling most likely to be quietly lost. Same reason the
+account list grew in the first place.)
 
 ══ WHAT IT ASSERTS, AND WHY EACH IS HERE RATHER THAN THE CHEAPER VERSION ═══════
 
@@ -52,9 +61,10 @@ account alone, "members get one door" is unfalsifiable. Hence three probes:
      read $postContext['id'], a key that does not exist in that context, and would
      have shipped a link to id=0 — a compose form for nothing.
 
-  5. PAGE TEXT SURVIVES FOR CAP-HOLDERS ONLY. ?lg_edit=1 must still be one click
-     away for edit_archive_poc, and must NOT be rendered for a plain author. Both
-     directions, because "members one" and "admins two" are two different claims.
+  5. THERE IS NO SECOND DOOR, FOR ANYBODY. No ?lg_edit=1 pill, no [data-lg-pagetext],
+     not for a plain author and specifically not for a cap-holder. The layout
+     editor remains reachable by URL for whoever knows it; what is asserted here is
+     that the DOCK offers one control and only one.
 
   6. IT READS THE FLAG RATHER THAN HARDCODING A STATE. The Edit pill points at
      /compose/ only when compose is switched on; with the flag off it falls back
@@ -291,7 +301,8 @@ def main() -> int:
     ap.add_argument("--author", default="patreon_77159883",
                     help="the post's OWN author, WITHOUT edit_archive_poc — gets exactly ONE pill")
     ap.add_argument("--capholder", default="claude_admin",
-                    help="an edit_archive_poc holder — gets Edit AND Page")
+                    help="an edit_archive_poc holder — gets exactly ONE Edit pill too, "
+                         "and NO second door; the only viewer for whom one could survive")
     ap.add_argument("--stranger", default="erin.vogel",
                     help="a member who should get NO edit control at all")
     a = ap.parse_args()
@@ -343,7 +354,7 @@ def main() -> int:
             chk("Edit is IN the dock", d["editInDock"], str(d["editHref"])[:56])
             chk("the old corner control is gone", not d["oldControl"])
             chk("the author gets EXACTLY ONE edit control", d["editN"] == 1, f"n={d['editN']}")
-            chk("no Page-text control for a plain author", d["pageHref"] is None,
+            chk("no second door for the author", d["pageHref"] is None,
                 str(d["pageHref"])[:40])
 
             # 4/6 — a real post, and the flag and the door AGREE either way
@@ -406,17 +417,20 @@ def main() -> int:
                 chk("the dock pills are dark in dark",
                     d["pillLum"] is not None and d["pillLum"] < 0.35, f"lum={d['pillLum']}")
 
-        # ── the CAP-HOLDER: two controls, and Page text still works ───────────
+        # ── the CAP-HOLDER: one control, and NO second door ───────────────────
+        # THE INVERTED LEG. This used to assert a cap-holder gets TWO. Ian reversed
+        # that after seeing the page, so the same viewer is now the proof that the
+        # second door is gone for everybody — nobody else could have had it.
         tab.call("Network.clearBrowserCookies")
         c = look(tab, url, jar(a.capholder), "light", 1280)
         if not c["live"] or c["signedOut"]:
             print("  CANNOT RUN: the cap-holder leg did not render signed in")
             return 2
         print("  cap-holder @1280 light: liveness ok")
-        chk("a cap-holder gets EXACTLY TWO edit controls", c["editN"] == 2, f"n={c['editN']}")
-        chk("…and the second one is Page text", bool(c["pageHref"]) and "lg_edit=1" in (c["pageHref"] or ""),
+        chk("a cap-holder gets EXACTLY ONE edit control too", c["editN"] == 1, f"n={c['editN']}")
+        chk("…and it is the Edit pill, in the dock", c["editInDock"], str(c["editHref"])[:52])
+        chk("…with NO page-text door, not even for them", c["pageHref"] is None,
             str(c["pageHref"])[:46])
-        chk("…in the dock too", c["pageInDock"])
 
         # ── the STRANGER: nothing at all, on a page that did render ───────────
         tab.call("Network.clearBrowserCookies")
@@ -438,8 +452,9 @@ def main() -> int:
             print(f"  - {f}")
         return 1
     print(f"\nGREEN — one Edit pill in the dock carrying a real post, the old corner menu "
-          f"gone, members one and admins two, one pill family that clears the body text and "
-          f"fits a phone, dark in dark, and a stranger gets nothing ({checked} checks).")
+          f"gone, ONE door for everybody including cap-holders, one pill family that clears "
+          f"the body text and fits a phone, dark in dark, and a stranger gets nothing "
+          f"({checked} checks).")
     return 0
 
 

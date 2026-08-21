@@ -2,6 +2,11 @@
 """
 loothprint-paywall-gate.py — PART OF GATE 35, no new number minted.
 
+Covers the Loothprint compose form's MEMBER-FACING CONTROLS: the paywall toggle
+(P1-P3) and the rich-text editor's initialisation (P4). One file rather than a
+third, because both legs need the same served page and the same deploy-coupling
+verdict.
+
 Gate 35 is "front-end compose+edit reaches the right people, and OFF is inert".
 The paywall toggle is a control ON that form, so it is asserted under that
 number rather than under a new one — the #172 precedent, and the recorded reason:
@@ -23,6 +28,13 @@ selector looth-lite or public."
       never hardcoded, so flipping the default needs no edit here. Three states:
       config absent, OFF, ON. OFF must render ZERO paywall bytes — not a hidden
       control.
+
+  P4. NO MEMBER IS SHOWN THEIR OWN HTML TAGS. Ian's 8/21 screenshot of the form:
+      "Click to initialize TinyMCE" above his write-up as literal <p>test</p>.
+      ACF's `delay` renders a placeholder and boots TinyMCE only on click, so
+      until then the textarea shows stored markup as text — and nothing tells the
+      member the grey bar is a button. Asserted on the served form. Deploy-coupled
+      with P2, for the same reason.
 
   P3. THE CHOICE REACHES THE RENDERED PAGE. Asserted from the SERVED BYTES of the
       standalone article, not from the term store, because a write that lands in
@@ -172,6 +184,14 @@ def main() -> int:
             chk("ON: 'behind the paywall' is the default", "checked" in after, repr(after))
         else:
             chk(f"{state}: the toggle renders ZERO bytes", not live)
+        # P4 — no member is ever shown their own HTML tags. Ian, 8/21, from his
+        # screenshot: a grey bar reading "Click to initialize TinyMCE" above his
+        # write-up rendered as literal <p>test</p>. That is ACF's `delay`
+        # placeholder; until it is clicked the textarea shows stored markup as
+        # text. Same element as gate 47's bright-surface red.
+        chk("the rich-text editor is not left un-initialised",
+            "Click to initialize TinyMCE" not in body and "acf-editor-toolbar" not in body,
+            "acf-editor-toolbar present" if "acf-editor-toolbar" in body else "")
 
     # ── P3: the choice reaches the RENDERED PAGE ─────────────────────────────
     print("P3 — the choice must reach the served bytes, not just the term store")
