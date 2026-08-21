@@ -31,23 +31,82 @@ function lg_materializer_managed_types(): array {
 }
 
 if (!function_exists('lg_materializer_dispatch')) {
+/**
+ * QUEUE a re-bake for the end of this request. It used to fire immediately, and
+ * that was wrong in a way nothing could see until #179 gave a member a control
+ * that depends on it.
+ *
+ * ══ WHY THIS QUEUES INSTEAD OF SENDING (2026-08-21, #179) ═══════════════════
+ *
+ * The de-dupe below is necessary — save hooks fire several times in one edit —
+ * but combined with an INLINE send it silently pinned the blob to whatever the
+ * post looked like at the FIRST hook of the request. Measured order for a
+ * front-end compose save:
+ *
+ *   1. ACF form-front calls wp_update_post   -> wp_after_insert_post
+ *        -> dispatch(id:upsert) SENT. The endpoint boots its own WordPress
+ *           (~100-150ms) and reads the post AS IT IS NOW.
+ *   2. acf/save_post 25  lg_fc_promote_draft -> wp_mail() to the moderator
+ *   3. acf/save_post 26  the paywall toggle  -> wp_set_object_terms(tier)
+ *        -> dispatch(id:upsert) SWALLOWED by $done. No second bake, ever.
+ *
+ * So the member ticks "behind the paywall", the term IS written, and the
+ * standalone page keeps rendering the old gating. Not a race on the member path
+ * either — step 2 sends mail before step 3, so on live it is deterministic.
+ * That is the control-that-looks-right-and-does-nothing class.
+ *
+ * Queuing to `shutdown` fixes it at the root: every writer in the request has
+ * finished before anything is sent, and the de-dupe still guarantees ONE bake
+ * per (post, action) per request rather than one per hook.
+ *
+ * ⚠️ THE POST TYPE IS RESOLVED HERE, AT QUEUE TIME, NOT AT FLUSH TIME. That is
+ * load-bearing for deletes: before_delete_post queues while the row still
+ * exists, and by `shutdown` get_post_type() would return false and the filter
+ * would DROP the delete — leaving a blob for a post that no longer exists.
+ *
+ * This is also the likeliest explanation for the "first publish gets no
+ * standalone page" gap (dev2 post 73544): the first dispatch of the request
+ * fires while the row is still an auto-draft, the endpoint correctly answers
+ * "not-managed-or-unpublished", and the post-promotion dispatch is then
+ * swallowed by the same de-dupe. Not chased here beyond saying so.
+ */
 function lg_materializer_dispatch(int $post_id, string $action = 'upsert'): void {
     if ($post_id <= 0) return;
     if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
     if (wp_is_post_revision($post_id) || wp_is_post_autosave($post_id)) return;
 
-    // De-dupe: one dispatch per (post, action) per request. save hooks can fire
-    // more than once (meta saves, term sets) in a single edit.
-    static $done = [];
+    // De-dupe: one bake per (post, action) per request. Save hooks fire more than
+    // once (meta saves, term sets) in a single edit.
+    static $queued = [];
     $key = $post_id . ':' . $action;
-    if (isset($done[$key])) return;
-    $done[$key] = true;
+    if (isset($queued[$key])) return;
 
     // Only managed CPTs (delete is allowed through for any of them; the endpoint
-    // decides). post_type is read fresh — a trash flips status, not type.
+    // decides). Read NOW — see the warning above about deletes.
     $ptype = get_post_type($post_id);
     if ($ptype === false || !in_array($ptype, lg_materializer_managed_types(), true)) return;
 
+    $queued[$key] = ['post_id' => $post_id, 'action' => $action];
+
+    // Registered once, on the first queued item, so a request that queues nothing
+    // adds no hook at all.
+    static $hooked = false;
+    if (!$hooked) {
+        $hooked = true;
+        add_action('shutdown', static function () use (&$queued) {
+            foreach ($queued as $job) {
+                lg_materializer_send($job['post_id'], $job['action']);
+            }
+            $queued = [];
+        }, 99);
+    }
+}
+}
+
+if (!function_exists('lg_materializer_send')) {
+/** The actual loopback POST. Split out so the queue above has one thing to call
+ *  and so a caller that genuinely wants to bake NOW (a CLI backfill) still can. */
+function lg_materializer_send(int $post_id, string $action = 'upsert'): void {
     $payload = wp_json_encode(['post_id' => $post_id, 'action' => $action]);
     wp_remote_post('https://127.0.0.1/archive-api/v0/_materialize', [
         'method'    => 'POST',

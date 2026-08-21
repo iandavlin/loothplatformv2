@@ -133,12 +133,11 @@ function lg_archive_poc_pdo(): PDO {
 // shim OR call profile-app directly with X-LG-WP-User-Id + X-LG-Internal-Auth.
 // Returns null on failure; callers fall back to cookie-only values in that case.
 // tier_unavailable:true (poller down) is treated as tier=public (fail open).
-if (!function_exists('lg_archive_poc_whoami')) {
-function lg_archive_poc_whoami(): ?array {
-    static $fetched = false, $result = null;
-    if ($fetched) return $result;
-    $fetched = true;
-    if (PHP_SAPI === 'cli') return null;
+if (!function_exists('lg_archive_poc_whoami_fetch')) {
+/** One /whoami call with an explicit Cookie header. Split out of the function
+ *  below so the ticket heal can ask the same question twice — once as the
+ *  visitor arrived, once with a freshly minted looth_id. */
+function lg_archive_poc_whoami_fetch(string $cookieHeader): ?array {
     $ch = curl_init();
     curl_setopt_array($ch, [
         CURLOPT_URL            => 'https://127.0.0.1/profile-api/v0/whoami',
@@ -149,7 +148,7 @@ function lg_archive_poc_whoami(): ?array {
         CURLOPT_TIMEOUT        => 5,
         CURLOPT_HTTPHEADER     => [
             'Host: ' . LG_ARCHIVE_POC_HOST,
-            'Cookie: ' . ($_SERVER['HTTP_COOKIE'] ?? ''),
+            'Cookie: ' . $cookieHeader,
         ],
     ]);
     $body = curl_exec($ch);
@@ -159,7 +158,143 @@ function lg_archive_poc_whoami(): ?array {
     if (is_array($data) && !empty($data['tier_unavailable'])) {
         $data['tier'] = 'public';
     }
-    $result = is_array($data) ? $data : null;
+    return is_array($data) ? $data : null;
+}
+}
+
+if (!function_exists('lg_archive_poc_heal_looth_id')) {
+/**
+ * MINT A FRESH looth_id WITHOUT BOUNCING THE BROWSER.
+ *
+ * ══ THE STATE THIS FIXES ═════════════════════════════════════════════════════
+ * Identity here is carried by TWO tickets that expire independently: the
+ * WordPress login cookie, which the hub and the forums honour, and the `looth_id`
+ * JWT, which /whoami — and therefore every standalone article page — honours. A
+ * member holding a valid WP session and a stale or absent looth_id is
+ * authenticated on one half of the site and A STRANGER on the other: no Edit
+ * control, a "Sign in" header, anonymous reactions, and — because
+ * lg_archive_poc_viewer_tier() fails CLOSED to 'public' — paid content shown
+ * locked to somebody who paid for it. Ian hit exactly this on 2026-08-21.
+ *
+ * ══ WHY THIS DOES NOT REDIRECT, WHICH IS THE WHOLE POINT ════════════════════
+ * profile-app heals the same state by BOUNCING the browser through
+ * /looth-auth/issue and back (profile-app/config.php:25). Ian, shown that shape:
+ * "Can we just simplify the tickets and avoid the bounce?" — so this fetches the
+ * ticket itself instead. The page makes one extra loopback call, hands the fresh
+ * cookie to the browser in its own response, and renders the member correctly in
+ * ONE page load.
+ *
+ * It is not slower: the WordPress boot inside /looth-auth/issue is paid either
+ * way, and the bounce merely made the browser wait for it and then issue a second
+ * request. Measured on this box 2026-08-21: 0.114s cold, 0.100-0.105s warm.
+ *
+ * And it is SAFER, not merely nicer. There is no redirect, so NO LOOP IS
+ * STRUCTURALLY POSSIBLE — which was the only reason a feature flag was proposed
+ * for it. Every failure path degrades to exactly today's behaviour: mint fails,
+ * times out, returns no cookie, or the second /whoami still says anonymous, and
+ * we render signed-out as we do now. Nothing here can produce a WORSE render than
+ * the one it replaces.
+ *
+ * ⚠️ ANONYMOUS VISITORS NEVER ENTER THIS. No wordpress_logged_in_* cookie means
+ * an immediate return, and that is the majority of this page's traffic.
+ *
+ * ⚠️ TIMEOUT 2s / CONNECT 1s, NOT /whoami's 5. This runs INSIDE a page render,
+ * so its worst case is added page latency. 2s bounds that while clearing the
+ * ~0.15s norm by an order of magnitude, and a timeout is not a failure here —
+ * it is today's render.
+ *
+ * @return string|null the raw Set-Cookie line to re-emit, or null.
+ */
+function lg_archive_poc_heal_looth_id(): ?string {
+    if (PHP_SAPI === 'cli') return null;
+
+    $hasWp = false;
+    foreach ($_COOKIE as $n => $_v) {
+        if (strncmp($n, 'wordpress_logged_in_', 20) === 0) { $hasWp = true; break; }
+    }
+    if (!$hasWp) return null;              // a genuine anonymous viewer
+
+    /* A short marker so a visitor whose WP cookie is itself EXPIRED does not pay
+       a failed loopback on every page they open, forever. Not a loop guard —
+       there is no loop to guard — purely a cost bound.
+       ⚠️ DELIBERATELY NOT profile-app's `looth_issue_tried`: that one IS its loop
+       guard, and setting it from here would suppress a legitimate profile-app
+       bounce for two minutes. Two mechanisms, two names. */
+    if (!empty($_COOKIE['lg_id_heal_tried'])) return null;
+
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL            => 'https://127.0.0.1/looth-auth/issue?return=/',
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HEADER         => true,
+        CURLOPT_FOLLOWLOCATION => false,   // we want the 302's Set-Cookie, not the page
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => false,
+        CURLOPT_HTTP_VERSION   => CURL_HTTP_VERSION_1_1,
+        CURLOPT_CONNECTTIMEOUT => 1,
+        CURLOPT_TIMEOUT        => 2,
+        CURLOPT_HTTPHEADER     => [
+            'Host: ' . LG_ARCHIVE_POC_HOST,
+            'Cookie: ' . ($_SERVER['HTTP_COOKIE'] ?? ''),
+        ],
+    ]);
+    $raw  = curl_exec($ch);
+    $hlen = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+    curl_close($ch);
+    if (!is_string($raw) || $hlen <= 0) return null;
+
+    /* Re-emitted VERBATIM. The endpoint sets domain/secure/httponly/samesite from
+       /etc/looth/env rather than from the request, so its attributes are already
+       the ones profile-auth would have set — copying the line replaces any stale
+       looth_id instead of leaving a second, differently-scoped one beside it,
+       which is the recorded duplicate-cookie trap. */
+    foreach (preg_split('/\r?\n/', substr($raw, 0, $hlen)) as $line) {
+        if (stripos($line, 'Set-Cookie:') === 0 && stripos($line, 'looth_id=') !== false) {
+            return trim(substr($line, strlen('Set-Cookie:')));
+        }
+    }
+    return null;                            // logged-out / mint failed: today's render
+}
+}
+
+if (!function_exists('lg_archive_poc_whoami')) {
+function lg_archive_poc_whoami(): ?array {
+    static $fetched = false, $result = null;
+    if ($fetched) return $result;
+    $fetched = true;                       // also THE once-per-request guard for the
+                                           // heal below: every caller shares this cache
+    if (PHP_SAPI === 'cli') return null;
+
+    $cookies = (string) ($_SERVER['HTTP_COOKIE'] ?? '');
+    $result  = lg_archive_poc_whoami_fetch($cookies);
+
+    /* ── THE TICKET HEAL LIVES HERE, AND NOWHERE ELSE ────────────────────────
+       At the CHOKE POINT, before $result is cached, because render.php alone asks
+       this question at five separate sites (the viewer, the shell tier, the edit
+       affordance, the header, the reactions). Healing in the renderer would leave
+       the other four still holding the anonymous answer, and the page would come
+       out half signed-in — which is a worse bug than the one being fixed. */
+    if (empty($result['authenticated'])) {
+        $setCookie = lg_archive_poc_heal_looth_id();
+        if ($setCookie !== null && !headers_sent()) {
+            header('Set-Cookie: ' . $setCookie, false);
+            // Mark the attempt for the cost bound above, whatever the outcome.
+            header('Set-Cookie: lg_id_heal_tried=1; Max-Age=120; Path=/; Secure; HttpOnly; SameSite=Lax', false);
+            // Re-ask ONCE with the new ticket. The token is the only thing that
+            // changed, so a still-anonymous answer means the mint could not help
+            // and we keep the original — never a worse render than today's.
+            if (preg_match('/looth_id=([^;]+)/', $setCookie, $m)) {
+                $fresh = preg_replace('/looth_id=[^;]*/', 'looth_id=' . $m[1], $cookies);
+                if (strpos((string) $fresh, 'looth_id=') === false) {
+                    $fresh = rtrim($cookies, '; ') . ($cookies === '' ? '' : '; ') . 'looth_id=' . $m[1];
+                }
+                $healed = lg_archive_poc_whoami_fetch((string) $fresh);
+                if (!empty($healed['authenticated'])) {
+                    $result = $healed;
+                }
+            }
+        }
+    }
     return $result;
 }
 }

@@ -154,13 +154,14 @@ if (!$IS_CLI && $previewAs === '') {
         $isAuthor = $vid > 0 && $vid === (int) ($postContext['author']['id'] ?? -1);
         if ($capEdit || $isAuthor) {
             $editUrl = rtrim((string) ($postContext['permalink'] ?? ''), '/') . '/?lg_edit=1';
-            /* IAN PICKED OPTION A, 2026-08-16: one Edit button that opens a two-line
-               choice — "Details & files" vs "Page text". Ruled scope item 4 is the
-               way IN; the form itself already worked, and was reachable by nobody.
+            /* IAN SUPERSEDED OPTION A, 2026-08-21: "I don't think we need the option
+               for text and data." The two-line menu is gone; $composeUrl is now the
+               Edit pill's own destination rather than one row of a choice.
 
-               ONLY FOR TYPES THE COMPOSE ROUTE ACTUALLY RENDERS. A "details" link on
-               a post type with no compose form would be a control that 404s, which
-               is the UI-lies class Ian has ruled against repeatedly. */
+               ONLY FOR TYPES THE COMPOSE ROUTE ACTUALLY RENDERS. An Edit pill
+               pointing at a compose form that does not exist for this type would be
+               a control that 404s, which is the UI-lies class Ian has ruled against
+               repeatedly — so the pill falls back to ?lg_edit=1 instead. */
             if ($postType === 'loothprint' && lg_standalone_compose_on()) {
                 /* post_id, NOT id — the established key here (see the comments
                    affordance and the reactions block, which both read post_id).
@@ -551,35 +552,38 @@ body { margin: 0; background: #f0eee8; color: #323532;
    should sit flush under the nav. A top pad here leaves a band above the banner.
    (Bottom pad stays for breathing room before the site footer.) */
 .lg-standalone-main { padding-block: 0 64px; }
-.lg-standalone-edit { position: fixed; right: 18px; bottom: 18px; z-index: 50;
-  display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px;
-  background: #323532; color: #f0eee8; border-radius: 999px; font-size: 14px;
-  font-weight: 600; text-decoration: none; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
-.lg-standalone-edit:hover { background: #1a1a1a; }
-/* Ian's Option A — the choice the Edit button opens. The wrap is what is fixed;
-   the button inside it keeps the exact geometry it had as a bare link, so the
-   control does not move for anyone who already knows where it is. */
-.lg-standalone-editwrap { position: fixed; right: 18px; bottom: 18px; z-index: 50;
-  display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
-.lg-standalone-editwrap .lg-standalone-edit { position: static; border: 0; cursor: pointer;
-  font-family: inherit; }
-.lg-standalone-editmenu { width: 244px; background: #fff; border: 1px solid #d8d2c4;
-  border-radius: 13px; overflow: hidden; box-shadow: 0 18px 40px -18px rgba(0,0,0,.45); }
-.lg-standalone-editmenu[hidden] { display: none; }
-.lg-editmenu__i { display: flex; gap: 10px; padding: 11px 13px; text-decoration: none;
-  align-items: flex-start; color: #323532; }
-.lg-editmenu__i + .lg-editmenu__i { border-top: 1px solid #e8e3d8; }
-.lg-editmenu__i:hover { background: #f4f2ec; }
-.lg-editmenu__g { font-size: 14px; line-height: 1.15; flex: 0 0 auto; margin-top: 1px; }
-.lg-editmenu__t { display: block; font-size: 12.5px; font-weight: 700; line-height: 1.25; }
-.lg-editmenu__s { display: block; font-size: 11px; line-height: 1.4; color: #6b6f6b; margin-top: 2px; }
-/* DARK FROM BIRTH, per the standing rule — this is a new member-facing surface and
-   it enrolls its own dark colours on the day it is born rather than later. */
-html[data-lguser-theme="dark"] .lg-standalone-editmenu { background: #1a1d20; border-color: #2c312d; }
-html[data-lguser-theme="dark"] .lg-editmenu__i { color: #e5e7e1; }
-html[data-lguser-theme="dark"] .lg-editmenu__i + .lg-editmenu__i { border-top-color: #2c312d; }
-html[data-lguser-theme="dark"] .lg-editmenu__i:hover { background: #232729; }
-html[data-lguser-theme="dark"] .lg-editmenu__s { color: #9aa097; }
+/* ── THE EDIT DOOR MOVED INTO THE DOCK (Ian, 2026-08-21) ──────────────────────
+   "could we put it in the bottom stack of sticky buttons ?" — and, superseding
+   his own Option A of 8/16: "I don't think we need the option for text and data.
+   It can be one button that kicks to the form they filled out."
+
+   So the fixed bottom-RIGHT control and its two-line menu are DELETED, not
+   hidden: ~30 lines of menu CSS, the menu markup and its open/close script all
+   go, because a control that is merely display:none is one CSS edit away from
+   coming back and reads to the next person as a thing still in service.
+
+   Edit now reuses .lg-dock__btn exactly as Save did before it, so the dock stays
+   ONE row of ONE shape — the reason recorded on .lg-dock__save, applied again.
+
+   ⚠️ ONE CONTROL FOR EVERYONE, INCLUDING ADMINS — and this reverses an answer
+   given hours earlier. A second "Page text" pill was built for edit_archive_poc
+   holders, on the argument that collapsing to one door would leave the layout
+   editor with no click-path (the site header's Edit goes to /wp-admin/,
+   measured). Ian was offered that from a DESCRIPTION and took it; then he looked
+   at the running page and reversed it, 2026-08-21:
+
+       "I was thinking we were moving away from the micro modal and just haveing
+        the edit button kick to the form page."
+       "The text is handled on the form."
+       "I don't know how we got to the modal thing."
+
+   He is right, and his second sentence is why: the compose form carries the
+   write-up as a rich-text field ("Tell people about it"), so the page-text editor
+   is not a second thing somebody might want — it is a second answer to a question
+   that now has one. Deleted rather than hidden, and gate 69 asserts its absence
+   FOR A CAP-HOLDER specifically, since that is the only viewer for whom it could
+   have survived. */
+.lg-dock__edit svg { width: 15px; height: 15px; flex: 0 0 auto; }
 .lg-standalone-comments { position: fixed; left: 18px; bottom: 18px; z-index: 50;
   display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; background: #fff;
   color: #323532; border: 1px solid #d8d2c4; border-radius: 999px; font-size: 14px;
@@ -641,16 +645,79 @@ html[data-lguser-theme="dark"] .lg-editmenu__s { color: #9aa097; }
 .lg-pf-react__opt:hover { transform: scale(1.3) translateY(-2px); }
 .lg-pf-react__opt img { width: 24px; height: 24px; display: block; }
 .lg-pf-react__opt.is-on { background: #fdf6e9; }
-@media (max-width: 640px) { .lg-dock__back span { display: none; } .lg-pf-react__lbl { display: none; } }
+/* ── ONE PILL FAMILY AT EVERY WIDTH (Ian, 2026-08-21) ─────────────────────────
+   "Floating-button style consistency: pill family at every width." MEASURED
+   before the change, signed in, on an authored loothprint:
+
+       390   row   343x44   45x35 · 64x44 · 84x35 · 126x34   (Save/Comments worded)
+       900   col    64x166  45x35 · 64x44 · 45x35 ·  47x34
+       1280  col    64x166  45x35 · 64x44 · 45x35 ·  47x34
+       1600  row   421x44   83x35 · 105x44 · 84x35 · 126x34
+
+   Three separate things were wrong and only the first is obvious: the heights
+   disagree (34 / 35 / 44), the react control is a WRAPPER DIV with square corners
+   whose inner button carried the pill, and on a phone the row was already 343px
+   inside a ~354px budget — so the fifth pill Ian asked for DID NOT FIT until the
+   Save/Comments words came off there too, exactly as they already were at middle
+   widths. The counts stay in every case: dropping a number to make a row fit is
+   removing information, which is a different defect from the one being fixed.
+
+   WIDTH IS NOT EQUALISED, deliberately. The wide look this is matching runs
+   83/105/84/126, so equal width was never the family rule; equal HEIGHT, one
+   radius and a shared baseline are. */
+@media (max-width: 1500px) {
+  .lg-dock__back span, .lg-pf-react__lbl, .lg-dock__word { display: none; }
+  .lg-standalone-dock > * { box-sizing: border-box; border-radius: 999px; }
+  .lg-standalone-dock .lg-dock__btn,
+  .lg-standalone-dock .lg-pf-react__btn { box-sizing: border-box; }
+  /* the react control is a wrapper; give the WRAPPER the family's geometry so it
+     stops being the odd one out at the level anything measures the dock. */
+  .lg-dock__react { display: inline-flex; align-items: center; }
+}
+/* A PHONE IS A TOUCH TARGET: 36px, and the row still fits inside 390 with five
+   pills (~278 against a ~354 budget). */
+@media (max-width: 640px) {
+  .lg-standalone-dock > *,
+  .lg-standalone-dock .lg-pf-react__btn { height: 36px; }
+  .lg-standalone-dock .lg-dock__btn,
+  .lg-standalone-dock .lg-pf-react__btn { padding: 0 11px; }
+}
 /* GH #53 / HK-027: at 641-1500px the horizontal dock (~310px) overlapped the
    centered article column (content left ~x178 at 1280 -> ~150px of body text
    covered). Collapse to a compact VERTICAL stack in the left gutter: word
    labels hidden (counts stay), so the dock's widest button fits inside the
-   column margin instead of under the text. */
+   column margin instead of under the text.
+   ⚠️ 30px PILLS AND A 4px GAP ARE ARITHMETIC, NOT TASTE. Five pills at 30 + four
+   gaps at 4 is 166px — EXACTLY the height the four-pill stack occupies today. A
+   taller stack reaches up into the post-header chip row: measured at 1100 and
+   1280, a naive 34px pill put the stack's top 41px higher and grazed the chips by
+   13-15px for the first ~25px of scroll. Keeping the total unchanged means the
+   fifth pill costs nothing that was previously clear.
+   (A cap-holder's SIXTH pill does take the stack to ~200px and can graze at the
+   very top of the page. Accepted knowingly: that is Ian and the editors, not
+   members, and shrinking every member's pill to protect an admin's would be the
+   wrong trade.) */
 @media (min-width: 641px) and (max-width: 1500px) {
-  .lg-standalone-dock { flex-direction: column; align-items: flex-start; gap: 6px; }
-  .lg-dock__back span, .lg-pf-react__lbl, .lg-dock__word { display: none; }
+  .lg-standalone-dock { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .lg-standalone-dock > *,
+  .lg-standalone-dock .lg-pf-react__btn { height: 30px; }
+  .lg-standalone-dock .lg-dock__btn,
+  .lg-standalone-dock .lg-pf-react__btn { padding: 0 9px; }
 }
+/* DARK. The dock has been a row of WHITE pills in dark since it shipped —
+   measured 2026-08-21 by gate 69's new dark leg: relative luminance 1.0, i.e.
+   pure white furniture floating on a dark article. Fixed here rather than filed,
+   because #179 is restyling these exact rules and leaving them would mean
+   touching every one of them and choosing not to. */
+html[data-lguser-theme="dark"] .lg-dock__btn,
+html[data-lguser-theme="dark"] .lg-pf-react__btn,
+html[data-lguser-theme="dark"] .lg-pf-react__pop {
+  background: #1a1d20; border-color: #2c312d; color: #e5e7e1; }
+html[data-lguser-theme="dark"] .lg-dock__btn:hover,
+html[data-lguser-theme="dark"] .lg-pf-react__btn:hover { background: #232729; }
+html[data-lguser-theme="dark"] .lg-dock__save.is-on { background: #2b1f1a; border-color: #c66845; }
+html[data-lguser-theme="dark"] .lg-pf-react__btn.is-on { background: #2a2416; border-color: #c08a2f; }
+html[data-lguser-theme="dark"] .lg-pf-react__opt.is-on { background: #2a2416; }
 </style>
 </head>
 <body<?= $embed ? ' class="lg-embed"' : '' ?>>
@@ -676,33 +743,6 @@ html[data-lguser-theme="dark"] .lg-editmenu__s { color: #9aa097; }
             : '/profile/edit',
     ]);
 ?>
-<?php if ($editUrl !== '' && $composeUrl !== ''): ?>
-<?php /* IAN'S OPTION A, 2026-08-16. One control where the single Edit already sat;
-         tapping it names the two things "edit" can mean here, so nobody has to
-         learn which editor is which. Details & files is the acf_form the compose
-         route already renders (and already permission-checks); Page text is the
-         layout editor this button has always opened, untouched.
-         DETAILS IS LISTED FIRST because it is the one that was unreachable — the
-         print files, the licence and the category could not be changed at all. */ ?>
-<div class="lg-standalone-editwrap" data-lg-editmenu>
-  <div class="lg-standalone-editmenu" id="lg-editmenu" hidden>
-    <a class="lg-editmenu__i" href="<?= htmlspecialchars($composeUrl, ENT_QUOTES, 'UTF-8') ?>">
-      <span class="lg-editmenu__g" aria-hidden="true">&#128194;</span>
-      <span><span class="lg-editmenu__t">Details &amp; files</span>
-      <span class="lg-editmenu__s">Photos, the ZIP, licence, category, links</span></span>
-    </a>
-    <a class="lg-editmenu__i" href="<?= htmlspecialchars($editUrl, ENT_QUOTES, 'UTF-8') ?>">
-      <span class="lg-editmenu__g" aria-hidden="true">&#9998;</span>
-      <span><span class="lg-editmenu__t">Page text</span>
-      <span class="lg-editmenu__s">The write-up on this page</span></span>
-    </a>
-  </div>
-  <button type="button" class="lg-standalone-edit" aria-expanded="false"
-          aria-controls="lg-editmenu" aria-haspopup="true">&#9998; Edit</button>
-</div>
-<?php elseif ($editUrl !== ''): ?>
-<a class="lg-standalone-edit" href="<?= htmlspecialchars($editUrl, ENT_QUOTES, 'UTF-8') ?>" title="Edit this post">&#9998; Edit</a>
-<?php endif; ?>
 <?php
     // Sticky dock: Back-to-Hub + post React + Comments float together, bottom-left
     // (Ian 2026-06-11). React shares the Hub card's card_reactions store (same
@@ -711,7 +751,11 @@ html[data-lguser-theme="dark"] .lg-editmenu__s { color: #9aa097; }
     // caller's $postContext/$postType/$postId are out of scope here).
     $reactId = (int) ($pc['post_id'] ?? 0);
     $reactPt = (string) ($pc['post_type'] ?? '');
-    if ($reactId > 0):
+    /* ⚠️ THE GUARD TAKES $editUrl TOO, and it has to. The Edit control used to be
+       fixed to the page independently of this block; now that it lives in the dock,
+       a post that resolves no post_id would have taken the author's only way in
+       down with the react buttons. Rare, and silent — which is why it is stated. */
+    if ($reactId > 0 || $editUrl !== ''):
 ?>
 <div class="lg-standalone-dock">
   <a class="lg-dock__btn lg-dock__back" href="/hub/" data-lg-hub-back title="Back to the Hub">
@@ -742,6 +786,20 @@ html[data-lguser-theme="dark"] .lg-editmenu__s { color: #9aa097; }
   <button type="button" class="lg-dock__btn lg-standalone-comments" id="lg-comments-btn" aria-haspopup="dialog" aria-controls="lg-cmodal">
     &#128172; <?php if ($commentsCount > 0): ?><span><?= number_format($commentsCount) ?></span><span class="lg-dock__word">&nbsp;comment<?= $commentsCount === 1 ? '' : 's' ?></span><?php else: ?><span class="lg-dock__word">Comments</span><?php endif; ?>
   </button>
+<?php endif; ?>
+<?php /* EDIT — Ian, 2026-08-21: one button, straight to the form the member filled
+         out. Not a menu, and not in the far corner: "could we put it in the bottom
+         stack of sticky buttons ?"
+
+         THE HREF FALLS BACK ON PURPOSE. $composeUrl is set only for a type the
+         compose route actually renders AND only when the compose flag is on, so
+         with the flag off this pill goes to the page editor it has always gone to
+         rather than pointing at a switched-off route. That is the UI-lies class
+         Ian has ruled against, and gate 69 asserts the two AGREE either way. */
+      if ($editUrl !== ''): ?>
+  <a class="lg-dock__btn lg-dock__edit" data-lg-edit href="<?= htmlspecialchars($composeUrl !== '' ? $composeUrl : $editUrl, ENT_QUOTES, 'UTF-8') ?>" title="Edit this post">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg><span class="lg-dock__word">Edit</span>
+  </a>
 <?php endif; ?>
 </div>
 <?php if ($commentsUrl !== ''): ?>
@@ -910,36 +968,6 @@ html[data-lguser-theme="dark"] .lg-editmenu__s { color: #9aa097; }
 <?php else: /* externalize failed (e.g. assets dir not writable) — inline as a fallback */ ?>
 <script>
 <?= (string) @file_get_contents(__DIR__ . '/engine/assets/lg-front.js') ?>
-</script>
-<?php endif; ?>
-<?php if ($editUrl !== '' && $composeUrl !== ''): ?>
-<script>
-/* The Edit choice (Ian's Option A). Deliberately tiny and dependency-free: this
-   sits on a page whose own JS is externalised and deferred, and a menu that only
-   opens once that has loaded would feel broken on a slow phone.
-   Closes on outside click and on Escape, and keeps aria-expanded honest — it is a
-   real menu button, so it answers to a keyboard. */
-(function () {
-  var wrap = document.querySelector('[data-lg-editmenu]');
-  if (!wrap) return;
-  var btn  = wrap.querySelector('.lg-standalone-edit');
-  var menu = wrap.querySelector('.lg-standalone-editmenu');
-  if (!btn || !menu) return;
-  function set(open) {
-    menu.hidden = !open;
-    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-  }
-  btn.addEventListener('click', function (e) {
-    e.stopPropagation();
-    set(menu.hidden);
-  });
-  document.addEventListener('click', function (e) {
-    if (!wrap.contains(e.target)) set(false);
-  });
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && !menu.hidden) { set(false); btn.focus(); }
-  });
-})();
 </script>
 <?php endif; ?>
 <?php if (!$embed) lg_shared_render_site_footer(); ?>

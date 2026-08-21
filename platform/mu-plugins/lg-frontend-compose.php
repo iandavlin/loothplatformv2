@@ -238,6 +238,189 @@ function lg_fc_enabled(): bool
     return $on;
 }
 
+/**
+ * Is the member-facing paywall toggle switched on?
+ *
+ * Same shape as lg_fc_enabled() above and for the same recorded reasons — tracked
+ * file, then a gitignored per-box override, then two preview sources because a
+ * fastcgi_param lands in $_SERVER but not reliably in getenv().
+ *
+ * ⚠️ THE PREVIEW VARIABLE IS NOT LG_FC_PREVIEW, and that is the one line worth
+ * reading twice. lane-preview-frontend-compose.conf sets LG_FC_PREVIEW as a
+ * fastcgi_param, so a literal copy of the reader above would have armed the
+ * paywall on every compose preview URL — a flag switched on by a different
+ * feature's preview.
+ *
+ * Fails CLOSED on an unreadable config, like its sibling: a toggle that cannot
+ * read its own switch must not start writing tier terms.
+ */
+function lg_fc_paywall_enabled(): bool
+{
+    static $on = null;
+    if ($on !== null) {
+        return $on;
+    }
+    if (getenv('LG_FC_PAYWALL_PREVIEW') === '1' || (($_SERVER['LG_FC_PAYWALL_PREVIEW'] ?? '') === '1')) {
+        return $on = true;
+    }
+    $path = dirname(__DIR__) . '/config/loothprint-paywall.php';
+    if (!is_readable($path)) {
+        error_log('[lg-frontend-compose] paywall config unreadable at ' . $path . ' — OFF (fail-closed)');
+        return $on = false;
+    }
+    $raw = require $path;
+    $on  = (is_array($raw) && ($raw['enabled'] ?? false) === true);
+
+    $local = dirname(__DIR__) . '/config/loothprint-paywall.local.php';
+    if (is_readable($local)) {
+        $lraw = require $local;
+        if (is_array($lraw) && array_key_exists('enabled', $lraw)) {
+            $on = ($lraw['enabled'] === true);
+        }
+    }
+    return $on;
+}
+
+/** The tier taxonomy the toggle drives, and the two slugs Ian named. */
+const LG_FC_PAYWALL_TAX    = 'tier';
+const LG_FC_PAYWALL_BEHIND = 'looth-lite';
+const LG_FC_PAYWALL_PUBLIC = 'public';
+
+/**
+ * THE WHOLE RULE, as a pure function: given the tier slugs a post carries now and
+ * what the member chose, what should be written — or nothing at all?
+ *
+ * Pure on purpose. It takes no post, touches no database and calls no WordPress,
+ * so its truth table can be executed exhaustively with `php -r` on a box where
+ * this feature is not deployed — which is the only honest way to test a rule
+ * whose real home is a mu-plugin symlinked out of the serving checkout.
+ *
+ * ══ WHY FOUR CASES AND NOT TWO ══════════════════════════════════════════════
+ *
+ * The obvious mapping — behind => looth-lite, not behind => public — SILENTLY
+ * DOWNGRADES a looth-pro post to looth-lite the first time its author saves it,
+ * because a two-state toggle has no way to say "pro". The member did not ask for
+ * that and would never see it happen. So:
+ *
+ *   behind     + already non-public (lite OR pro)  ->  null   (preserve)
+ *   behind     + public, or no term at all         ->  looth-lite
+ *   not behind + non-public                        ->  public
+ *   not behind + already public                    ->  null   (nothing to do)
+ *
+ * "Already non-public" means CARRIES ANY non-public term, so a post holding both
+ * public and looth-pro hits the preserve branch rather than being flattened.
+ *
+ * The two null cases are not an optimisation. wp_set_object_terms() fires
+ * set_object_terms even when nothing changes, and that hook re-bakes the
+ * standalone blob — so "no write" has to mean no call, not an idempotent one.
+ *
+ * No loothprint on this box is looth-pro today (161 lite / 9 public / 4 none), so
+ * the preserve branch costs nothing now and cannot bite later. It is a one-way
+ * door either way: a pro post un-ticked and re-ticked comes back lite, because
+ * the control genuinely does not carry "pro". Stated rather than hidden.
+ */
+function lg_fc_paywall_target(array $current, string $choice): ?string
+{
+    $nonPublic = false;
+    foreach ($current as $slug) {
+        if (is_string($slug) && $slug !== '' && $slug !== LG_FC_PAYWALL_PUBLIC) {
+            $nonPublic = true;
+            break;
+        }
+    }
+    if ($choice === 'behind') {
+        return $nonPublic ? null : LG_FC_PAYWALL_BEHIND;
+    }
+    return $nonPublic ? LG_FC_PAYWALL_PUBLIC : null;
+}
+
+/**
+ * What the member chose, as a strict two-value read — the same shape as
+ * lg_fc_comment_status(), so there is no injection surface and the value is only
+ * ever consumed after ACF has verified the form nonce.
+ *
+ * DEFAULTS TO 'behind', which is Ian's ruling and also the safe direction: a
+ * missing or mangled field must never publish somebody's print files wider than
+ * they meant.
+ */
+function lg_fc_paywall_choice(): string
+{
+    $v = isset($_POST['lg_fc_paywall']) ? (string) $_POST['lg_fc_paywall'] : '';
+    return $v === 'public' ? 'public' : 'behind';
+}
+
+/** The tier slugs a post carries right now. [] for a post with no terms. */
+function lg_fc_paywall_current(int $post_id): array
+{
+    $terms = wp_get_object_terms($post_id, LG_FC_PAYWALL_TAX, ['fields' => 'slugs']);
+    return is_wp_error($terms) ? [] : array_values((array) $terms);
+}
+
+/**
+ * Write the member's paywall choice, on the way out of an ACF save.
+ *
+ * Priority 26: AFTER lg_fc_promote_draft (25) has given the post its real status,
+ * so the term lands on a post that exists in the state it will be published in.
+ *
+ * FLAG OFF => NOT HOOKED AT ALL (see the add_action below), so this is not merely
+ * an early return: with the switch off nothing observes the save and no term can
+ * move.
+ */
+function lg_fc_paywall_apply($post_id): void
+{
+    if (!is_numeric($post_id)) {
+        return;
+    }
+    $post_id = (int) $post_id;
+    $type    = get_post_type($post_id);
+    $types   = lg_fc_types();
+    // Only a type that DECLARES a paywall control. Without this, any future type
+    // routed through this form would silently acquire a tier write.
+    if (!$type || empty($types[$type]['paywall'])) {
+        return;
+    }
+    // The control has to have been ON SCREEN for its absence to mean anything.
+    // Guarding on the flag rather than on the POST field is deliberate: a request
+    // that simply omits the field must fall to the ruled default, not skip.
+    if (!lg_fc_paywall_enabled()) {
+        return;
+    }
+    /* ⚠️ THIS SAVE MUST BE OUR FORM'S, and without this line it need not be.
+       acf/save_post fires for EVERY ACF save on the site, wp-admin included —
+       where this control is not rendered at all. lg_fc_paywall_choice() defaults
+       to 'behind' when the field is absent (the safe direction for our form, and
+       Ian's ruling), so an admin saving a PUBLIC loothprint in wp-admin would
+       have had it silently moved behind the paywall. A default that is right in
+       one context is a data change in another.
+
+       $_POST['_acf_form'] carries the REGISTERED FORM ID for a registered form
+       (ACF form-front.php:337-342) — which this route registers precisely so its
+       settings never travel with the POST — and wp-admin posts no such field.
+       So this identifies our screen exactly, and cannot be forged into a wider
+       permission: it only decides whether we read a field we already validate,
+       on a post the caller has already passed current_user_can('edit_post') for. */
+    if ((string) ($_POST['_acf_form'] ?? '') !== 'lg-fc-' . $type) {
+        return;
+    }
+    $target = lg_fc_paywall_target(lg_fc_paywall_current($post_id), lg_fc_paywall_choice());
+    if ($target === null) {
+        return;   // preserve — and NOT an idempotent write; see lg_fc_paywall_target()
+    }
+    $term = get_term_by('slug', $target, LG_FC_PAYWALL_TAX);
+    if (!$term || is_wp_error($term)) {
+        error_log('[lg-frontend-compose] paywall: no `' . LG_FC_PAYWALL_TAX . '` term for slug ' . $target);
+        return;
+    }
+    // INT term ids, never the slug string: `tier` is hierarchical, and passing
+    // names/slugs there goes through term lookup-or-CREATE.
+    wp_set_object_terms($post_id, [(int) $term->term_id], LG_FC_PAYWALL_TAX, false);
+}
+
+/* Hooked only when the switch is on, so OFF adds no observer of the save path. */
+if (lg_fc_paywall_enabled()) {
+    add_action('acf/save_post', 'lg_fc_paywall_apply', 26);   // AFTER promote (25)
+}
+
 const LG_FC_PATH = 'compose';
 
 /* The reaper's handle on a compose draft, and how long a never-returned one
@@ -340,6 +523,16 @@ function lg_fc_types(): array
                numbers are the reason the ruling went the way it did. */
             // Rendered by us, not by ACF — see lg_fc_comment_status().
             'comments' => ['label' => 'Let people comment', 'acf_label' => 'Commenting'],
+            /* THE PAYWALL TOGGLE (Ian, 2026-08-21). Declared per-type rather than
+               assumed, because "behind the paywall" is a Loothprint sentence: a
+               type whose content is not gated would get a control that decides
+               nothing. lg_fc_own_controls() renders it only when this is set. */
+            'paywall'  => [
+                'label'  => 'Who can get the files?',
+                'behind' => 'Members only',
+                'public' => 'Anyone',
+                'hint'   => 'Members only keeps your print files behind the paywall. This is the usual choice.',
+            ],
             // The mock drops the featured_image control and promises the footer
             // line above instead. lg_fc_hero_from_gallery() is what keeps that
             // promise. NB "unless you pick another" has no control in the mock —
@@ -810,7 +1003,11 @@ function lg_fc_route(): void
             'class'             => 'acf-form lgfc__form',
             'data-lgfc-type'    => $type,
         ],
-        'html_after_fields'  => lg_fc_own_controls($t),
+        /* $edit rides along so the controls we render ourselves can be PREFILLED
+           from the post. Without it the comments chip re-opened comments the
+           author had closed, and the paywall chip would have misreported the
+           post's real gating. */
+        'html_after_fields'  => lg_fc_own_controls($t, $edit),
         'html_submit_button' => '<input type="submit" class="lgfc__submit" value="%s" />'
             . '<span class="lgfc__foot">' . esc_html($t['foot']) . '</span>',
         /* #93: a member's new post arrives PENDING, so its permalink would 404
@@ -851,16 +1048,76 @@ function lg_fc_acf_field_names(string $type): array
  * The controls we render ourselves, placed INSIDE ACF's form via
  * html_after_fields. See lg_fc_comment_status() for why comments is ours.
  */
-function lg_fc_own_controls(array $t): string
+function lg_fc_own_controls(array $t, int $edit = 0): string
 {
     $label = esc_html($t['comments']['label']);
     $hero  = !empty($t['hero_from']) ? lg_fc_hero_control() : '';
+
+    /* ⚠️ PREFILLED FROM THE POST, NOT HARDCODED — and this is a fix, not a
+       flourish. This control shipped with `checked` nailed to "Yes", so EDITING a
+       post whose author had turned comments off silently re-opened them on save:
+       lg_fc_comment_status() reads the posted value, and the posted value was
+       always "open" because that is what the form rendered. A data-changing
+       defect in the save path, found while adding the control below it.
+       Create keeps "Yes" — that is a default, and defaults are fine; it is the
+       EDIT case where a default overwrites an answer. */
+    $cOpen   = ($edit <= 0) || get_post_field('comment_status', $edit) !== 'closed';
+    $cYes    = $cOpen ? ' checked' : '';
+    $cNo     = $cOpen ? '' : ' checked';
+
     return $hero . <<<HTML
 <div class="acf-field lgfc-field lgfc__own" data-name="lg_fc_comments">
   <div class="acf-label"><label>{$label}</label></div>
   <div class="acf-input"><div class="lgfc__chips">
-    <label class="lgfc__chip"><input type="radio" name="lg_fc_comments" value="open" checked> <span>Yes</span></label>
-    <label class="lgfc__chip"><input type="radio" name="lg_fc_comments" value="closed"> <span>No</span></label>
+    <label class="lgfc__chip"><input type="radio" name="lg_fc_comments" value="open"{$cYes}> <span>Yes</span></label>
+    <label class="lgfc__chip"><input type="radio" name="lg_fc_comments" value="closed"{$cNo}> <span>No</span></label>
+  </div></div>
+</div>
+HTML
+    . lg_fc_paywall_control($t, $edit);
+}
+
+/**
+ * "Who can get the files?" — Ian's paywall toggle, 2026-08-21.
+ *
+ * Returns '' when the switch is off or the type declares no paywall, so OFF is
+ * genuinely no bytes rather than a hidden control. Built as a heredoc appended to
+ * the string above (never interleaved with `?>`), because this route's OFF state
+ * is asserted BYTE-IDENTICAL and PHP eats the newline after a close tag but not
+ * the whitespace before an open tag — the recorded 8-byte indentation leak.
+ *
+ * ── THE PREFILL TELLS THE TRUTH, WHICH IS NOT THE SAME AS THE DEFAULT ───────
+ * Create defaults to "Members only", which is Ian's ruling and the safe
+ * direction. An EDIT reflects what the post ACTUALLY is: a loothprint carrying no
+ * tier term at all is not gated today, so it prefills as "Anyone" even though a
+ * new post would default the other way. Showing "Members only" on a post that is
+ * in fact public would be the form lying about the thing it is asking you to
+ * change — and the member would have to notice to avoid changing it by accident.
+ */
+function lg_fc_paywall_control(array $t, int $edit = 0): string
+{
+    if (empty($t['paywall']) || !lg_fc_paywall_enabled()) {
+        return '';
+    }
+    $p      = $t['paywall'];
+    $label  = esc_html($p['label']);
+    $behind = esc_html($p['behind']);
+    $public = esc_html($p['public']);
+    $hint   = esc_html($p['hint']);
+
+    $isBehind = ($edit <= 0)
+        ? true                                                   // Ian's ruled default
+        : (lg_fc_paywall_target(lg_fc_paywall_current($edit), 'public') !== null);
+    $bSel = $isBehind ? ' checked' : '';
+    $pSel = $isBehind ? '' : ' checked';
+
+    return <<<HTML
+<div class="acf-field lgfc-field lgfc__own" data-name="lg_fc_paywall">
+  <div class="acf-label"><label>{$label}</label>
+    <p class="description">{$hint}</p></div>
+  <div class="acf-input"><div class="lgfc__chips">
+    <label class="lgfc__chip"><input type="radio" name="lg_fc_paywall" value="behind"{$bSel}> <span>{$behind}</span></label>
+    <label class="lgfc__chip"><input type="radio" name="lg_fc_paywall" value="public"{$pSel}> <span>{$public}</span></label>
   </div></div>
 </div>
 HTML;
@@ -1143,6 +1400,37 @@ function lg_fc_relabel($field)
         return $field;
     }
     $name = $field['_name'] ?? $field['name'];
+
+    /* ⚠️ NO DELAYED EDITOR ON A MEMBER-FACING FORM (Ian, 2026-08-21, from his own
+       screenshot of the form: he was looking at a grey bar reading "Click to
+       initialize TinyMCE" sitting on top of his write-up rendered as LITERAL
+       <p>test</p>).
+
+       MEASURED on the served page before changing anything, which is what named
+       the cause: the form ships
+
+           <div class="acf-editor-toolbar">Click to initialize TinyMCE</div>
+           <textarea class="wp-editor-area" name="acf[_post_content]">…
+
+       That is ACF's `delay` setting (class-acf-field-wysiwyg.php:240,276-277):
+       with it on, ACF renders a PLACEHOLDER and only boots TinyMCE when the
+       member clicks. Until they do, the textarea shows the stored HTML as text —
+       so on an EDIT the member is shown their own markup, and has no way to know
+       the grey bar is a button.
+
+       ACF's own default for this field is delay => 0 (:41), and its pseudo-field
+       registration sets no delay at all (form-front.php:59-65) — so something
+       else on this box turns it on. Forced OFF here rather than chased, because
+       this filter is added and removed around THIS render only: whatever sets it,
+       and whenever that changes, this form is unaffected.
+
+       ⚠️ IT IS THE SAME ELEMENT AS GATE 47's OPEN RED. div.acf-editor-toolbar is
+       the 712x40 slab of #f5f5f5 the dark sweep flags — one object, two symptoms,
+       and this removes it entirely. The dark rule added for it stays as
+       belt-and-braces: ACF still renders that div in other configurations. */
+    if (($field['type'] ?? '') === 'wysiwyg') {
+        $field['delay'] = 0;
+    }
 
     // ACF's pseudo-fields for title and content.
     $map = [];
@@ -1867,10 +2155,47 @@ html[data-lguser-theme="dark"] .lgfc{--lg-paper:#20241f;--lg-rust-tint:#3a2320}
    THE GATE SAW ONE OF THESE; THERE WERE THREE. Only the default-selected licence
    renders selected on load, so the type-list label and the .lgfc__chip carry the
    identical defect and appear the moment a member picks anything. One cause, so
-   one fix — but the shade is Ian's to adjust, not load-bearing. */
+   one fix — but the shade is Ian's to adjust, not load-bearing.
+
+   ⚠️ #179 (2026-08-21) WENT LOOKING FOR A FOURTH SITE AND THERE ISN'T ONE — and
+   the way that was established is the point. The charter carried this forward as
+   "hardcoded #fff on --lg-sage-d, still present at ~1617/1675/1683". Reading the
+   source, `.lgfc__submit` (below) looks like a fourth instance of exactly this
+   pair and is NOT covered by the selector here, so it was written up as one.
+
+   MEASURED ON THE SERVED PAGE IN DARK INSTEAD, which is what this comment block
+   argues for three paragraphs up, and the reasoning was wrong:
+
+       .lgfc__submit   background #222629   colour #e5e7e1   ratio 12.23:1
+       --lg-sage-d resolves to #b0c693, as documented — the button just is not
+       painted with it; something later in the cascade wins.
+
+   So the button is FINE in dark, no override was added for it, and the charter's
+   item is CLOSED as already-fixed rather than fixed again. A rule that pairs
+   var(--lg-sage-d) with #fff in the source is a candidate, not a finding.
+
+   ⚠️ AND A REAL GATE BLIND SPOT, FOUND ON THE WAY: the dark sweep reports "88
+   text elements measured" and never looked at this button at all, because an
+   <input>'s label is a `value` attribute and not a text node. The form's PRIMARY
+   control is invisible to its own contrast gate. It happens to be fine; the next
+   input-valued control on this form would not be checked either. Recorded, not
+   fixed here — it is the gate's shape, not this file's. */
 html[data-lguser-theme="dark"] .lgfc li:has(input:checked)>label,
 html[data-lguser-theme="dark"] .lgfc__chip:has(input:checked){
   background:#3d5233;border-color:#3d5233;color:#fff}
+/* THE ACTUAL OPEN GATE-47 RED, measured on main 2026-08-21: the WYSIWYG toolbar
+   is a 712x40 slab of #f5f5f5 in dark mode. It carries no text, so the contrast
+   pass never looks at it and only the bright-surface leg catches it. ACF's own
+   stylesheet paints it, so it is corrected here rather than there.
+   ⚠️ NOT VERIFIABLE FROM A BRANCH ON THIS BOX: this mu-plugin is symlinked out of
+   the serving checkout, so gate 47 measures MAIN until a merge and a pull. Re-run
+   after the pull with:
+     python3 tools/frontend-compose/dark-contrast-sweep.py --width 1280
+     python3 tools/frontend-compose/dark-contrast-sweep.py --width 390 */
+html[data-lguser-theme="dark"] .lgfc .acf-editor-toolbar,
+html[data-lguser-theme="dark"] .lgfc .mce-toolbar-grp,
+html[data-lguser-theme="dark"] .lgfc .mce-panel{
+  background:#222629;border-color:#2c312d}
 html[data-lguser-theme="dark"] .lgfc__card{box-shadow:0 10px 34px rgba(0,0,0,.28)}
 CSS;
 }

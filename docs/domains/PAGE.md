@@ -212,3 +212,51 @@ posture: same-site links go HOST-RELATIVE at render time
 (`lg_bb_self_relative_url()`, bb-mirror/config.php) — reload-proof; never
 "fix the data", a fresh cut reintroduces it. Foreign hosts pass untouched.
 If a surface shows stored URLs, check its emitter uses the helper.
+
+## ⚠️ #179 wears the `page` label and is NOT a lanes-page issue either (8/21)
+
+The second one, after #171. **#179 is the Loothprint bundle** — one Edit door in
+the article page's floating dock, one pill family at every width, and a member
+paywall toggle on the compose form. Nothing in it touches `/lanes/`,
+`tools/lanes-page.py`, `lanes.json` or the timer.
+
+Recorded here rather than silently relabelled, because the domain rule says a
+domain-labelled issue updates its domain file in the same commit, so this line IS
+that update — and flagged to Ian for a ruling on the label. Its knowledge lives
+where the next person will look for it: the standalone renderer, the compose
+form, gate 69 and gate 35b. Two `page`-labelled issues in two days have belonged
+to other domains, which is itself worth someone's attention.
+
+### The one thing from #179 a lanes-page reader might want
+
+`tools/preview/lane-preview.sh` really does give a BRANCH a clickable URL, and
+#179 used it for `archive-poc/standalone/render.php`:
+`platform/nginx/lane-preview-179-loothprint-bundle.conf`. That matters here
+because it is the general answer to "the serve only carries merged code, so how
+was this verified before merge" — the same question the deploy-gap strip on the
+lanes page exists to surface. Gate 69 grew a `--path` flag so it can measure the
+preview instead of main.
+
+### Reported, NOT fixed by #179 — the dock already covers body text at 641–700px
+
+Measured 2026-08-21 on main, signed in, on an authored loothprint, using Range
+rects over real text nodes (not element boxes, which carry padding):
+
+    width   leftmost body text x   dock right edge   clearance
+    641     41.6                   82                −40.4   ← overlapping today
+    700     44.0                   82                −38.0   ← overlapping today
+    900     98.5                   82                +16.5
+    1100    118.5                  82                +36.5
+    1280    176.5                  82                +94.5
+    1500    286.5                  82                +204.5
+
+So GH #53 / HK-027 — "the floating dock must not sit on the article" — **is not
+actually fixed at the bottom of its own media query**. #179 did not cause it and
+did not fix it (keeper's posture: report, do not fix); #179's dock is *narrower*
+than before (64 → 54 at 900), so the overlap is unchanged at 641–700 and better
+everywhere above. Gate 69 asserts clearance at 900 and 1280 and deliberately
+does **not** assert 641–700, because a gate that goes red for somebody else's
+open defect blocks every lane.
+
+Fixing it means moving the article's left padding or the dock's x at those
+widths — a layout change that deserves Ian's eyes on its own.
