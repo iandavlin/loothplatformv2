@@ -400,3 +400,82 @@ instead of hardcoding a state.
    dynamically as `"{$action}_prefilter"`, while ACF only listens on
    `wp_handle_upload_prefilter`. Proof that needs no reading: the print-file field
    declares `mime_types = zip` and holds **48 `.stl` files**.
+
+---
+
+## ⚠️ #189 wears the `page` label and is NOT a lanes-page issue — the FIFTH in five days
+
+After #171 (Patreon/join dark mode → MEMBERSHIP.md), #179 (the Loothprint
+bundle), #185 (the compose write-up editor) and #186 (compose uploads). **#189 is
+the compose form's own uploader** — drop-zone, thumbnails, 1-in-1-out, and no
+media modal. Nothing in it touches `/lanes/`, `tools/lanes-page.py`, `lanes.json`
+or the timer. Recorded here rather than silently relabelled, because the domain
+rule says a domain-labelled issue updates its domain file in the same commit — so
+this line IS that update.
+
+**Five in five days. Four separate lanes have now each spent a paragraph
+explaining why the `page` label did not mean what it says.** It needs Ian's
+ruling, not a sixth footnote.
+
+### The two things a lanes-page reader might actually want
+
+**1. A branch can be served to a real browser, not just to wp-cli.** Gate 88
+already loaded a branch's mu-plugin under wp-cli by mirroring the mu-plugin dir
+with one file swapped and defining `WPMU_PLUGIN_DIR` first (core sets it with
+`if ( ! defined(...) )`). #189 made that reusable **over HTTP**:
+`tools/preview/mu-mirror.sh` builds the mirror, `tools/preview/mu-mirror-boot.php`
+is an nginx `SCRIPT_FILENAME` shim that defines the constant and then requires the
+serve's own `index.php`. Real WordPress, real DB, real theme, one branch file,
+nothing on the serve modified.
+
+⚠️ The existing `lane-preview-frontend-compose.conf` does **not** do this — it
+points at `/var/www/dev/index.php`, so it arms the flag and renders **main**. A
+lane copying it for a mu-plugin change would verify main and call it verified.
+That is the same question the deploy-gap strip on the lanes page exists to
+surface.
+
+**Repointing the one symlink inside that mirror is the cheapest main-vs-branch
+attribution tool on this box** — two fetches, byte counts, done. #189 used it to
+prove a TinyMCE regression was its own and a hero-picker defect was main's.
+
+**2. An author `display` beats the UA's `[hidden]{display:none}` outright**,
+whatever the specificity. It bit three controls in one lane, one of them
+pre-existing on main. Any surface that hides a control by setting `hidden` from
+script needs `[hidden]{display:none}` in its own stylesheet, or the attribute
+does nothing.
+
+### Two more from #189 that reach every surface on this box
+
+**3. Setting `data-lguser-theme` is NOT setting the theme.** Dark is applied by
+`app-settings.js` **re-pointing the `--lg-*` tokens as inline style on `<html>`**,
+and only then stamping the attribute. A harness that stamps the attribute alone
+photographs a **light page wearing a dark attribute** — every
+`var(--lg-…, <light fallback>)` stays light — and the result reads as a defect in
+whatever is drawn on top. Read the palette out of `webroot/app-settings.js` and
+apply it inline; never write `lg-set-theme` to localStorage, which persists on
+the **shared** chrome profile and takes every other lane's browser dark. Assert
+the delta (a card colour that changes) before believing any dark shot.
+
+⚠️ And the corollary: **a colour token with no dark value silently stays light.**
+Auditing the compose stylesheet that way found three — `--lg-card` (used by the
+type toggle since before #189), `--lg-error`, `--lg-ink-soft`. Gate 88 §K now
+checks that class automatically for that file; **any other stylesheet on this box
+has the same exposure and nothing checking it.**
+
+**4. `pgrep -f '<your command>'` matches the harness WRAPPER.** The bracket trick
+(`foo[-]bar`) stops `pgrep` matching itself; it does **not** stop it matching the
+shell wrapper that carries your command text verbatim. #189 watched the wrapper,
+it exited at once, and a 35-minute run was reported "finished" on its first step.
+Capture `$!`, or pick the interpreter line out of `ps -eo pid,cmd`.
+
+### Reported by #189, not fixed
+
+- **Gate 88 §E was RED on main** and would have blocked every lane: it required
+  zero stamped attachments outside its own fixtures, which stopped being true the
+  moment a member used the compose form (measured: 11 stamped files on one
+  member's live auto-draft). Restated in #189 to assert the property that
+  actually matters — a stamp agrees with its `post_parent`, and nothing that
+  predates the feature carries one. **A gate whose green depends on nobody using
+  the feature is a gate that goes red on success.**
+- No cancel on an upload in flight; the 5GB/4.6G spool risk from #186 is still
+  open; the print-file field's `mime_types = zip` is still unenforced.

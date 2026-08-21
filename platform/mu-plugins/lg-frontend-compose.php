@@ -956,6 +956,37 @@ function lg_fc_upload_target(): int
  * Registered on BOTH prefilters so it cannot be routed around by a future change
  * to which uploader is active.
  */
+/**
+ * THE ONE SENTENCE A TOO-BIG FILE GETS, wherever the refusal is decided.
+ *
+ * Extracted for #189 because the form's own uploader now refuses in the BROWSER
+ * too, before the bytes leave the member's machine. Two copies of a refusal are
+ * two wordings that drift, and the client's copy is the one a member actually
+ * reads — so both sides call this and the client is handed the finished
+ * sentences by lg_fc_upload_config() rather than rebuilding them in JS.
+ */
+function lg_fc_size_refusal(bool $photo, int $size, int $cap): string
+{
+    return sprintf(lg_fc_size_refusal_template($photo), lg_fc_mb($size), lg_fc_mb($cap));
+}
+
+/**
+ * The refusal with its two numbers left as `%s`, so the SAME sentence can be
+ * finished in the browser.
+ *
+ * ⚠️ THE SPLIT IS DELIBERATE: the WORDING lives here and travels to the client;
+ * only the byte FORMATTER is reimplemented in JS. A wording that exists twice
+ * drifts and nobody notices, because the two copies are read by different
+ * people. A formatter that exists twice can be held to agreement by a gate, and
+ * §I does exactly that over real byte values.
+ */
+function lg_fc_size_refusal_template(bool $photo): string
+{
+    return $photo
+        ? 'That photo is %s — a bit big. Photos need to be %s or smaller.'
+        : 'That file is %s — a bit big. Print files need to be %s or smaller.';
+}
+
 function lg_fc_upload_prefilter(array $file): array
 {
     $post_id = lg_fc_upload_target();
@@ -972,11 +1003,7 @@ function lg_fc_upload_prefilter(array $file): array
         /* THE REFUSAL NAMES THE LIMIT AND THE ACTUAL SIZE. A refusal that only
            says "too big" makes the member guess, and guessing at an upload is
            how a silent drop feels from the outside. */
-        $file['error'] = $photo
-            ? sprintf('That photo is %s — a bit big. Photos need to be %s or smaller.',
-                      lg_fc_mb($size), lg_fc_mb($cap))
-            : sprintf('That file is %s — a bit big. Print files need to be %s or smaller.',
-                      lg_fc_mb($size), lg_fc_mb($cap));
+        $file['error'] = lg_fc_size_refusal($photo, $size, $cap);
     }
     return $file;
 }
@@ -1744,12 +1771,20 @@ HTML;
  * empty background. It also painted a floating "ADMIN →" pill over the form.
  *
  * A DENY-LIST, NOT AN ALLOW-LIST, and that is the important decision. acf_form()
- * for this type needs the gallery, the media modal, select2, the colour picker
- * and their dependency closure; an allow-list that misses one member of that
- * closure breaks the photo uploader SILENTLY — the field still renders, the
- * button just stops working — which is precisely the kind of defect a page-level
- * screenshot passes and a member reports. Naming what we know we do not want is
- * the direction of error we can afford.
+ * for this type needs select2, the colour picker and their dependency closure;
+ * an allow-list that misses one member of that closure breaks a control
+ * SILENTLY — the field still renders, the button just stops working — which is
+ * precisely the kind of defect a page-level screenshot passes and a member
+ * reports. Naming what we know we do not want is the direction of error we can
+ * afford.
+ *
+ * ⚠️ THE MEDIA MODAL IS NO LONGER IN THAT CLOSURE (#189), and this line used to
+ * say it was. ACF's gallery and file renderers were the only things that pulled
+ * `wp_enqueue_media()` onto this page and they are no longer the renderers, so
+ * wp-media / media-editor / media-views are simply not enqueued. Nothing here
+ * drops them — there is nothing to drop. Corrected in the same commit as the
+ * behaviour, because a docblock that describes the old shape is confidently
+ * wrong rather than merely out of date.
  *
  * wp_head() itself is still called, because it is what prints ACF's own
  * enqueues. This trims what it prints; it does not bypass it.
@@ -1919,14 +1954,15 @@ function lg_fc_render(string $type, int $edit = 0, bool $embed = false): void
     // see lg_fc_relabel()'s prefill block for why ACF does not do it for us here.
     $GLOBALS['lg_fc_editing'] = $edit;
     add_filter('acf/prepare_field', 'lg_fc_relabel', 20);
-    /* ACF's picker refusal is the literal string "Maximum selection reached",
-       which names no number — so a member who hits the cap is told they have hit
-       something without being told what. Ian's rule for this lane is that a
-       refusal says the limit, so the one string is replaced for the duration of
-       this render. It is localized via acf_localize_text() during the gallery
-       field's enqueue (class-acf-field-gallery.php:82), which is inside this
-       render, so a scoped gettext filter reaches it. */
-    add_filter('gettext', 'lg_fc_gallery_max_wording', 10, 3);
+
+    /* #189 — THE SCOPED GETTEXT FILTER IS GONE, and deleting it is the point
+       rather than an omission. It existed to replace ACF's "Maximum selection
+       reached" — a refusal that names no number — inside the gallery picker.
+       There is no picker on this form any more, so the filter could only ever
+       have been a rule about a control that is not rendered: a stale artifact
+       reading as live behaviour. The rule it carried (a refusal names the
+       number) is now carried by lg_fc_upload_config()['say'], where a member
+       actually meets it. */
 
     lg_fc_page_open($t['title'], $embed);
     ?>
@@ -1986,22 +2022,31 @@ function lg_fc_render(string $type, int $edit = 0, bool $embed = false): void
       so those will not change here. Tell us and we’ll update them.
     </div>
   <?php endif; ?>
-  <?php acf_form('lg-fc-' . $type); ?>
+  <?php
+  /* #189 — THE UPLOADER'S TRANSPORT, printed before the form so it exists by the
+     time lg_fc_js() runs at page close.
+
+     THE POST ID COMES FROM THE REGISTERED FORM, not from a second guess at it.
+     Whatever acf_form() is about to save into is the only correct parent for an
+     upload; re-deriving it here would be a chance for the two to disagree, and a
+     disagreement means an attachment with the wrong post_parent, no #186 stamp
+     and no collector. When the working draft could not be created ACF's post_id
+     is the string 'new_post' — that resolves to 0 here and the JS refuses to
+     upload at all rather than quietly making orphans, which is a real
+     improvement on the old picker, which would happily have uploaded to
+     post_parent 0. */
+  lg_fc_close_uploader_door();
+  $lg_fc_form = acf_get_form('lg-fc-' . $type);
+  $lg_fc_pid  = is_numeric($lg_fc_form['post_id'] ?? 0) ? (int) $lg_fc_form['post_id'] : 0;
+  printf('<script>window.LGFC_UP=%s;</script>',
+         wp_json_encode(lg_fc_upload_config($lg_fc_pid)));
+  acf_form('lg-fc-' . $type);
+  ?>
 </div>
     <?php
     lg_fc_page_close($embed);
     remove_filter('acf/prepare_field', 'lg_fc_relabel', 20);
-    remove_filter('gettext', 'lg_fc_gallery_max_wording', 10);
     unset($GLOBALS['lg_fc_editing']);
-}
-
-/** ACF's wording for a full gallery, replaced with one that names the number. */
-function lg_fc_gallery_max_wording($translated, $text, $domain)
-{
-    if ($domain === 'acf' && $text === 'Maximum selection reached') {
-        return sprintf('That\'s the limit — %d photos.', lg_fc_limits()['photos']);
-    }
-    return $translated;
 }
 
 /**
@@ -2035,6 +2080,27 @@ function lg_fc_relabel($field)
     $field['label']        = $label;
     $field['instructions'] = $hint;
     $field['wrapper']['class'] = trim(($field['wrapper']['class'] ?? '') . ' lgfc-field');
+
+    /* ⚠️ #189 — THE RENDER SWAP, AND IT IS THE ONLY LINE THAT REMOVES THE MODAL.
+       ACF's gallery and file renderers are the only callers of
+       acf_enqueue_uploader() on this page, and acf_render_field() dispatches the
+       type variation from the PREPARED field — so setting the type HERE replaces
+       the renderer and nothing else. Validation and update load the field
+       through acf/load_field and never see this, which is what keeps the stored
+       ids, the ACF save path, post_parent and #186's stamp exactly as they were.
+       Bracketed on a real WordPress before any of it was built; the numbers are
+       in the section comment above lg_fc_upload_config().
+
+       BY SHAPE, NOT BY A NAME LIST. A list of field names is a list that the
+       next field added to this form is not in — the same lesson
+       lg_fc_referenced_ids() was taught by the corpus. This is already scoped to
+       fields our own registry declares, by the $map check above, and to this one
+       render, because the filter is added and removed around it. */
+    if ($field['type'] === 'gallery') {
+        $field['type'] = 'lg_fc_photos';
+    } elseif ($field['type'] === 'file') {
+        $field['type'] = 'lg_fc_printfile';
+    }
 
     /* RICH TEXT — Ian, 2026-08-16: "rich text with light tinymce controls".
        This is the parity decision the previous comment here said would have to be
@@ -2129,6 +2195,356 @@ function lg_fc_relabel($field)
     }
     return $field;
 }
+
+
+/* ════════════════════════════════ #189 — THE FORM'S OWN UPLOADER ═════════════
+ *
+ * Ian, 2026-08-21: "Would it be worth it to forsake the wordpress media pool and
+ * put our on interface right on the form 1 in 1 out if over ?", sharpened the
+ * same day to "It could all be handled in form without having a modal opened
+ * right ?" — so: NO MODAL AT ALL, and no Browse-existing. Everything happens
+ * inline on the form.
+ *
+ * ⚠️ THIS IS A RENDER SWAP. IT CHANGES NO STORAGE, AND THAT IS THE WHOLE POINT.
+ * Ian was offered the deeper version — our own files, our own records — and did
+ * not take it, because four things depend on these being ordinary WordPress
+ * attachments: the 4-size image resize, the layout engine's ID references,
+ * #186's publish-time collector and its reference walk, and gates 88 and 35.
+ *
+ * HOW THE MODAL LEAVES THE PAGE, measured rather than assumed:
+ *
+ *   - `acf_render_field()` runs `acf_prepare_field()` FIRST and then dispatches
+ *     the type variation from the PREPARED field (acf-field-functions.php:800).
+ *   - Validation and save never go through `acf_prepare_field` at all: they load
+ *     the field through `acf/load_field`.
+ *   - So swapping the type at prepare time replaces ACF's gallery and file
+ *     renderers, and with them their `acf_enqueue_uploader()` calls.
+ *
+ * ⚠️ AND THAT IS NOT ENOUGH ON ITS OWN — SEE lg_fc_close_uploader_door().
+ * The first version of this comment claimed the gallery and file renderers were
+ * the only callers on this page. THE RENDERED PAGE SAID OTHERWISE: media-models,
+ * media-views, media-editor, plupload and wp-plupload were all still on it. ACF's
+ * **wysiwyg** field calls `acf_enqueue_uploader()` unconditionally from its own
+ * `render_field()` (class-acf-field-wysiwyg.php:189) — `media_upload = 0` does not
+ * stop it — and the write-up is a wysiwyg. The claim was wrong and only fetching
+ * the page as a real member found it, which is the whole argument for measuring
+ * the rendered bytes rather than reasoning about the call graph.
+ *
+ * So a type set at prepare time swaps the RENDERER and nothing else. Bracketed
+ * on a real WordPress before a line of this was written:
+ *
+ *     swapped render  →  did_action('wp_enqueue_media') 0 → 0 , no .acf-gallery
+ *     ACF's own render →  did_action('wp_enqueue_media') 0 → 1 , .acf-gallery present
+ *     validation saw type='gallery'   ·   update saw type='gallery'
+ *     ids stored: ['61698','61697'] — byte-identical to today
+ *
+ * The second line matters as much as the first. `enqueue_uploader()` carries a
+ * once-only latch, so a baseline measured AFTER the swap would look clean for
+ * free — the order above is what stops the assertion being vacuous.
+ *
+ * ⚠️ THE MODAL IS ABSENT, NOT HIDDEN. Nothing here hides a control with CSS. The
+ * media scripts are never enqueued, so there is no modal on the page to open.
+ * A CSS-hidden picker would pass a screenshot and fail the actual ask.
+ *
+ * ⚠️ AND THERE IS NO SECOND UPLOAD ROUTE. The browser posts to the very endpoint
+ * #186 validated — `admin-ajax.php?action=bfu_chunker` — so every byte still
+ * passes `lg_fc_chunk_guard()` at priority 1, then `wp_handle_sideload_prefilter`
+ * → `lg_fc_upload_prefilter()`, then `media_handle_upload()`, then
+ * `add_attachment` → `lg_fc_stamp_upload()`. A private uploader with its own
+ * limits is exactly how the ACF-validator hole happened: that field declares
+ * `mime_types = zip` and holds 48 `.stl` files.
+ */
+
+/**
+ * SHUT THE ONE DOOR THE RENDER SWAP CANNOT REACH.
+ *
+ * ACF's wysiwyg `render_field()` calls `acf_enqueue_uploader()` before it does
+ * anything else (class-acf-field-wysiwyg.php:189) — `media_upload = 0` does not
+ * stop it — so the write-up field alone would put the whole media modal back on
+ * a page that has nothing to open it with. Measured on the rendered page, not
+ * inferred: the first build of this feature still served media-models,
+ * media-views, media-editor, plupload, moxie, wp-plupload and the footer
+ * templates.
+ *
+ * ⚠️⚠️ THE OBVIOUS FIX IS WRONG AND IT TAKES THE WRITE-UP EDITOR WITH IT.
+ * `ACF_Assets::enqueue_uploader()` is guarded by one latch, and `acf_has_done()`
+ * is the supported way to arm it. Arming it does stop `wp_enqueue_media()` — and
+ * it also stops `print_uploader_scripts()`, which is the ONLY thing on this page
+ * that brings TinyMCE. **ACF's front-end wysiwyg does not call `wp_editor()`
+ * for the field**: it hand-renders a bare textarea and relies on the HIDDEN
+ * `wp_editor('', 'acf_content')` that `print_uploader_scripts()` prints, then
+ * clones its settings client-side. Behind the same latch. So the latch produced
+ * exactly #185's defect again — a write-up rendered as a plain textarea with no
+ * toolbar — and it was caught by LOOKING at a screenshot, after a 26-assertion
+ * browser suite had gone green without ever asserting the editor.
+ *
+ * Bisected through the same nginx preview, one variant per row:
+ *
+ *     variant                        bytes  tmce-active  tinymce  media js
+ *     ─────────────────────────────────────────────────────────────────────
+ *     main                          254068            2        8         4
+ *     door-closer removed           272348            2        8         4
+ *     do_action only, no latch      254068            2        8         4
+ *     LATCH ONLY                    191494            0        0         0   ← both
+ *
+ * The latch is the whole difference, and it is all-or-nothing.
+ *
+ * SO THE SEAM IS CORE's, NOT ACF's. Let `enqueue_uploader()` run in full — the
+ * hidden editor, the toolbars localization, all of it — and take back only what
+ * `wp_enqueue_media()` added. Core enqueues exactly two script roots on the
+ * front end (`wp-includes/media.php`, wp_enqueue_media): `media-editor` and
+ * `media-audiovideo`. media-views, media-models, wp-plupload, plupload and moxie
+ * are on the page ONLY as dependencies of those two, so dropping the roots drops
+ * the tree. `mce-view` and `image-edit` are `is_admin()`-only and never reach us.
+ *
+ * ⚠️ A NAME LIST IS A LIST THAT ROTS, so gate 88 asserts the ABSENCE of every
+ * media handle from the served page and the PRESENCE of TinyMCE and the toolbar,
+ * rather than trusting this list to stay complete.
+ *
+ * ⚠️ TIMING: the wysiwyg enqueues during the BODY, long after `wp_enqueue_scripts`
+ * has fired, so the ordinary dequeue hook is far too early. `wp_footer` at 1 is
+ * before `wp_print_media_templates` (10), and `wp_print_footer_scripts` at 0 is
+ * the last moment before the footer scripts are printed.
+ */
+function lg_fc_close_uploader_door(): void
+{
+    add_action('wp_footer',               'lg_fc_drop_media_modal', 1);
+    add_action('wp_print_footer_scripts', 'lg_fc_drop_media_modal', 0);
+}
+
+/** Idempotent: it runs twice, once at each of the two moments above. */
+function lg_fc_drop_media_modal(): void
+{
+    wp_dequeue_script('media-editor');
+    wp_dequeue_script('media-audiovideo');
+    wp_dequeue_style('media-views');
+    wp_dequeue_style('imgareaselect');
+    remove_action('wp_footer', 'wp_print_media_templates');
+}
+
+/**
+ * The transport and the wording the browser needs, in one blob.
+ *
+ * ⚠️ THE NONCE IS OURS TO MINT NOW. `wp_enqueue_media()` no longer runs, so
+ * `_wpPluploadSettings` — where the uploader used to find its nonce and its
+ * chunk size — does not exist on this page. `media-form` is the nonce BFU's
+ * `check_admin_referer()` actually tests, so that is the one we mint.
+ */
+function lg_fc_upload_config(int $post_id): array
+{
+    $lim = lg_fc_limits();
+    return [
+        'url'     => admin_url('admin-ajax.php'),
+        'action'  => 'bfu_chunker',
+        'nonce'   => wp_create_nonce('media-form'),
+        'post_id' => $post_id,
+        /* ⚠️ 4MB, AND SMALLER THAN BFU's OWN 20MB ON PURPOSE. BFU picks 20MB "to
+           avoid timeouts"; we are not bound by its choice because we no longer
+           go through its plupload settings at all. The chunk size is the
+           OVERSHOOT BOUND: lg_fc_chunk_guard() refuses at the first chunk that
+           crosses the cap, so at most one chunk of a refused upload ever touches
+           the spool — and the spool is wp-content/bfu-temp on the ROOT disk,
+           measured 2026-08-21 at 4.6G free. 4MB keeps a 128MB print file to 32
+           requests while cutting the worst-case overshoot from 20MB to 4MB. */
+        'chunk_b' => 4 * 1024 * 1024,
+        'photos'  => $lim['photos'],
+        'photo_b' => $lim['photo_b'],
+        'file_b'  => $lim['file_b'],
+        /* Every sentence a member can be shown, written here in the form's voice
+           and never assembled in JS. The two with %s in them are the SAME
+           templates the server refuses with — see lg_fc_size_refusal_template(). */
+        'say' => [
+            'photo_big'  => lg_fc_size_refusal_template(true),
+            'file_big'   => lg_fc_size_refusal_template(false),
+            'network'    => 'That didn’t reach us — check your connection and try again.',
+            'refused'    => 'That one didn’t go up. Try again, or try a different file.',
+            'swap_head'  => sprintf('That’s %d photos, which is the most we take.', $lim['photos']),
+            'swap_ask'   => 'Pick one to swap out for %s.',
+            'swap_more'  => '%d more waiting.',
+            'swap_this'  => 'Swap this one out',
+            'cancel'     => 'Leave things as they are',
+            'removed'    => 'Removed %s.',
+            'undo'       => 'Undo',
+            'swapped'    => 'Swapped %s out for %s.',
+            'replaced'   => 'Replaced %s.',
+            'sending'    => 'Sending %s…',
+            'added'      => 'Added %s.',
+            'not_photo'  => 'That doesn’t look like a photo — %s can go in the print files instead.',
+            /* The draft could not be created, so an upload would land with
+               post_parent 0: no #186 stamp, invisible to the collector, an
+               orphan by construction. The old picker did exactly that silently.
+               We say so and refuse instead. */
+            'nodraft'    => 'We couldn’t get your draft ready — reload the page and try again before adding files.',
+            'one_only'   => 'One print file at a time — we took %s.',
+        ],
+    ];
+}
+
+/**
+ * What one already-attached file looks like in the strip.
+ *
+ * The thumbnail is WordPress's own `thumbnail` derivative at 150px, shown at
+ * 72px — a real resize, never the member's original, and comfortably 2× for the
+ * size it is drawn at. Returns null for an id that no longer resolves, so a
+ * deleted attachment leaves no broken tile behind.
+ */
+function lg_fc_upload_tile(int $id): ?array
+{
+    $post = get_post($id);
+    if (!$post || $post->post_type !== 'attachment') {
+        return null;
+    }
+    $name = basename((string) get_attached_file($id)) ?: $post->post_title;
+    $src  = wp_get_attachment_image_src($id, 'thumbnail');
+    return [
+        'id'    => $id,
+        'name'  => $name,
+        'thumb' => $src ? $src[0] : '',
+        'w'     => $src ? (int) $src[1] : 0,
+        'h'     => $src ? (int) $src[2] : 0,
+    ];
+}
+
+/**
+ * One tile's markup. The hidden input lives INSIDE it, so removing the tile from
+ * the DOM is the unlink — there is no second list to keep in step.
+ *
+ * ⚠️ `$input` IS THE FULL INPUT NAME AND THE TWO FIELDS DIFFER, which is not
+ * cosmetic. The gallery posts a LIST (`acf[key][]`); the file field posts a
+ * SCALAR (`acf[key]`), because its update_value() runs the value through
+ * `acf_idval()`, and `acf_idval(['54773'])` looks for an `ID` key, finds none and
+ * returns **0**. A `[]` on the print file would therefore have saved the field
+ * EMPTY while the tile on screen showed the file — the exact "looks right,
+ * writes nothing" shape this form has been bitten by before.
+ */
+function lg_fc_upload_tile_html(array $t, string $input, string $swap_label): string
+{
+    $img = $t['thumb'] !== ''
+        ? sprintf('<img class="lgfc-up__thumb" src="%s" width="%d" height="%d" alt="" loading="lazy">',
+                  esc_url($t['thumb']), $t['w'], $t['h'])
+        : '<span class="lgfc-up__thumb lgfc-up__thumb--none" aria-hidden="true"></span>';
+
+    return sprintf(
+        '<li class="lgfc-up__item" data-lgfc-att="%1$d">'
+        . '<input type="hidden" name="%2$s" value="%1$d">'
+        . '%3$s'
+        . '<span class="lgfc-up__name" title="%4$s">%4$s</span>'
+        . '<button type="button" class="lgfc-up__x" aria-label="Remove %4$s">'
+        . '<span aria-hidden="true">×</span></button>'
+        . '<button type="button" class="lgfc-up__swap" tabindex="-1" hidden>%5$s</button>'
+        . '</li>',
+        $t['id'], esc_attr($input), $img, esc_attr($t['name']), esc_html($swap_label)
+    );
+}
+
+/**
+ * THE PHOTOS CONTROL. Drop-zone, strip, remove, 1-in-1-out.
+ *
+ * ⚠️ THE HIDDEN INPUTS ARE ACF's OWN SHAPE, IN ACF's OWN ORDER, and that is what
+ * makes this a UI change rather than a storage change. The gallery field posts
+ * an EMPTY SCALAR first and then one `[]` entry per photo
+ * (class-acf-field-gallery.php:430,450); PHP promotes the scalar to an array
+ * when the first `[]` arrives, which is how an emptied gallery still posts a
+ * value rather than vanishing from $_POST. Emit them the other way round and an
+ * emptied strip would save the member's old photos back.
+ */
+function lg_fc_render_photos(array $field): void
+{
+    $lim  = lg_fc_limits();
+    $name = (string) $field['name'];
+    $ids  = array_values(array_filter(array_map('intval', acf_array($field['value'] ?: []))));
+    $say  = lg_fc_upload_config(0)['say'];
+    ?>
+<div class="lgfc-up lgfc-up--photos" data-lgfc-up="photos"
+     data-input="<?php echo esc_attr($name . '[]'); ?>"
+     data-max="<?php echo (int) $lim['photos']; ?>"
+     data-max-b="<?php echo (int) $lim['photo_b']; ?>">
+  <input type="hidden" name="<?php echo esc_attr($name); ?>" value="">
+  <ul class="lgfc-up__strip"><?php
+    foreach ($ids as $id) {
+        $t = lg_fc_upload_tile($id);
+        if ($t) {
+            echo lg_fc_upload_tile_html($t, $name . '[]', $say['swap_this']);   // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the builder
+        }
+    }
+  ?></ul>
+  <div class="lgfc-up__swapbar" hidden>
+    <p class="lgfc-up__swaptext"></p>
+    <button type="button" class="lgfc-up__cancel"><?php echo esc_html($say['cancel']); ?></button>
+  </div>
+  <ul class="lgfc-up__prog" aria-hidden="true"></ul>
+  <?php /* THE ZONE IS A <label> AROUND A REAL, VISIBLE FILE INPUT. That one
+           decision covers three of the requirements at once: drag-and-drop for
+           a mouse, a click target the size of the box, and — where drag-drop is
+           unavailable or a member is on the keyboard — the browser's own input,
+           focusable and operable with Space, with no ARIA standing in for a
+           control that isn't there. */ ?>
+  <label class="lgfc-up__zone">
+    <span class="lgfc-up__zonetext">
+      <strong>Drag photos here</strong>
+      <span class="lgfc-up__hint">Up to <?php echo (int) $lim['photos']; ?>, <?php echo esc_html(lg_fc_mb($lim['photo_b'])); ?> each — or choose them below.</span>
+    </span>
+    <input type="file" class="lgfc-up__file" accept="image/*" multiple>
+  </label>
+  <p class="lgfc-up__say" role="status" aria-live="polite"></p>
+  <p class="lgfc-up__err" role="alert"></p>
+</div>
+    <?php
+}
+add_action('acf/render_field/type=lg_fc_photos', 'lg_fc_render_photos');
+
+/**
+ * THE PRINT-FILE CONTROL. One slot, so "1 in 1 out" needs no choosing: a new
+ * file replaces the one that is there, which is Ian's ruling of 2026-08-16 that
+ * an edit may SWAP the file rather than only add to it.
+ *
+ * The old attachment is unlinked, never deleted — #186's stamped collector at
+ * publish is the only thing that deletes, and it still sees the old file because
+ * the stamp and post_parent are untouched.
+ */
+function lg_fc_render_printfile(array $field): void
+{
+    $lim  = lg_fc_limits();
+    $name = (string) $field['name'];
+    $id   = (int) (is_array($field['value']) ? ($field['value']['ID'] ?? 0) : $field['value']);
+    $t    = $id ? lg_fc_upload_tile($id) : null;
+    $say  = lg_fc_upload_config(0)['say'];
+    ?>
+<div class="lgfc-up lgfc-up--file" data-lgfc-up="file"
+     data-input="<?php echo esc_attr($name); ?>"
+     data-max="1"
+     data-max-b="<?php echo (int) $lim['file_b']; ?>">
+  <?php /* ⚠️ THE EMPTY SENTINEL COMES FIRST FOR BOTH CONTROLS, and it is doing a
+           different job in each. For the gallery, PHP promotes the scalar to an
+           array when the first `acf[key][]` arrives, so an emptied strip still
+           posts a value instead of dropping out of $_POST and leaving the old
+           photos in place. For the print file there is no promotion — the LAST
+           `acf[key]` simply wins — so the tile's own scalar overrides this when a
+           file is present, and this is what an emptied slot posts.
+           Putting it first makes both cases fall out of ordinary form
+           semantics, with no input being enabled or disabled by script: a JS
+           error can then lose the ADDING of a file, but never silently blank one
+           the member already had. */ ?>
+  <input type="hidden" name="<?php echo esc_attr($name); ?>" value="">
+  <ul class="lgfc-up__strip"><?php
+    if ($t) {
+        echo lg_fc_upload_tile_html($t, $name, $say['swap_this']);   // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the builder
+    }
+  ?></ul>
+  <ul class="lgfc-up__prog" aria-hidden="true"></ul>
+  <label class="lgfc-up__zone">
+    <span class="lgfc-up__zonetext">
+      <strong>Drag your print file here</strong>
+      <span class="lgfc-up__hint">One file, up to <?php echo esc_html(lg_fc_mb($lim['file_b'])); ?> — a new one replaces the old. Or choose it below.</span>
+    </span>
+    <input type="file" class="lgfc-up__file">
+  </label>
+  <p class="lgfc-up__say" role="status" aria-live="polite"></p>
+  <p class="lgfc-up__err" role="alert"></p>
+</div>
+    <?php
+}
+add_action('acf/render_field/type=lg_fc_printfile', 'lg_fc_render_printfile');
 
 /**
  * The ONE list of tags this field may contain. The toolbar can make exactly these
@@ -2435,6 +2851,18 @@ function lg_fc_css(): string
   border-top:0;margin:0;float:none!important;width:100%!important;
   min-height:0;clear:both;display:block}
 .lgfc .acf-fields>.acf-field:last-of-type{border-bottom:0}
+/* ⚠️ AN AUTHOR `display` BEATS THE UA's `[hidden]{display:none}` OUTRIGHT, whatever
+   the specificity — so the rule above was overriding the `hidden` attribute on
+   every field that carries one. The hero picker ("Which photo leads?") renders
+   with `hidden` and is un-hidden by script only once there are two photos to
+   choose between; it was therefore on screen, with an empty strip under it, on
+   an empty form. PRE-EXISTING — the rule, the markup and the hero script are all
+   unchanged by #189, and main renders it the same way. Fixed here rather than
+   only reported because it is one line, it is in this lane's own file, and the
+   control sits directly beneath the photo strip this lane rewrote: it is in
+   every picture Ian is being given. Found by LOOKING at a screenshot after a
+   26-assertion browser suite went green. */
+.lgfc .acf-fields>.acf-field[hidden]{display:none}
 .lgfc .acf-fields{border:0;padding-left:21px;padding-right:21px}
 .lgfc .acf-field[data-name="_validate_email"]{display:none!important}
 .lgfc .acf-label{margin:0 0 3px;padding:0}
@@ -2609,77 +3037,32 @@ html[data-lguser-theme="dark"] .lgfc-taxo__done{
 .lgfc .acf-field[data-name="loothprint_creative_commons"] .acf-radio-list label{
   border-radius:10px;padding:10px 12px;width:100%;font-weight:600;line-height:1.35}
 
-/* ---- gallery ----
-   ACF gives .acf-gallery a FIXED 400px height and absolutely positions its
-   inner panes, so an empty gallery is a 400px void — which is what the first
-   render showed, and the mock draws a compact drop zone. Unwinding the
-   positioning is what lets the box size to its contents.
-   The empty state is styled through :empty so it reads as the mock's drop zone
-   without a second element to keep in sync: when ACF puts an attachment in
-   there, the dashed zone stops applying by itself. */
-.lgfc .acf-gallery{height:auto!important;min-height:0;border:0;background:none}
-.lgfc .acf-gallery-main,.lgfc .acf-gallery-attachments,.lgfc .acf-gallery-toolbar{
-  position:static;width:auto;height:auto;padding:0;border:0;background:none}
-.lgfc .acf-gallery-attachments{min-height:64px}
-/* :has(), NOT :empty. ACF leaves a whitespace text node inside the attachments
-   container, and :empty does not match an element containing one — so the
-   drop-zone styling silently never applied and the field rendered as a blank
-   64px gap. Measured in the live DOM (1 child node, innerHTML "\n\t\t\t\t\t")
-   rather than inferred from the screenshot, which only showed "nothing there".
-   :has() asks the question that was actually meant: are there any attachments? */
-.lgfc .acf-gallery-attachments:not(:has(.acf-gallery-attachment)){display:flex;
-  flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:104px;
-  border:1.5px dashed var(--lg-sage,#87986a);border-radius:11px;
-  background:var(--lg-paper,#fdfdfa)}
-.lgfc .acf-gallery-attachments:not(:has(.acf-gallery-attachment))::before{content:"Drop photos here";
-  font:700 13.5px/1.3 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-sage-d,#6b7c52)}
-.lgfc .acf-gallery-attachments:not(:has(.acf-gallery-attachment))::after{content:"or tap to choose · JPG, PNG, HEIC";
-  font-size:12.3px;color:var(--lg-mute,#6b6f6b)}
-.lgfc .acf-gallery-toolbar{margin-top:10px}
-.lgfc .acf-gallery-toolbar .acf-hl{display:flex;align-items:center;gap:8px;
-  list-style:none;margin:0;padding:0}
-.lgfc .acf-gallery-toolbar .acf-fr{margin-left:auto}
-.lgfc .acf-gallery-side{border-radius:11px;border:1px solid var(--lg-line,#e3ddd0)}
+/* ---- gallery and print-file: ACF's OWN CONTROLS ARE GONE (#189) ----
+   Roughly sixty-five lines lived here, unwinding ACF's fixed-height gallery
+   (.acf-gallery, .acf-gallery-attachments, .acf-gallery-toolbar) and redrawing
+   its file row (.acf-file-uploader, .hide-if-value, .show-if-value) into
+   something Ian would accept. Not one of those selectors matches anything on
+   this page any more: the render swap means ACF's gallery and file renderers
+   never run, so the markup they styled is not emitted.
 
-/* ---- file ---- */
-/* THE PRINT-FILES ROW — Ian, 2026-08-16, testing live: "The print files is weird,
-   please make look nice". MEASURED BEFORE REDRAWING rather than restyled on a
-   hunch: the control rendered as a 21px-tall sliver reading "No file selected
-   [Add File]", directly beneath a 104px dashed drop-zone for photos. Beside the
-   thing above it, it read as an afterthought — which is exactly what he saw.
+   DELETED RATHER THAN LEFT IN PLACE. Dead CSS for a control that no longer
+   renders is not harmless — it reads as live styling and the next person spends
+   their time on it. Two hard-won findings from those lines are worth keeping,
+   because they are facts about THIS page rather than about the old markup:
 
-   ⚠️ STYLED ON .hide-if-value, NOT ON A has-value CLASS. My first instinct was
-   `.acf-file-uploader:not(.has-value)`, and it would have been wrong: this build
-   never sets that class — measured in the live DOM, the uploader's class list is
-   exactly "acf-file-uploader", and `has-value` appears ZERO times in the served
-   page. The drop-zone would then have stayed on top of a chosen file. Also note
-   this page loads NO ACF stylesheet at all, so nothing here can be assumed from
-   how ACF looks in wp-admin.
+     · this page loads NO ACF stylesheet at all, so nothing may be assumed from
+       how ACF looks in wp-admin;
+     · `:empty` does not match an element containing a whitespace text node,
+       which is why the old empty-state rule silently never applied and the field
+       rendered as a blank 64px gap. Measured in the live DOM, not inferred from
+       a screenshot that only showed "nothing there".
 
-   .hide-if-value IS the empty state by definition — ACF hides it the instant a
-   file lands and reveals .show-if-value — so the drop-zone look disappears on its
-   own with no state class to track. */
-.lgfc .acf-field-file .acf-input>.acf-file-uploader{border:0;background:none}
-.lgfc .acf-file-uploader>.hide-if-value{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
-  min-height:104px;padding:14px;
-  border:1.5px dashed var(--lg-sage,#87986a);border-radius:11px;
-  background:var(--lg-paper,#fdfdfa)}
-.lgfc .acf-file-uploader>.hide-if-value::before{content:"Drop your ZIP here";
-  font:700 13.5px/1.3 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-sage-d,#6b7c52)}
-.lgfc .acf-file-uploader>.hide-if-value::after{content:"or tap to choose \00b7 STLs, and the source too if you like";
-  font-size:12.3px;color:var(--lg-mute,#6b6f6b);order:2;text-align:center}
-/* ACF's "No file selected" wording and its button share ONE <p>, so the text
-   cannot be display:none'd without taking the only tap target with it. Zero the
-   paragraph and give the size back to the button. */
-.lgfc .acf-file-uploader>.hide-if-value p{font-size:0;margin:8px 0 0;order:3}
-.lgfc .acf-file-uploader>.hide-if-value p .acf-button{font-size:12.5px}
-/* the chosen-file state stays a solid card, so "empty" and "filled" read apart */
-.lgfc .acf-file-uploader>.show-if-value{
-  border:1px solid var(--lg-line,#e3ddd0);border-radius:11px;background:var(--lg-paper,#fdfdfa)}
-.lgfc .acf-file-uploader .file-wrap,.lgfc .acf-file-uploader .show-if-value{padding:9px 11px}
+   The mock's drop-zone wording those rules carried in ::before/::after content
+   now lives in the markup itself (lg_fc_render_photos / lg_fc_render_printfile),
+   where a screen reader reaches it — generated content is not always announced,
+   so this is a small accessibility gain as well as a tidy-up. */
 .lgfc input[type=file]{font-size:13px;color:var(--lg-mute,#6b6f6b)}
-.lgfc .acf-button,.lgfc .acf-gallery .acf-button{font:600 12.5px/1 var(--lg-font-sans,system-ui,sans-serif);
+.lgfc .acf-button{font:600 12.5px/1 var(--lg-font-sans,system-ui,sans-serif);
   border-radius:8px;padding:8px 12px;border:1px solid var(--lg-line,#e3ddd0);
   background:var(--lg-card-bg,#fff);color:var(--lg-sage-d,#6b7c52);cursor:pointer}
 
@@ -2753,7 +3136,16 @@ html[data-lguser-theme="dark"] .lgfc-taxo__done{
    need saying twice. --lg-paper and --lg-rust-tint are light-only in the current
    palette, so they are restated rather than left to a fallback that would stay
    cream on a dark card. */
-html[data-lguser-theme="dark"] .lgfc{--lg-paper:#20241f;--lg-rust-tint:#3a2320}
+/* ⚠️ THE LOCAL RE-POINT, AND #189 FOUND TWO TOKENS MISSING FROM IT.
+   app-settings.js re-points most of the palette as inline style on <html>, but
+   not every name this file uses: `--lg-card` and `--lg-error` are in NEITHER the
+   app's dark set NOR this line, so every colour written against them stayed
+   LIGHT in dark mode — measured, by reading the app's own THEMES table rather
+   than by eye. `--lg-card` was already used by the type toggle before this lane,
+   so this is a pre-existing gap closed in one line rather than a new need.
+   #1e2124 is the app's own `--lg-card-bg`, so the two agree by construction. */
+html[data-lguser-theme="dark"] .lgfc{--lg-paper:#20241f;--lg-rust-tint:#3a2320;
+  --lg-card:#1e2124;--lg-error:#f2b8b5;--lg-ink-soft:#c6cabf}
 /* SELECTED CHIPS IN DARK — Ian 2026-08-15: "compose works well. Needs some dark
    mode love." Gate 47 caught this on its first real run; measured, 1.85:1.
 
@@ -2830,6 +3222,131 @@ html[data-lguser-theme="dark"] .lgfc .mce-toolbar-grp,
 html[data-lguser-theme="dark"] .lgfc .mce-panel{
   background:#222629;border-color:#2c312d}
 html[data-lguser-theme="dark"] .lgfc__card{box-shadow:0 10px 34px rgba(0,0,0,.28)}
+/* ═══════════════════════ #189 — THE FORM'S OWN UPLOADER ═════════════════════
+   No modal, so every state a member can be in has to be drawn here: empty,
+   sending, full, swapping, refused. Nothing below hides a WordPress control —
+   there is no WordPress control on this page to hide. */
+.lgfc-up{display:block}
+.lgfc-up__strip{display:flex;flex-wrap:wrap;gap:9px;margin:0 0 11px;padding:0;list-style:none}
+.lgfc-up__strip:empty{display:none}
+
+.lgfc-up__item{position:relative;width:96px;border:1px solid var(--lg-line,#e3ddd0);
+  border-radius:11px;background:var(--lg-card,#fff);padding:6px 6px 5px;overflow:hidden}
+.lgfc-up__thumb{display:block;width:100%;height:72px;object-fit:cover;border-radius:7px;
+  background:var(--lg-cream,#fbfbf8)}
+.lgfc-up__thumb--none{height:72px;border-radius:7px;background:var(--lg-cream,#fbfbf8);
+  border:1px dashed var(--lg-line,#e3ddd0)}
+.lgfc-up__name{display:block;margin:5px 1px 0;font-size:11px;line-height:1.3;
+  color:var(--lg-mute,#6b6f6b);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* The × is a real button at 28px — a remove control smaller than a fingertip is
+   how a member deletes the wrong photo. */
+.lgfc-up__x{position:absolute;top:9px;right:9px;width:28px;height:28px;padding:0;
+  display:flex;align-items:center;justify-content:center;border:0;border-radius:999px;
+  background:rgba(26,29,26,.62);color:#fff;font:600 17px/1 inherit;cursor:pointer}
+.lgfc-up__x:hover{background:rgba(26,29,26,.85)}
+.lgfc-up__x:focus-visible{outline:2px solid var(--lg-sage,#87986a);outline-offset:2px}
+
+/* SWAP MODE. Each tile becomes one button, because "pick one to swap out" is a
+   choice BETWEEN tiles and not a choice inside one.
+
+   ⚠️ THE OVERLAY COVERS THE THUMBNAIL ONLY, AND IS TRANSLUCENT. The first build
+   used inset:0 at 72% black, and the screenshot made the mistake obvious: every
+   tile went to a dark slab reading "Swap this one out", so the member was asked
+   to choose between ten photos they could no longer see, with the filenames
+   covered too. A control that hides the thing it is asking about is not a
+   choice. The scrim is now light enough to read the photo through, the filename
+   stays uncovered below it, and the text carries a shadow so it holds up over a
+   pale image. */
+.lgfc-up__swap{position:absolute;left:6px;right:6px;top:6px;height:72px;padding:4px;
+  border:0;border-radius:7px;background:rgba(26,29,26,.42);color:#fff;
+  font:600 10.5px/1.2 inherit;text-shadow:0 1px 2px rgba(0,0,0,.6);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;text-align:center}
+.lgfc-up__swap[hidden]{display:none}
+.lgfc-up.is-swapping .lgfc-up__x{display:none}
+.lgfc-up__swap:hover,.lgfc-up__swap:focus-visible{background:rgba(135,152,106,.8)}
+.lgfc-up__swap:focus-visible{outline:2px solid var(--lg-sage,#87986a);outline-offset:2px}
+/* the print file is one row and never enters swap mode (a single slot replaces
+   outright), but if it ever did the overlay must fit the row, not a 72px tile */
+.lgfc-up--file .lgfc-up__swap{inset:0;height:auto;border-radius:11px}
+
+.lgfc-up__swapbar[hidden]{display:none}
+.lgfc-up__swapbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  margin:0 0 11px;padding:10px 12px;border-radius:10px;
+  border:1px solid var(--lg-sage,#87986a);background:var(--lg-sage-tint,#f1f4ec)}
+.lgfc-up__swaptext{margin:0;flex:1 1 220px;font-size:13px;color:var(--lg-ink,#323532)}
+.lgfc-up__cancel{border:1px solid var(--lg-line,#e3ddd0);background:var(--lg-card,#fff);
+  color:var(--lg-ink-soft,#565a55);border-radius:999px;padding:6px 13px;
+  font:600 12.5px/1 inherit;cursor:pointer}
+.lgfc-up__cancel:hover{border-color:var(--lg-sage,#87986a);color:var(--lg-ink,#262925)}
+
+/* ---- the drop zone: a <label> wrapped around a real, visible file input ---- */
+.lgfc-up__zone{display:flex;flex-direction:column;align-items:center;gap:9px;
+  padding:17px 14px;border:1.5px dashed var(--lg-line,#e3ddd0);border-radius:12px;
+  background:var(--lg-cream,#fbfbf8);cursor:pointer;text-align:center}
+.lgfc-up__zone:hover,.lgfc-up__zone.is-drag{border-color:var(--lg-sage,#87986a);
+  background:var(--lg-sage-tint,#f1f4ec)}
+.lgfc-up__zone:focus-within{border-color:var(--lg-sage,#87986a);
+  box-shadow:0 0 0 3px rgba(135,152,106,.22)}
+.lgfc-up__zonetext strong{display:block;font:600 14px/1.3 inherit;color:var(--lg-ink,#323532)}
+.lgfc-up__hint{display:block;margin-top:3px;font-size:12.5px;color:var(--lg-mute,#6b6f6b)}
+/* VISIBLE ON PURPOSE. It is the fallback where drag-and-drop is unavailable and
+   the native control on the keyboard path, so it is never sr-only. */
+.lgfc-up__file{max-width:100%;font-size:12.5px;color:var(--lg-ink-soft,#565a55);cursor:pointer}
+/* ⚠️ `.is-full` IS DELIBERATELY UNSTYLED, and the class is kept as a state hook
+   rather than deleted so this note has somewhere to live. It used to carry
+   `opacity:.72` on the drop-zone. That was wrong: at ten photos the zone is
+   FULLY LIVE — dropping another is what offers the swap, which is the whole
+   feature — and a dimmed control says "disabled" to everyone who looks at it.
+   Caught in a screenshot, in dark, where the greyed-out zone read as broken.
+   Do not re-add a dim here. */
+
+/* ---- sending ---- */
+.lgfc-up__prog{margin:0 0 10px;padding:0;list-style:none}
+.lgfc-up__prog:empty{display:none}
+.lgfc-up__progitem{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:12.5px;
+  color:var(--lg-ink-soft,#565a55)}
+.lgfc-up__progname{flex:0 1 auto;max-width:46%;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+.lgfc-up__bar{flex:1 1 auto;height:6px;border-radius:999px;
+  background:var(--lg-line,#e3ddd0);overflow:hidden}
+.lgfc-up__barfill{display:block;height:100%;width:0;border-radius:999px;
+  background:var(--lg-sage,#87986a);transition:width .18s linear}
+.lgfc-up__pct{flex:0 0 auto;font-variant-numeric:tabular-nums}
+
+/* ---- what the form says back ---- */
+.lgfc-up__say,.lgfc-up__err{margin:9px 0 0;font-size:12.5px}
+.lgfc-up__say:empty,.lgfc-up__err:empty{display:none}
+.lgfc-up__say{color:var(--lg-mute,#6b6f6b)}
+.lgfc-up__err{padding:8px 11px;border-radius:9px;
+  background:var(--lg-rust-tint,#fbeee8);color:var(--lg-error,#b3261e)}
+.lgfc-up__undo{margin-left:6px;border:0;background:none;padding:0;cursor:pointer;
+  color:var(--lg-sage-d,#6b7c52);font:600 12.5px/1 inherit;text-decoration:underline}
+
+/* ---- the print file is a row, not a tile: a ZIP has nothing to look at ---- */
+.lgfc-up--file .lgfc-up__item{width:100%;display:flex;align-items:center;gap:10px;
+  padding:10px 44px 10px 12px}
+.lgfc-up--file .lgfc-up__thumb,.lgfc-up--file .lgfc-up__thumb--none{width:34px;height:34px;flex:0 0 34px}
+.lgfc-up--file .lgfc-up__name{margin:0;font-size:13px;color:var(--lg-ink,#323532);flex:1 1 auto}
+.lgfc-up--file .lgfc-up__x{top:50%;transform:translateY(-50%);right:10px}
+
+@media (max-width:520px){
+  .lgfc-up__item{width:calc(33.333% - 6px)}
+  .lgfc-up--file .lgfc-up__item{width:100%}
+}
+
+/* ---- dark ----
+   There is almost nothing here on purpose. Every colour above is written against
+   a --lg-* token, and dark re-points those tokens — so dark comes free, exactly
+   as this file's header says it should. The nine hardcoded overrides that used
+   to sit here were compensating for ONE missing token (`--lg-card`), which is
+   now re-pointed with the rest; keeping them would have frozen this control at
+   one palette while the rest of the site was retuned around it.
+   The thumbnail well is the only exception: it wants to be a shade DARKER than
+   the tile it sits in, so that an image with transparency reads as a hole rather
+   than as part of the card, and there is no token for "one step down". */
+html[data-lguser-theme="dark"] .lgfc-up__thumb,
+html[data-lguser-theme="dark"] .lgfc-up__thumb--none{background:#15171a}
 CSS;
 }
 
@@ -3074,13 +3591,20 @@ function lg_fc_js(): string
   var gal   = document.querySelector('.acf-field[data-name="loothprint_more_images"]');
   if (!input || !strip || !gal) return;
 
+  /* #189 — READS OUR OWN TILES NOW. The strip it used to mirror was ACF's
+     gallery (.acf-gallery-attachment), which no longer renders. Behaviour is
+     unchanged: the MutationObserver below still rebuilds this on every add,
+     remove and swap, because our tiles are added and removed from the same
+     subtree. */
   function shots() {
     return Array.prototype.slice.call(
-      gal.querySelectorAll('.acf-gallery-attachment')
+      gal.querySelectorAll('[data-lgfc-att]')
     ).map(function (el) {
       var img = el.querySelector('img');
-      var id  = el.getAttribute('data-id') || (el.querySelector('input') || {}).value || '';
-      return { id: String(id || ''), src: img ? img.getAttribute('src') : '' };
+      return {
+        id:  String(el.getAttribute('data-lgfc-att') || ''),
+        src: img ? img.getAttribute('src') : ''
+      };
     }).filter(function (s) { return s.id && s.src; });
   }
 
@@ -3123,5 +3647,338 @@ function lg_fc_js(): string
    body in its declared order, which is also why the registry's `extra` column is
    now false everywhere: nothing reads it, and leaving true values behind would
    describe a construct that no longer exists. */
+/* ════════════════════════ #189 — THE FORM'S OWN UPLOADER ═════════════════════
+   Everything a member does with files happens here, on the form. There is no
+   modal to open: ACF's gallery and file renderers were the only callers of
+   wp_enqueue_media() on this page and they no longer run, so the media scripts
+   are not on the page at all.
+
+   ⚠️ THE TRANSPORT IS #186's, NOT A NEW ONE. Every byte goes to
+   admin-ajax.php?action=bfu_chunker — the same endpoint plupload used — so it
+   still meets lg_fc_chunk_guard() at priority 1, then
+   wp_handle_sideload_prefilter -> lg_fc_upload_prefilter(), then
+   media_handle_upload(), then add_attachment -> lg_fc_stamp_upload(). A private
+   route with its own limits is precisely how a field declaring mime_types=zip
+   came to hold 48 .stl files.
+
+   ⚠️ THE NONCE AND THE CHUNK SIZE COME FROM US. _wpPluploadSettings is where an
+   uploader on this site normally finds both, and it is created by
+   wp_enqueue_media(), which no longer runs. window.LGFC_UP carries them, and
+   the nonce is 'media-form' because that is the one BFU's check_admin_referer()
+   actually tests.
+
+   REMOVING IS AN UNLINK, NEVER A DELETE. The hidden input lives inside the tile,
+   so taking the tile out of the DOM is the whole unlink; the file stays on the
+   post until publish, when #186's stamped collector takes what the post does not
+   use. That is what makes Undo free — it puts the same attachment row back, with
+   no upload, so a removed-then-re-added file cannot end up stamped twice.
+
+   WITH SCRIPTING OFF the member sees the tiles they already have, each with its
+   hidden input, and a real file input that submits nothing — the form still
+   saves everything else and loses nothing it had. */
+(function () {
+  var CFG = window.LGFC_UP;
+  var ups = document.querySelectorAll('[data-lgfc-up]');
+  if (!CFG || !ups.length || !window.FormData || !window.fetch) return;
+  var SAY = CFG.say;
+
+  /* MIRROR OF lg_fc_mb(). The WORDING is never rebuilt here — the sentences
+     arrive finished from PHP with %s left in them — but the byte formatter has
+     to exist on both sides, so gate 88 §I holds the two to agreement over real
+     byte values rather than trusting this comment. */
+  function mb(b) {
+    var m = b / 1048576;
+    return (m >= 10 ? String(Math.round(m)) : (Math.round(m * 10) / 10).toFixed(1)) + 'MB';
+  }
+  function fmt(t, a, b) {
+    var args = [a, b], i = 0;
+    return String(t).replace(/%[sd]/g, function () { return String(args[i++]); });
+  }
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  /* ONE FILE, CHUNK BY CHUNK, ALWAYS SEQUENTIALLY.
+     Sequential is not laziness: BFU appends each chunk to a single .part file
+     keyed on sha1(name), so two chunks of the same file in flight at once would
+     interleave into the spool. */
+  function send(file, onProg) {
+    return new Promise(function (resolve, reject) {
+      var CH = CFG.chunk_b || (4 * 1024 * 1024);
+      var chunks = Math.max(1, Math.ceil(file.size / CH));
+      var i = 0;
+      (function step() {
+        var fd = new FormData();
+        fd.append('name', file.name);
+        fd.append('chunk', i);
+        fd.append('chunks', chunks);
+        fd.append('post_id', CFG.post_id);
+        fd.append('_wpnonce', CFG.nonce);
+        fd.append('async-upload', file.slice(i * CH, Math.min(file.size, (i + 1) * CH)), file.name);
+
+        fetch(CFG.url + '?action=' + encodeURIComponent(CFG.action),
+              { method: 'POST', body: fd, credentials: 'same-origin' })
+          .then(function (r) {
+            if (!r.ok) { throw new Error(SAY.network); }
+            return r.text();
+          })
+          .then(function (txt) {
+            /* Intermediate chunks answer with an EMPTY body; only the last one
+               answers with JSON. But a refusal can arrive on ANY chunk — that is
+               the whole point of the priority-1 guard — so every response is
+               tried as JSON and the refusal is shown in the server's own words,
+               never replaced with a guess of our own. */
+            var body = String(txt || '').trim(), json = null;
+            if (body.charAt(0) === '{') { try { json = JSON.parse(body); } catch (e) { json = null; } }
+            if (json && json.success === false) {
+              reject(new Error((json.data && json.data.message) || SAY.refused));
+              return;
+            }
+            i++;
+            onProg(Math.min(1, i / chunks));
+            if (i < chunks) { step(); return; }
+            if (json && json.success === true && json.data && json.data.id) { resolve(json.data); return; }
+            reject(new Error(SAY.refused));
+          })
+          .catch(function (e) { reject(e instanceof Error ? e : new Error(SAY.network)); });
+      })();
+    });
+  }
+
+  Array.prototype.forEach.call(ups, function (root) {
+    var kind  = root.getAttribute('data-lgfc-up');
+    var input = root.getAttribute('data-input') || '';
+    var max   = parseInt(root.getAttribute('data-max'), 10) || 1;
+    var maxB  = parseInt(root.getAttribute('data-max-b'), 10) || 0;
+    var strip = root.querySelector('.lgfc-up__strip');
+    var prog  = root.querySelector('.lgfc-up__prog');
+    var zone  = root.querySelector('.lgfc-up__zone');
+    var picker= root.querySelector('.lgfc-up__file');
+    var sayEl = root.querySelector('.lgfc-up__say');
+    var errEl = root.querySelector('.lgfc-up__err');
+    var bar   = root.querySelector('.lgfc-up__swapbar');
+    var barTx = bar && bar.querySelector('.lgfc-up__swaptext');
+    var cancel= bar && bar.querySelector('.lgfc-up__cancel');
+    if (!strip || !zone || !picker) return;
+
+    var queue = [], busy = false, pending = null, undoable = null;
+
+    function tiles() { return strip.querySelectorAll('.lgfc-up__item'); }
+    function nameOf(li) {
+      var n = li.querySelector('.lgfc-up__name');
+      return (n && n.textContent) || 'that file';
+    }
+    function paint() { root.classList.toggle('is-full', tiles().length >= max); }
+
+    function setErr(m) { sayEl.textContent = ''; errEl.textContent = m || ''; }
+    function setSay(m, withUndo) {
+      errEl.textContent = '';
+      sayEl.textContent = '';
+      if (!m) return;
+      sayEl.appendChild(document.createTextNode(m));
+      if (withUndo && undoable) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'lgfc-up__undo';
+        b.textContent = SAY.undo;
+        b.addEventListener('click', function () {
+          if (!undoable) return;
+          strip.insertBefore(undoable.el, strip.children[undoable.idx] || null);
+          undoable = null;
+          paint();
+          setSay('');
+        });
+        sayEl.appendChild(b);
+      }
+    }
+
+    /* THE UNLINK. Nothing is deleted here, on the server or anywhere else. */
+    function removeTile(li, silent) {
+      var nm = nameOf(li);
+      var idx = Array.prototype.indexOf.call(strip.children, li);
+      strip.removeChild(li);
+      paint();
+      if (silent) { undoable = null; return nm; }
+      undoable = { el: li, idx: idx };
+      setSay(fmt(SAY.removed, nm), true);
+      return nm;
+    }
+
+    function addTile(att) {
+      var th = (att.sizes && att.sizes.thumbnail) || null;
+      var nm = att.filename || att.title || String(att.id);
+      var li = document.createElement('li');
+      li.className = 'lgfc-up__item';
+      li.setAttribute('data-lgfc-att', String(att.id));
+      li.innerHTML =
+        '<input type="hidden" name="' + esc(input) + '" value="' + esc(att.id) + '">'
+        + (th && th.url
+            ? '<img class="lgfc-up__thumb" src="' + esc(th.url) + '" width="' + esc(th.width)
+              + '" height="' + esc(th.height) + '" alt="" loading="lazy">'
+            : '<span class="lgfc-up__thumb lgfc-up__thumb--none" aria-hidden="true"></span>')
+        + '<span class="lgfc-up__name" title="' + esc(nm) + '">' + esc(nm) + '</span>'
+        + '<button type="button" class="lgfc-up__x" aria-label="Remove ' + esc(nm) + '">'
+        + '<span aria-hidden="true">×</span></button>'
+        + '<button type="button" class="lgfc-up__swap" tabindex="-1" hidden>' + esc(SAY.swap_this) + '</button>';
+      strip.appendChild(li);
+      paint();
+      return nm;
+    }
+
+    function progRow(nm) {
+      var li = document.createElement('li');
+      li.className = 'lgfc-up__progitem';
+      li.innerHTML = '<span class="lgfc-up__progname">' + esc(nm) + '</span>'
+        + '<span class="lgfc-up__bar"><span class="lgfc-up__barfill"></span></span>'
+        + '<span class="lgfc-up__pct">0%</span>';
+      prog.appendChild(li);
+      var fill = li.querySelector('.lgfc-up__barfill'), pct = li.querySelector('.lgfc-up__pct');
+      return {
+        set: function (p) { var v = Math.round(p * 100); fill.style.width = v + '%'; pct.textContent = v + '%'; },
+        done: function () { if (li.parentNode) { li.parentNode.removeChild(li); } }
+      };
+    }
+
+    /* ── 1 IN, 1 OUT ─────────────────────────────────────────────────────────
+       Ian: "1 in 1 out if over". At the limit a further file is NOT refused and
+       NOT dropped — the strip becomes a set of choices and the member says which
+       one leaves. The file that leaves is unlinked, not deleted, so a mis-swap
+       costs nothing but the upload. */
+    function offerSwap(f) {
+      pending = f;
+      root.classList.add('is-swapping');
+      Array.prototype.forEach.call(tiles(), function (li) {
+        var b = li.querySelector('.lgfc-up__swap');
+        if (b) { b.hidden = false; b.removeAttribute('tabindex'); }
+      });
+      var m = SAY.swap_head + ' ' + fmt(SAY.swap_ask, f.name);
+      if (queue.length > 1) { m += ' ' + fmt(SAY.swap_more, queue.length - 1); }
+      if (barTx) { barTx.textContent = m; }
+      if (bar) { bar.hidden = false; }
+      setSay('');
+    }
+    function endSwap() {
+      pending = null;
+      root.classList.remove('is-swapping');
+      Array.prototype.forEach.call(tiles(), function (li) {
+        var b = li.querySelector('.lgfc-up__swap');
+        if (b) { b.hidden = true; b.setAttribute('tabindex', '-1'); }
+      });
+      if (bar) { bar.hidden = true; }
+    }
+    function chooseSwap(li) {
+      if (!pending) return;
+      var f = pending;
+      var gone = removeTile(li, true);
+      endSwap();
+      queue.shift();
+      go(f, { swapped: gone });
+    }
+
+    function go(f, ctx) {
+      busy = true;
+      var row = progRow(f.name);
+      setSay(fmt(SAY.sending, f.name));
+      send(f, row.set).then(function (att) {
+        row.done();
+        var nm = addTile(att);
+        if (ctx.swapped)       { setSay(fmt(SAY.swapped, ctx.swapped, nm)); }
+        else if (ctx.replaced) { setSay(fmt(SAY.replaced, ctx.replaced)); }
+        else                   { setSay(fmt(SAY.added, nm)); }
+        busy = false;
+        pump();
+      }).catch(function (e) {
+        row.done();
+        /* THE SERVER'S OWN SENTENCE, VERBATIM. lg_fc_chunk_refusal() and
+           lg_fc_upload_prefilter() already name the number; re-wording them here
+           would be a second voice for the same rule. */
+        setErr((e && e.message) || SAY.refused);
+        /* A swap that failed must not silently cost the member the photo it was
+           going to replace — it is still in `undoable` only when the removal was
+           loud, and a swap removal is silent, so say what happened instead. */
+        busy = false;
+        pump();
+      });
+    }
+
+    function pump() {
+      if (busy) return;
+      if (!queue.length) { endSwap(); return; }
+      if (kind === 'file') {
+        var cur = tiles()[0];
+        var prev = cur ? removeTile(cur, true) : null;
+        go(queue.shift(), prev ? { replaced: prev } : {});
+        return;
+      }
+      if (tiles().length < max) { go(queue.shift(), {}); return; }
+      offerSwap(queue[0]);
+    }
+
+    function accept(list) {
+      var arr = Array.prototype.slice.call(list || []);
+      if (!arr.length) return;
+      if (!CFG.post_id) { setErr(SAY.nodraft); return; }
+      var note = '';
+      if (kind === 'file' && arr.length > 1) {
+        note = fmt(SAY.one_only, arr[0].name);
+        arr = arr.slice(0, 1);
+      }
+      var refused = [];
+      arr.forEach(function (f) {
+        /* REFUSED BEFORE THE BYTES LEAVE THE MEMBER'S MACHINE — a courtesy, and
+           never the enforcement. lg_fc_chunk_guard() still refuses server-side
+           at the first chunk that crosses the cap, which is what a member who
+           bypasses this page entirely will meet. */
+        if (maxB && f.size > maxB) {
+          refused.push(fmt(kind === 'photos' ? SAY.photo_big : SAY.file_big, mb(f.size), mb(maxB)));
+          return;
+        }
+        queue.push(f);
+      });
+      if (refused.length) { setErr(refused.join(' ')); }
+      else if (note)      { setSay(note); }
+      pump();
+    }
+
+    root.addEventListener('click', function (e) {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      var x = t.closest('.lgfc-up__x');
+      if (x && root.contains(x)) { e.preventDefault(); removeTile(x.closest('.lgfc-up__item')); return; }
+      var s = t.closest('.lgfc-up__swap');
+      if (s && root.classList.contains('is-swapping')) {
+        e.preventDefault();
+        chooseSwap(s.closest('.lgfc-up__item'));
+      }
+    });
+
+    if (cancel) {
+      cancel.addEventListener('click', function () {
+        queue.length = 0;
+        endSwap();
+        setSay('');
+      });
+    }
+
+    ['dragenter', 'dragover'].forEach(function (ev) {
+      zone.addEventListener(ev, function (e) { e.preventDefault(); zone.classList.add('is-drag'); });
+    });
+    ['dragleave', 'dragend'].forEach(function (ev) {
+      zone.addEventListener(ev, function () { zone.classList.remove('is-drag'); });
+    });
+    zone.addEventListener('drop', function (e) {
+      e.preventDefault();
+      zone.classList.remove('is-drag');
+      if (e.dataTransfer && e.dataTransfer.files) { accept(e.dataTransfer.files); }
+    });
+    picker.addEventListener('change', function () {
+      accept(picker.files);
+      picker.value = '';           /* so the same file can be chosen twice */
+    });
+
+    paint();
+  });
+})();
 JS;
 }

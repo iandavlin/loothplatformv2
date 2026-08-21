@@ -38,6 +38,8 @@ swapped, and pointing WPMU_PLUGIN_DIR at the mirror.
 Exit: 0 green · 1 an open defect · 2 CANNOT RUN (never 3 — run-all.sh reads
 anything that is not 0 or 2 as RED, so an environment failure must say 2).
 """
+import io
+import json
 import os
 import re
 import shutil
@@ -145,13 +147,99 @@ def run_probe(boot, probe, tag, plugin, flag_on):
         cmd.append("LG_FC_PREVIEW=1")
     cmd += ["wp", "--path=" + WP_PATH, "--require=" + boot, "eval-file", probe]
     r = sh(cmd, timeout=420)
-    rows = []
+    rows, mb = [], None
     for line in (r.stdout or "").splitlines():
         if line.startswith("R|"):
             parts = line.split("|", 3)
             if len(parts) == 4:
                 rows.append((parts[1], parts[2] == "PASS", parts[3]))
-    return rows, r
+        elif line.startswith("MB|"):
+            try:
+                mb = json.loads(line[3:])
+            except ValueError:
+                mb = None
+    return rows, r, mb
+
+
+def js_mb_agrees(plugin, want):
+    """§J — run the SHIPPED JS byte formatter against PHP's, in node.
+
+    The refusal WORDING travels from PHP to the browser as a template, so it
+    cannot drift. The byte FORMATTER cannot travel — it has to exist in JS too —
+    so this is the leg that stops the two from disagreeing. It does not read the
+    JS and reason about it: it extracts the function from the served asset and
+    EXECUTES it, because a formatter that looks right is not a formatter that
+    agrees.
+    """
+    src = io.open(plugin, encoding="utf-8").read()
+    m = re.search(r"\n  function mb\(b\) \{.*?\n  \}\n", src, re.S)
+    if not m:
+        return None, ("could not find the JS mb() in %s — if it was renamed this leg is "
+                      "silently not running, which is worse than it being red"
+                      % os.path.basename(plugin))
+    prog = (m.group(0) + "\nconst want = " + json.dumps(want) + ";\n"
+            "const bad = [];\n"
+            "for (const b of Object.keys(want)) {\n"
+            "  const got = mb(Number(b));\n"
+            "  if (got !== want[b]) bad.push(b + ': js ' + got + ' vs php ' + want[b]);\n"
+            "}\n"
+            "console.log(JSON.stringify(bad));\n")
+    with tempfile.NamedTemporaryFile("w", suffix=".mjs", delete=False) as fh:
+        fh.write(prog)
+        path = fh.name
+    try:
+        r = subprocess.run(["node", path], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        os.unlink(path)
+        return None, "could not run node: %s" % e
+    os.unlink(path)
+    if r.returncode != 0:
+        return None, "node refused the shipped mb(): %s" % (r.stderr or "")[-200:]
+    try:
+        bad = json.loads((r.stdout or "[]").strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        return None, "node produced no verdict: %r" % (r.stdout or "")[-200:]
+    return bad, None
+
+
+def dark_tokens_are_repointed(plugin, repo):
+    """§K — every COLOUR token this stylesheet reads must have a dark value.
+
+    ⚠️ THIS IS A CROSS-FILE CHECK, WHICH IS WHY IT IS NOT A BROWSER TEST. Dark on
+    this platform is applied by app-settings.js re-pointing the --lg-* tokens as
+    inline style on <html>; the compose page additionally re-points a few of its
+    own. A colour written against a token that appears in NEITHER list silently
+    stays light — dark-grey text on a dark background, or a white card in a black
+    page — and it looks like a defect in whatever is drawn on top of it.
+
+    Found the hard way: `--lg-card` (used by the type toggle since before #189)
+    and `--lg-ink-soft` (4 uses) were in neither, so a screenshot in dark showed
+    a control that read as broken and was not.
+
+    ⚠️ WHAT IT CANNOT SEE: whether the dark value is a GOOD colour. It asserts a
+    value EXISTS. Contrast is gate 47's job and a human's.
+    """
+    src = io.open(plugin, encoding="utf-8").read()
+    m = re.search(r"function lg_fc_css\(\): string\s*\{\s*return <<<'CSS'\n(.*?)\nCSS;", src, re.S)
+    if not m:
+        return None, "could not find lg_fc_css()'s stylesheet — this leg is not running"
+    body = m.group(1)
+    used = sorted(set(re.findall(r"var\((--lg-[a-z0-9-]+)", body)))
+    if not used:
+        return None, "the stylesheet reads no tokens at all, which cannot be right"
+
+    settings = os.path.join(repo, "webroot/app-settings.js")
+    if not os.path.isfile(settings):
+        return None, "webroot/app-settings.js is missing — the dark palette cannot be read"
+    app = set(re.findall(r"'(--lg[a-z0-9-]*)'\s*:", io.open(settings, encoding="utf-8").read()))
+
+    local = set()
+    for blk in re.findall(r'html\[data-lguser-theme="dark"\][^{]*\{([^}]*)\}', body):
+        local |= set(re.findall(r"(--lg-[a-z0-9-]+)\s*:", blk))
+
+    # Fonts are not colours and are correctly absent from a theme palette.
+    missing = [t for t in used if t not in app and t not in local and "font" not in t]
+    return missing, None
 
 
 def main():
@@ -177,7 +265,7 @@ def main():
     for flag_on in (False, True):
         label = "flag ON " if flag_on else "flag OFF"
         tag = "%d%s" % (os.getpid(), "on" if flag_on else "off")
-        rows, raw = run_probe(boot, staged, tag, plugin, flag_on)
+        rows, raw, mb = run_probe(boot, staged, tag, plugin, flag_on)
         if not rows:
             die("the %s run produced no assertions. stdout=%r stderr=%r"
                 % (label, (raw.stdout or "")[-400:], (raw.stderr or "")[-400:]))
@@ -199,6 +287,20 @@ def main():
                 "assertions, so a green verdict here would mean nothing. "
                 "stderr=%r" % (label, len(rows), (raw.stderr or "")[-300:]))
 
+        # ── §J the two byte formatters, executed rather than compared by eye ──
+        if mb:
+            bad, why = js_mb_agrees(plugin, mb)
+            if why:
+                rows.append(("J.mb.executed", False, why))
+            else:
+                rows.append(("J.mb.agrees", not bad,
+                             ("the shipped JS mb() matches lg_fc_mb() on %d real byte values"
+                              % len(mb)) if not bad else "; ".join(bad)))
+        else:
+            rows.append(("J.mb.emitted", False,
+                         "the probe emitted no MB| line, so the formatter leg did not run — "
+                         "silence is not success"))
+
         state = [d for i, _, d in rows if i == "0.flagstate"]
         want = "ON" if flag_on else "OFF"
         if state and want not in state[0]:
@@ -216,6 +318,23 @@ def main():
         print("   %d passed, %d failed" % (
             sum(1 for _, ok, _ in rows if ok), sum(1 for _, ok, _ in rows if not ok)))
         print()
+
+    # ── §K the dark palette, once (it reads files, not a WordPress) ──────────
+    missing, why = dark_tokens_are_repointed(plugin, repo)
+    if why:
+        failed += 1
+        findings.append("both       K.dark.readable  " + why)
+        print("   FAIL  %-28s %s" % ("K.dark.readable", why))
+    elif missing:
+        failed += 1
+        detail = ("%d colour token(s) the stylesheet reads have no dark value, so they "
+                  "stay LIGHT in dark mode: %s" % (len(missing), ", ".join(missing)))
+        findings.append("both       K.dark.repointed  " + detail)
+        print("   FAIL  %-28s %s" % ("K.dark.repointed", detail))
+    else:
+        passed += 1
+        print("── dark palette ──\n   every colour token the stylesheet reads has a dark "
+              "value (app-settings.js or the page's own re-point)\n")
 
     print("gate 88 — %d passed, %d failed" % (passed, failed))
     if failed:
