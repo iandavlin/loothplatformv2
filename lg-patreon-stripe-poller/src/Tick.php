@@ -229,6 +229,32 @@ final class Tick
             ) );
         }
 
+        // Pass 4: comp timers (#183). Ian, 2026-08-21: "comp timers need to
+        // work." They stopped when lg-looth4-expiry did not survive the
+        // cutover, and two live timers lapsed in July with nothing watching.
+        //
+        // It has to be a SWEEP for the same reason pass 3 does: Arbiter::sync
+        // only ever runs for members something has an opinion about, and a
+        // pure comp holder has no payment source at all, so nothing would ever
+        // visit them and the timer would never fire. Iterate the timers.
+        //
+        // Behind platform/config/comp-expiry.php, DEFAULT OFF; OFF is a total
+        // no-op (no query, no option write, no log line). Unlike pass 3 this
+        // one DOES move members — but only through Arbiter::sync, which stays
+        // the sole writer of wp_capabilities, and only for a timer that ran out
+        // at or after the enforcement cutover. Anything that lapsed before it
+        // is logged as HELD and never touched: Ian ruled the two already-overdue
+        // accounts are left alone until he decides case by case.
+        try {
+            \LGMS\Membership\CompExpiry::tick();
+        } catch ( Throwable $e ) {
+            Log::line( sprintf(
+                "[%s] comp expiry sweep FAILED: %s\n",
+                gmdate( 'c' ),
+                $e->getMessage(),
+            ) );
+        }
+
         } finally {
             try {
                 $pdo->query( "SELECT RELEASE_LOCK('lgms_tick_lock')" );

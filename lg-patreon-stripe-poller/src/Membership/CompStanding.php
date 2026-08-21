@@ -11,31 +11,39 @@ namespace LGMS\Membership;
  * membeship needs to respect what we have built there."* Keeper sharpened it
  * the same day: respect **unexpired** looth4, not looth4.
  *
- * ⚠️ THIS CLASS ENFORCES NOTHING, AND MUST NOT START. It is a read-only
- * predicate. Nothing here demotes anybody, writes any meta, or schedules
- * anything. Re-arming comp expiry is **#183**, ruled and queued; Ian ruled the
- * two already-overdue accounts are LEFT ALONE for now. This exists so that
- * #183 inherits one predicate rather than writing a second one, and so that
- * #181's gate asserts the right rule instead of encoding "comped forever".
+ * ⚠️ THIS CLASS STILL ENFORCES NOTHING, AND MUST NOT START. It is a read-only
+ * predicate: nothing here demotes anybody, writes any meta, or schedules
+ * anything. #183 re-armed comp expiry around it — see `CompExpiry` for the
+ * policy and the sweep, and `Arbiter::sync` for the one place a role is ever
+ * written. Keeping the question ("has this comp lapsed?") separate from the
+ * answer ("then what?") is what let #181 ask it safely before anything acted.
  *
- * THE GAP IT DESCRIBES, measured 2026-08-21 and true on both boxes. The meta
- * `looth4_expires_at` exists on 2 of the comp holders and BOTH dates are
- * already past (users 1829 and 1865). Nothing enforces them: the expiry plugin
- * is not installed, not in mu-plugins, not in `active_plugins`, and no cron
- * event mentions it. There is not one reference to the meta key anywhere in
- * this monorepo — this file is the first. So today an expired comp still holds
- * looth4, still reads as `pro` to `lg-viewer-tier.php`, and is still skipped by
- * `Arbiter::sync`'s looth4 early-return. That is the #183 hole, stated; it is
- * not this lane's to close.
+ * ── THE TIMEZONE, SETTLED (#183, 2026-08-21) ────────────────────────────────
+ * `looth4_expires_at` holds a bare `Y-m-d H:i:s` with no offset. #181 left the
+ * zone deliberately unsettled — safe for a predicate nobody acted on, a real
+ * decision for one that demotes people — and read it in the SITE's timezone.
+ * **It is UTC**, on two independent proofs:
  *
- * ⚠️ THE TIMEZONE IS DELIBERATELY NOT SETTLED HERE, and #183 must settle it
- * before anything enforces. The stored values are bare `Y-m-d H:i:s` with no
- * offset, so "has it passed" is ambiguous by up to a day at the boundary. This
- * class reads them in the SITE's timezone when WordPress can tell it one, and
- * UTC otherwise — a choice that is safe for a predicate nobody acts on and
- * would be a real decision for one that demotes people. Note the trap waiting
- * there: `wp_date('G', current_time('timestamp'))` double-shifts, which is how
- * a "08:00" digest once computed hour 7 at 11:45 local.
+ *   1. The writer's own source, captured at cutover
+ *      (cutover/batch-output/BATCH-04-results.md:158):
+ *          define( 'LG_L4E_META_EXPIRES', 'looth4_expires_at' );
+ *                                      // stored as Y-m-d H:i:s UTC
+ *   2. The data agrees, independently of the comment. `user_registered` is
+ *      UTC. User 1829 registered 2026-04-21 21:11:27 and their expiry reads
+ *      2026-07-28 21:11:00 — the same minute-of-day. User 1865: registered
+ *      15:26:04, expiry 15:25:00. Two for two.
+ *
+ * ⚠️ SO THE SITE-TIMEZONE READ WAS A BUG, AND A DIRECTIONAL ONE. Both boxes
+ * run `timezone_string = America/New_York`, so reading these values locally
+ * placed every expiry **four hours LATE** (2026-07-28 21:11 became 01:11 UTC on
+ * the 29th). Harmless while nothing enforced. Not harmless now. Anything that
+ * WRITES this meta must write UTC too — the Comp Timers tab says so on the
+ * field.
+ *
+ * THE STATE OF THE WORLD it describes, measured 2026-08-21 and true on both
+ * boxes: 14 comp holders on live (15 on dev2), of whom exactly 2 carry an
+ * expiry at all — users 1829 and 1865 — and BOTH dates are already past. Ian
+ * ruled those two LEFT ALONE; `CompExpiry`'s cutover fence is what holds them.
  */
 final class CompStanding
 {
@@ -60,17 +68,25 @@ final class CompStanding
             return null;
         }
 
-        $tz = null;
-        if ( function_exists( 'wp_timezone' ) ) {
-            try {
-                $tz = wp_timezone();
-            } catch ( \Throwable $e ) {
-                $tz = null;
-            }
+        return self::parse( $raw );
+    }
+
+    /**
+     * Parse a stored expiry string to a timestamp, or null if it is not a date.
+     *
+     * UTC, always — see the class docblock. Split out from expiresAt() so the
+     * gate can assert the zone directly on a value, and so the admin screen can
+     * validate what an operator types through the same code that reads it back.
+     */
+    public static function parse( string $raw ): ?int
+    {
+        $raw = trim( $raw );
+        if ( $raw === '' ) {
+            return null;
         }
 
         try {
-            $dt = new \DateTimeImmutable( $raw, $tz ?? new \DateTimeZone( 'UTC' ) );
+            $dt = new \DateTimeImmutable( $raw, new \DateTimeZone( 'UTC' ) );
         } catch ( \Throwable $e ) {
             // An unparseable date is NOT an expiry. Treating garbage as "lapsed"
             // would demote a comp member because somebody fat-fingered a field.
@@ -104,8 +120,11 @@ final class CompStanding
     }
 
     /**
-     * Holds the comp role but the date has passed. Today this is a REPORTING
-     * state and nothing more — nobody is demoted for being in it (#183).
+     * Holds the comp role but the date has passed.
+     *
+     * ⚠️ THIS IS NOT "WILL BE DEMOTED". Whether a lapsed comp is actually
+     * acted on is `CompExpiry`'s question, and it holds anything whose timer
+     * ran out before the enforcement cutover — which today is both of them.
      */
     public static function isExpiredComp( int $wpUserId ): bool
     {

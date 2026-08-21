@@ -302,6 +302,7 @@ class WP_REST_Request {
 $FILES = [
     'audience'  => "$ROOT/lg-patreon-stripe-poller/src/Membership/CheckoutAudience.php",
     'comp'      => "$ROOT/lg-patreon-stripe-poller/src/Membership/CompStanding.php",
+    'compexp'   => "$ROOT/lg-patreon-stripe-poller/src/Membership/CompExpiry.php",
     'rest'      => "$ROOT/lg-patreon-stripe-poller/src/Wp/CheckoutAudienceRestController.php",
     'prov'      => "$ROOT/lg-patreon-stripe-poller/src/Wp/UserProvisioner.php",
     'sync'      => "$ROOT/lg-patreon-stripe-poller/src/Sync.php",
@@ -321,6 +322,7 @@ foreach ( $FILES as $k => $f ) { if ( ! is_readable( $f ) ) { cannot( "missing $
 require_once $FILES['arbiter'];
 require_once $FILES['audience'];
 require_once $FILES['comp'];
+require_once $FILES['compexp'];
 require_once $FILES['rest'];
 require_once $FILES['prov'];
 require_once $FILES['sync'];
@@ -370,6 +372,11 @@ function reset_world(): void {
     // Mirrors the real shape measured on both boxes 8/21: bare 'Y-m-d H:i:s',
     // and present on only a minority of holders (2 of 14 on live, both past).
     $GLOBALS['USERMETA'][402]['looth4_expires_at'] = '2026-07-11 15:25:00';
+    // #183 armed comp expiry. This gate is not about that, so the flag is
+    // pinned OFF here — at EVERY reset, never once at module scope, because a
+    // pin set once is silently gone by the first assertion. §I9b arms it
+    // deliberately and puts it back.
+    \LGMS\Membership\CompExpiry::$override = [ 'enabled' => false, 'effective_from' => '' ];
 }
 
 /** Did a bridge row get written? Keeper's proof 3 turns on this being false. */
@@ -712,18 +719,44 @@ $GLOBALS['USERMETA'][402]['looth4_expires_at'] = 'not a date at all';
 is_( $CS::expiresAt( 402 ) === null && $CS::isActiveComp( 402 ) === true,
      'I8g an UNPARSEABLE date is not an expiry — a fat-fingered field cannot lapse a comp member' );
 
-// ⚠️ WHAT IS DELIBERATELY NOT ASSERTED, and it is the #183 hole, stated rather
-// than quietly encoded: an EXPIRED comp holder is STILL protected by
-// Arbiter::sync's looth4 early-return today. Nothing enforces the date — the
-// expiry plugin is not installed, not in mu-plugins, not in active_plugins, and
-// no cron event mentions it (measured 8/21). This lane does not change that and
-// must not: Ian ruled the two overdue accounts are LEFT ALONE.
+// ⚠️ THIS ASSERTION WAS INVERTED BY #183, NOT DELETED. It used to record the
+// gap — "an EXPIRED comp is STILL protected, recorded not fixed" — because
+// nothing enforced the date: the expiry plugin was not installed, not in
+// mu-plugins, not in active_plugins, and no cron event mentioned it (measured
+// 8/21, both boxes). #183 re-armed it, so the honest form of the same question
+// is now about STATE, and both halves are asserted so it cannot quietly drift
+// back to "comped forever" in either direction.
+//
+// Gate 89 owns comp expiry. What is asserted HERE is only the part #181 leans
+// on: that an expired comp is still protected in the state these boxes
+// actually run, and that this is a flag rather than an accident.
 reset_world();
 $GLOBALS['USERMETA'][402]['looth4_expires_at'] = '2026-07-11 15:25:00';
 $GLOBALS['SOURCES'][402] = [ 'stripe' => null ];
 LGMS\Arbiter::sync( 402 );
 is_( in_array( 'looth4', $GLOBALS['USERS'][402]->roles, true ),
-     'I9  an EXPIRED comp is STILL protected by the Arbiter today — the #183 gap, recorded not fixed' );
+     'I9  an EXPIRED comp is still protected while comp expiry is OFF — the shipped default, and #181 relies on it' );
+
+// I9b — LIVENESS. Without this, I9 is satisfied by comp expiry being broken
+// rather than by it being off, which is exactly the state it used to record.
+reset_world();
+$GLOBALS['USERMETA'][402]['looth4_expires_at'] = '2026-07-11 15:25:00';
+$GLOBALS['SOURCES'][402] = [ 'stripe' => null ];
+\LGMS\Membership\CompExpiry::$override = [ 'enabled' => true, 'effective_from' => '2026-07-01' ];
+LGMS\Arbiter::sync( 402 );
+is_( ! in_array( 'looth4', $GLOBALS['USERS'][402]->roles, true ),
+     'I9b ARMED past the cutover, the same comp DOES lose looth4 — #183 closed the gap this line used to record' );
+is_( ! empty( array_intersect( $GLOBALS['USERS'][402]->roles, [ 'looth1', 'looth2', 'looth3' ] ) ),
+     'I9c ...and lands on a real tier rather than nothing — an expiry is not a deletion' );
+
+// I9d — the ruling that outranks the mechanism. Both live timers ran out before
+// any cutover we would set, so an armed sweep must still leave them alone.
+reset_world();
+$GLOBALS['USERMETA'][402]['looth4_expires_at'] = '2026-07-11 15:25:00';
+\LGMS\Membership\CompExpiry::$override = [ 'enabled' => true, 'effective_from' => '2026-08-21' ];
+LGMS\Arbiter::sync( 402 );
+is_( in_array( 'looth4', $GLOBALS['USERS'][402]->roles, true ),
+     'I9d a timer that ran out BEFORE the cutover is held even when armed — Ian 8/21, the two overdue accounts are left alone' );
 
 // And #181 changes nothing for either kind of comp holder.
 reset_world();

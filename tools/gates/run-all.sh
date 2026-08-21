@@ -2042,6 +2042,37 @@ echo "=== GATE 87: the header's account chip is ONE LINE, and the name survives 
 run "header-name-clamp" python3 "$(dirname "$0")/header-name-clamp-gate.py"
 echo
 
+echo "=== GATE 89: comp timers run out, and the already-overdue are HELD ==="
+# #183. Ian 8/21: "comp timers need to work." They had not for at least 41 days:
+# lg-looth4-expiry enforced looth4 expiry before the cutover and did not survive
+# it -- measured both sides 8/21 (no file under live's wp-content, absent from
+# active_plugins, recently_activated empty, no cron event in the 13,182-byte
+# cron option, no ACF field, no snippet, no option naming the key). Two live
+# timers lapsed in July with nothing watching, and nothing could SET one either.
+#
+# ⚠️ THE TWO HALVES MUST PASS TOGETHER. §E runs a REAL armed sweep over the two
+# genuinely overdue accounts (1829 2026-07-28, 1865 2026-07-11) and requires
+# their roles byte-identical with no role operation even attempted -- Ian ruled
+# they are LEFT ALONE. §F requires a timer at/after the cutover to actually
+# demote. Either section alone is satisfied by a sweep broken in one direction.
+#
+# The timezone is asserted against a HOSTILE process zone: the gate sets PHP's
+# default to America/New_York, which is what both boxes run, so a reader that
+# dropped its explicit UTC zone reddens §B. The values ARE UTC -- the old
+# plugin's own source says so, and both live rows' minute-of-day matches their
+# UTC registration, two for two.
+#
+# §G keeps Arbiter::sync the only writer of wp_capabilities: CompExpiry and the
+# admin screen are asserted to contain no add_role/remove_role/set_role at all.
+#
+# RED-FIRST: 30 mutations + 2 no-op controls, 32/32 -- tools/gates/comp-expiry-redfirst.py.
+# Three holes it found in this gate, all closed: the flag-off cases were MASKED
+# BY THE CUTOVER (they passed with the flag check deleted); no case reached the
+# stripe coexistence guard; and "UTC appears somewhere" passed on the table
+# header after the visible field label was removed.
+run "comp-expiry" php "$(dirname "$0")/comp-expiry-gate.php"
+echo
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"
