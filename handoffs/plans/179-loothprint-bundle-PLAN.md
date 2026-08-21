@@ -95,20 +95,24 @@ a dark pill in the **opposite corner**.
   resubmitted it should kick back to the post"* is satisfied today; I will
   verify it end-to-end rather than rebuild it.
 
-### ❓ DECISION 1 FOR IAN — does he keep his own one-click page editor?
+### ✅ RULED BY IAN, 8/21 — the admin keeps a one-click page editor
 
-Collapsing to one door removes the only click-path to the v2 page-text editor on
-a standalone page. The header's "Edit" is **not** it — measured: that button goes
-to `/wp-admin/`, not to `?lg_edit=1`.
+Collapsing to one door would have removed the only click-path to the v2
+page-text editor on a standalone page. The header's "Edit" is **not** it —
+measured: that button goes to `/wp-admin/`, not to `?lg_edit=1`.
 
-- **Recommended:** members get exactly one Edit pill (→ the form), and a second
-  small **"Page"** pill appears *only* for `edit_archive_poc` holders — Ian and
-  editors. His ruling was about what a **member** sees ("members get one door");
-  this keeps that literally true and costs him nothing.
-- Alternative: strictly one pill for everyone, and Ian reaches the page editor by
-  adding `?lg_edit=1` to the URL.
+**Ian ruled the admin-only second pill.** So:
 
----
+- **Every entitled viewer** (author or `edit_archive_poc`) gets **one Edit pill**
+  → the prefilled form. That is the member's whole experience, exactly as ruled:
+  one door.
+- **`edit_archive_poc` holders only** — Ian and editors, never a plain member,
+  never a member editing their own post — additionally get a small **"Page"**
+  pill → `?lg_edit=1`.
+
+The gate asserts both halves: a member-who-owns-the-post sees exactly ONE edit
+control, and a cap-holder sees two. "Members get one door" becomes a *testable*
+claim rather than a description.
 
 ## Deliverable 2 — the pill family at every width
 
@@ -196,7 +200,7 @@ the next live flip or force the two decisions to move together.
   for the taxonomy chips. Same treatment, same value, for the three that were
   missed. Gate 47 is `tools/frontend-compose/dark-contrast-sweep.py`; I run it
   individually at 1280 and 390, before and after.
-- **looth_id auto-heal — see decision 2.**
+- **looth_id ticket heal — IN, and RULED to have no bounce and no flag.** See below.
 - **Noticed, NOT fixed, flagged here:** `lg_fc_own_controls()` hardcodes
   `checked` on the comments "Yes" chip, so **editing** a post whose author closed
   comments silently re-opens them on save. It is adjacent (I am adding a second
@@ -204,26 +208,60 @@ the next live flip or force the two decisions to move together.
   prefill), so it is nearly free to fix in passing — but it is not in Ian's
   scope, so it is his call, and I will not fix it unless told to.
 
-### ❓ DECISION 2 FOR IAN — the looth_id auto-heal
+### ✅ RULED BY IAN, 8/21 — heal the ticket WITHOUT a bounce, and without a flag
 
-The pattern exists and is proven: `profile-app/config.php:25`
-`looth_issue_bounce_if_needed()` — WP cookie present, no valid `looth_id` ⇒ mint
-via `/looth-auth/issue?return=…` behind a 120-second one-shot cookie so a failed
-mint cannot loop. Copying it into `archive-poc/config.php` heals the state where
-a signed-in member is rendered a stranger on a standalone page.
+Ian's question when shown the bounce: *"Can we just simplify the tickets and
+avoid the bounce?"* — and the answer is yes, because the mechanism is already in
+the file.
 
-It is also the riskiest thing in this bundle: it adds a **redirect** to every
-standalone page render for anyone carrying a WP cookie, and a loop there takes
-out every article page at once.
+`render.php` **already** makes one loopback call per render carrying the
+visitor's own cookies — `lg_archive_poc_whoami()` (`archive-poc/config.php:136`)
+curls `https://127.0.0.1/profile-api/v0/whoami` with
+`Cookie: $_SERVER['HTTP_COOKIE']`, 5-second timeout, returning `null` on any
+failure. So the heal is a second call of the same shape, not a new mechanism:
 
-- **Recommended:** build it, behind its **own** OFF-default flag, in this merge.
-  It then reaches the serve inert, gets verified there for real, and Ian flips it
-  when he has looked. Anonymous viewers are untouched in every state (no WP
-  cookie ⇒ no bounce), which is the majority of that page's traffic.
-- Alternative: park it to its own issue and ship the three ruled deliverables
-  alone.
+    whoami says NOT authenticated
+      AND a wordpress_logged_in_* cookie is present   ← the exact broken state
+        → loopback GET /looth-auth/issue?return=/ with the visitor's cookies,
+          WITHOUT following the redirect
+        → read `looth_id` off the response's Set-Cookie
+        → re-emit it on OUR response (so the browser keeps it)
+        → re-run whoami ONCE with the new token, and render as that member
 
----
+**Why this is the safer shape, not merely the nicer one.** There is no redirect,
+so **no loop is structurally possible** — and the loop was the entire reason a
+flag was proposed. Every failure mode degrades to exactly today's behaviour:
+mint fails, times out, returns no cookie, or the second whoami still says
+anonymous ⇒ we render signed-out, which is what happens now.
+
+It is also not slower overall. The WordPress boot inside `/looth-auth/issue` is
+paid either way; the bounce simply made the *browser* wait for it and then
+issue a second request. This pays it once, inside one render.
+
+**No flag**, on Ian's ruling. The house rule wants a flag where a member-facing
+change could do harm on arrival; this one cannot, because its whole failure
+surface is "behaves as it does today". What it needs instead is a **hard
+timeout** (short, so a stalled WP boot can never hang an article page) and a
+**once-per-request static guard** so nothing can re-enter it. Both are asserted.
+
+Anonymous viewers are untouched in every state: no `wordpress_logged_in_*`
+cookie ⇒ the branch is never entered, and that is asserted too (it is the
+majority of this page's traffic).
+
+**FILED AS #182, NOT DONE HERE.** The real simplification Ian is pointing at is
+**one ticket instead of two** — teaching the identity desk to accept a WordPress
+session directly, which `archive-poc/config.php:126-134` already anticipates
+("when profile-app ships the trusted-header bridge…"). Ian, 8/21: *"Yes but make
+issue and save for later, unless mission critical for membership."*
+
+**It is not mission critical, and the issue says why.** The membership-critical
+version would be a paying member shown gated content as locked because the wrong
+ticket expired — real, because `lg_archive_poc_viewer_tier()` fails closed to
+`public` when whoami says anonymous. But this lane's heal closes it on the
+surface where it bites, and profile-app already heals it its own way. After
+#179 the split is a wart with two patches holding it shut, not an open hole
+under a paying member. #182 carries the scope, the blast radius (profiles, hub,
+messages, every `/archive-api/v0/*` surface) and the two recorded traps.
 
 ## Gates — extended, not minted
 
@@ -269,10 +307,9 @@ Guessing wide on purpose, so overlap with the two other live lanes
 (`178-confirm-button`, `180-tester-token-url`) is caught now:
 
     archive-poc/standalone/render.php                    D1, D2  (+ D-rider auto-heal)
-    archive-poc/config.php                               auto-heal helper, if approved
+    archive-poc/config.php                               the no-bounce ticket heal (RULED)
     platform/mu-plugins/lg-frontend-compose.php          D3 + gate-47 dark ink
     platform/config/loothprint-paywall.php               NEW — the flag
-    platform/config/looth-id-autoheal.php                NEW — only if decision 2 is "build it"
     platform/nginx/lane-preview-179-loothprint-bundle.conf  NEW — the preview
     tools/gates/loothprint-edit-door-gate.py             gate 69, rewritten
     tools/gates/compose-gate.py                          gate 35, extended
