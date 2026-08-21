@@ -2035,6 +2035,7 @@ function lg_fc_render(string $type, int $edit = 0, bool $embed = false): void
      upload at all rather than quietly making orphans, which is a real
      improvement on the old picker, which would happily have uploaded to
      post_parent 0. */
+  lg_fc_close_uploader_door();
   $lg_fc_form = acf_get_form('lg-fc-' . $type);
   $lg_fc_pid  = is_numeric($lg_fc_form['post_id'] ?? 0) ? (int) $lg_fc_form['post_id'] : 0;
   printf('<script>window.LGFC_UP=%s;</script>',
@@ -2212,14 +2213,22 @@ function lg_fc_relabel($field)
  *
  * HOW THE MODAL LEAVES THE PAGE, measured rather than assumed:
  *
- *   - ACF's gallery and file renderers are the ONLY things on this page that
- *     call `wp_enqueue_media()` — via `acf_enqueue_uploader()` inside their own
- *     `render_field()` (ACF_Assets::enqueue_uploader, assets.php:316). The
- *     write-up already carries `media_upload = 0`.
  *   - `acf_render_field()` runs `acf_prepare_field()` FIRST and then dispatches
  *     the type variation from the PREPARED field (acf-field-functions.php:800).
  *   - Validation and save never go through `acf_prepare_field` at all: they load
  *     the field through `acf/load_field`.
+ *   - So swapping the type at prepare time replaces ACF's gallery and file
+ *     renderers, and with them their `acf_enqueue_uploader()` calls.
+ *
+ * ⚠️ AND THAT IS NOT ENOUGH ON ITS OWN — SEE lg_fc_close_uploader_door().
+ * The first version of this comment claimed the gallery and file renderers were
+ * the only callers on this page. THE RENDERED PAGE SAID OTHERWISE: media-models,
+ * media-views, media-editor, plupload and wp-plupload were all still on it. ACF's
+ * **wysiwyg** field calls `acf_enqueue_uploader()` unconditionally from its own
+ * `render_field()` (class-acf-field-wysiwyg.php:189) — `media_upload = 0` does not
+ * stop it — and the write-up is a wysiwyg. The claim was wrong and only fetching
+ * the page as a real member found it, which is the whole argument for measuring
+ * the rendered bytes rather than reasoning about the call graph.
  *
  * So a type set at prepare time swaps the RENDERER and nothing else. Bracketed
  * on a real WordPress before a line of this was written:
@@ -2245,6 +2254,50 @@ function lg_fc_relabel($field)
  * limits is exactly how the ACF-validator hole happened: that field declares
  * `mime_types = zip` and holds 48 `.stl` files.
  */
+
+/**
+ * SHUT THE ONE DOOR THE RENDER SWAP CANNOT REACH.
+ *
+ * ACF's wysiwyg `render_field()` calls `acf_enqueue_uploader()` before it does
+ * anything else, so the write-up field alone would put the whole media modal —
+ * media-models, media-views, media-editor, plupload, wp-plupload and the footer
+ * templates — back on a page that has nothing to open it with. Measured on the
+ * rendered page, not inferred.
+ *
+ * `ACF_Assets::enqueue_uploader()` is guarded by exactly one latch, and
+ * `acf_has_done()` is the supported way to set it: it returns false the first
+ * time and marks it done. Arming it before the form renders means ACF's own call
+ * returns immediately and `wp_enqueue_media()` is never reached.
+ *
+ * ⚠️ BUT THE LATCH ALONE WOULD BREAK THE WRITE-UP EDITOR, and that is the whole
+ * reason this is a function rather than one line. `acf/enqueue_uploader` is where
+ * ACF's wysiwyg field localizes `acf.data.toolbars` — including OUR `lgfc_light`
+ * toolbar (class-acf-field-wysiwyg.php:51). Latch without firing it and the
+ * write-up renders with no toolbar at all: #185's defect class, reintroduced by
+ * the fix for this one. So this mirrors ACF's own method body exactly, minus the
+ * two things we do not want:
+ *
+ *     ACF                                 here
+ *     ── latch ──────────────────────     latch (via acf_has_done)
+ *     wp_enqueue_media()                  — dropped, this is the point
+ *     add_action(admin_footer, …)         — already inert: admin_footer does not
+ *                                           fire on the front end
+ *     do_action('acf/enqueue_uploader')   do_action('acf/enqueue_uploader')
+ *
+ * If ACF ever renames that latch, media comes back silently — so gate 88 asserts
+ * the ABSENCE of the media handles from the served page and the PRESENCE of the
+ * toolbar, rather than trusting this comment.
+ */
+function lg_fc_close_uploader_door(): void
+{
+    /* acf_has_done() latches AND reports in one call: false means we are first,
+       true means something already enqueued the uploader and this cannot help —
+       in which case firing the action again would only duplicate a localization
+       that has already happened. */
+    if (!acf_has_done('ACF_Assets::enqueue_uploader')) {
+        do_action('acf/enqueue_uploader');
+    }
+}
 
 /**
  * The transport and the wording the browser needs, in one blob.
@@ -2949,77 +3002,32 @@ html[data-lguser-theme="dark"] .lgfc-taxo__done{
 .lgfc .acf-field[data-name="loothprint_creative_commons"] .acf-radio-list label{
   border-radius:10px;padding:10px 12px;width:100%;font-weight:600;line-height:1.35}
 
-/* ---- gallery ----
-   ACF gives .acf-gallery a FIXED 400px height and absolutely positions its
-   inner panes, so an empty gallery is a 400px void — which is what the first
-   render showed, and the mock draws a compact drop zone. Unwinding the
-   positioning is what lets the box size to its contents.
-   The empty state is styled through :empty so it reads as the mock's drop zone
-   without a second element to keep in sync: when ACF puts an attachment in
-   there, the dashed zone stops applying by itself. */
-.lgfc .acf-gallery{height:auto!important;min-height:0;border:0;background:none}
-.lgfc .acf-gallery-main,.lgfc .acf-gallery-attachments,.lgfc .acf-gallery-toolbar{
-  position:static;width:auto;height:auto;padding:0;border:0;background:none}
-.lgfc .acf-gallery-attachments{min-height:64px}
-/* :has(), NOT :empty. ACF leaves a whitespace text node inside the attachments
-   container, and :empty does not match an element containing one — so the
-   drop-zone styling silently never applied and the field rendered as a blank
-   64px gap. Measured in the live DOM (1 child node, innerHTML "\n\t\t\t\t\t")
-   rather than inferred from the screenshot, which only showed "nothing there".
-   :has() asks the question that was actually meant: are there any attachments? */
-.lgfc .acf-gallery-attachments:not(:has(.acf-gallery-attachment)){display:flex;
-  flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:104px;
-  border:1.5px dashed var(--lg-sage,#87986a);border-radius:11px;
-  background:var(--lg-paper,#fdfdfa)}
-.lgfc .acf-gallery-attachments:not(:has(.acf-gallery-attachment))::before{content:"Drop photos here";
-  font:700 13.5px/1.3 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-sage-d,#6b7c52)}
-.lgfc .acf-gallery-attachments:not(:has(.acf-gallery-attachment))::after{content:"or tap to choose · JPG, PNG, HEIC";
-  font-size:12.3px;color:var(--lg-mute,#6b6f6b)}
-.lgfc .acf-gallery-toolbar{margin-top:10px}
-.lgfc .acf-gallery-toolbar .acf-hl{display:flex;align-items:center;gap:8px;
-  list-style:none;margin:0;padding:0}
-.lgfc .acf-gallery-toolbar .acf-fr{margin-left:auto}
-.lgfc .acf-gallery-side{border-radius:11px;border:1px solid var(--lg-line,#e3ddd0)}
+/* ---- gallery and print-file: ACF's OWN CONTROLS ARE GONE (#189) ----
+   Roughly sixty-five lines lived here, unwinding ACF's fixed-height gallery
+   (.acf-gallery, .acf-gallery-attachments, .acf-gallery-toolbar) and redrawing
+   its file row (.acf-file-uploader, .hide-if-value, .show-if-value) into
+   something Ian would accept. Not one of those selectors matches anything on
+   this page any more: the render swap means ACF's gallery and file renderers
+   never run, so the markup they styled is not emitted.
 
-/* ---- file ---- */
-/* THE PRINT-FILES ROW — Ian, 2026-08-16, testing live: "The print files is weird,
-   please make look nice". MEASURED BEFORE REDRAWING rather than restyled on a
-   hunch: the control rendered as a 21px-tall sliver reading "No file selected
-   [Add File]", directly beneath a 104px dashed drop-zone for photos. Beside the
-   thing above it, it read as an afterthought — which is exactly what he saw.
+   DELETED RATHER THAN LEFT IN PLACE. Dead CSS for a control that no longer
+   renders is not harmless — it reads as live styling and the next person spends
+   their time on it. Two hard-won findings from those lines are worth keeping,
+   because they are facts about THIS page rather than about the old markup:
 
-   ⚠️ STYLED ON .hide-if-value, NOT ON A has-value CLASS. My first instinct was
-   `.acf-file-uploader:not(.has-value)`, and it would have been wrong: this build
-   never sets that class — measured in the live DOM, the uploader's class list is
-   exactly "acf-file-uploader", and `has-value` appears ZERO times in the served
-   page. The drop-zone would then have stayed on top of a chosen file. Also note
-   this page loads NO ACF stylesheet at all, so nothing here can be assumed from
-   how ACF looks in wp-admin.
+     · this page loads NO ACF stylesheet at all, so nothing may be assumed from
+       how ACF looks in wp-admin;
+     · `:empty` does not match an element containing a whitespace text node,
+       which is why the old empty-state rule silently never applied and the field
+       rendered as a blank 64px gap. Measured in the live DOM, not inferred from
+       a screenshot that only showed "nothing there".
 
-   .hide-if-value IS the empty state by definition — ACF hides it the instant a
-   file lands and reveals .show-if-value — so the drop-zone look disappears on its
-   own with no state class to track. */
-.lgfc .acf-field-file .acf-input>.acf-file-uploader{border:0;background:none}
-.lgfc .acf-file-uploader>.hide-if-value{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
-  min-height:104px;padding:14px;
-  border:1.5px dashed var(--lg-sage,#87986a);border-radius:11px;
-  background:var(--lg-paper,#fdfdfa)}
-.lgfc .acf-file-uploader>.hide-if-value::before{content:"Drop your ZIP here";
-  font:700 13.5px/1.3 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-sage-d,#6b7c52)}
-.lgfc .acf-file-uploader>.hide-if-value::after{content:"or tap to choose \00b7 STLs, and the source too if you like";
-  font-size:12.3px;color:var(--lg-mute,#6b6f6b);order:2;text-align:center}
-/* ACF's "No file selected" wording and its button share ONE <p>, so the text
-   cannot be display:none'd without taking the only tap target with it. Zero the
-   paragraph and give the size back to the button. */
-.lgfc .acf-file-uploader>.hide-if-value p{font-size:0;margin:8px 0 0;order:3}
-.lgfc .acf-file-uploader>.hide-if-value p .acf-button{font-size:12.5px}
-/* the chosen-file state stays a solid card, so "empty" and "filled" read apart */
-.lgfc .acf-file-uploader>.show-if-value{
-  border:1px solid var(--lg-line,#e3ddd0);border-radius:11px;background:var(--lg-paper,#fdfdfa)}
-.lgfc .acf-file-uploader .file-wrap,.lgfc .acf-file-uploader .show-if-value{padding:9px 11px}
+   The mock's drop-zone wording those rules carried in ::before/::after content
+   now lives in the markup itself (lg_fc_render_photos / lg_fc_render_printfile),
+   where a screen reader reaches it — generated content is not always announced,
+   so this is a small accessibility gain as well as a tidy-up. */
 .lgfc input[type=file]{font-size:13px;color:var(--lg-mute,#6b6f6b)}
-.lgfc .acf-button,.lgfc .acf-gallery .acf-button{font:600 12.5px/1 var(--lg-font-sans,system-ui,sans-serif);
+.lgfc .acf-button{font:600 12.5px/1 var(--lg-font-sans,system-ui,sans-serif);
   border-radius:8px;padding:8px 12px;border:1px solid var(--lg-line,#e3ddd0);
   background:var(--lg-card-bg,#fff);color:var(--lg-sage-d,#6b7c52);cursor:pointer}
 
