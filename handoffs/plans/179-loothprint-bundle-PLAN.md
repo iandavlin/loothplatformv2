@@ -334,3 +334,66 @@ so my edit there is one appended paragraph.
 - Fix the comments-reopened-on-edit prefill bug (report only, unless told).
 - Touch the dead `freebie-loothprint` ACF group or its 2 orphan rows.
 - Touch `~/loothplatformv2-clean`, rebase, force-push, or merge my own lane.
+
+---
+
+# WHAT WAS ACTUALLY BUILT — closing handoff, 2026-08-21
+
+All three ruled deliverables plus both riders. Branch `179-loothprint-bundle`,
+7 commits, 13 files. Not merged; the worktree and the preview are left standing.
+
+## Deviations from the plan above, each traceable
+
+| Plan said | What happened | Why |
+|---|---|---|
+| extend `tools/gates/compose-gate.py` | new sibling `tools/gates/loothprint-paywall-gate.py`, run under **35b** | surgery on a 489-line gate for a self-contained subject; no number minted, same as extending |
+| — | **`platform/mu-plugins/lg-article-materializer.php`** | keeper ruled the re-bake blocker IN: without it the toggle writes the term and the page renders the old gating |
+| — | `tools/gates/materializer-queue-harness.php` | the proof for that, stubbed because the plugin is symlinked out of the serving checkout |
+| `platform/config/looth-id-autoheal.php` | not created | Ian ruled the heal has no bounce, therefore no loop, therefore no flag |
+
+## Verified, and how
+
+- **Gate 69** (rewritten): red-first **36 of 49 on the serve**, then **49/49 green
+  against the branch preview**. Three viewers, because "members one, admins two"
+  is unfalsifiable against one account.
+- **Gate 35b** (new leg): green, 5 checks — the rule truth table, and a paywall
+  choice reaching the **served bytes** (`chip--tier--public` → `chip--tier--looth-lite`)
+  on a PID-keyed throwaway that was deleted with its blob, 0 rows left.
+- **Re-bake harness**: 5/5 — one bake per save, first publish baked as
+  *published*, delete survives its own row vanishing.
+- **Flag-register gate**: green.
+- **The ticket heal**, same request, WP session with no `looth_id`:
+  main renders **3 sign-in links and no member name** (a stranger); the branch
+  renders the member, with the Edit pill, in **one page load**, 0.525s. Anon is
+  untouched — no cookies set, 0.090s.
+- **Gate 47**: run individually. Main is RED for `div.acf-editor-toolbar`
+  (712×40 of `#f5f5f5` in dark) — fixed here, **not verifiable from a branch**
+  (mu-plugin symlinked out of the serving checkout); re-run after the pull.
+
+## Noticed and NOT fixed
+
+1. **641–700px: the dock already covers ~40px of body text on main.** GH #53 /
+   HK-027 is not actually fixed at the bottom of its own media query. Full table
+   in `docs/domains/PAGE.md`. Keeper's posture: report, don't fix.
+2. **First-publish materialize gap / post 73544.** Flagged per keeper, not
+   chased. The harness shows the re-bake fix plausibly closes it.
+3. **The dark sweep is blind to `<input>` value text.** It measures text nodes,
+   so the form's primary control ("Post it") was never covered. It happens to be
+   fine — measured 12.23:1 — but the next input-valued control would not be
+   checked either. Gate's shape, not this file's.
+4. **The standalone article page's own body background stays light in dark
+   mode** (`#f0eee8`, no dark override) while its chrome and the new dock pills
+   go dark. Seen in the dark screenshot; not measured further, not in scope.
+5. **`b23f436`'s commit body lost one word** to shell backtick substitution.
+   Not amended — it is pushed, and force-pushing is forbidden.
+
+## Left standing deliberately
+
+- **The lane preview is UP.** `tools/preview/lane-preview.sh down 179-loothprint-bundle`
+  removes it. Ian needs it to look at the branch.
+- **`platform/config/frontend-compose.local.php` exists in this worktree**
+  (gitignored). Without it the previewed code reads the tracked default and the
+  compose flag disagrees with the box — which is what made the gate's first run
+  red on healthy code.
+- Screenshots: `/home/ubuntu/projects/footer-mockups/179-dock/` (before/after at
+  1280 light, after dark, after 390, after admin).
