@@ -111,6 +111,36 @@ live IDs as they are created.
 with no interval — $66.00 and $145.00, left from early setup. Do not recreate
 them, and deactivate them on dev2 so nothing can select them.
 
+### 4c. How to create each one (Ian confirmed test mode 8/21, so live is empty)
+
+**Per PRODUCT**, set Metadata:
+
+    kind = membership
+    ref  = looth2   (Lite)   |   looth3   (Pro)
+
+Ian already does this in the sandbox — `prod_RerXcVx8RqqS0P` carries
+`kind=membership`, `ref=looth2`.
+
+**Per PRICE**, set Metadata only where it applies:
+
+    region_tag = regional_a | regional_b     (omit entirely for standard)
+    priority   = 100
+
+⚠️ **METADATA ALONE DOES NOT MAP THE TIER.** `ProductSyncHandler` syncs only
+`name` and `active` from product events — *"`ref` and `kind` are set once
+manually and are never overwritten by webhook events"*. So the Stripe metadata
+is documentation; the row in our `products` table is the mapping. **Confirm each
+live product's `ref` on our side after the webhook has created the row**, or
+checkout will refuse the price with "not mapped to a membership tier".
+
+Price metadata IS honoured on sync: `region_tag`, `priority`,
+`grants_duration_days`, `lgms_discount_scale`, `lgms_trial_days`.
+
+**Create ONLY the twelve wanted prices.** dev2's catalogue carries strays that
+prove the point — two active $5/month (Aug 20 and Apr 29), both $55 and $60
+yearly, and a $66 with no billing period at all. Harmless in a sandbox; on live
+a stray active price is something a checkout can be pointed at.
+
 ---
 
 ## 5. The allowlist — the door (Ian)
