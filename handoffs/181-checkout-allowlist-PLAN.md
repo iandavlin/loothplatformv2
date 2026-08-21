@@ -56,12 +56,22 @@ no grant.**
 reads as `allowlist`, the same fail-safe-closed posture
 `StripeLifecycle::allowlist()` already takes. This is a deliberate departure from
 "merge behind a flag defaulted OFF" and the charter asks for it: the enforcing
-state must be the one dev2 runs. **Consequence, stated plainly:** dev2's
-`lgms_stripe_lifecycle_allowlist` is currently UNSET, and unset = nobody. On
-merge, dev2 Stripe checkout closes until the cohort is populated (one action:
-Settings -> LG Member Sync -> Stripe Test Group). Live is unaffected today — zero
-Stripe customers, empty catalogue. Alternative if you would rather: default
-`off`, and the flip becomes a go-live checklist item that can be forgotten.
+state must be the one dev2 runs. **RULED: approved** (keeper, 2026-08-21).
+
+> ⚠️ **CORRECTION — the premise above was WRONG, and the correction matters.**
+> I wrote that dev2's `lgms_stripe_lifecycle_allowlist` was UNSET and that the
+> merge would therefore close dev2 checkout for everybody. Keeper caught it and
+> I re-measured as the pool user: the cohort is **populated**, and by the time
+> I checked it held **six** ids —
+> `[854, 1887, 1938, 1953, 2047, 1]` (854 GerryHayesTest, 1887 qa-disposable,
+> 1938 qa-gift-rcpt, 1953 mikelle.davlin, 2047 gdle_gate_probe, and **1 —
+> iandavlin**, whom keeper added so ruling (b) below does not block Ian's own
+> testing). So the merge does **not** close dev2 checkout for the cohort; it
+> closes it for everyone else, which is the point. Live is still unaffected
+> today — zero Stripe customers, empty catalogue.
+
+Alternative, not taken: default `off`, which would have made the flip a go-live
+checklist item that can be forgotten.
 
 **(b) NO ADMIN BYPASS. The list is the list.** #170's header pill uses
 `manage_options || inCohort`. I am NOT copying that here, for two reasons: the
@@ -69,9 +79,10 @@ two fences already in this path (`StripeLifecycle::applyConfirmed`,
 `Sync::customer`) use raw `inCohort` and a third predicate one line away is how
 fences drift; and MEMBERSHIP.md's own warning — *"an admin passes and sees
 nothing wrong, the person most likely to check is the one person who cannot see
-the failure"* — is worse on a money door than on a button. **Ian: you will need
-to add yourself to the Stripe Test Group to buy anything.** That is one dash
-click and it makes your test identical to a tester's.
+the failure"* — is worse on a money door than on a button. **RULED: approved**
+(keeper, 2026-08-21), and keeper added Ian to the dev2 cohort as id 1 so his
+testing is not blocked. He is in **by list, not by privilege** — which is what
+makes his test identical to a tester's.
 
 ### Unknown answers
 
@@ -134,3 +145,23 @@ stranger walking the page will have an account minted and then be refused at
 the money door, leaving an orphan `looth1` account. Pre-existing ordering, and
 on live lane 180's work is what keeps anon off that page at all. Out of scope
 here; worth an issue.
+
+
+---
+
+## Ruled after approval, and built (2026-08-21)
+
+- **looth4 (Ian):** *"looth4 is the everything bypass the stripe side of
+  membeship needs to respect what we have built there."* Keeper sharpened it to
+  **UNEXPIRED** looth4. Built as `LGMS\Membership\CompStanding` — read-only,
+  enforcing nothing. The respect itself is `Arbiter::sync`'s pre-existing
+  unconditional looth4 early-return, proven in gate 86 §I with the **real**
+  Arbiter. **#183 inherits `CompStanding`.**
+- **Beyond the approved plan, declared:** `CompStanding.php`; a **one-route**
+  BuddyBoss REST exemption (without it the probe could never get an answer —
+  every shared-secret route in the namespace 401s, measured); and four
+  neighbouring test files that this lane's enforcing default reddened and that
+  this lane therefore fixed.
+
+**Outcome:** gate **86**, 156 assertions, red-first **23/23** + 2 no-op controls.
+Full write-up: `handoffs/2026-08-21-181-checkout-allowlist.md`.
