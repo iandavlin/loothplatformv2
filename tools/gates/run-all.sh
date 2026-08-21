@@ -1919,6 +1919,44 @@ echo
 # green. Red-first 25/25 (22 mutations, 3 no-ops); it found one assertion that
 # passed on its own defect and one mutation absorbed by a duplicate guard.
 run "tester-unlock" python3 "$(dirname "$0")/tester-unlock-gate.py"
+
+echo "=== GATE 86: the soft-launch cohort is REAL in the checkout path (#181) ==="
+# Ian 8/21, decision box: "Fix before go-live". Lane 180 measured that NOTHING in
+# the signup or checkout path consulted the cohort. Three unrelated accidents did
+# the refusing, and the load-bearing one on live -- an EMPTY Stripe catalogue --
+# is removed on purpose at go-live. Reproduced on dev2 before the fix, anon and
+# cookieless, with a real price id from the public /billing/v1/products list:
+# POST /billing/v1/checkout -> 200 + a live Stripe client secret.
+#
+# ONE OPTION, THREE DOORS, TWO HALVES. lgms_checkout_audience is off/allowlist/on
+# and reads the ONE cohort list through StripeLifecycle::inCohort(). The MINT half
+# refuses early and honestly at all three doors; the PROVISION half, inside
+# UserProvisioner::findOrProvision, is the backstop that cannot be routed around
+# because it reads the option in-process with no network between question and
+# answer.
+#
+# ⚠️ THE DEFAULT IS `allowlist` -- ENFORCING -- and it is the deliberate exception
+# to flags-default-dark: the enforcing state must be the state the boxes run, or
+# it is never exercised before the night it has to work.
+#
+# ⚠️ THE ASSERTION THAT MEASURES NOTHING is "a cohort member can buy" -- true of
+# the broken code too, since everybody could buy. The ones that bite are the
+# refusals (B2, B3, C1). Same family as #148's "a PRO purchase grants looth3".
+#
+# ⚠️ THE FENCE SITS ONE LINE BELOW THE EXISTING-BRIDGE EARLY RETURN, so an
+# already-bridged member is untouched in every state and their sweeps keep
+# landing -- grants AND retractions (C3/C4, driven through the REAL Arbiter).
+#
+# looth4 IS RESPECTED (Ian 8/21: "looth4 is the everything bypass the stripe side
+# of membeship needs to respect"). §I runs the REAL Arbiter over a comp holder
+# with no Stripe customer and asserts the role survives, with a liveness leg
+# proving the same sweep DOES demote a non-comp member.
+#
+# RED-FIRST: 20 mutations, 2 no-op controls, all caught -- see
+# tools/gates/checkout-audience-redfirst.py. Two were found by that run and
+# fixed: B8c could not see the guard's two sentences being made identical, and
+# one "mutation" changed no decision at all.
+run "checkout-audience" php "$(dirname "$0")/checkout-audience-gate.php"
 echo
 
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi

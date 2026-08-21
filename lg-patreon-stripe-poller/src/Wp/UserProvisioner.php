@@ -60,13 +60,27 @@ final class UserProvisioner
         // tier — which is exactly the shape the identity gate below chose for
         // the same reason. Nothing is half-done: no user, no bridge, no grant.
         if ( ! \LGMS\Membership\CheckoutAudience::allowsEmail( $email ) ) {
+            // WHO WAS REFUSED, not just that somebody was. An operator reading
+            // this needs to tell a stranger apart from a member we already comp
+            // — they are opposite support actions (refund and ignore, versus
+            // "why is a staff member being asked to pay"). Ian 2026-08-21:
+            // looth4 is the everything bypass and the Stripe side must respect
+            // it. UNEXPIRED looth4, per keeper's sharpening the same day —
+            // LGMS\Membership\CompStanding is that predicate, and it is
+            // deliberately read-only: re-arming comp expiry is #183.
+            $refusedUser = get_user_by( 'email', $email );
+            $who         = $refusedUser
+                ? \LGMS\Membership\CompStanding::describe( (int) $refusedUser->ID )
+                : 'no WordPress account';
+
             $detail = sprintf(
-                'Stripe customer %d (%s) is outside the soft-launch cohort, and the checkout '
+                'Stripe customer %d (%s — %s) is outside the soft-launch cohort, and the checkout '
                 . 'audience is `%s`, so no WordPress account was created and no membership was '
                 . 'granted. If this purchase is genuine it needs a refund, or the buyer needs '
                 . 'adding to the cohort (Settings -> LG Member Sync -> Test Group).',
                 $customerId,
                 $email,
+                $who,
                 \LGMS\Membership\CheckoutAudience::state(),
             );
 
@@ -74,7 +88,7 @@ final class UserProvisioner
                 \LGMS\Membership\CheckoutAudience::D_PROVISION,
                 $email,
                 0,
-                sprintf( 'customer %d — nothing minted, nothing granted', $customerId ),
+                sprintf( 'customer %d — nothing minted, nothing granted (%s)', $customerId, $who ),
             );
             \LGMS\Membership\CheckoutAudience::notifyRefusalOnce( $email, $detail );
 

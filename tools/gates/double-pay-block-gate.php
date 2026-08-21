@@ -512,6 +512,17 @@ section( '[6] DOOR 2 — /wp-json/lg-member-sync/v1/me/checkout-session (found b
 
 require_once $multiTier;
 require_once $wpCheckout;
+$CA_FILE = dirname( __DIR__, 2 ) . '/lg-patreon-stripe-poller/src/Membership/CheckoutAudience.php';
+// ⚠️ #181 COUPLING, DECLARED RATHER THAN WORKED AROUND. `CheckoutRestController`
+// now asks LGMS\Membership\CheckoutAudience whether the signed-in member may
+// buy at all, and that option DEFAULTS TO `allowlist` — enforcing — so without
+// the two lines below every assertion in this section would get a 403 from a
+// fence this gate is not about. The real class is loaded (not stubbed) so the
+// coupling cannot drift silently, and pinned to `off` because THIS gate's
+// subject is the Patreon double-pay block, not who is invited. Gate 86 owns the audience
+// in all three states, including the 403 at this very door.
+require_once $CA_FILE;
+$GLOBALS['OPTS'][ \LGMS\Membership\CheckoutAudience::OPT ] = 'off';
 \LGMS\Wp\CheckoutRestController::$clientFactory = static function () {
     return new class {
         public array $created = [];

@@ -41,8 +41,9 @@ GUARD = ROOT / "lg-stripe-billing/src/Core/CheckoutAudienceGuard.php"
 PROBE = ROOT / "lg-stripe-billing/src/Adapters/HttpCheckoutAudienceProbe.php"
 SLIM = ROOT / "lg-stripe-billing/src/Http/Controllers/CheckoutController.php"
 ENVS = ROOT / "lg-stripe-billing/src/Adapters/EnvSettingsStore.php"
+COMP = ROOT / "lg-patreon-stripe-poller/src/Membership/CompStanding.php"
 
-TOUCHED = [AUD, REST, PROV, PLUG, GUARD, PROBE, SLIM, ENVS, GATE]
+TOUCHED = [AUD, REST, PROV, PLUG, GUARD, PROBE, SLIM, ENVS, COMP, GATE]
 
 
 def sub(path, old, new, count=1):
@@ -176,6 +177,15 @@ MUTATIONS = {
     "M20": ("the audience URL gains an `off` valve — blanking it opens the doors",
             sub(ENVS, "    public function getCheckoutAudienceUrl(): string\n    {\n        $explicit = trim(self::env('LGMS_CHECKOUT_AUDIENCE_URL'));\n        if ($explicit !== '') {",
                       "    public function getCheckoutAudienceUrl(): string\n    {\n        $explicit = trim(self::env('LGMS_CHECKOUT_AUDIENCE_URL'));\n        if (strcasecmp($explicit, 'off') === 0) {\n            return '';\n        }\n        if ($explicit !== '') {")),
+    # ── the comp predicate (Ian 8/21, keeper's sharpening) ───────────────────
+    "M21": ("a missing expiry reads EXPIRED — lapses the 12 of 14 holders who have no date",
+            sub(COMP, "        return $exp === null || $exp > time();",
+                      "        return $exp !== null && $exp > time();")),
+    "M22": ("an expiry in the PAST still reads as an active comp — 'comped forever'",
+            sub(COMP, "        return $exp === null || $exp > time();",
+                      "        return true;")),
+    "M23": ("an unparseable date lapses the member instead of being ignored",
+            sub(COMP, "            // An unparseable date is NOT an expiry.", "            return 0;\n            // An unparseable date is NOT an expiry.")),
 }
 
 NO_OPS = {

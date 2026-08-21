@@ -301,6 +301,7 @@ class WP_REST_Request {
 
 $FILES = [
     'audience'  => "$ROOT/lg-patreon-stripe-poller/src/Membership/CheckoutAudience.php",
+    'comp'      => "$ROOT/lg-patreon-stripe-poller/src/Membership/CompStanding.php",
     'rest'      => "$ROOT/lg-patreon-stripe-poller/src/Wp/CheckoutAudienceRestController.php",
     'prov'      => "$ROOT/lg-patreon-stripe-poller/src/Wp/UserProvisioner.php",
     'sync'      => "$ROOT/lg-patreon-stripe-poller/src/Sync.php",
@@ -319,6 +320,7 @@ foreach ( $FILES as $k => $f ) { if ( ! is_readable( $f ) ) { cannot( "missing $
 
 require_once $FILES['arbiter'];
 require_once $FILES['audience'];
+require_once $FILES['comp'];
 require_once $FILES['rest'];
 require_once $FILES['prov'];
 require_once $FILES['sync'];
@@ -363,7 +365,11 @@ function reset_world(): void {
         1   => new FakeUser( 1,   'admin@example.com',   [ 'administrator' ] ),        // administrator
         400 => new FakeUser( 400, 'comp@example.com',    [ 'looth4' ] ),               // COMP / staff
         401 => new FakeUser( 401, 'comp2@example.com',   [ 'looth4', 'looth1' ] ),     // comp + stale lower tier
+        402 => new FakeUser( 402, 'compexp@example.com', [ 'looth4' ] ),               // comp, EXPIRED
     ];
+    // Mirrors the real shape measured on both boxes 8/21: bare 'Y-m-d H:i:s',
+    // and present on only a minority of holders (2 of 14 on live, both past).
+    $GLOBALS['USERMETA'][402]['looth4_expires_at'] = '2026-07-11 15:25:00';
 }
 
 /** Did a bridge row get written? Keeper's proof 3 turns on this being false. */
@@ -680,6 +686,66 @@ is_( $GLOBALS['ROLE_OPS'] === [] && $GLOBALS['REPORTED'] === [],
 note( 'I6 is the honest edge: a comp member who somehow reaches Stripe checkout is' );
 note( 'refused like anyone else. They lose NOTHING — see the handoff, boarded for Ian.' );
 
+// I8 — UNEXPIRED looth4, not looth4 (keeper's sharpening, 8/21). Asserting on
+// the bare role would encode "comped forever", which is the very reading #183
+// exists to correct — and this gate would then have to be fought to fix it.
+$CS = 'LGMS\\Membership\\CompStanding';
+reset_world();
+is_( $CS::isActiveComp( 400 ) === true,
+     'I8  a looth4 holder with NO expiry meta is an ACTIVE comp (12 of 14 live holders)' );
+is_( $CS::expiresAt( 400 ) === null,
+     'I8b ...and a missing expiry reads NULL — "never expires", NOT "expired"' );
+is_( $CS::isActiveComp( 402 ) === false,
+     'I8c a looth4 holder whose date has PASSED is not an active comp' );
+is_( $CS::isExpiredComp( 402 ) === true, 'I8d ...it is the expired state, named' );
+is_( $CS::isActiveComp( 900 ) === false && $CS::isExpiredComp( 900 ) === false,
+     'I8e a non-comp member is neither' );
+
+// A future date must read ACTIVE. Without this the class could return false for
+// everyone carrying the meta and I8c would still pass.
+$GLOBALS['USERMETA'][402]['looth4_expires_at'] = gmdate( 'Y-m-d H:i:s', time() + 86400 * 30 );
+is_( $CS::isActiveComp( 402 ) === true,
+     'I8f LIVENESS: a FUTURE expiry reads ACTIVE — so I8c measured the date, not the meta key' );
+
+// Garbage must not demote anybody.
+$GLOBALS['USERMETA'][402]['looth4_expires_at'] = 'not a date at all';
+is_( $CS::expiresAt( 402 ) === null && $CS::isActiveComp( 402 ) === true,
+     'I8g an UNPARSEABLE date is not an expiry — a fat-fingered field cannot lapse a comp member' );
+
+// ⚠️ WHAT IS DELIBERATELY NOT ASSERTED, and it is the #183 hole, stated rather
+// than quietly encoded: an EXPIRED comp holder is STILL protected by
+// Arbiter::sync's looth4 early-return today. Nothing enforces the date — the
+// expiry plugin is not installed, not in mu-plugins, not in active_plugins, and
+// no cron event mentions it (measured 8/21). This lane does not change that and
+// must not: Ian ruled the two overdue accounts are LEFT ALONE.
+reset_world();
+$GLOBALS['USERMETA'][402]['looth4_expires_at'] = '2026-07-11 15:25:00';
+$GLOBALS['SOURCES'][402] = [ 'stripe' => null ];
+LGMS\Arbiter::sync( 402 );
+is_( in_array( 'looth4', $GLOBALS['USERS'][402]->roles, true ),
+     'I9  an EXPIRED comp is STILL protected by the Arbiter today — the #183 gap, recorded not fixed' );
+
+// And #181 changes nothing for either kind of comp holder.
+reset_world();
+$GLOBALS['OPTS'][ CA::OPT ] = 'allowlist';
+$GLOBALS['USERMETA'][402]['looth4_expires_at'] = '2026-07-11 15:25:00';
+foreach ( [ 400 => 'an ACTIVE comp', 402 => 'an EXPIRED comp' ] as $uid => $label ) {
+    $before = $GLOBALS['USERS'][ $uid ]->roles;
+    try { UserProvisioner::findOrProvision( 7500 + $uid, $GLOBALS['USERS'][ $uid ]->user_email, 'C' ); }
+    catch ( \RuntimeException $e ) { /* refused, as any non-cohort address is */ }
+    is_( $GLOBALS['USERS'][ $uid ]->roles === $before,
+         "I10 #181 leaves $label byte-identical — the fence refuses, it never demotes" );
+}
+
+// The refusal NAMES the comp standing, so an operator can tell a staff member
+// apart from a stranger. Two opposite support actions, one alert channel.
+reset_world();
+$GLOBALS['OPTS'][ CA::OPT ] = 'allowlist';
+try { UserProvisioner::findOrProvision( 7601, 'comp@example.com', 'Comp' ); }
+catch ( \RuntimeException $e ) {}
+is_( str_contains( implode( "\n", $GLOBALS['LOG'] ), 'looth4' ),
+     'I11 the refusal names the comp standing — a comped member is not logged as a stranger' );
+
 // I7 — the double-pay guard cannot misfire on a comp member: it reads Patreon
 // facts only and never looks at a role.
 $psSrc = bare( "$ROOT/lg-patreon-stripe-poller/src/Membership/PatreonStanding.php" );
@@ -886,10 +952,24 @@ if ($mode === 'off')      { echo '{"state":"off","allowed":true}'; exit; }
 echo '{"state":"allowlist","allowed":true,"message":"ok"}';
 PHP );
 
+// ⚠️ REGISTERED BEFORE THE SERVER STARTS. The tidy-up at the foot of §H only
+// runs on the happy path, and during this gate's own development three stub
+// servers leaked from runs that fataled mid-section — on a 2-core box that is
+// a real cost, and they collide with the next run's port. A shutdown function
+// fires on a fatal and on every exit() path alike.
+register_shutdown_function( static function () {
+    if ( isset( $GLOBALS['CA_SRV'] ) && is_resource( $GLOBALS['CA_SRV'] ) ) {
+        @proc_terminate( $GLOBALS['CA_SRV'] );
+        @proc_close( $GLOBALS['CA_SRV'] );
+        $GLOBALS['CA_SRV'] = null;
+    }
+} );
+
 $srv = proc_open(
     sprintf( 'exec php -S 127.0.0.1:%d %s/router.php', $port, escapeshellarg( $docroot ) === "'$docroot'" ? $docroot : $docroot ),
     [ 1 => [ 'file', '/dev/null', 'w' ], 2 => [ 'file', '/dev/null', 'w' ] ], $pipes
 );
+$GLOBALS['CA_SRV'] = $srv;
 $up = false;
 for ( $i = 0; $i < 60; $i++ ) {
     $c = @fsockopen( '127.0.0.1', $port, $e1, $e2, 0.2 );
@@ -958,7 +1038,7 @@ if ( ! $up ) {
     is_( $g->refusalFor( 'tester1@example.com' ) === null,
          'H6  a cohort member passes through the real HTTP probe (keeper proof 2)' );
 
-    if ( is_resource( $srv ) ) { proc_terminate( $srv ); proc_close( $srv ); }
+    if ( is_resource( $srv ) ) { proc_terminate( $srv ); proc_close( $srv ); $GLOBALS['CA_SRV'] = null; }
     @unlink( "$docroot/router.php" ); @rmdir( $docroot );
 }
 
@@ -984,7 +1064,23 @@ exit( 0 );
  * ─── RED-FIRST RECORD ──────────────────────────────────────────────────────
  *
  * Each mutation applied ALONE to correct code, gate run, mutation reverted.
- * Counts are measured, not predicted. Run: tools/gates/checkout-audience-redfirst.sh
+ * Counts are MEASURED, not predicted:
+ *
+ *     23/23 mutations caught, 2/2 no-op controls stayed green.
+ *     Run: python3 tools/gates/checkout-audience-redfirst.py [--only M7]
+ *
+ * ⚠️ THE RUN EARNED ITS KEEP TWICE, and both findings are worth knowing before
+ * editing this file:
+ *
+ *   - §B8c WAS A REAL BLIND SPOT. It compared the 503 sentence against a 403
+ *     whose message WordPress had supplied, so the guard's own two constants
+ *     could be made identical and it still passed. §B8d now drives the
+ *     fallback path, where the constants are what is actually compared.
+ *   - ONE "MUTATION" CHANGED NO DECISION AT ALL. Flipping `if ( ! $user )` to
+ *     `if ( false )` still refuses: `$user->ID` on a bool is null, (int)null is
+ *     0, and allowsUser(0) is false. The code was right twice over and the gate
+ *     was innocent. A mutation that expresses the actual wrong DECISION is the
+ *     only kind worth counting — see M5's note in the harness.
  *
  *  M1  CheckoutAudience::state() defaults to 'on' instead of 'allowlist'
  *  M2  ...defaults to 'off'
@@ -1006,6 +1102,9 @@ exit( 0 );
  * M18  the BuddyBoss exemption widened to the whole namespace
  * M19  notifyRefusalOnce loses its transient guard (alert-channel flood)
  * M20  the audience URL gains an 'off' valve
+ * M21  a missing comp expiry reads EXPIRED (lapses 12 of 14 live holders)
+ * M22  a PAST comp expiry still reads active ("comped forever")
+ * M23  an unparseable comp date lapses the member
  *
  * NO-OP CONTROLS (must stay GREEN, or the gate is measuring the wrong thing):
  * N1  reword a comment in CheckoutAudience.php
