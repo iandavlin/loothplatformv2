@@ -265,4 +265,102 @@ foreach ($rows as $r) {
     ];
 }
 
-profile_app_json(200, ['pool' => $pool]);
+/* ── #200: CANDIDATES — the members Ian can PIN ──────────────────────────────
+ *
+ * Ian, 2026-08-22: "The override I wanted would still have them on the frontpage
+ * even if they didn't meet the criteria." The pool above is the self-serve list
+ * and is unchanged; this is the ADDITIVE half — every real member, searchable,
+ * so an admin can place someone who has not ticked the box.
+ *
+ * ⚠️ ONLY ON REQUEST, and only with a query. 1,934 public members live on this
+ * box; returning them unasked would make every dash page load carry a
+ * Completeness computation per member for a list nobody is reading. Absent `q`,
+ * this key is absent from the payload entirely — which an older dash also reads
+ * correctly as "this endpoint does not offer candidates", the same absent-key
+ * discipline card_renderable uses.
+ *
+ * `eligible` MEANS THE SAME THING HERE AS ABOVE, and that is the point: privacy,
+ * and nothing else. A member whose profile is Private is RETURNED, marked
+ * ineligible, so the dash can say "cannot be pinned — their profile is Private"
+ * instead of leaving Ian to wonder why a name he searched for is not there. That
+ * refusal is keeper's ruling of 2026-08-22 upholding this lane's recommendation:
+ * a pinned pick does not bypass a member's own profile_visibility, because that
+ * is their switch rather than one of the platform's bars.
+ *
+ * NO card_renderable HERE, DELIBERATELY. That field predicts the resolver's
+ * avatar+role guard — and for a pinned pick the resolver does not apply that
+ * guard at all, so reporting it would be a confidently wrong answer to "will
+ * this show?" (it always will). What the admin needs instead is what the card
+ * will actually SAY, so the fields it can be built from travel plainly:
+ * `has_photo` and `public_role`, the latter computed with the pinned rule — the
+ * glance only when the header block is public, never on a consent the member
+ * has not given.
+ */
+$candidates = null;
+$q = trim((string) ($_GET['q'] ?? ''));
+if ($q !== '') {
+    // ILIKE over the three fields an admin would type. Bounded at 25: a search
+    // is for finding a person you have in mind, and a longer list is a worse
+    // answer, not a more complete one.
+    //
+    // ⚠️ AND AN EXACT UUID MATCH, which is not a convenience — it is load
+    // bearing. FeaturedMemberDash::handle_pin() re-resolves the member by uuid
+    // before writing, so that the display name snapshotted into
+    // featured_history and the privacy refusal both come from this endpoint
+    // rather than from the submitted form. Without this clause that lookup
+    // finds nobody every time and every pin fails with "could not be looked
+    // up" — caught by reading the two files together, before either ran.
+    $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $q) . '%';
+    $cst = $pg->prepare(
+        "SELECT u.id, u.uuid, u.slug, u.display_name, u.avatar_url, u.at_a_glance,
+                u.business_name, u.location_city, u.location_region,
+                u.profile_visibility, u.featured_opt_in,
+                coalesce((SELECT ps.visibility FROM profile_sections ps
+                           WHERE ps.user_id = u.id AND ps.key = 'header'), 'members')
+                  AS header_visibility
+           FROM users u
+          WHERE (u.display_name ILIKE :q OR u.slug ILIKE :q OR u.business_name ILIKE :q
+                 OR u.uuid::text = :exact)
+          ORDER BY (u.uuid::text = :exact) DESC, (u.display_name ILIKE :q) DESC, u.display_name ASC
+          LIMIT 25"
+    );
+    $cst->execute([':q' => $like, ':exact' => $q]);
+
+    $candidates = [];
+    foreach ($cst->fetchAll() as $r) {
+        // The PINNED role rule, which is the resolver's rule with the consent
+        // routes closed: a member who never ticked has given no consent for
+        // their members-only one-liner to be republished, so it is used ONLY
+        // when their header block is already public. Mirrors
+        // lg_fm_card_role($..., $pinned = true) in archive-poc/web/index.php —
+        // a copy across two processes, kept honest by gate 94 §C the same way
+        // gate 39 §F3 keeps card_renderable honest.
+        $glanceRaw = trim((string) $r['at_a_glance']);
+        $role = ($r['header_visibility'] === 'public') ? $glanceRaw : '';
+        if ($role === '') {
+            $biz = Completeness::deEscape($r['business_name']);
+            if ($biz !== '' && !str_ends_with((string) $r['display_name'], $biz)) $role = $biz;
+        }
+        $candidates[] = [
+            'uuid'         => $r['uuid'],
+            'slug'         => $r['slug'],
+            'display_name' => $r['display_name'],
+            'avatar_url'   => $r['avatar_url'],
+            'location'     => trim(implode(', ', array_filter([$r['location_city'], $r['location_region']]))),
+            // Privacy only — the one criterion pinning does not override.
+            'eligible'     => $r['profile_visibility'] === 'public',
+            // Already in the self-serve pool? Then they do not need pinning, and
+            // the dash says so rather than offering two routes to one member.
+            'opted_in'     => (bool) $r['featured_opt_in'],
+            'has_photo'    => trim((string) $r['avatar_url']) !== '',
+            // What the pinned card's second line will actually say — '' means
+            // the card draws with no role line at all, which is allowed for a
+            // pinned pick and is worth showing before the click, not after.
+            'public_role'  => $role,
+        ];
+    }
+}
+
+profile_app_json(200, $candidates === null
+    ? ['pool' => $pool]
+    : ['pool' => $pool, 'candidates' => $candidates]);

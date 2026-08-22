@@ -41,6 +41,16 @@ final class FeaturedMemberDash
     public const NONCE_ACTION = 'lg_featured_member_dash';
     public const FEATURE_ACTION = 'lg_featured_member_feature';
     public const REMOVE_ACTION  = 'lg_featured_member_remove';
+    // #200 — Ian places a member by hand. A SEPARATE action from FEATURE_ACTION
+    // on purpose: the two write different things, warn about different things,
+    // and mean different things to the member, so one handler doing both behind
+    // a boolean would be one nonce away from a pin that nobody chose.
+    public const PIN_ACTION     = 'lg_featured_member_pin';
+    // #200 — the real off-switch, split out of Remove. Remove now clears the
+    // pick and lets the band fall back (Ian's empty-pool law: the band must
+    // never render as absent); this is the deliberate silence, and it is
+    // labelled as such because the two are not the same intention.
+    public const HIDE_ACTION    = 'lg_featured_member_hide';
 
     public const CONFIG_SECRET_FILE   = '/etc/lg-archive-poc-secret';
     public const INTERNAL_SECRET_FILE = '/etc/lg-internal-secret';
@@ -58,6 +68,8 @@ final class FeaturedMemberDash
         add_action('admin_menu', [self::class, 'register_page'], 12);
         add_action('admin_post_' . self::FEATURE_ACTION, [self::class, 'handle_feature']);
         add_action('admin_post_' . self::REMOVE_ACTION,  [self::class, 'handle_remove']);
+        add_action('admin_post_' . self::PIN_ACTION,     [self::class, 'handle_pin']);
+        add_action('admin_post_' . self::HIDE_ACTION,    [self::class, 'handle_hide']);
     }
 
     public static function register_page(): void
@@ -105,17 +117,27 @@ final class FeaturedMemberDash
         return is_array($j) ? $j : [];
     }
 
-    private static function fetch_pool(): array
+    private static function fetch_pool(string $search = ''): array
     {
         $secret = self::read_file_secret(self::INTERNAL_SECRET_FILE);
-        if ($secret === '') return [];
-        $resp = wp_remote_get(self::POOL_URL, [
-            'timeout' => 3, 'sslverify' => false,
+        if ($secret === '') return ['pool' => [], 'candidates' => null];
+        $url = self::POOL_URL . ($search !== '' ? '?q=' . rawurlencode($search) : '');
+        $resp = wp_remote_get($url, [
+            'timeout' => 5, 'sslverify' => false,
             'headers' => ['Host' => self::resolve_host(), 'X-LG-Internal-Auth' => $secret],
         ]);
-        if (is_wp_error($resp) || (int) wp_remote_retrieve_response_code($resp) !== 200) return [];
+        if (is_wp_error($resp) || (int) wp_remote_retrieve_response_code($resp) !== 200) {
+            return ['pool' => [], 'candidates' => null];
+        }
         $j = json_decode((string) wp_remote_retrieve_body($resp), true);
-        return is_array($j['pool'] ?? null) ? $j['pool'] : [];
+        return [
+            'pool' => is_array($j['pool'] ?? null) ? $j['pool'] : [],
+            // NULL, not [] — "this endpoint does not offer candidates" (older
+            // than this dash, mid-deploy) and "your search found nobody" are
+            // different answers and must not render alike. Same absent-key
+            // discipline card_renderable already uses one field over.
+            'candidates' => is_array($j['candidates'] ?? null) ? $j['candidates'] : null,
+        ];
     }
 
     private static function fetch_history(): array
@@ -295,7 +317,7 @@ final class FeaturedMemberDash
         // (private profile) is present in the pool with eligible:false; that
         // is checked here too, so Feature can never fire on a row the dash
         // itself showed as unavailable.
-        $pool = self::fetch_pool();
+        $pool = self::fetch_pool()['pool'];
         $member = null;
         foreach ($pool as $p) {
             if (isset($p['uuid']) && strcasecmp((string) $p['uuid'], $uuid) === 0) { $member = $p; break; }
@@ -355,6 +377,14 @@ final class FeaturedMemberDash
             'name'       => (string) $member['display_name'],
             'role'       => (string) $member['tagline'],
             'consent_ack' => $consentWarn !== null,
+            // #200 — WRITTEN ON EVERY SAVE, FALSE INCLUDED, and for exactly the
+            // reason consent_ack is. _config.php merges featured_member with
+            // `$clean + $existing`, and PHP's `+` keeps the left operand's keys
+            // and fills the rest from the right — so an OMITTED key PERSISTS. A
+            // stale `pinned: true` left behind by an earlier hand-placement
+            // would silently reclassify this consented member as one Ian placed
+            // himself, which is a claim about consent and not a cosmetic label.
+            'pinned'     => false,
             // where/bio/cta_href/cta_label are NOT set here — index.php
             // re-resolves the live card from profile_app on every request
             // ("live, not frozen"). name/role are stored only as the
@@ -376,7 +406,44 @@ final class FeaturedMemberDash
         );
     }
 
+    /* ── REMOVE NO LONGER MEANS HIDE (#200, Ian's empty-pool law) ──────────
+       "with zero eligible members and zero picks, the band must render the old
+       hand-placed content or a designed fallback — never nothing."
+
+       This used to post `enabled => false`, which took the whole band off the
+       front page — the very hole the law forbids, reachable from a button
+       labelled "Remove from front page" that reads like it means "remove this
+       member". So Remove now clears the SELECTION and leaves the band enabled:
+       index.php falls back to the tracked hand-placed card. Wanting no band at
+       all is a different intention and has its own button, handle_hide().
+
+       member_uuid is blanked rather than left in place, because a uuid sitting
+       in config.json with nobody featured is what made "turn the flag off"
+       remove the band instead of restoring it. */
     public static function handle_remove(): void
+    {
+        if (!current_user_can(self::CAPABILITY)) wp_die('Forbidden', '', ['response' => 403]);
+        check_admin_referer(self::NONCE_ACTION);
+
+        $res = self::post_config([
+            'enabled'     => true,
+            'member_uuid' => '',
+            'name'        => '',
+            'role'        => '',
+            'consent_ack' => false,
+            'pinned'      => false,
+        ]);
+        self::redirect_back(
+            $res['ok'] ? '' : urlencode((string) $res['error']),
+            $res['ok'],
+            $res['ok'] ? rawurlencode('Nobody is featured now, so the front page shows the standing card instead. The band itself is still on — use “Hide the band entirely” if you want the whole row gone.') : ''
+        );
+    }
+
+    /* The deliberate silence. Separate button, separate words, because a person
+       choosing to show nothing and a page failing to show something must never
+       be the same state — that confusion is the whole of #200. */
+    public static function handle_hide(): void
     {
         if (!current_user_can(self::CAPABILITY)) wp_die('Forbidden', '', ['response' => 403]);
         check_admin_referer(self::NONCE_ACTION);
@@ -384,7 +451,96 @@ final class FeaturedMemberDash
         $current = self::fetch_current();
         $uuid = (string) ($current['featured_member']['member_uuid'] ?? '');
         $res = self::post_config(['enabled' => false, 'member_uuid' => $uuid]);
-        self::redirect_back($res['ok'] ? '' : urlencode((string) $res['error']), $res['ok']);
+        self::redirect_back(
+            $res['ok'] ? '' : urlencode((string) $res['error']),
+            $res['ok'],
+            $res['ok'] ? rawurlencode('The featured band is now hidden completely — no card, no fallback. Feature or pin someone to bring it back.') : ''
+        );
+    }
+
+    /* ── PIN: Ian places a member who has not ticked the box (#200) ────────
+       Ian, 2026-08-22: "The override I wanted would still have them on the
+       frontpage even if they didn't meet the criteria."
+
+       What this does NOT do is as load-bearing as what it does: it never writes
+       users.featured_opt_in. Consent stays the member's to give — gate 39 §D
+       keeps me-featured.php off the admin-impersonation allowlist for the same
+       reason, and pinning must not become the back door that rule closes.
+       Nothing here touches profile_app at all; the pin lives in config.json. */
+    public static function handle_pin(): void
+    {
+        if (!current_user_can(self::CAPABILITY)) wp_die('Forbidden', '', ['response' => 403]);
+        check_admin_referer(self::NONCE_ACTION);
+
+        $uuid = isset($_POST['member_uuid']) ? sanitize_text_field(wp_unslash((string) $_POST['member_uuid'])) : '';
+        if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $uuid)) {
+            self::redirect_back('invalid%20member');
+            return;
+        }
+        // Re-resolve against the endpoint rather than trusting the form: the
+        // display name is snapshotted into featured_history, and the privacy
+        // state is the one refusal a pin must still honour. Searching by the
+        // uuid finds the member whatever the admin originally typed.
+        $found = self::fetch_pool($uuid);
+        $member = null;
+        foreach (($found['candidates'] ?? []) as $c) {
+            if (isset($c['uuid']) && strcasecmp((string) $c['uuid'], $uuid) === 0) { $member = $c; break; }
+        }
+        if ($member === null) {
+            self::redirect_back(rawurlencode('that member could not be looked up just now — nothing was changed'));
+            return;
+        }
+        // KEEPER'S RULING, 2026-08-22: a pinned pick does NOT bypass a member's
+        // own profile_visibility. Placing them is Ian's call; being public at
+        // all is theirs, and the front page would otherwise link the world to a
+        // profile the world cannot open.
+        if (empty($member['eligible'])) {
+            self::redirect_back(rawurlencode(
+                trim((string) $member['display_name']) . ' has set their profile to Private, so they cannot be '
+                . 'put on the public front page. That is their own setting, not a completeness bar — ask them '
+                . 'to make their profile public first.'
+            ));
+            return;
+        }
+
+        $user = wp_get_current_user();
+        $res = self::post_config([
+            'enabled'     => true,
+            'member_uuid' => $uuid,
+            'name'        => (string) $member['display_name'],
+            'role'        => (string) ($member['public_role'] ?? ''),
+            // A pin carries NO consent, so it carries no acknowledgement of one.
+            // Writing false explicitly matters here more than anywhere: a stale
+            // true from a previous consented pick would tell the resolver an
+            // admin knowingly accepted a tick this member never made.
+            'consent_ack' => false,
+            'pinned'      => true,
+            'chosen_by'   => $user && $user->user_login ? $user->user_login : 'wp-admin',
+        ]);
+        self::redirect_back(
+            $res['ok'] ? '' : urlencode((string) $res['error']),
+            $res['ok'],
+            $res['ok'] ? rawurlencode(self::pin_notice_saved($member)) : ''
+        );
+    }
+
+    /* What just happened, in words, at the moment it becomes true — including
+       the part Ian has to do himself. Consent-A (#107) says a member placed by
+       his hand rather than their own tick is his call and he asks them
+       personally; that sentence is the only place the platform can say so. */
+    public static function pin_notice_saved(array $member): string
+    {
+        $name = trim((string) ($member['display_name'] ?? '')) ?: 'This member';
+        $msg  = $name . ' is on the front page now — pinned by you, not opted in. '
+              . 'They have not ticked the featured box, so nobody has asked them: that conversation is yours to have.';
+        if (($member['public_role'] ?? '') === '') {
+            $msg .= ' Their card shows a photo, their name and a link — no second line, because there is '
+                  . 'nothing on their profile the public card is allowed to repeat.';
+        }
+        if (empty($member['has_photo'])) {
+            $msg .= ' They have no photo, so the card is their name and a link alone.';
+        }
+        return $msg;
     }
 
     private static function redirect_back(string $error, bool $updated = false, string $warn = ''): void
@@ -409,11 +565,19 @@ final class FeaturedMemberDash
         if (!current_user_can(self::CAPABILITY)) wp_die('Forbidden');
 
         $current = self::fetch_current();
-        $pool    = self::fetch_pool();
+        $search  = isset($_GET['pinq']) ? sanitize_text_field(wp_unslash((string) $_GET['pinq'])) : '';
+        $fetched = self::fetch_pool($search);
+        $pool    = $fetched['pool'];
+        $candidates = $fetched['candidates'];
         $history = self::fetch_history();
         $fm      = is_array($current['featured_member'] ?? null) ? $current['featured_member'] : [];
         $currentUuid = (string) ($fm['member_uuid'] ?? '');
         $isLiveReal  = !empty($fm['enabled']) && $currentUuid !== '';
+        // #200 — is the live pick one Ian placed, or one a member asked for?
+        // Named everywhere it is shown, because "featured" now covers two quite
+        // different things and only one of them involved the member agreeing.
+        $isPinned    = $isLiveReal && !empty($fm['pinned']);
+        $bandHidden  = empty($fm['enabled']);
 
         $notice = isset($_GET['updated']) ? (string) $_GET['updated'] : '';
         $error  = isset($_GET['err'])     ? (string) $_GET['err']     : '';
@@ -422,8 +586,11 @@ final class FeaturedMemberDash
         $postUrl = admin_url('admin-post.php');
 
         echo '<div class="wrap"><h1>Featured Member</h1>';
-        echo '<p class="description">Members who have ticked &ldquo;include me as a possible featured member&rdquo; on their own profile. '
-           . 'Featuring someone puts them on the front page immediately; removing them takes the band down. One at a time.</p>';
+        echo '<p class="description">Two ways onto the front page. <strong>The pool</strong> is members who ticked '
+           . '&ldquo;include me as a possible featured member&rdquo; on their own profile &mdash; they asked. '
+           . '<strong>Pinning</strong> places anyone else, whether or not they meet the criteria &mdash; you asked, '
+           . 'so you tell them. One at a time, either way. Clearing the pick never leaves the band empty: '
+           . 'the front page falls back to the standing card.</p>';
 
         // A warned save is NOT a plain success — saying only "Saved and pushed"
         // over a pick that renders nothing is the exact lie #107's measurement
@@ -442,10 +609,22 @@ final class FeaturedMemberDash
             $liveRow = null;
             foreach ($pool as $p) { if (strcasecmp((string) $p['uuid'], $currentUuid) === 0) { $liveRow = $p; break; } }
             $liveName = $liveRow ? (string) $liveRow['display_name'] : (string) ($fm['name'] ?? '(unknown)');
-            echo '<div class="notice notice-info"><p><strong>On the front page now:</strong> ' . esc_html($liveName) . '</p></div>';
+            // THE HONEST NAME FOR EACH KIND. "Featured" alone would now cover a
+            // member who agreed and a member who was never asked, and the
+            // difference is the whole of consent-A.
+            echo '<div class="notice notice-info"><p><strong>On the front page now:</strong> ' . esc_html($liveName)
+               . ' &mdash; <strong>' . ($isPinned ? 'pinned by an admin' : 'opted in') . '</strong>. '
+               . ($isPinned
+                    ? 'They did not tick the featured box; someone placed them here. Ask them personally if that has not happened.'
+                    : 'They ticked the featured box on their own profile.')
+               . '</p></div>';
+        } elseif ($bandHidden) {
+            echo '<div class="notice notice-warning"><p><strong>The band is hidden entirely.</strong> '
+               . 'No card and no fallback &mdash; the row does not render at all. Feature or pin someone to bring it back.</p></div>';
         } else {
-            echo '<div class="notice notice-warning"><p><strong>No one is on the front page.</strong> The featured-member band is not rendering a real member'
-               . (!empty($fm['enabled']) ? ' — the hand-typed fallback shows instead.' : '.') . '</p></div>';
+            echo '<div class="notice notice-info"><p><strong>Nobody is featured right now.</strong> '
+               . 'The front page is showing the standing fallback card, not an empty space &mdash; that is deliberate '
+               . '(#200: the band never renders as absent).</p></div>';
         }
 
         echo '<h2>Selectable pool <span style="font-weight:400;color:#646970">&mdash; ' . count($pool) . ' member' . (count($pool) === 1 ? '' : 's') . ' opted in</span></h2>';
@@ -488,7 +667,9 @@ final class FeaturedMemberDash
                     echo '<td><form method="post" action="' . esc_url($postUrl) . '">'
                        . '<input type="hidden" name="action" value="' . esc_attr(self::REMOVE_ACTION) . '">'
                        . '<input type="hidden" name="_wpnonce" value="' . esc_attr($nonce) . '">'
-                       . '<button type="submit" class="button">Remove from front page</button></form></td>';
+                       . '<button type="submit" class="button" title="' . esc_attr(
+                            'Clears the pick. The band stays up and shows the standing card — it does not go blank.'
+                         ) . '">Clear this pick</button></form></td>';
                 } elseif ($blocked !== null) {
                     // The ONE remaining wall, and it is consent/privacy — never
                     // completion (#107).
@@ -535,16 +716,117 @@ final class FeaturedMemberDash
             echo '</tbody></table>';
         }
 
+        /* ── PIN A MEMBER (#200) ────────────────────────────────────────────
+           A SEARCH BOX, not a dropdown: 1,934 public members live on this box,
+           and the endpoint only computes candidates when asked, so an unsearched
+           page load costs nothing. */
+        echo '<h2>Pin a member <span style="font-weight:400;color:#646970">&mdash; anyone, criteria or not</span></h2>';
+        echo '<p class="description" style="max-width:70em">Puts a member on the front page who has <strong>not</strong> ticked the box. '
+           . 'Their card shows only what their profile already shows the public &mdash; their photo, their name, and their public '
+           . 'one-liner if they have one. A members-only one-liner is never repeated here, because they have not agreed to that; '
+           . 'ticking the box is what agreeing looks like, and a pinned member has not done it. '
+           . '<strong>That conversation is yours to have with them.</strong></p>';
+        echo '<form method="get" action="' . esc_url(admin_url('admin.php')) . '" style="margin:10px 0 16px">'
+           . '<input type="hidden" name="page" value="' . esc_attr(self::PAGE_SLUG) . '">'
+           . '<input type="search" name="pinq" value="' . esc_attr($search) . '" class="regular-text" '
+           . 'placeholder="Search members by name, handle or business">'
+           . ' <button type="submit" class="button">Search</button>'
+           . ($search !== '' ? ' <a class="button-link" href="' . esc_url(admin_url('admin.php?page=' . self::PAGE_SLUG)) . '">clear</a>' : '')
+           . '</form>';
+
+        if ($search === '') {
+            // Say nothing rather than show an empty table — an empty table reads
+            // as "no such members".
+        } elseif ($candidates === null) {
+            // NOT the same as "found nobody". A null means this dash asked an
+            // endpoint that does not offer candidates (a half-finished deploy),
+            // and "I could not look" must never render as "there is nobody".
+            echo '<div class="notice notice-warning inline"><p><strong>Could not search.</strong> '
+               . 'The profile service did not return a candidate list &mdash; it may be older than this page, '
+               . 'or unreachable. This is not the same as finding nobody, so nothing is being claimed either way.</p></div>';
+        } elseif (!$candidates) {
+            echo '<p style="color:#646970">No member matches &ldquo;' . esc_html($search) . '&rdquo;.</p>';
+        } else {
+            echo '<table class="wp-list-table widefat fixed striped"><thead><tr>'
+               . '<th>Member</th><th>Card would say</th><th>Where</th><th>Status</th><th></th></tr></thead><tbody>';
+            foreach ($candidates as $c) {
+                $cUuid = (string) ($c['uuid'] ?? '');
+                $isCur = $isLiveReal && strcasecmp($cUuid, $currentUuid) === 0;
+                echo '<tr' . ($isCur ? ' style="background:#fcf9e8"' : '') . '>';
+                echo '<td><strong>' . esc_html((string) $c['display_name']) . '</strong><br>'
+                   . '<span style="color:#787c82;font-size:11.5px">/u/' . esc_html((string) $c['slug']) . '</span></td>';
+                // What the card will SAY, stated before the click rather than
+                // discovered after it — the lesson #107 paid for with Rick
+                // Liftig, one category over.
+                if (($c['public_role'] ?? '') !== '') {
+                    echo '<td>' . esc_html((string) $c['public_role']) . '</td>';
+                } else {
+                    echo '<td style="color:#8a6d1f">their name and a link only<br>'
+                       . '<span style="font-size:11.5px">nothing on their profile is public enough to repeat</span></td>';
+                }
+                echo '<td>' . esc_html((string) ($c['location'] ?? '')) . '</td>';
+
+                if ($isCur) {
+                    echo '<td colspan="2"><span style="background:#edf7ee;color:#1a6b2a;border-radius:3px;padding:3px 7px;font-size:11px;font-weight:600">On now</span></td>';
+                } elseif (empty($c['eligible'])) {
+                    // The one refusal a pin still honours, said in full rather
+                    // than by omitting the row — a name that silently is not
+                    // there is a question, not an answer.
+                    echo '<td colspan="2" style="color:#646970"><strong>Cannot be pinned</strong> &mdash; their profile is Private. '
+                       . 'That is their own setting, not a completeness bar.</td>';
+                } elseif (!empty($c['opted_in'])) {
+                    echo '<td colspan="2" style="color:#646970"><strong>Already in the pool</strong> &mdash; they ticked the box, '
+                       . 'so feature them from the table above and their card can say more.</td>';
+                } else {
+                    echo '<td style="color:#8a6d1f">Never asked</td>';
+                    echo '<td><form method="post" action="' . esc_url($postUrl) . '">'
+                       . '<input type="hidden" name="action" value="' . esc_attr(self::PIN_ACTION) . '">'
+                       . '<input type="hidden" name="member_uuid" value="' . esc_attr($cUuid) . '">'
+                       . '<input type="hidden" name="_wpnonce" value="' . esc_attr($nonce) . '">'
+                       . '<button type="submit" class="button" title="' . esc_attr(
+                            'Places them on the front page without a tick. They have not been asked — that is yours to do.'
+                         ) . '">Pin to front page</button></form></td>';
+                }
+                echo '</tr>';
+            }
+            echo '</tbody></table>';
+        }
+
+        /* The deliberate silence, kept away from Remove so the two intentions
+           cannot be confused by a hurried click. */
+        if (!$bandHidden) {
+            echo '<h2>The band itself</h2>';
+            echo '<p class="description">Clearing a pick leaves the band up with the standing card. This takes the whole row off the front page.</p>';
+            echo '<form method="post" action="' . esc_url($postUrl) . '" style="margin:8px 0 4px">'
+               . '<input type="hidden" name="action" value="' . esc_attr(self::HIDE_ACTION) . '">'
+               . '<input type="hidden" name="_wpnonce" value="' . esc_attr($nonce) . '">'
+               . '<button type="submit" class="button">Hide the band entirely</button></form>';
+        }
+
         echo '<h2>Featured history</h2>';
         if (empty($history)) {
             echo '<div style="background:#fff;border:1px dashed #c3c4c7;border-radius:4px;padding:26px 18px;text-align:center;color:#646970">'
                . '<strong style="display:block;color:#1d2327;margin-bottom:4px">No one has been featured yet.</strong>'
                . 'Stints on the front page will be listed here with dates.</div>';
         } else {
-            echo '<table class="wp-list-table widefat fixed striped"><thead><tr><th>Member</th><th>From</th><th>To</th><th>Chosen by</th></tr></thead><tbody>';
+            echo '<table class="wp-list-table widefat fixed striped"><thead><tr><th>Member</th><th>How</th><th>From</th><th>To</th><th>Chosen by</th></tr></thead><tbody>';
             foreach ($history as $h) {
                 $to = $h['ended_at'] ? esc_html(date('j M Y', strtotime((string) $h['ended_at']))) : '<span style="color:#1a6b2a;font-weight:600">On now</span>';
+                // ABSENT KEY IS NOT FALSE, the same discipline as card_warning().
+                // A missing `pinned` means the history table predates
+                // tools/migrations/200-featured-history-pinned.sql on this box,
+                // and the honest answer is a dash, not the reassuring "opted in".
+                // That distinction matters here more than most: this column is
+                // what someone auditing consent would read.
+                if (!array_key_exists('pinned', $h)) {
+                    $how = '<span style="color:#787c82">—</span>';
+                } elseif (!empty($h['pinned'])) {
+                    $how = '<span style="color:#8a6d1f;font-weight:600">pinned</span>';
+                } else {
+                    $how = '<span style="color:#646970">opted in</span>';
+                }
                 echo '<tr><td>' . esc_html((string) $h['display_name']) . '</td>'
+                   . '<td>' . $how . '</td>'
                    . '<td>' . esc_html(date('j M Y', strtotime((string) $h['started_at']))) . '</td>'
                    . '<td>' . $to . '</td>'
                    . '<td style="color:#646970">' . esc_html((string) ($h['chosen_by'] ?? '—')) . '</td></tr>';
