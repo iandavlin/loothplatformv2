@@ -29,6 +29,7 @@ FLAG = os.path.join(REPO, "platform", "config", "featured-members.php")
 DASH = os.path.join(REPO, "lg-layout-v2", "src", "FeaturedMemberDash.php")
 POOL = os.path.join(REPO, "profile-app", "api", "v0", "internal-featured-pool.php")
 UPHP = os.path.join(REPO, "profile-app", "web", "u.php")
+DEFS = os.path.join(REPO, "archive-poc", "web", "defaults.php")
 
 
 def run_gate():
@@ -125,6 +126,20 @@ MUTATIONS = [
     ("the dash stops naming a pinned pick", DASH,
      "'pinned by an admin'", "'featured'", "[F4", True),
 
+    # ── #200-B, Ian's ruling 2026-08-22 ("B is fine for featured") ──────────
+    # The revert this is here to catch is not malicious, it is plausible: the
+    # 'member' fields are still carried in defaults.php on purpose, so one word
+    # puts a person who was featured in June back on the front page as though
+    # they were featured today, and every other assertion stays green because a
+    # perfectly good card renders.
+    ("the ruled invite shape is reverted to the hand-placed card", DEFS,
+     "'kind'      => 'invite',", "'kind'      => 'member',", "[A4", True),
+
+    # The defect this caught for real: the mock drew the CTA with href="#" and
+    # the build shipped '/u/', a branded 404. Nobody had clicked the button.
+    ("the invite card's button points back at the 404", DEFS,
+     "'cta_href'  => '/profile/edit',", "'cta_href'  => '/u/',", "[A5", True),
+
     # ── NO-OP CONTROLS ──────────────────────────────────────────────────────
     ("NO-OP: a comment is reworded", IDX,
      "// ── THE EMPTY-POOL LAW (#200, Ian 2026-08-22) ─",
@@ -133,6 +148,13 @@ MUTATIONS = [
     ("NO-OP: whitespace inside the fallback function", IDX,
      "function lg_fm_fallback_card(array $fb): ?array {",
      "function lg_fm_fallback_card(array $fb): ?array  {", None, False),
+
+    # A no-op on defaults.php too — the two legs above are the first to mutate
+    # that file, so it needs its own control. Without one, an A4/A5 red could be
+    # the gate reacting to defaults.php being touched at all.
+    ("NO-OP: a comment is reworded in defaults.php", DEFS,
+     "// `kind` selects the shape index.php draws:",
+     "// `kind` chooses the shape index.php draws:", None, False),
 ]
 
 
