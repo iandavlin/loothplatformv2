@@ -402,3 +402,63 @@ background from the dark pane's, else it is one theme photographed twice —
 paired with a liveness read, and it verifies the shared profile's theme is
 unchanged when it exits. Measured: light `rgb(255,255,255)` vs dark
 `rgb(30,33,36)`, no horizontal scroll at 390, every CTA inside the viewport.
+
+---
+
+## 8. DELIVERED — what was actually built, and where it diverged from this plan
+
+Written at the end of the lane, against `git diff --name-only main...HEAD`.
+
+### Four files touched that this plan did not list
+
+LANE-RULES: *"If it includes files that weren't in your plan, flag them."*
+
+| file | why |
+|---|---|
+| `tools/gates/featured-override-redfirst.py` | the red-first harness. Implied by "red-first" in §4 but never named as a file. |
+| `tools/migrations/200-featured-history-pinned.sql` | `featured_history` could no longer be read as a list of members who consented once pinning existed — and that is exactly what an audit would read it as. Additive, `IF NOT EXISTS`, and **the code never requires it to have run**. |
+| `handoffs/200-featured-override-DEPLOY.md` | three deploy couplings a pull does not do, one of them with a deadline (dev2 goes dark until the `.local.php` is placed). |
+| **`tools/gates/front-banner-patreon-dark-gate.py`** | ⚠️ **another lane's gate (#171/#169).** Its §B diffed the **whole front page** against `origin/main` and failed on any byte difference, which makes it a merge-blocker for every front-page lane rather than a flag check. #200's fallback band tripped it; I measured the diff first (+880 bytes, the band and nothing else) and narrowed the leg to the banner region it actually governs, reporting anything else as a named, sized NOTE. Reported to keeper on the board the same hour. |
+
+### Two files this plan listed and the build did not need
+
+- `platform/config/featured-consent.php` — the `.local.php` layer for that flag
+  was documented **in the readers** (`index.php`, `internal-featured-pool.php`,
+  `u.php`) where someone debugging it will actually look, rather than in a
+  docblock one directory away.
+- `archive-poc/api/v0/fp-save.php` — planned as "doc only". Left alone entirely:
+  it forwards a raw `featured_member` object and, because omitted keys persist,
+  carries `pinned` through unchanged. Nothing to say in the file that is not
+  already said at the merge point in `_config.php`.
+
+### The plan's biggest wrong call, and what corrected it
+
+§1 recommended **keeping** the `profile_visibility` refusal on pins, and keeper
+upheld it. **Ian overruled both of us** on 8/22 — *"Regardless of the status of
+their profile. Please strip the saftey feature."* — and he was right on the
+facts: asked to justify the fence before removing it, the measurement came back
+**zero non-public members on live** and one test fixture on dev2 with nothing to
+protect. The carve-out I argued for was defending an empty set.
+
+What that changed downstream: the fence came out of the resolver, the refusal
+came out of the dash, the status became a **winnowing filter with counts** rather
+than a gate, every row got a new-tab profile link, and **gate 94 §F3 was re-aimed
+from "a Private profile is refused" to "a Private profile is offered, labelled
+and counted"**. A gate kept green by defending a struck-out behaviour is worse
+than no gate.
+
+### Coverage — what is measured, and what is not
+
+**Measured, by rendering or executing:** all three flag states; the pin against a
+member who fails every criterion; the same member unpinned (the control); a
+pinned non-public member; the consent flag in both states with `consent_ack` set;
+the three flag readers at their own directory depths; the status filter's buckets
+and counts; and the admin dash rendered under **real WordPress with the branch's
+class** (`ReflectionClass` asserting which file loaded).
+
+**Asserted but not exercised end to end:** the `admin-post.php` POST round-trip
+for Pin. `handle_pin()` redirects and `exit`s, and driving it for real would
+write the live `config.json` that dev2's own front page reads. Its payload is
+asserted per-key by gate 94 §F2, its lookup path was verified against the real
+endpoint, and the resolver side is rendered against the exact config a pin
+writes — but nobody has clicked the button. **Say so rather than imply otherwise.**
