@@ -207,6 +207,25 @@ gate**, which is the whole point of running one:
 
 ---
 
+## Gates run
+
+| gate | result |
+|---|---|
+| **92** `compose-licence` (new) | **GREEN, 100 checks** |
+| 88 `compose-limits` | GREEN, 189 passed — including its §K dark-token leg over the new licence CSS |
+| 68 `compose-chrome` | GREEN, 5 checks, both themes |
+| 46 `compose-media` | GREEN — no orphans, unattached count unchanged (4880 → 4880) |
+
+Run **individually**, not through `run-all.sh`, which exits early on main's
+gate-72 red (#175). Those three are the neighbourhood this change touches; gate
+88's dark-token leg is the one that would have caught a new colour with no dark
+value, and it passed.
+
+**Red-first: 22 cases, all as expected** — 19 mutations each reddening its own
+named assertion, 2 no-op controls proven inert, 1 documented known-green.
+
+---
+
 ## For keeper — merging this
 
 **One expected conflict, and the resolution is "keep both".** This branch is 4
