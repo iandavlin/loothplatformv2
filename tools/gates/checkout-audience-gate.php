@@ -1302,24 +1302,28 @@ is_( in_array( '/lg-member-sync/v1/auth', $exempt, true ),
 is_( in_array( '/lg-member-sync/v1/gift-auth', $exempt, true ),
      'K2  ...and its alias, which is the same handler and the gift redemption door' );
 
-/* ⚠️ THIS LIST SHRANK BY ONE ON 2026-08-22, AND IT WAS RULED, NOT DRIFT.
-   #181 reported four still-restricted shared-secret routes and opened none of
-   them. Ian then flipped `lgms_double_pay_block` ON on dev2, and
-   `/patreon-standing` — measured from 127.0.0.1 WITH the correct secret —
-   still answered 401 bb_rest_authorization_required. That guard is FAIL-OPEN by
-   design, so an unreachable probe answers UNKNOWN and waves EVERY checkout
-   through, including the listed tester who actively pays Patreon: the guard
-   reads as armed and refuses nobody. Keeper ruled the exemption on #193's rider,
-   under the same three conditions as /auth, and superseded #181's
-   one-route-only condition explicitly. `/sync-customer` and `/send-gift-codes`
-   stay shut ON PURPOSE — the five-minute Sync::all() sweep covers the first and
-   nothing is waiting on the second. If a future lane wants either opened, it
-   needs its own ruling; growing this exemption quietly is the thing these
-   assertions exist to prevent. */
+/* ⚠️ WHAT THIS LOOP MEANS CHANGED ON 2026-08-22 (#203), AND THE ASSERTION IS
+   KEPT RATHER THAN DELETED. It used to read "`/sync-customer` and
+   `/send-gift-codes` are STILL NOT opened", which was #181's ruling and is no
+   longer true: #203 opened both, plus `/send-gift-recipient`, each through its
+   OWN filter. What must still hold — and what this loop now says — is that the
+   AUTH filter did not grow: an exemption may only ever arrive as a new filter
+   somebody wrote down, never as a route appended to a neighbour's list. That is
+   the whole arrangement, and it is why every route below is named against the
+   filter that must NOT contain it rather than against the hook as a whole.
+
+   History, so the shrinking is readable as decisions: #181 reported four
+   restricted shared-secret routes and opened none. #193 opened `/auth` and its
+   alias; its rider opened `/patreon-standing` once Ian flipped
+   `lgms_double_pay_block` ON and the fail-open guard was measured refusing
+   nobody. #203 opened the three above. `/run-now` alone stays shut — ops-only,
+   cron-covered, and what it exposes is a whole Tick. */
 foreach ( [ '/lg-member-sync/v1/sync-customer',
-            '/lg-member-sync/v1/send-gift-codes' ] as $shut ) {
-    is_( ! in_array( $shut, $exempt, true ),
-         "K3  $shut is STILL NOT opened — deliberately shut, not forgotten" );
+            '/lg-member-sync/v1/send-gift-codes',
+            '/lg-member-sync/v1/send-gift-recipient',
+            '/lg-member-sync/v1/run-now' ] as $notHere ) {
+    is_( ! in_array( $notHere, $exempt, true ),
+         "K3  the AUTH filter does not name $notHere — an exemption is its own filter, never a route tacked on" );
 }
 is_( count( $exempt ) === 2, 'K3b the auth filter still names exactly two, so a widening cannot hide among them' );
 
@@ -1350,8 +1354,8 @@ is_( $psAuth !== '' && strpos( $psAuth, "return false;" ) !== false
      'K3h  ...and an UNCONFIGURED secret is still CLOSED, never open' );
 is_( strpos( bare( $FILES['plugin'] ), 'PatreonStandingRestController::class, \'exemptFromBuddyBossRestriction\'' ) !== false,
      'K3i  Plugin.php registers it — an unwired filter is a comment' );
-is_( substr_count( bare( $FILES['plugin'] ), "'bb_exclude_endpoints_from_restriction'" ) === 3,
-     'K3j  ...as a THIRD filter beside #181\'s and /auth\'s, each owning its own route' );
+is_( substr_count( bare( $FILES['plugin'] ), "'bb_exclude_endpoints_from_restriction'" ) === 6,
+     'K3j  ...as its own filter among SIX, each owning its own route (#203 took it 3 -> 6)' );
 
 /* ⚠️ THE OFF STATE IS UNTOUCHED. The filter is unconditional while the ROUTE is
    flag-gated, so with the flag off the route still does not exist and the probe
@@ -1405,19 +1409,177 @@ is_( substr_count( $authBody, 'set_transient' ) >= 2,
 $plugSrc2 = bare( $FILES['plugin'] );
 is_( strpos( $plugSrc2, 'exemptAuthFromBuddyBossRestriction' ) !== false,
      'K9  Plugin.php actually registers it — an unwired filter is a comment' );
-/* ⚠️ ONE FILTER PER CONTROLLER, EACH OWNING ITS OWN ROUTE — three of them now
-   (#181's /checkout-audience, #193's /auth pair, and the rider's
-   /patreon-standing). This assertion caught the rider's own change and that is
-   the point of it: the count is pinned so a new exemption has to be a decision
-   somebody writes down, never a route quietly appended to an existing list. */
-is_( substr_count( $plugSrc2, "'bb_exclude_endpoints_from_restriction'" ) === 3,
-     'K9b ...as its OWN filter, not by widening a neighbour\'s' );
+/* ⚠️ ONE FILTER PER ROUTE — SIX of them now (#181's /checkout-audience, #193's
+   /auth pair, the rider's /patreon-standing, and #203's /sync-customer,
+   /send-gift-codes and /send-gift-recipient). ⚠️ THE NUMBER IS UPDATED
+   DELIBERATELY, ONCE PER RULING, AND THAT IS THE POINT OF IT: this assertion
+   caught the rider's own change and #203's, so a seventh exemption cannot merge
+   without somebody editing this line and writing down why. Never relax it to a
+   >= or derive it from the file it is measuring. */
+is_( substr_count( $plugSrc2, "'bb_exclude_endpoints_from_restriction'" ) === 6,
+     'K9b ...as its OWN filter, not by widening a neighbour\'s — six, deliberately (#203)' );
 foreach ( [ 'CheckoutAudienceRestController::class,\'exemptFromBuddyBossRestriction\'',
             'RestController::class,\'exemptAuthFromBuddyBossRestriction\'',
-            'PatreonStandingRestController::class,\'exemptFromBuddyBossRestriction\'' ] as $wired ) {
+            'PatreonStandingRestController::class,\'exemptFromBuddyBossRestriction\'',
+            'RestController::class,\'exemptSyncCustomerFromBuddyBossRestriction\'',
+            'RestController::class,\'exemptGiftCodesFromBuddyBossRestriction\'',
+            'RestController::class,\'exemptGiftRecipientFromBuddyBossRestriction\'' ] as $wired ) {
     is_( strpos( str_replace( ' ', '', $plugSrc2 ), str_replace( ' ', '', $wired ) ) !== false,
-         'K9c each exemption is wired to the controller that OWNS that route — ' . explode( ':', $wired )[0] );
+         'K9c each exemption is wired to the controller that OWNS that route — ' . trim( explode( ',', $wired )[1], "'" ) );
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   §K10  #203 — THE THREE ROUTES THAT WERE DEAD TO THEIR OWN CALLERS
+   ═══════════════════════════════════════════════════════════════════════════
+
+   MEASURED ON DEV2 BEFORE THE CHANGE, from 127.0.0.1, WITH the correct 64-char
+   `lgms_shared_secret`, over the real serve:
+
+     /sync-customer        401 {"code":"bb_rest_authorization_required"}
+     /send-gift-codes      401 {"code":"bb_rest_authorization_required"}
+     /send-gift-recipient  401 {"code":"bb_rest_authorization_required"}
+     /patreon-standing     400 {"error":"email is required"}   <- #193, past the wall
+     /checkout-audience    200 {"state":"allowlist",...}       <- #181, past the wall
+
+   ⚠️ READ THE CODE, NOT THE NUMBER. Both refusals are 401. `rest_forbidden` is
+   the route's OWN secret check saying no — healthy. `bb_rest_authorization_required`
+   is BuddyBoss pre-empting the REST stack before any permission_callback runs,
+   which cannot tell the billing app apart from an anonymous stranger. An
+   assertion phrased "it refuses" passes on both and measures nothing.
+
+   WHAT WAS ACTUALLY BROKEN, per route: /sync-customer dead means a tester who
+   has just paid with a real card waits up to five minutes for the sweep;
+   /send-gift-codes dead means a paid-for gift never arrives; and
+   /send-gift-recipient — which #203's issue did not name, and enumerating the
+   controller found — is what Send / Resend / Reassign on the buyer's My Gifts
+   dashboard calls, so those buttons reported success and mailed nobody.
+   `WpGiftMailer::post()` is best-effort by design, so none of it surfaced. */
+section( '§K10 #203 the three server-to-server routes answer for themselves' );
+
+$syncEx = LGMS\Wp\RestController::exemptSyncCustomerFromBuddyBossRestriction( [] );
+$giftEx = LGMS\Wp\RestController::exemptGiftCodesFromBuddyBossRestriction( [] );
+$recpEx = LGMS\Wp\RestController::exemptGiftRecipientFromBuddyBossRestriction( [] );
+
+is_( $syncEx === [ '/lg-member-sync/v1/sync-customer' ],
+     'K10a /sync-customer is exempted, and it is the ONLY route that filter names' );
+is_( $giftEx === [ '/lg-member-sync/v1/send-gift-codes' ],
+     'K10b /send-gift-codes is exempted, and it is the ONLY route that filter names' );
+is_( $recpEx === [ '/lg-member-sync/v1/send-gift-recipient' ],
+     'K10c /send-gift-recipient is exempted, and it is the ONLY route that filter names' );
+
+/* CONDITION 3, PER FILTER. Each of the three must survive the same four ways
+   the two precedents do, or the newest exemption is the weakest link. */
+foreach ( [
+    'sync-customer'       => 'exemptSyncCustomerFromBuddyBossRestriction',
+    'send-gift-codes'     => 'exemptGiftCodesFromBuddyBossRestriction',
+    'send-gift-recipient' => 'exemptGiftRecipientFromBuddyBossRestriction',
+] as $name => $fn ) {
+    $cb   = [ LGMS\Wp\RestController::class, $fn ];
+    $once = $cb( [] );
+    is_( $cb( 'not-an-array' ) === 'not-an-array',
+         "K10d $name — a non-array filter value is handed back untouched" );
+    is_( count( $cb( $once ) ) === 1,
+         "K10e $name — idempotent, so a double-registered filter does not duplicate" );
+    is_( $cb( [ '/buddyboss/v1/members' ] ) === [ '/buddyboss/v1/members', $once[0] ],
+         "K10f $name — appends rather than replacing another plugin's entries" );
+    is_( count( $once ) === 1,
+         "K10g $name — one route wide, so the repair cannot widen by editing a list" );
+}
+
+/* CONDITION 1: the routes' OWN secret check is untouched. All three share
+   RestController::auth(), so this is one function and three routes.
+
+   ⚠️ ASSERT THE COMPARISON, NOT THE KEY NAME — the #193 lesson. A check for the
+   string 'lgms_shared_secret' passes on `return true;` sitting underneath it. */
+/* ⚠️ `'auth'` HERE WOULD MEASURE `authLoggedInUser()`. fn_body() finds the
+   first `function <name>` by prefix, and RestController declares
+   authLoggedInUser() and authAdmin() ABOVE auth() — so the obvious spelling
+   silently asserts hash_equals about the WRONG function, and passes, because
+   that one has a nonce check and no hash_equals at all (it would have FAILED
+   here, which is how this was caught — a prefix hit that passes is the shape
+   that gets shipped). The open paren pins it. Same family as #193's §10
+   selector regex whose `[^{}]*` let a `-DISABLED` suffix read as a match. */
+$authFn = fn_body( $restSrc, 'auth(' );
+is_( $authFn !== '', 'K10h RestController::auth() is still there to assert about' );
+is_( strpos( $authFn, 'hash_equals(' ) !== false,
+     'K10i the three routes still compare the secret with hash_equals' );
+is_( strpos( $authFn, "\$expected === ''" ) !== false && strpos( $authFn, 'return false;' ) !== false,
+     'K10j ...and an UNCONFIGURED secret is still CLOSED, never open' );
+
+/* Executed, not read: an empty secret must refuse even a caller that presents
+   an empty token, which is the shape a misconfigured box actually produces. */
+$GLOBALS['OPTS']['lgms_shared_secret'] = '';
+is_( LGMS\Wp\RestController::auth( new WP_REST_Request( [], [ 'x-lgms-token' => '' ] ) ) === false,
+     'K10k an unconfigured box refuses an empty token — proven by running it, not by reading it' );
+$GLOBALS['OPTS']['lgms_shared_secret'] = 'the-real-secret';
+is_( LGMS\Wp\RestController::auth( new WP_REST_Request( [], [ 'x-lgms-token' => 'the-real-secret' ] ) ) === true,
+     'K10l ...and the correct secret is still accepted — a fence that refuses the caller is an outage' );
+is_( LGMS\Wp\RestController::auth( new WP_REST_Request( [], [ 'x-lgms-token' => 'the-real-secre' ] ) ) === false,
+     'K10m ...and a near-miss is refused, so the exemption did not become the auth' );
+
+/* ⚠️ THE PERMISSION CALLBACK MUST STILL BE auth(). The exemption lifts a
+   blanket pre-emption; if a tidy-up ever also relaxed one of these routes to
+   __return_true, THAT is the auth bypass this whole arrangement is not. */
+$regBody = fn_body( $restSrc, 'register' );
+foreach ( [ 'sync-customer', 'send-gift-codes', 'send-gift-recipient' ] as $r ) {
+    $slice = substr( $regBody, (int) strpos( $regBody, "'/$r'" ) );
+    $slice = substr( $slice, 0, (int) strpos( $slice, '] );' ) );
+    is_( strpos( $slice, "[ self::class, 'auth' ]" ) !== false,
+         "K10n /$r is STILL shared-secret — the exemption is not the authentication" );
+    is_( strpos( $slice, '__return_true' ) === false,
+         "K10o ...and did not quietly become public in the same edit" );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   §K11  THE ROUTE LIST CANNOT DRIFT FROM THE ROUTES
+   ═══════════════════════════════════════════════════════════════════════════
+
+   #203 gave the health panel `RestController::SECRET_ROUTES` so an operator can
+   see which shared-secret routes are still behind the 401 — subtracted from what
+   the filters return, rather than from a sentence somebody keeps up to date. The
+   sentence it replaced had been wrong since #193.
+
+   ⚠️ THAT ONLY WORKS IF THE CONSTANT MATCHES register(). A route added with
+   `auth` and not added here would be invisible to the panel in exactly the way
+   the old sentence was — the same defect, one indirection along. So the constant
+   is asserted against the file, both directions. */
+section( '§K11 SECRET_ROUTES matches the routes that actually use auth()' );
+
+preg_match_all(
+    "#register_rest_route\(\s*self::NAMESPACE\s*,\s*'([^']+)'\s*,\s*\[(.*?)\]\s*\);#s",
+    $regBody, $mm, PREG_SET_ORDER
+);
+$declaredSecret = [];
+foreach ( $mm as $m ) {
+    if ( strpos( $m[2], "[ self::class, 'auth' ]" ) !== false ) {
+        $declaredSecret[] = '/lg-member-sync/v1' . $m[1];
+    }
+}
+sort( $declaredSecret );
+$constSecret = LGMS\Wp\RestController::SECRET_ROUTES;
+sort( $constSecret );
+
+is_( $declaredSecret !== [], 'K11a register() was parsed — an empty parse would pass everything below vacuously' );
+is_( count( $declaredSecret ) === 4,
+     'K11b register() declares FOUR shared-secret routes — the number #181 reported, measured not remembered' );
+is_( $constSecret === $declaredSecret,
+     'K11c SECRET_ROUTES is exactly those four — a new one cannot go unmentioned on the health panel' );
+
+/* AND THE OPEN/SHUT SPLIT IS THE RULING, executed. */
+$allOpen = [];
+foreach ( [
+    [ LGMS\Wp\CheckoutAudienceRestController::class, 'exemptFromBuddyBossRestriction' ],
+    [ LGMS\Wp\PatreonStandingRestController::class,  'exemptFromBuddyBossRestriction' ],
+    [ LGMS\Wp\RestController::class, 'exemptAuthFromBuddyBossRestriction' ],
+    [ LGMS\Wp\RestController::class, 'exemptSyncCustomerFromBuddyBossRestriction' ],
+    [ LGMS\Wp\RestController::class, 'exemptGiftCodesFromBuddyBossRestriction' ],
+    [ LGMS\Wp\RestController::class, 'exemptGiftRecipientFromBuddyBossRestriction' ],
+] as $cb ) { $allOpen = $cb( $allOpen ); }
+
+is_( count( $allOpen ) === 7,
+     'K11d the six filters open SEVEN routes between them — /auth carries its alias' );
+is_( array_values( array_diff( $constSecret, $allOpen ) ) === [ '/lg-member-sync/v1/run-now' ],
+     'K11e exactly /run-now is still behind the 401 — ops-only, cron-covered, whole-Tick exposure' );
 
 /* ═══ verdict ═════════════════════════════════════════════════════════════ */
 

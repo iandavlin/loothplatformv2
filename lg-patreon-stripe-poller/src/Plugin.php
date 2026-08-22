@@ -259,12 +259,11 @@ final class Plugin
 
         // THE PASSWORD DOOR, ANSWERING FOR ITSELF (#193). Same hook, same
         // one-route-at-a-time discipline: this names `/auth` and its alias
-        // `/gift-auth` and nothing else, so `/sync-customer`,
-        // `/send-gift-codes` stays restricted exactly as #181 left it, and
-        // `/sync-customer` with it — the five-minute Sync::all() sweep covers
-        // the first and nothing is waiting on the second. `/patreon-standing`
-        // was opened on #193's rider once its flag went ON; see that
-        // controller. Without it a tester listed by ADDRESS reaches
+        // `/gift-auth` AND NOTHING ELSE. `/patreon-standing` was opened on
+        // #193's rider once its flag went ON, and `/sync-customer` and
+        // `/send-gift-codes` on #203 — each by its OWN filter below, never by
+        // a route being tacked onto this list. Without it a tester listed by
+        // ADDRESS reaches
         // /lgjoin/, presses Continue and is told "Sign-in failed" — the route
         // that creates their account answers 401 to anon. The route's own
         // hardening is untouched; see RestController for what that is and for
@@ -272,6 +271,49 @@ final class Plugin
         add_filter(
             'bb_exclude_endpoints_from_restriction',
             [ Wp\RestController::class, 'exemptAuthFromBuddyBossRestriction' ]
+        );
+
+        // THE DEAD SERVER-TO-SERVER ROUTES (#203, keeper 2026-08-22). All three
+        // answered 401 bb_rest_authorization_required to the billing app holding
+        // the CORRECT shared secret, measured on dev2 from 127.0.0.1.
+        //   /sync-customer       dead means a tester who has just paid with a
+        //                        real card waits up to five minutes for the
+        //                        sweep to notice; #181's "the sweep covers it"
+        //                        was true of the grant and never of the person.
+        //   /send-gift-codes     dead means a paid-for gift never arrives, and
+        //                        WpGiftMailer::post() is best-effort, so nothing
+        //                        anywhere says so.
+        //   /send-gift-recipient the issue named two; enumerating the controller
+        //                        found this third one behind the same wall and
+        //                        the same auth(). It is what Send / Resend /
+        //                        Reassign on the buyer's My Gifts dashboard
+        //                        calls, so opening its twin alone would have made
+        //                        a gift arrive when bought and vanish when
+        //                        resent, the button reporting success both times.
+        //                        Keeper widened #203 rather than let the count
+        //                        stand.
+        //
+        // ⚠️ THREE FILTERS, EACH NAMING ONE ROUTE — six on this hook now, and
+        // gate 86 COUNTS them. A seventh has to be a decision somebody writes
+        // down, never a route appended to a neighbour's list. Unconditional,
+        // like #181's and unlike #193's rider, because these routes are
+        // unconditional too: there is no flag here to read wrong twice.
+        //
+        // /run-now is deliberately NOT here — ops-only, cron-covered, and what
+        // it exposes is a whole Tick. RestController::SECRET_ROUTES minus what
+        // these filters return is what the health panel shows, so that stays a
+        // visible decision instead of becoming folklore.
+        add_filter(
+            'bb_exclude_endpoints_from_restriction',
+            [ Wp\RestController::class, 'exemptSyncCustomerFromBuddyBossRestriction' ]
+        );
+        add_filter(
+            'bb_exclude_endpoints_from_restriction',
+            [ Wp\RestController::class, 'exemptGiftCodesFromBuddyBossRestriction' ]
+        );
+        add_filter(
+            'bb_exclude_endpoints_from_restriction',
+            [ Wp\RestController::class, 'exemptGiftRecipientFromBuddyBossRestriction' ]
         );
 
         // Front-end shortcodes (gift redemption etc.).

@@ -114,6 +114,11 @@ foreach ( [
 
 $OPTS    = [];
 $FILTERS = [];
+/* What the exclusion hook returns, per scenario. The default below is the SIX
+   routes the three controllers' filters name on main after #203 — never a
+   transcription kept in step by hand: §J asserts it against the filters
+   themselves, so this constant cannot quietly disagree with the code. */
+$FILTER_VALUES = [];
 $PROBE   = [ 'code' => 200, 'body' => '{"state":"allowlist","allowed":false}' ];
 
 function get_option( $k, $d = false ) { global $OPTS; return array_key_exists( $k, $OPTS ) ? $OPTS[ $k ] : $d; }
@@ -127,7 +132,16 @@ function esc_html( $s ) { return htmlspecialchars( (string) $s, ENT_QUOTES, 'UTF
 function esc_attr( $s ) { return htmlspecialchars( (string) $s, ENT_QUOTES, 'UTF-8' ); }
 function esc_url( $s )  { return htmlspecialchars( (string) $s, ENT_QUOTES, 'UTF-8' ); }
 function wp_kses_post( $s ) { return (string) $s; }
-function apply_filters( $tag, $value ) { return $value; }
+/* ⚠️ apply_filters USED TO RETURN $value UNCHANGED, WHICH MADE THE HOOK
+   UNMEASURABLE (#203). Health now ASKS the exclusion hook which routes are
+   exempted rather than carrying a sentence about it, so a stub that always
+   answers "nothing" would have the panel report zero exempted routes on a
+   healthy box and no assertion could tell that apart from the real thing.
+   $FILTER_VALUES lets each scenario say what the hook actually returns. */
+function apply_filters( $tag, $value ) {
+    global $FILTER_VALUES;
+    return array_key_exists( $tag, $FILTER_VALUES ) ? $FILTER_VALUES[ $tag ] : $value;
+}
 function has_filter( $tag, $fn = false ) { global $FILTERS; return in_array( $tag, $FILTERS, true ) ? 10 : false; }
 function sanitize_key( $k ) { return preg_replace( '/[^a-z0-9_\-]/', '', strtolower( (string) $k ) ); }
 
@@ -199,6 +213,13 @@ require $GATE_ROOT . '/lg-patreon-stripe-poller/src/CohortAllowlist.php';
 require $GATE_ROOT . '/lg-patreon-stripe-poller/src/Log.php';
 require $GATE_ROOT . '/lg-patreon-stripe-poller/src/Membership/CheckoutAudience.php';
 require $GATE_ROOT . '/lg-patreon-stripe-poller/src/StripePrice.php';
+/* #203 — Health's channel check now asks RestController which shared-secret
+   routes exist, instead of carrying a hand-kept sentence that was two lanes out
+   of date. Without this require that call is a FATAL, and this plugin's test
+   files have died at exit 255 with no FAIL line three times already. */
+require $GATE_ROOT . '/lg-patreon-stripe-poller/src/Wp/RestController.php';
+require $GATE_ROOT . '/lg-patreon-stripe-poller/src/Wp/CheckoutAudienceRestController.php';
+require $GATE_ROOT . '/lg-patreon-stripe-poller/src/Wp/PatreonStandingRestController.php';
 require $GATE_ROOT . '/lg-patreon-stripe-poller/src/Membership/Health.php';
 require $GATE_ROOT . '/lg-patreon-stripe-poller/src/HealthPanel.php';
 
@@ -252,8 +273,34 @@ function healthy_env( array $over = [] ): string {
  * assertions after it then measure a default nobody chose — the exact shape
  * that reddened four neighbouring gates on #181.
  */
-function scenario( string $envPath, array $opts = [], array $probe = [], array $filters = [ 'bb_exclude_endpoints_from_restriction' ] ): array {
-    global $OPTS, $PROBE, $FILTERS;
+/**
+ * Run the REAL exemption filters, exactly as WordPress would, and return what
+ * they collectively produce.
+ *
+ * ⚠️ NOT A LIST TYPED OUT HERE. A hand-kept copy is a second place to be wrong,
+ * and being wrong in exactly this way — a sentence about which routes are open,
+ * left behind by two lanes — is the defect #203 found in the panel this gate
+ * measures. Calling the filters means the fixture moves when the code moves.
+ *
+ * @return list<string>
+ */
+function real_exemptions(): array {
+    $out = [];
+    foreach ( [
+        [ LGMS\Wp\CheckoutAudienceRestController::class, 'exemptFromBuddyBossRestriction' ],
+        [ LGMS\Wp\PatreonStandingRestController::class,  'exemptFromBuddyBossRestriction' ],
+        [ LGMS\Wp\RestController::class, 'exemptAuthFromBuddyBossRestriction' ],
+        [ LGMS\Wp\RestController::class, 'exemptSyncCustomerFromBuddyBossRestriction' ],
+        [ LGMS\Wp\RestController::class, 'exemptGiftCodesFromBuddyBossRestriction' ],
+        [ LGMS\Wp\RestController::class, 'exemptGiftRecipientFromBuddyBossRestriction' ],
+    ] as $cb ) {
+        $out = $cb( $out );
+    }
+    return $out;
+}
+
+function scenario( string $envPath, array $opts = [], array $probe = [], array $filters = [ 'bb_exclude_endpoints_from_restriction' ], ?array $exempted = null ): array {
+    global $OPTS, $PROBE, $FILTERS, $FILTER_VALUES;
     $GLOBALS['DB_BROKEN'] = false;
     Db::wipe();
     Health::reset();
@@ -269,6 +316,9 @@ function scenario( string $envPath, array $opts = [], array $probe = [], array $
     ], $opts );
     $PROBE   = $probe === [] ? [ 'code' => 200, 'body' => '{"state":"allowlist","allowed":false}' ] : $probe;
     $FILTERS = $filters;
+    /* The real filters, run for real — the union of what the three controllers
+       actually append, so this can never drift from the code under test. */
+    $FILTER_VALUES = [ 'bb_exclude_endpoints_from_restriction' => $exempted ?? real_exemptions() ];
     $_SERVER['LG_HEALTH_APP_ENV'] = $envPath;
     putenv( 'LG_HEALTH_APP_ENV=' . $envPath );
     recording_started( gmdate( 'Y-m-d H:i:s', time() - 86400 * 14 ) );
@@ -287,6 +337,25 @@ function words( array $c ): string {
     $s = $c['summary'];
     foreach ( $c['lines'] as $l ) { $s .= ' | ' . $l['label'] . ': ' . $l['value']; }
     return $s;
+}
+
+/**
+ * ONE named line's value, so an assertion can be about THAT LINE rather than
+ * about every word the check rendered.
+ *
+ * ⚠️ IT EXISTS BECAUSE words() MADE AN ASSERTION VACUOUS (#203, found by the
+ * red-first, not by review). "The open routes are not on the still-shut line"
+ * was written against words(), which concatenates every line — and the
+ * roll-call line names all of them a few characters earlier, so the phrase was
+ * always present and the assertion could never fail. Mutating the panel to
+ * report EVERY secret route as still shut left it green. Ask a line, not a
+ * blob.
+ */
+function line_value( array $c, string $labelFragment ): string {
+    foreach ( $c['lines'] as $l ) {
+        if ( stripos( $l['label'], $labelFragment ) !== false ) { return (string) $l['value']; }
+    }
+    return '';
 }
 
 function render_panel(): string {
@@ -710,6 +779,60 @@ is_( ( $GLOBALS['PROBE_OPTS']['timeout'] ?? 99 ) <= 5,
      'F9c and it is capped at a few seconds so a dead channel cannot hang the admin page' );
 is_( in_array( 'X-LGMS-Token: ' . APP_SHARED, (array) ( $GLOBALS['PROBE_OPTS']['headers'] ?? [] ), true ),
      'F9d and it authenticates with the shared secret, which is what makes a 200 meaningful' );
+
+/* ── #203: THE ROLL-CALL, because the sentence it replaced was a lane behind ──
+   This panel said "checkout-audience is exempted" from #181 until #203, by
+   which time #193 and its rider had opened three more routes. An operator
+   reading it would have concluded the rest were shut while two of them were
+   open — the health panel failing its one job, quietly, with every assertion
+   above it still green. What follows measures the roll-call against the REAL
+   filters, and the still-shut line against RestController's own list. */
+$d = scenario( healthy_env() );
+$w = words( chk( $d, 'channel' ) );
+foreach ( real_exemptions() as $open ) {
+    is_( str_contains( $w, $open ),
+         'F10 the roll-call names ' . $open . ' — every route the filters actually open' );
+}
+is_( str_contains( $w, count( real_exemptions() ) . ' route(s) exempted' ),
+     'F10b ...and counts them, so "an exemption is registered" stops meaning "the one I remember"' );
+
+/* ⚠️ THE ASSERTION THAT BITES IS THE STILL-SHUT ONE. "It names the open routes"
+   would pass on a panel that names ALL of them, which is the pre-#203 failure
+   inverted; what an operator needs is the DIFFERENCE. /run-now is what #203
+   deliberately left shut, so it must appear here and nowhere in the open list. */
+is_( str_contains( line_value( chk( $d, 'channel' ), 'still behind' ), '/lg-member-sync/v1/run-now' ),
+     'F10c the still-shut line names /run-now — #203 shut it on purpose, so it must stay visible' );
+is_( ! in_array( '/lg-member-sync/v1/run-now', real_exemptions(), true ),
+     'F10d ...and nothing exempted it behind the panel\'s back' );
+/* ⚠️ THESE TWO LEGS WERE ONE LEG, AND IT MEASURED NOTHING. It read
+   "$opened is OPEN after #203 — so it is not on the still-shut line" and then
+   asked only real_exemptions(), which is a fact about the FILTERS. The panel
+   could report all four routes as still shut and it stayed green — proven, by
+   the mutation that does exactly that. The claim about the LINE has to be
+   asked of the line. */
+$shutLine = line_value( chk( $d, 'channel' ), 'still behind' );
+is_( $shutLine !== '', 'F10e the still-shut line is rendered at all — an absent line passes every absence below' );
+foreach ( [ '/lg-member-sync/v1/sync-customer',
+            '/lg-member-sync/v1/send-gift-codes',
+            '/lg-member-sync/v1/send-gift-recipient' ] as $opened ) {
+    is_( in_array( $opened, real_exemptions(), true ),
+         'F10e2 ' . $opened . ' is OPEN after #203 — asked of the filters' );
+    is_( ! str_contains( $shutLine, $opened ),
+         'F10e3 ...and the still-shut LINE does not name it — asked of the line' );
+}
+$shutCount = count( array_diff( LGMS\Wp\RestController::SECRET_ROUTES, real_exemptions() ) );
+is_( $shutCount === 1,
+     'F10f exactly ONE shared-secret route is still behind the 401, and it is a decision, not a leftover' );
+
+/* AND IT IS ASKED, NOT TRANSCRIBED. A panel holding its own copy of the route
+   list is the same defect one indirection along. */
+$healthSrcRoll = php_code_only( $GATE_ROOT . '/lg-patreon-stripe-poller/src/Membership/Health.php' );
+is_( str_contains( $healthSrcRoll, "apply_filters( 'bb_exclude_endpoints_from_restriction'" ),
+     'F10g the panel RUNS the hook — it does not carry a sentence about it' );
+is_( str_contains( $healthSrcRoll, 'RestController::SECRET_ROUTES' ),
+     'F10h and takes the route list from RestController, beside the routes themselves' );
+is_( ! preg_match( '#[\'"]/lg-member-sync/v1/(run-now|sync-customer|send-gift)#', $healthSrcRoll ),
+     'F10i and hardcodes no route of its own, so a new one cannot go unmentioned' );
 
 /* THE CONVENTION IT FOLLOWS, asserted by source: this plugin requires raw curl
    with CURLOPT_RESOLVE for every server-to-server hop — wp_remote_post is

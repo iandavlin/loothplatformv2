@@ -296,7 +296,12 @@
   one); surgical, its own filter on its own controller; and **gate 86's
   still-restricted list shrank DELIBERATELY** — `/sync-customer` and
   `/send-gift-codes` stay shut, the sweep covers the first, nothing waits on the
-  second. **This supersedes #181's one-route-only condition**, and the gate says
+  second. ✅ **BOTH WERE OPENED BY #203 (8/22)**, along with
+  `/send-gift-recipient`, which #181 and #193 both missed; "nothing waits on the
+  second" turned out to be a purchasable product waiting on it. Only `/run-now`
+  is still shut. See State (8/22, #203) above — this line is kept because the
+  *ruling* it records (one filter per route, count updated deliberately) is what
+  #203 followed. **This supersedes #181's one-route-only condition**, and the gate says
   so in its own comment so the change reads as decided rather than drifted.
 - ⚠️ **THE FILTER IS UNCONDITIONAL THOUGH THE ROUTE IS FLAG-GATED.** Naming a
   route that does not exist changes nothing — WordPress 404s it either way, so
@@ -432,7 +437,11 @@
   correctly and the rehearsal still impossible. Exempted through BuddyBoss's own
   `bb_exclude_endpoints_from_restriction`, naming `/auth` and `/gift-auth` and
   **nothing else**; `/sync-customer`, `/patreon-standing` and `/send-gift-codes`
-  stay shut exactly as #181 left them (gate 86 §K3). **The route's own hardening
+  stay shut exactly as #181 left them (gate 86 §K3). ⚠️ **SUPERSEDED — all three
+  are open now** (`/patreon-standing` on #193's own rider, the other two plus
+  `/send-gift-recipient` on #203), each by its OWN filter. What §K3 still
+  asserts, and what stayed true, is that the `/auth` filter never grew to hold
+  any of them. **The route's own hardening
   is untouched** — per-IP 20/hour, per-email 5 fails/15min, `is_email()`, the
   8-character minimum, `wp_check_password()` — and §K asserts each COMPARISON,
   not the key names. **The same 401 is why a gift recipient with no account
@@ -481,6 +490,106 @@
   verified over HTTP until it is merged** — the `/auth` 401 above was measured
   against main and is the state that will change on the pull. Live writes stay
   his.
+## State (8/22, #203 — the last dead server-to-server routes, and the count was wrong)
+
+- **WHAT THIS CLOSES:** #181 measured four shared-secret routes in
+  `lg-member-sync/v1` answering **401 `bb_rest_authorization_required`** to
+  their own secret-bearing callers and opened one. #193 opened `/auth` +
+  `/gift-auth`; its rider opened `/patreon-standing`. #203 opens the rest bar
+  one. Measured on dev2 from 127.0.0.1 **with the correct 64-char
+  `lgms_shared_secret`**, before and after, in the same process:
+
+  | route | before | after |
+  |---|---|---|
+  | `/sync-customer` | 401 `bb_rest_authorization_required` | 400 `{"ok":false,"error":"customer_id required"}` |
+  | `/send-gift-codes` | 401 `bb_rest_authorization_required` | 400 `{"ok":false,"error":"to_email and codes required"}` |
+  | `/send-gift-recipient` | 401 `bb_rest_authorization_required` | 400 `{"ok":false,"error":"recipient_email missing or invalid"}` |
+  | any of the three, wrong or absent secret | 401 `bb_rest_authorization_required` | **401 `rest_forbidden`** — our own check |
+  | `/run-now` | 401 `bb_rest_authorization_required` | **unchanged, on purpose** |
+
+- ⚠️ **THE ISSUE SAID TWO AND THE FILE SAID THREE.** #203 was written naming
+  `/sync-customer` and `/send-gift-codes`. Enumerating `RestController` instead
+  of trusting the count found **`/send-gift-recipient`** behind the same wall,
+  behind the same `auth()`, **in the same flow as the second**: Slim's
+  `WpGiftMailer::sendOneRecipient()` calls it for the **Send / Resend /
+  Reassign** buttons on the buyer's My Gifts dashboard. Opening its twin alone
+  would have made a gift **arrive when bought and vanish when resent**, and
+  `WpGiftMailer::post()` is best-effort by design — errors logged, never raised
+  — so the button reports success both times. Keeper ruled it in and widened the
+  issue (3 → **6** filters, not 3 → 5). **A count in an issue is a starting
+  point, not a measurement.**
+- **`/run-now` STAYS SHUT, AND THAT IS A DECISION.** Same 401, same correct
+  secret. Ops-only, nothing but a person calls it, the five-minute cron does its
+  job, and what it exposes is a **whole Tick** — so it is the one route where
+  #181's *"the sweep covers it"* is still the true sentence. It is also now
+  **M33's wrong-decision mutation**: appending it to a neighbour's filter is
+  exactly the widening keeper's condition 3 forbids.
+- ⚠️ **READ THE CODE, NOT THE NUMBER — both refusals are 401.**
+  `rest_forbidden` is the route's OWN secret check saying no, which is healthy.
+  `bb_rest_authorization_required` is BuddyBoss pre-empting the REST stack at
+  `rest_request_before_callbacks` (priority 100) before any
+  `permission_callback` runs, which **cannot tell the billing app apart from an
+  anonymous stranger**. An assertion phrased *"it refuses"* passes on both and
+  measures nothing. The mechanism is an **exact** `in_array()` against
+  `$request->get_route()` (`bb_restricate_rest_api`,
+  `bp-core/bp-core-functions.php`), so the constants must be the route pattern
+  to the character.
+- **IT IS A REPAIR, NOT A BYPASS, and here that is easier to hold than it was
+  for `/auth`.** All three carry `permission_callback => auth()`, which requires
+  a **configured** secret and compares with `hash_equals`. Untouched. Only
+  *which* check refuses changes. Gate 86 §K10n/§K10o pin that none of the three
+  quietly became `__return_true` in the same edit — the single change that would
+  turn this into the thing it is not — and §K10k/§K10l/§K10m **execute**
+  `auth()` rather than reading it.
+- **THREE FILTERS, ONE PER ROUTE, SHARING ONE PRIVATE APPENDER.** A single
+  combined filter would be smaller and would make the next widening invisible.
+  `appendExemption()` is what keeps them from drifting on the three things that
+  matter: a non-array is handed back untouched, entries are appended not
+  replaced, and it is idempotent. **It takes one route and cannot take a list.**
+- **`RestController::SECRET_ROUTES` IS NEW, AND IT IS WHY THE PANEL CAN STOP
+  LYING.** The health panel's channel line said *"checkout-audience is
+  exempted"* from #181 until #203 — by which time #193 and its rider had opened
+  three more, so an operator would have read the rest as shut while two were
+  open. **The health panel failing its one job, quietly, with every assertion
+  above it green.** It now **runs the hook** for the roll-call and subtracts it
+  from `SECRET_ROUTES` for the still-shut line, so neither can be kept up to
+  date by hand. Gate 86 §K11 asserts that constant against `register()` in both
+  directions, so a shared-secret route added and never named is a RED.
+- **#203 BUILT** on `203-route-exemptions`. **No flag** — the routes are
+  unconditional, so unlike #193's rider there is no second place to read one
+  wrong. Gate **86** at 261 assertions (§K10 + §K11 new, §K3 re-aimed, §K3j/§K9b
+  3 → 6), gate **91** at 121 (§F10, the roll-call), red-first **58/58 + 5
+  no-op controls**.
+- **RE-RUNNABLE PROOF:** `tools/verify/203-route-exemptions-verify.php` loads
+  the branch's filter code, asks it for the route strings, and drives them
+  through BuddyBoss's **real** restriction function via `rest_do_request()` —
+  filters off, then on, in one process. Side-effect free by construction: every
+  request carries no body, so each route refuses at its own required-parameter
+  guard. **No customer is synced and no gift mail is sent.**
+- ⚠️ **FOUR GATE DEFECTS FOUND BY RED-FIRST, NONE BY REVIEW**, and three were in
+  this lane's own work: **(1)** my §F10e read *"the still-shut LINE does not
+  name it"* and asked `real_exemptions()` — a fact about the **filters**. The
+  panel could report all four routes as shut and it stayed green (M58 proves
+  it); gate 91 gained `line_value()`, because `words()` concatenates every line
+  and the roll-call names them all a few characters earlier. **Ask a line, not a
+  blob.** **(2)** `fn_body('auth')` **PREFIX-MATCHES** and returned
+  `authLoggedInUser()`'s body, so §K10i asserted `hash_equals` about the wrong
+  function — it FAILED rather than passing, which was luck: that function has a
+  nonce check and no `hash_equals` at all. Pin the open paren. **(3)** gate 91's
+  `apply_filters` stub returned `$value` unchanged, which made the hook
+  **unmeasurable** — a stub that always answers "nothing" cannot be told apart
+  from a panel that finds nothing. **(4)** M18 and M33 both used
+  `/sync-customer` as their widening mutation; after this lane that is a
+  *legitimate* exemption spelled differently, so both had to be re-aimed at
+  `/run-now` or they would have stopped modelling a wrong decision at all.
+- **Owed:** nothing member-facing to look at — this is a server-to-server
+  repair. On merge, the dev2 serve picks it up on the pull with no config
+  coupling and no symlink change (the poller mu-plugin is already symlinked into
+  the serving checkout). **On LIVE it changes nothing yet**, because live's
+  `lgms_shared_secret` is still **ABSENT** (see #192's measurements) — the
+  routes will answer `rest_forbidden` to everyone until Ian sets it. That is the
+  same go-live blocker #192 already recorded, not a new one.
+
 ## State (8/22, #196 — a Patreon payer is offered SWITCH, never JOIN)
 
 - **THE LAW THIS ADDS (Ian 8/22, verbatim):** *"Can you check and see if a user
@@ -688,10 +797,14 @@
   `lgms_stripe_webhook_secret` is **ABSENT in WordPress**. Inert today (the WP
   webhook ingest is behind `lgms_stripe_lifecycle`, off everywhere) and a real
   disagreement the moment it is not.
-- ⚠️ **BuddyBoss is still eating the route the billing app calls after every
-  checkout.** Loopback with the real secret: `checkout-audience` → **200**
-  (#181's exemption works), `sync-customer` → **401
-  `bb_rest_authorization_required`**. Reported, not opened, per #181.
+- ✅ **CLOSED BY #203 (8/22).** This read: *"BuddyBoss is still eating the route
+  the billing app calls after every checkout — loopback with the real secret,
+  `checkout-audience` → 200, `sync-customer` → 401
+  `bb_rest_authorization_required`. Reported, not opened, per #181."* Re-measured
+  the same way after #203, `sync-customer` answers its own 400 and refuses a
+  wrong secret with `rest_forbidden`. `/send-gift-codes` and
+  `/send-gift-recipient` went with it; only `/run-now` is still behind that
+  wall, deliberately. See State (8/22, #203).
 - ⚠️ **`APP_DEBUG=true` in dev2's billing app** — found by the panel on its
   first real run, and not previously written down anywhere. It displays errors
   to visitors. Harmless on dev2, a real problem if that shape reaches live.
@@ -1376,11 +1489,13 @@ Anonymous, over loopback, in the `lg-member-sync/v1` namespace:
 
 | Route | Code | Means |
 |---|---|---|
-| `sync-customer` | `bb_rest_authorization_required` | BuddyBoss's blanket wall |
+| `sync-customer` | `bb_rest_authorization_required` | BuddyBoss's blanket wall — ⚠️ **fixed by #203**; post-merge this route answers `rest_forbidden` to an anonymous caller, like the row below |
 | `checkout-audience` | `rest_forbidden` | **past the wall**, refused by its own token check — healthy |
 
 `checkout-audience`, `patreon-standing` and `auth`/`gift-auth` each register a
-narrow exemption; **`sync-customer` does not**, and live's public-content list
+narrow exemption; **`sync-customer` did not until #203 gave it one** (with
+`/send-gift-codes` and `/send-gift-recipient`; only `/run-now` is still without).
+Live's public-content list
 still holds only `looth/v1`, `looth-internal/v1` and a wc URL. Reading one 401 as
 proof of anything is the trap — read the CODE.
 ## What a Loothprint's tier actually gates (Ian 2026-08-22, #199)
