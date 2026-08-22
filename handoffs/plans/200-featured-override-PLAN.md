@@ -73,7 +73,27 @@ them render**:
 tracked default to `false` with no `.local.php` reader would take the band off
 **dev2** as well. The reader has to be built in the same change.
 
-### C. Also measured, for scale
+### C. The fix's premise, measured before building it
+
+The pinned resolver's query is the shipped one minus `featured_opt_in = true`.
+Run read-only against dev2 for Ian's own pick:
+
+    id 1390 · jonathan-scott-chisels-picks · has_avatar t · glance (none)
+    header members · business_name "Chisels & Picks" · featured_opt_in **f**
+
+So **the pinned card draws** — photo, name, profile link, no role line — which
+is the picture in the mock. Two things fall out of that row:
+
+- **dev2 already holds the perfect fixture and I do not need to invent one.**
+  On dev2 this member has `featured_opt_in = false`; on **live** the same
+  member is `true`. The boxes disagree, so gate 94 must **read** the opt-in
+  state rather than assume it — asserting "not opted in" as a constant would
+  pass on dev2 and be wrong about live.
+- **1,921 members on dev2 are pinnable and have a photo.** The picker is a
+  search box over a real population, which is why the plan does not offer a
+  dropdown.
+
+### D. Also measured, for scale
 
 - dev2: 1,934 public members, **8 opted in**. Live: 1,888 + **6 opted in**.
   A pin picker over ~1,900 members is a **search box**, not a dropdown.
@@ -152,11 +172,21 @@ member set themselves" would have been the silent reading; this is the loud one.
    reclassify a consented pick as one of Ian's. This is the same discipline
    `consent_ack` already documents for exactly the same reason, and it is why
    that comment says "explicitly false included".
-4. **`lg_resolve_featured_member()`** takes a `$pinned` argument: drops
+4. **The pinned rule goes INSIDE the existing pure function, not beside it.**
+   Gate 39 §G3 lifts `lg_fm_card_role()` out of `index.php` **by name** with
+   `_extract_php_fn()` and executes it over a truth table — "a rule read out of
+   a file is not a rule that ran". So `$pinned` becomes a parameter of *that*
+   function (defaulting `false`, which keeps §G3's existing table valid
+   unchanged) rather than a second function that would have to be kept in step
+   with it by hand. Gate 94 then adds the pinned rows to the same lifted
+   function. **One rule, one place, two gates executing it.** The function stays
+   free of every DB call, config read and global, because that is what makes it
+   liftable at all.
+5. **`lg_resolve_featured_member()`** takes a `$pinned` argument: drops
    `featured_opt_in = true` from the WHERE, keeps `profile_visibility='public'`,
    forces the consent republication rule to *off* for the glance, and skips the
    avatar/role card-ready guard.
-5. **The card template** guards `.lg-fm__avi` and `.lg-fm__role` with `!empty()`,
+6. **The card template** guards `.lg-fm__avi` and `.lg-fm__role` with `!empty()`,
    the way `where`/`bio` already are. Byte-identical for every card that has
    both — which is every card rendering today.
 
