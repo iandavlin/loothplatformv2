@@ -187,3 +187,45 @@ own 6-per-email / 21-per-IP-per-hour 429 throttle either way. (3) PHP's
 `FILTER_FLAG_NO_RES_RANGE` and Python's `ipaddress` disagree about RFC 5737
 documentation ranges — the renderer is stricter, which is the safe direction, and
 it is the authority.
+
+## /srv/lg-stripe-billing — the last app outside the deploy (#197, measured 8/22)
+
+`/srv` is otherwise all symlinks into the serving checkout. `lg-stripe-billing`
+on **live** was the exception: a real directory holding a SECOND git repo
+(`iandavlin/lg-stripe-billing`), so `lg-deploy` deployed none of it. dev2 swapped
+to a symlink on **2026-08-16** — `/srv/lg-stripe-billing.bak-20260816-183554` is
+still beside it, which is where the backup-naming and the `logs/` ownership
+pattern come from. Cutover: `tools/infra/live-billing-cutover.sh` +
+`docs/LIVE-BILLING-CUTOVER-2026-08-22.md`.
+
+- **nginx and the FPM pool need NO change.** The vhost already aliases
+  `/srv/lg-stripe-billing/public/` and a symlink there is transparent to it. The
+  pool `lg-billing-dev` runs as **www-data** — measured by spawning a worker and
+  reading `ps`, because the pool conf is root-only. ⚠️ The pool conf checked into
+  the app's own `deploy/` is **stale fiction**: it names user `ccdev`, path
+  `/home/ccdev/...` and host `dev.loothgroup.com`. It describes no box that
+  exists; do not "restore" from it.
+- **⚠️ live-ro can LIST `/etc/nginx` and `/etc/php/*/fpm/pool.d` but cannot READ
+  the files in them.** A `grep -rl` there returns empty for *permission denied*
+  exactly as it does for *no match* — one measurement said "nothing references
+  the app" when the truth was "I can read nothing." Pair every such grep with a
+  control grep for a string that MUST be present; if the control is also empty,
+  you measured your own permissions. (Live's *vhost* is readable, but only
+  because it is a symlink into the serving checkout.)
+- **Live's vhost IS a symlink into the checkout**
+  (`sites-enabled → sites-available → platform/nginx/dev2.loothgroup.com.conf`),
+  so a tracked vhost change rides `lg-deploy`. This is the OPPOSITE of dev2,
+  whose vhost is a hand-edited copy. Do not generalise one box's answer.
+- **The three things a pull can never deliver** for any app like this: `vendor/`,
+  `.env` and `logs/` are gitignored, so a serving checkout has none of them and a
+  symlink swap without all three is an instant fatal. `logs/` is the quiet one —
+  Monolog creates its own dir, but not as `www-data` inside an `ubuntu`-owned
+  tree, so every HTTP route answers 200 until something logs, then 500s.
+- **Copy `vendor/`, do not `composer install` on live**, when the lock file is
+  byte-identical: provably the same bytes, and no packagist egress inside a
+  change window.
+- **A symlink re-target is invisible until `systemctl reload php8.3-fpm`**
+  (opcache + realpath cache; D3, proven on dev2 6/28). Give the battery an
+  assertion that can only pass on the NEW bytes — for #197 that is the checkout
+  refusal changing from `400 price_id is required` to a guard refusal, so a
+  missed reload shows up as a FAIL instead of a green `readlink`.
