@@ -56,6 +56,7 @@ import argparse
 import datetime
 import html
 import json
+import os
 import pathlib
 import re
 import subprocess
@@ -124,6 +125,57 @@ def poke_btn(seat):
     as Approve; the endpoint's whole vocabulary is "say so on the board"."""
     return (f'<button class="actbtn pokebtn" data-seat="{html.escape(seat, quote=True)}" '
             f'data-nonce="{nonce("poke", seat)}">Poke keeper</button>')
+
+
+DECISIONS = pathlib.Path(os.path.expanduser("~/.lg-decisions"))
+
+
+def pending_decisions(store=None):
+    """#202 — how many decision boxes are waiting on Ian right now.
+
+    Returns (count, ok). `ok` is False when the store could not be read AT ALL
+    or when a file in it would not parse — and that distinction is the whole
+    reason this returns a flag instead of just a number.
+
+    ⚠ THE COUNT IS THE ONLY THING THIS PAGE BAKES. The questions themselves and
+    their nonces are fetched live by the browser from lanes-decisions.php, so a
+    box opened at 14:03 shows what keeper is asking at 14:03 and not what it was
+    asking at the last five-minute redraw — and a question Ian already answered
+    in chat is gone from it. Baking them would make the page a snapshot of a
+    conversation, which is the one thing a decision box must never be.
+
+    ⚠ AN UNREADABLE STORE IS NOT AN EMPTY ONE. This page's oldest law, and the
+    reason `ok` exists: "nothing waits on you" and "I could not look" must never
+    render alike. A missing store means the deploy step was never run, which is
+    exactly the state the poke button sat in for two days while telling Ian it
+    had told keeper.
+
+    The CLAIM FILE OUTRANKS THE JSON, as it does in both endpoints: the claim is
+    written first and the rewrite can be lost, so a question with a claim has
+    been answered even if its own body has not caught up.
+    """
+    store = pathlib.Path(store) if store else DECISIONS
+    try:
+        names = sorted(store.glob("*.json"))
+    except OSError:
+        return 0, False
+    if not store.is_dir():
+        return 0, False
+    n = 0
+    for f in names:
+        i = f.name[:-5]
+        if not re.match(r"^[0-9a-z][0-9a-z-]{2,39}$", i) or ".." in i:
+            return n, False
+        try:
+            q = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return n, False
+        if q.get("answered"):
+            continue
+        if (store / (i + ".claim")).exists():
+            continue
+        n += 1
+    return n, True
 
 
 def gh_link(issue, label=None):
@@ -734,6 +786,9 @@ def main():
                     help="the ref whose commit bodies carry TEST-URL records "
                          "(default main; a lane names its own branch to check "
                          "its seed before the merge)")
+    ap.add_argument("--decisions-dir",
+                    help="read the pending-question store here (default "
+                         "~/.lg-decisions); gate 77 points this at a fixture")
     args = ap.parse_args()
     out_dir = pathlib.Path(args.out) if args.out else OUT
     repo = args.repo or REPO
@@ -885,6 +940,39 @@ details.acc>summary:hover h2{color:#e8e6df;}
 .todo .meta{color:#9aa3ad;font-size:12.5px;margin-top:3px;}
 .shipline{font-size:13px;color:#9aa3ad;padding:2px 0;}
 .shipline b{color:#e8e6df;font-weight:600;}
+/* #202 — the decision box. The BUTTON lives at accordion depth zero, because a
+   collapsed decision is a hidden decision and this page's rule is that the loud
+   layer is never inside an accordion. It sits below AT RISK and above Your list:
+   a decision is a request, not a failure, and must not shout over one. */
+.decide{background:#2a2418;border:1px solid #6b5628;border-left:3px solid #e0b64f;
+  border-radius:8px;padding:12px 14px;margin-bottom:14px;}
+.decide b{font-size:16px;}
+.decidebtn{background:#e0b64f;color:#14161a;border:none;border-radius:6px;
+  padding:7px 16px;font-size:14px;font-weight:700;cursor:pointer;margin-top:8px;}
+.decidebtn:hover{background:#efc763;}
+dialog#lg-decide-dlg{background:#1b1f26;color:#e8e6df;border:1px solid #3a4049;
+  border-radius:10px;padding:0;max-width:600px;width:calc(100% - 24px);}
+dialog#lg-decide-dlg::backdrop{background:rgba(0,0,0,.62);}
+.dlghead{display:flex;align-items:baseline;gap:10px;padding:14px 16px 8px;
+  border-bottom:1px solid #2a2f38;}
+.dlghead h2{margin:0;}
+.dlgbody{padding:12px 16px 16px;max-height:70vh;overflow-y:auto;}
+.dlgclose{margin-left:auto;background:#2d323b;color:#9aa3ad;border:1px solid #3a4049;
+  border-radius:6px;padding:2px 10px;font-size:12px;font-weight:700;cursor:pointer;}
+.qcard{border:1px solid #2a2f38;border-radius:8px;padding:10px 12px;margin-bottom:10px;}
+.qcard .qq{font-size:15px;font-weight:600;}
+.qcard .qd{color:#9aa3ad;font-size:12.5px;margin-top:4px;}
+.optbtn{display:block;width:100%;text-align:left;background:#232833;color:#e8e6df;
+  border:1px solid #3a4049;border-radius:6px;padding:8px 10px;margin-top:8px;
+  font-size:14px;cursor:pointer;font-family:inherit;}
+.optbtn:hover:not(:disabled){border-color:#9db668;background:#283040;}
+.optbtn:disabled{opacity:.5;cursor:default;}
+.optbtn .ol{font-weight:700;}
+.optbtn .od{display:block;color:#9aa3ad;font-size:12.5px;font-weight:400;margin-top:2px;}
+.optbtn .orec{color:#9db668;font-size:11.5px;font-weight:700;margin-left:6px;}
+.qdone{color:#9db668;font-size:13px;font-weight:700;margin-top:8px;}
+.dlgnote{color:#9aa3ad;font-size:13px;}
+.dlgloud{color:#e05f4f;font-weight:700;font-size:13.5px;}
 </style></head><body><div class="wrap"><h1>lanes</h1>""")
 
     # 0. capacity — one glance, no counting rows (Ian's item 1)
@@ -958,6 +1046,42 @@ details.acc>summary:hover h2{color:#e8e6df;}
     if not gh_ok:
         h.append('<div class="block gap">GitHub unreadable — what waits on you '
                  'is UNKNOWN right now, not necessarily nothing</div>')
+    # 3a. THE DECISION BOX (#202). Ian, 8/22: "I want a button that opens up the
+    # decision box that we use here and have it communicate with you."
+    #
+    # Depth zero — outside every accordion — for the same reason AT RISK is:
+    # a collapsed decision is a hidden decision. Below the risk blocks, because
+    # a decision is a request and not a failure.
+    #
+    # ⚠ The three states are three DIFFERENT renders, and the third is the whole
+    # point: nothing pending is SILENCE (quiet when healthy), and a store that
+    # could not be read is LOUD. They must never look alike — the one inversion
+    # of the quiet rule that this page exists to protect.
+    dcount, dok = pending_decisions(args.decisions_dir)
+    if not dok:
+        h.append('<div class="block gap"><b>DECISIONS UNKNOWN</b><br>'
+                 'I could not read the question list — that is not the same as '
+                 'there being none. Nothing is waiting to be concluded from '
+                 'this.</div>')
+    elif dcount:
+        h.append(f'<div class="decide"><b>{plural(dcount, "decision")} waiting '
+                 f'for you</b><div class="dim" style="margin-top:4px">'
+                 f'the same boxes keeper asks in chat — one tap answers one, '
+                 f'and keeper hears it within the minute</div>'
+                 f'<button class="decidebtn" id="lg-decide-open">'
+                 f'Open the decision box</button></div>')
+    # The dialog is an EMPTY shell. No question text and no nonce is ever baked
+    # into this page: the browser fetches both from lanes-decisions.php when the
+    # button is tapped. That is what lets a page cached from yesterday still
+    # work, and what makes a question answered in chat thirty seconds ago
+    # already absent from the box.
+    if dok and dcount:
+        h.append('<dialog id="lg-decide-dlg"><div class="dlghead">'
+                 '<h2>Decisions</h2>'
+                 '<button class="dlgclose" id="lg-decide-close">close</button>'
+                 '</div><div class="dlgbody" id="lg-decide-body">'
+                 '<div class="dlgnote">loading…</div></div></dialog>')
+
     parked_reason = {p["branch"].split("-")[0]: p["reason"] for p in parked
                      if p["branch"].split("-")[0].isdigit() and p.get("reason")}
     # #172: the doors and the action words. Only the issues that can reach the
@@ -1203,6 +1327,91 @@ details.acc>summary:hover h2{color:#e8e6df;}
         if(v==='1')d.open=true;else if(v==='0')d.open=false;}catch(e){}
     d.addEventListener('toggle',function(){
       try{localStorage.setItem(k,d.open?'1':'0');}catch(e){}});});
+  /* #202 — the decision box. Ian: "a button that opens up the decision box
+     that we use here and have it communicate with you."
+
+     Everything is fetched on OPEN, never baked: fresh questions, fresh nonces,
+     and anything he already answered in chat is simply not in the response.
+     One tap answers one question; the other cards stay open, because he may
+     have three waiting and answering one is not answering them all. */
+  var dop=document.getElementById('lg-decide-open'),
+      ddl=document.getElementById('lg-decide-dlg'),
+      dbd=document.getElementById('lg-decide-body');
+  function esc(s){var d=document.createElement('div');d.textContent=s==null?'':s;
+    return d.innerHTML;}
+  function answer(btn,card,id,key){
+    card.querySelectorAll('.optbtn').forEach(function(o){o.disabled=true;});
+    var was=btn.innerHTML;btn.innerHTML='sending…';
+    var b=new URLSearchParams();b.set('id',id);b.set('key',key);
+    b.set('nonce',btn.dataset.nonce);
+    fetch('/lanes-decide.php',{method:'POST',credentials:'same-origin',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},body:b.toString()})
+    .then(function(r){return r.json()}).then(function(j){
+      if(j&&j.ok){btn.innerHTML=was;
+        card.innerHTML='<div class="qq">'+card.dataset.q+'</div>'+
+          '<div class="qdone">answered: '+esc(btn.dataset.label)+
+          ' &check; — keeper has been told</div>';}
+      else{card.querySelectorAll('.optbtn').forEach(function(o){o.disabled=false;});
+        btn.innerHTML=was;
+        /* A refusal is SHOWN, never swallowed. "Already answered" is the
+           honest outcome of a race with the chat channel and he needs to see
+           it, or the page has told him something it does not know. */
+        var e=document.createElement('div');e.className='dlgloud';
+        e.textContent=(j&&j.error)?j.error:'that did not send';
+        card.appendChild(e);}
+    }).catch(function(){
+      card.querySelectorAll('.optbtn').forEach(function(o){o.disabled=false;});
+      btn.innerHTML=was;
+      var e=document.createElement('div');e.className='dlgloud';
+      e.textContent='that did not send — check you are still signed in';
+      card.appendChild(e);});
+  }
+  function draw(j){
+    if(!j||!j.ok){
+      /* The law again, in the browser this time: a failed read says so. */
+      dbd.innerHTML='<div class="dlgloud">I could not read the question list'+
+        ((j&&j.error)?' — '+esc(j.error):'')+'. That is not the same as there '+
+        'being none.</div>';return;}
+    if(!j.questions||!j.questions.length){
+      dbd.innerHTML='<div class="dlgnote">Nothing waiting on you right now — '+
+        'anything that was here has been answered.</div>';
+      if(j.unreadable){dbd.innerHTML+='<div class="dlgloud">…but '+j.unreadable+
+        ' question(s) in the store could not be read, so this may not be all of '+
+        'them.</div>';}
+      return;}
+    dbd.innerHTML='';
+    j.questions.forEach(function(q){
+      var c=document.createElement('div');c.className='qcard';
+      c.dataset.q=esc(q.question);
+      var html='<div class="qq">'+esc(q.question)+'</div>';
+      if(q.detail)html+='<div class="qd">'+esc(q.detail)+'</div>';
+      if(q.issue)html+='<div class="qd">about #'+q.issue+'</div>';
+      c.innerHTML=html;
+      (q.options||[]).forEach(function(o){
+        var b=document.createElement('button');b.className='optbtn';
+        b.dataset.nonce=o.nonce;b.dataset.label=o.label;
+        b.innerHTML='<span class="ol">'+esc(o.label)+'</span>'+
+          (o.recommended?'<span class="orec">recommended</span>':'')+
+          (o.description?'<span class="od">'+esc(o.description)+'</span>':'');
+        b.addEventListener('click',function(ev){ev.preventDefault();
+          answer(b,c,q.id,o.key);});
+        c.appendChild(b);});
+      dbd.appendChild(c);});
+    if(j.unreadable){var w=document.createElement('div');w.className='dlgloud';
+      w.textContent=j.unreadable+' question(s) in the store could not be read, '+
+        'so this may not be all of them.';dbd.appendChild(w);}
+  }
+  if(dop&&ddl){
+    dop.addEventListener('click',function(){
+      dbd.innerHTML='<div class="dlgnote">loading…</div>';
+      if(ddl.showModal)ddl.showModal();else ddl.setAttribute('open','');
+      fetch('/lanes-decisions.php',{credentials:'same-origin'})
+        .then(function(r){return r.json()}).then(draw)
+        .catch(function(){draw(null);});});
+    var dcl=document.getElementById('lg-decide-close');
+    if(dcl)dcl.addEventListener('click',function(){
+      if(ddl.close)ddl.close();else ddl.removeAttribute('open');});
+  }
   var rf=document.getElementById('lg-refresh');
   if(rf){rf.addEventListener('click',function(){
     rf.disabled=true;rf.textContent='refreshing…';
@@ -1227,6 +1436,11 @@ details.acc>summary:hover h2{color:#e8e6df;}
     # #172: the structured form, so a consumer gets the action and the door
     # without parsing prose. The flat list above is kept as it was — a shape
     # change is a broken consumer, and nothing on this box asked for one.
+    # #202: the count and whether it could be read, so a machine consumer sees
+    # the same three states the page does. Deliberately NOT the questions
+    # themselves and never a nonce — lanes.json is a static file on disk and a
+    # nonce in it would be a nonce with a five-minute life and no reader.
+    data["decisions"] = {"pending": dcount, "readable": dok}
     data["todo_cards"] = [
         {"issue": t.get("issue"), "family": t.get("family"),
          "action": t.get("action"), "test_url": t.get("url")} for t in todo]
