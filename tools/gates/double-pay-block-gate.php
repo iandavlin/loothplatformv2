@@ -697,6 +697,166 @@ if ( ! is_readable( $msPage ) || ! is_readable( $msCss ) ) {
 }
 
 
+/* ═══ §9 — THE PROBE MUST BE ABLE TO REACH WORDPRESS (#193 rider, 8/22) ════ *
+ *
+ * Ian flipped `lgms_double_pay_block` ON on dev2. Measured immediately after,
+ * from 127.0.0.1, WITH the correct shared secret:
+ *
+ *     POST /wp-json/lg-member-sync/v1/patreon-standing
+ *     -> 401 {"code":"bb_rest_authorization_required"}
+ *
+ * ⚠️ THIS SECTION EXISTS BECAUSE THE GUARD'S OWN BEST QUALITY IS WHAT MAKES THAT
+ * FATAL. Everything in §5 above is true and stayed true: the DECISION is
+ * correct. But the guard is FAIL-OPEN by design — a WordPress blip must never
+ * stop a legitimate sale — so a route that cannot answer produces UNKNOWN, and
+ * UNKNOWN waves every checkout through. The guard reads as armed on the dash and
+ * refuses nobody, including the listed tester who actively pays Patreon: the
+ * exact person it exists to stop.
+ *
+ * §5 could not see this because it stubs the probe. A stub always answers. The
+ * assertions below drive the REAL adapter over REAL HTTP, which is the only way
+ * the reachability half is visible at all.
+ */
+section( '[9] THE PROBE REACHES WORDPRESS — or the guard is armed and blind' );
+
+$slimProbeFile = $BILLING . '/src/Adapters/HttpPatreonStandingProbe.php';
+$slimSettings  = $BILLING . '/src/Contracts/SettingsStore.php';
+if ( ! is_readable( $slimProbeFile ) || ! is_readable( $slimSettings ) ) {
+    cannot( 'the Slim standing probe is missing: ' . $slimProbeFile );
+}
+require_once $slimSettings;
+require_once $slimProbeFile;
+
+/* A tiny settings store pointing the real probe at a local server. */
+$mkSettings = static function ( string $url, string $secret = 'the-real-secret' ) {
+    /* Implements the WHOLE interface on purpose: a partial stub would fatal,
+       and a fatal here would read as "the probe is broken" rather than "the
+       gate is". Only the two the probe actually reads carry a value. */
+    return new class( $url, $secret ) implements \LGSB\Contracts\SettingsStore {
+        public function __construct( private string $u, private string $s ) {}
+        public function getPatreonStandingUrl(): string { return $this->u; }
+        public function getSyncSharedSecret(): string  { return $this->s; }
+        public function getSecretKey(): string         { return ''; }
+        public function getPublishableKey(): string    { return ''; }
+        public function getCheckoutReturnUrl(): string { return ''; }
+        public function getHomeUrl(): string           { return ''; }
+        public function getSyncEndpointUrl(): string   { return ''; }
+        public function getGiftMailUrl(): string       { return ''; }
+        public function getCheckoutAudienceUrl(): string { return ''; }
+        public function getWebhookSecret(): string     { return ''; }
+        public function getBulkDiscountTiers(): array  { return []; }
+        public function getRegionalFailUrl(): string   { return ''; }
+        public function getReturnSuccessUrl(): string  { return ''; }
+    };
+};
+
+$docroot = sys_get_temp_dir() . '/lg-dp-probe-' . getmypid();
+@mkdir( $docroot );
+file_put_contents( "$docroot/router.php", <<<'PHP'
+<?php
+/* Answers whatever the query string asks for, so ONE server serves every case. */
+$mode = $_GET['mode'] ?? 'active';
+if ( $mode === 'bb401' ) {
+    header( 'Content-Type: application/json', true, 401 );
+    echo '{"code":"bb_rest_authorization_required","message":"Only authenticated users can access the REST API.","data":{"status":401}}';
+    return;
+}
+if ( $mode === 'norurte' ) {   // the FLAG-OFF shape: no route at all
+    header( 'Content-Type: application/json', true, 404 );
+    echo '{"code":"rest_no_route"}';
+    return;
+}
+header( 'Content-Type: application/json', true, 200 );
+if ( $mode === 'inactive' ) {
+    echo '{"active":false,"tier":null,"tier_label":null,"reason":"no_patreon_row","message":null,"manage_url":null}';
+    return;
+}
+echo json_encode( [
+    'active'     => true,
+    'tier'       => 'looth2',
+    'tier_label' => 'Looth LITE',
+    'reason'     => 'active_pledge',
+    'message'    => $GLOBALS['LG_MSG'] ?? 'You are already paying for your membership through Patreon.',
+    'manage_url' => 'https://www.patreon.com/loothgroup/membership',
+] );
+PHP );
+
+$port = 8700 + ( getmypid() % 200 );
+$srv  = proc_open(
+    sprintf( 'exec php -S 127.0.0.1:%d %s/router.php', $port, $docroot ),
+    [ 1 => [ 'file', '/dev/null', 'w' ], 2 => [ 'file', '/dev/null', 'w' ] ],
+    $pipes
+);
+$up = false;
+for ( $i = 0; $i < 60; $i++ ) {
+    $c = @fsockopen( '127.0.0.1', $port, $e, $es, 0.2 );
+    if ( $c ) { fclose( $c ); $up = true; break; }
+    usleep( 100000 );
+}
+if ( ! $up ) {
+    if ( is_resource( $srv ) ) { proc_terminate( $srv ); proc_close( $srv ); }
+    cannot( "could not start a local probe server on 127.0.0.1:$port" );
+}
+
+$base   = "http://127.0.0.1:$port/";
+$probeR = static fn( string $mode ) => new \LGSB\Adapters\HttpPatreonStandingProbe( $mkSettings( $base . '?mode=' . $mode ) );
+
+/* ── 9a/9b: THE DEFECT, reproduced through the real units. ── */
+$standing401 = $probeR( 'bb401' )->activeFor( 'patron@example.com' );
+is_( $standing401 === null,
+     '9a  a 401 bb_rest_authorization_required decodes to UNKNOWN — the measured dev2 answer' );
+is_( ( new \LGSB\Core\DoublePayGuard( $probeR( 'bb401' ) ) )->refusalFor( 'patron@example.com', false ) === null,
+     '9b  ...and UNKNOWN LETS THE BUYER THROUGH, so an unreachable route is a SILENTLY DISARMED guard' );
+
+/* ── 9c: THE ASSERTION THAT MATTERS (keeper: "everything else is plumbing").
+      THE MIKELLE CASE — a listed tester who actively pays Patreon. Flag on,
+      route reachable, real probe, real guard: REFUSED. ── */
+$mikelle = $probeR( 'active' )->activeFor( 'mikelle@example.com' );
+is_( is_array( $mikelle ) && $mikelle['active'] === true,
+     '9c  a reachable route answers ACTIVE for a paying patron, over real HTTP' );
+$mikelleRefusal = ( new \LGSB\Core\DoublePayGuard( $probeR( 'active' ) ) )->refusalFor( 'mikelle@example.com', false );
+is_( is_array( $mikelleRefusal ),
+     '9c* *** THE PAYING PATRON IS REFUSED, END TO END *** — real adapter, real HTTP, real guard' );
+is_( is_array( $mikelleRefusal ) && stripos( (string) ( $mikelleRefusal['error'] ?? '' ), 'patreon' ) !== false,
+     '9c2 ...and the refusal names Patreon' );
+is_( is_array( $mikelleRefusal ) && ( $mikelleRefusal['patreon_active'] ?? null ) === true,
+     '9c3 ...carrying the marker the join page branches on' );
+
+/* THE LIVENESS PARTNER, or 9c proves only that the server was up. */
+is_( ( new \LGSB\Core\DoublePayGuard( $probeR( 'inactive' ) ) )->refusalFor( 'lapsed@example.com', false ) === null,
+     '9c4 ...while a NON-patron on the same reachable route still buys — 9c is not a blanket refusal' );
+
+/* ── 9d: the OFF state is untouched. The flag is still the registration. ── */
+is_( $probeR( 'norurte' )->activeFor( 'patron@example.com' ) === null,
+     '9d  a 404 (flag off, no route) is still UNKNOWN — OFF is unchanged by the exemption' );
+
+if ( is_resource( $srv ) ) { proc_terminate( $srv ); proc_close( $srv ); }
+@unlink( "$docroot/router.php" ); @rmdir( $docroot );
+
+/* ── 9e: THE FIX. The route is exempted from BuddyBoss's blanket restriction,
+      so the 401 above cannot happen on a real box. Keeper's ruling, 8/22. ── */
+$psFile = dirname( __DIR__, 2 ) . '/lg-patreon-stripe-poller/src/Wp/PatreonStandingRestController.php';
+require_once $psFile;
+$psEx = \LGMS\Wp\PatreonStandingRestController::exemptFromBuddyBossRestriction( [] );
+is_( $psEx === [ '/lg-member-sync/v1/patreon-standing' ],
+     '9e  the route IS exempted, and the exemption names ONLY it (surgical)' );
+$plugBare = bare( dirname( __DIR__, 2 ) . '/lg-patreon-stripe-poller/src/Plugin.php' );
+is_( strpos( str_replace( ' ', '', $plugBare ), "PatreonStandingRestController::class,'exemptFromBuddyBossRestriction'" ) !== false,
+     '9e2 ...and Plugin.php registers it — an unwired filter is a comment' );
+
+/* CONDITION 1: the route's own secret check is untouched. This route is a
+   membership ORACLE — it says whether a named address pays us — so an open one
+   would be worse than a closed one. */
+$psBare = bare( $psFile );
+is_( strpos( $psBare, 'hash_equals(' ) !== false,
+     '9f  the route still compares the shared secret with hash_equals' );
+is_( strpos( $psBare, "'permission_callback'=>[self::class,'authSharedSecret']" ) !== false
+     || strpos( str_replace( ' ', '', $psBare ), "'permission_callback'=>[self::class,'authSharedSecret']" ) !== false,
+     '9f2 ...and it is still the route\'s permission_callback' );
+is_( \LGMS\Wp\PatreonStandingRestController::authSharedSecret(
+        new WP_REST_Request( [], [ 'x_lgms_token' => 'guessed' ] ) ) === false,
+     '9f3 ...so a caller WITHOUT the secret is still refused — only WHICH check refuses changed' );
+
 echo "\n$pass passed, $fail failed\n";
 if ( $fail > 0 ) {
     echo "RED — the double-pay block is not holding.\n";

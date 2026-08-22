@@ -356,6 +356,7 @@ $FILES = [
     'wpdoor'    => "$ROOT/lg-patreon-stripe-poller/src/Wp/CheckoutRestController.php",
     'plugin'    => "$ROOT/lg-patreon-stripe-poller/src/Plugin.php",
     'restctl'   => "$ROOT/lg-patreon-stripe-poller/src/Wp/RestController.php",
+    'pstand'    => "$ROOT/lg-patreon-stripe-poller/src/Wp/PatreonStandingRestController.php",
     'guard'     => "$ROOT/lg-stripe-billing/src/Core/CheckoutAudienceGuard.php",
     'probeI'    => "$ROOT/lg-stripe-billing/src/Contracts/CheckoutAudienceProbe.php",
     'probe'     => "$ROOT/lg-stripe-billing/src/Adapters/HttpCheckoutAudienceProbe.php",
@@ -375,6 +376,7 @@ require_once $FILES['prov'];
 require_once $FILES['sync'];
 require_once $FILES['wpdoor'];
 require_once $FILES['restctl'];   // #193 §K — the /auth exemption lives here
+require_once $FILES['pstand'];    // #193 rider §K3c — the standing route's exemption
 require_once $FILES['probeI'];
 require_once $FILES['guard'];
 
@@ -1300,13 +1302,67 @@ is_( in_array( '/lg-member-sync/v1/auth', $exempt, true ),
 is_( in_array( '/lg-member-sync/v1/gift-auth', $exempt, true ),
      'K2  ...and its alias, which is the same handler and the gift redemption door' );
 
+/* ⚠️ THIS LIST SHRANK BY ONE ON 2026-08-22, AND IT WAS RULED, NOT DRIFT.
+   #181 reported four still-restricted shared-secret routes and opened none of
+   them. Ian then flipped `lgms_double_pay_block` ON on dev2, and
+   `/patreon-standing` — measured from 127.0.0.1 WITH the correct secret —
+   still answered 401 bb_rest_authorization_required. That guard is FAIL-OPEN by
+   design, so an unreachable probe answers UNKNOWN and waves EVERY checkout
+   through, including the listed tester who actively pays Patreon: the guard
+   reads as armed and refuses nobody. Keeper ruled the exemption on #193's rider,
+   under the same three conditions as /auth, and superseded #181's
+   one-route-only condition explicitly. `/sync-customer` and `/send-gift-codes`
+   stay shut ON PURPOSE — the five-minute Sync::all() sweep covers the first and
+   nothing is waiting on the second. If a future lane wants either opened, it
+   needs its own ruling; growing this exemption quietly is the thing these
+   assertions exist to prevent. */
 foreach ( [ '/lg-member-sync/v1/sync-customer',
-            '/lg-member-sync/v1/patreon-standing',
             '/lg-member-sync/v1/send-gift-codes' ] as $shut ) {
     is_( ! in_array( $shut, $exempt, true ),
-         "K3  $shut is NOT opened — the exemption names two routes, never the namespace" );
+         "K3  $shut is STILL NOT opened — deliberately shut, not forgotten" );
 }
-is_( count( $exempt ) === 2, 'K3b ...and exactly two, so a widening cannot hide among them' );
+is_( count( $exempt ) === 2, 'K3b the auth filter still names exactly two, so a widening cannot hide among them' );
+
+/* THE STANDING ROUTE'S OWN EXEMPTION — a SEPARATE filter on the same hook, so
+   each controller owns its own route and neither can widen the other. */
+$psExempt = LGMS\Wp\PatreonStandingRestController::exemptFromBuddyBossRestriction( [] );
+is_( $psExempt === [ '/lg-member-sync/v1/patreon-standing' ],
+     'K3c  /patreon-standing is exempted, and it is the ONLY route that filter names' );
+is_( LGMS\Wp\PatreonStandingRestController::exemptFromBuddyBossRestriction( 'nope' ) === 'nope',
+     'K3d  ...a non-array filter value is handed back untouched' );
+is_( count( LGMS\Wp\PatreonStandingRestController::exemptFromBuddyBossRestriction( $psExempt ) ) === 1,
+     'K3e  ...and it is idempotent' );
+$psPre = [ '/buddyboss/v1/members' ];
+is_( LGMS\Wp\PatreonStandingRestController::exemptFromBuddyBossRestriction( $psPre )
+     === [ '/buddyboss/v1/members', '/lg-member-sync/v1/patreon-standing' ],
+     'K3f  ...and it appends rather than replacing another plugin\'s entries' );
+
+/* CONDITION 1 AGAIN: the standing route's OWN secret check is untouched. The
+   exemption changes WHICH check refuses an anonymous caller, never WHETHER one
+   does — and this route is a membership oracle, so an open one would tell
+   anybody whether a named address pays us. */
+$psSrc = bare( $FILES['pstand'] );
+$psAuth = fn_body( $psSrc, 'authSharedSecret' );
+is_( $psAuth !== '' && strpos( $psAuth, 'hash_equals(' ) !== false,
+     'K3g  the standing route still compares the secret with hash_equals' );
+is_( $psAuth !== '' && strpos( $psAuth, "return false;" ) !== false
+     && strpos( $psAuth, "\$expected === ''" ) !== false,
+     'K3h  ...and an UNCONFIGURED secret is still CLOSED, never open' );
+is_( strpos( bare( $FILES['plugin'] ), 'PatreonStandingRestController::class, \'exemptFromBuddyBossRestriction\'' ) !== false,
+     'K3i  Plugin.php registers it — an unwired filter is a comment' );
+is_( substr_count( bare( $FILES['plugin'] ), "'bb_exclude_endpoints_from_restriction'" ) === 3,
+     'K3j  ...as a THIRD filter beside #181\'s and /auth\'s, each owning its own route' );
+
+/* ⚠️ THE OFF STATE IS UNTOUCHED. The filter is unconditional while the ROUTE is
+   flag-gated, so with the flag off the route still does not exist and the probe
+   still gets a 404 -> UNKNOWN -> proceed. Naming a route that does not exist
+   changes nothing; asserting that is what stops somebody "tidying" the filter
+   into a flag check and creating a second switch. */
+is_( strpos( bare( $FILES['pstand'] ), 'function maybeRegister' ) !== false
+     && strpos( fn_body( $psSrc, 'maybeRegister' ), 'PatreonStanding::flagOn()' ) !== false,
+     'K3k  the ROUTE is still flag-gated — the flag is still the registration' );
+is_( strpos( fn_body( $psSrc, 'exemptFromBuddyBossRestriction' ), 'flagOn' ) === false,
+     'K3l  ...while the EXEMPTION is not, so there is no second place to read the flag wrong' );
 
 $pre = [ '/buddyboss/v1/members' ];
 is_( LGMS\Wp\RestController::exemptAuthFromBuddyBossRestriction( $pre ) === array_merge( $pre, [ '/lg-member-sync/v1/auth', '/lg-member-sync/v1/gift-auth' ] ),
@@ -1349,8 +1405,19 @@ is_( substr_count( $authBody, 'set_transient' ) >= 2,
 $plugSrc2 = bare( $FILES['plugin'] );
 is_( strpos( $plugSrc2, 'exemptAuthFromBuddyBossRestriction' ) !== false,
      'K9  Plugin.php actually registers it — an unwired filter is a comment' );
-is_( substr_count( $plugSrc2, "'bb_exclude_endpoints_from_restriction'" ) === 2,
-     'K9b ...as a SECOND filter beside #181\'s, not by widening the first' );
+/* ⚠️ ONE FILTER PER CONTROLLER, EACH OWNING ITS OWN ROUTE — three of them now
+   (#181's /checkout-audience, #193's /auth pair, and the rider's
+   /patreon-standing). This assertion caught the rider's own change and that is
+   the point of it: the count is pinned so a new exemption has to be a decision
+   somebody writes down, never a route quietly appended to an existing list. */
+is_( substr_count( $plugSrc2, "'bb_exclude_endpoints_from_restriction'" ) === 3,
+     'K9b ...as its OWN filter, not by widening a neighbour\'s' );
+foreach ( [ 'CheckoutAudienceRestController::class,\'exemptFromBuddyBossRestriction\'',
+            'RestController::class,\'exemptAuthFromBuddyBossRestriction\'',
+            'PatreonStandingRestController::class,\'exemptFromBuddyBossRestriction\'' ] as $wired ) {
+    is_( strpos( str_replace( ' ', '', $plugSrc2 ), str_replace( ' ', '', $wired ) ) !== false,
+         'K9c each exemption is wired to the controller that OWNS that route — ' . explode( ':', $wired )[0] );
+}
 
 /* ═══ verdict ═════════════════════════════════════════════════════════════ */
 
