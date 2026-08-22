@@ -173,6 +173,72 @@ the wrong gate is a false green, and it will recur.
   disk.** It was the last case and only a comment reword, verified by reading
   the diff before restoring. Long harnesses run backgrounded now.
 
+## The rider — the double-pay guard was ON and BLIND (keeper, 8/22)
+
+Ian flipped `lgms_double_pay_block` ON on dev2. Measured immediately after, from
+127.0.0.1, **with the correct shared secret**:
+
+    POST /wp-json/lg-member-sync/v1/patreon-standing
+    -> 401 {"code":"bb_rest_authorization_required"}
+
+⚠️ **The guard's best quality is what made that fatal.** It is fail-open by
+design — a WordPress blip must never stop a legitimate sale — so a route that
+cannot answer produces UNKNOWN, and UNKNOWN waves **every** checkout through.
+The guard read as armed on the dash and refused nobody, **including the listed
+tester who actively pays Patreon: the exact person it exists to stop.**
+
+#181 measured this 401 and reported it rather than opening it, which was right
+while the flag was off everywhere. **The flip is what turned a report into a
+live defect** — a reported-not-fixed finding can become urgent without anybody
+touching the code.
+
+Exempted under the same three conditions as `/auth`: the route's own secret
+check untouched (it is a membership **oracle**, so an open one is worse than a
+closed one); its own filter on its own controller; and gate 86's
+still-restricted list **shrank deliberately**, with the ruling in the gate's own
+comment — `/sync-customer` and `/send-gift-codes` stay shut, the sweep covers
+the first and nothing waits on the second. This supersedes #181's
+one-route-only condition explicitly.
+
+**Gate 75 §9** drives the **real adapter over real HTTP** against a real 401,
+because §5 stubs the probe and **a stub always answers** — which is why the
+reachability half was invisible for that gate's whole life. `9c*` is the
+assertion keeper named: **a paying patron is REFUSED, end to end.**
+
+## Ian's ruling — the linked Patreon email (8/22)
+
+> *"its critical to add to any double pay or switch surface the email associated
+> with their patreon account and that that is the email to use when adjusting
+> thier membership."*
+
+⚠️ **Measured on live before building, and the number is ZERO.** Of **1,223**
+active paying patrons, 1,223 carry a Patreon email and **0 differ** from their
+WordPress address. This changes nothing anyone can see today; its value is
+entirely **preventive**. Do not quote it as fixing a live divergence.
+
+**Keeper's rail — signed-in member, their own surface, only — is structural.**
+`patreon_email` is deliberately not returned by `PatreonStandingRestController`,
+the only channel the Slim app has into WordPress. That app answers
+`POST /billing/v1/checkout`, which takes an arbitrary email and replies to a
+stranger, so including it there would make the guard an address-lookup service.
+**The app cannot leak what it never receives.**
+
+Shown on `/manage-subscription/`, `/lgjoin/`'s blocked-by-Patreon block (whose
+branch requires a session by construction), and the WP `/me/checkout-session`
+409 — safe because it is session-authenticated **and** takes the member from
+`get_current_user_id()`, never the body.
+
+Gate 75 at **131**, red-first **17/17** + 1 no-op, automated as
+`tools/gates/double-pay-redfirst.py`. Three of my own §10 assertions were blind
+first time and the **gate** was fixed each time — including a selector regex
+whose `[^{}]*` swallowed a `-DISABLED` suffix, so a **prefix match read as a
+hit**.
+
+**Observed, not fixed:** `.lg-join__patreon-block` — the whole
+blocked-by-Patreon refusal block on `/lgjoin/` — has **no CSS rule anywhere in
+the repo** and renders as bare `h3`/`p`. Pre-existing from #150; Ian decides
+from pictures, so it is worth a look.
+
 ## Owed / not reached
 
 - **Ian looks at the Testers tab on dev2 after the merge** and lists a real
