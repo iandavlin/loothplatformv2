@@ -194,6 +194,19 @@ final class SharedSecretPanel
             .lgms-ss-cmd { display:block; background:#f6f7f7; border:1px solid #dcdcde; padding:.5em .7em; margin:.35em 0 .1em; font-family:Menlo,Consolas,monospace; font-size:12.5px; overflow-x:auto; white-space:pre; }
             .lgms-ss-cmdrow { display:flex; align-items:flex-start; gap:.5em; }
             .lgms-ss-cmdrow > .lgms-ss-cmd { flex:1; min-width:0; }
+            /* ⚠️ THE CHIP PALETTE IS REPEATED HERE ON PURPOSE. It is HealthPanel's,
+               and sharing the class names is deliberate — one visual language on one
+               tab. But depending on a SIBLING to emit the rules makes this section
+               render as unstyled grey text anywhere else, which is exactly what the
+               first picture built for Ian showed: every verdict, MATCH and BROKEN
+               alike, in identical plain text. Identical declarations, so the two
+               copies cannot disagree; the section is now self-contained. */
+            .lgms-ss .lgms-h-chip { display:inline-block; padding:.15em .6em; border-radius:3px; font-size:.85em; font-weight:600; }
+            .lgms-ss .lgms-h-ok      { background:#dcfce7; color:#15803d; }
+            .lgms-ss .lgms-h-warn    { background:#fef3c7; color:#92400e; }
+            .lgms-ss .lgms-h-fail    { background:#fee2e2; color:#b91c1c; }
+            .lgms-ss .lgms-h-unknown { background:#e0e7ff; color:#3730a3; }
+            .lgms-ss .lgms-h-neutral { background:#f0f0f1; color:#555; }
         </style>
 
         <div id="lgms-ss-root">
@@ -270,6 +283,20 @@ final class SharedSecretPanel
         $wpPath  = defined( 'ABSPATH' ) ? rtrim( (string) ABSPATH, '/' ) : '';
         $wpCmd   = 'wp' . ( $wpPath !== '' ? ' --path=' . $wpPath : '' )
                  . " option update lgms_shared_secret '<the-new-value>'";
+
+        /* ⚠️ BUILT AS A STRING, NOT AS TWO LINES OF INLINE HTML. PHP swallows one
+           newline directly after `?>`, so a closing tag at the end of the first
+           line silently joins the two — the first picture showed
+           `.env# set the LGMS_SHARED_SECRET= line ...` running off the edge as a
+           single line.
+
+           ⚠️ AND IT DOES NOT TELL ANYONE TO RESTART ANYTHING. Checked rather than
+           assumed: `LGSB\App::create()` calls `Dotenv::createImmutable(...)->load()`
+           on EVERY request, so the billing app re-reads this file as it stands. A
+           reload instruction here would be a real action taken for no reason. */
+        $appCmd  = 'sudoedit ' . $envPath . "\n"
+                 . '# set LGMS_SHARED_SECRET= to the SAME value. The app re-reads this'
+                 . " file on every request — nothing to restart.";
         ?>
         <div class="lgms-ss s-<?php echo esc_attr( (string) $s['status'] ); ?>">
             <div class="lgms-ss-head">
@@ -331,8 +358,8 @@ final class SharedSecretPanel
                 <strong>Setting this is a command-line act, on purpose — there is no field for it here or
                 on any other tab.</strong>
                 The billing app's half lives in a server file that the web user cannot write, so a form on
-                this screen could only ever move <em>one</em> of the two halves — which is the state above
-                that reads <em>DIFFER</em>, arrived at by accident. Both halves take the same value:
+                this screen could only ever move <em>one</em> of the two halves — which is how a pair ends up
+                reading <em>DIFFER</em> with nobody having meant it. Both halves take the same value:
             </p>
 
             <div class="lgms-ss-cmdrow">
@@ -340,8 +367,7 @@ final class SharedSecretPanel
                 <button type="button" class="button" data-lgms-ss="copy" data-target="lgms-ss-cmd-wp">Copy</button>
             </div>
             <div class="lgms-ss-cmdrow">
-                <code class="lgms-ss-cmd" id="lgms-ss-cmd-app">sudo editor <?php echo esc_html( $envPath ); ?>
-# set the LGMS_SHARED_SECRET= line to the same value, then reload PHP-FPM</code>
+                <code class="lgms-ss-cmd" id="lgms-ss-cmd-app"><?php echo esc_html( $appCmd ); ?></code>
                 <button type="button" class="button" data-lgms-ss="copy" data-target="lgms-ss-cmd-app">Copy</button>
             </div>
 

@@ -273,6 +273,24 @@ MUTATIONS = [
      "H6", "a value-shaped example is printed, which is a secret-shaped string on a secrets screen"),
 
     # ---- I. the wiring ----------------------------------------------------
+    # ---- the three defects the PICTURE found, not the gate --------------
+    ("M37b", PANEL,
+     """        $appCmd  = 'sudoedit ' . $envPath . "\\n"
+                 . '# set LGMS_SHARED_SECRET= to the SAME value. The app re-reads this'""",
+     """        $appCmd  = 'sudoedit ' . $envPath . ' '
+                 . '# set LGMS_SHARED_SECRET= to the SAME value. The app re-reads this'""",
+     "H4b", "the two halves of the app command rejoin into one line running off the edge"),
+
+    ("M37c", PANEL,
+     "                 . \" file on every request — nothing to restart.\";",
+     "                 . \" file, then: sudo systemctl reload php8.3-fpm\";",
+     "H4c", "the screen asks for a restart the billing app does not need"),
+
+    ("M37d", PANEL,
+     "            .lgms-ss .lgms-h-ok      { background:#dcfce7; color:#15803d; }",
+     "            /* .lgms-ss .lgms-h-ok   { background:#dcfce7; color:#15803d; } */",
+     "H8", "the chips lose their colours off the Health tab and every verdict reads as plain grey text"),
+
     ("M38", ADMIN,
      "        SharedSecretPanel::boot();",
      "        /* SharedSecretPanel::boot(); */",

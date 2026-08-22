@@ -815,6 +815,42 @@ is_( str_contains( $out, '--path=' ),
 is_( ! preg_match( '/[0-9a-f]{32,}/i', $out ),
      'H6 no long hex run of any kind reaches the screen — nothing that could BE a secret' );
 
+/* ⚠️ THE APP HALF'S TWO PARTS ARE ON TWO LINES, and this is a real assertion
+   rather than tidiness: PHP swallows one newline directly after `?>`, so the
+   first build rendered `.env# set the LGMS_SHARED_SECRET= line ...` as one long
+   line running off the edge of the box. Found by looking at the picture, not by
+   the gate — so it is a gate now. */
+$appCmd = '';
+if ( preg_match( '#<code class="lgms-ss-cmd" id="lgms-ss-cmd-app">(.*?)</code>#s', $out, $m ) ) { $appCmd = $m[1]; }
+is_( $appCmd !== '' && str_contains( $appCmd, "\n" ),
+     'H4b the billing-app command is TWO lines, not one line running off the edge' );
+
+/* ⚠️ AND IT MUST NOT TELL ANYONE TO RESTART ANYTHING. Measured, not assumed:
+   LGSB\App::create() calls Dotenv::createImmutable(...)->load() on every
+   request, so the app re-reads that file as it stands. An instruction to reload
+   FPM would be a real action, taken on a live box, for no reason. */
+is_( stripos( $out, 'reload php-fpm' ) === false && stripos( $out, 'systemctl' ) === false,
+     'H4c and it does not ask for a restart the billing app does not need' );
+
+/* ⚠️ THE CHIPS CARRY THEIR OWN COLOURS. They share HealthPanel's class names on
+   purpose — one visual language on one tab — but the first picture built for Ian
+   rendered every verdict, MATCH and BROKEN alike, as identical plain grey text,
+   because the rules live in the SIBLING panel's style block. A section that only
+   looks right when a neighbour happens to be on the page is a section that will
+   one day be read wrong. */
+/* ⚠️ CSS COMMENTS ARE STRIPPED FIRST. Without that, commenting a rule OUT still
+   satisfies a str_contains for its selector — the fifth time in this repo an
+   assertion has matched a string that also lives in prose or in a comment, and
+   the third in this gate alone. A commented rule does not paint anything. */
+$css = '';
+if ( preg_match_all( '#<style>(.*?)</style>#s', $out, $mm ) ) { $css = implode( "\n", $mm[1] ); }
+$css = (string) preg_replace( '#/\*.*?\*/#s', '', $css );
+$needChips = [ '.lgms-ss .lgms-h-chip', '.lgms-ss .lgms-h-ok', '.lgms-ss .lgms-h-fail', '.lgms-ss .lgms-h-unknown' ];
+$missingChips = array_values( array_filter( $needChips, static fn( $c ) => ! str_contains( $css, $c ) ) );
+is_( $missingChips === [],
+     'H8 the section styles its own chips, so it reads correctly on its own (missing: '
+     . ( $missingChips === [] ? 'none' : implode( ', ', $missingChips ) ) . ')' );
+
 /* THE SAME TWO LINES ARE ON SCREEN IN EVERY STATE, healthy included: this is
    how a rotation is performed, not only how a fault is repaired. */
 $missing = [];
