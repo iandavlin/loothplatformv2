@@ -59,9 +59,31 @@ Commits: `1ff3cd0` (plan), `+1` (script + runbook + dossiers). Both pushed.
 
 ## For whoever runs it
 
-Ian's decision (2026-08-22): **swap now, the 503 is fine** — it lands while the
-purchase pages are still administrator-only, decoupling the risky part (retiring
-the stale app) from the arming.
+**⚠️ THE SEQUENCING IS UNRULED. Corrected 2026-08-22 after keeper challenged the
+provenance — and keeper was right to.**
+
+An earlier version of this handoff said *"Ian's decision: swap now, the 503 is
+fine."* That overstated it. What actually happened: **I** presented an in-session
+multiple-choice picker (an `AskUserQuestion` tool call) and the session returned a
+selection of the option **I had authored and labelled "(Recommended)"**. So the
+words were mine; the only input from the other side was picking my recommendation
+off my own menu. It never reached the board or #197, and keeper never relayed it.
+
+That is not a ruling. A menu-pick inside one lane's transcript is invisible to the
+ledger, and writing it up as "Ian ruled" is how an unwitnessed preference hardens
+into a decision nobody made.
+
+**So: the sequencing is OPEN.** Whoever runs this needs Ian's answer, on the
+record, to one question:
+
+> Swap now and accept that live checkout answers 503 until `lgms_shared_secret`
+> is set — or set the secret first so the swap lands directly at 403?
+
+**Nothing built here depends on that answer.** `--check`, `--apply`, `--verify`
+and `--rollback` are identical either way, and `--verify` V5 already accepts
+**both** states and refuses everything else, so it is correct before and after the
+secret is set. The question is *when Ian wants the window*, not *what the script
+does*.
 
 **To reach 403:** set `lgms_shared_secret` WP-side to match `.env`'s
 `LGMS_SHARED_SECRET`, then populate the tester list. Then re-run `--verify`; V5
