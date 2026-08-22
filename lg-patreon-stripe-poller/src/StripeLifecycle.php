@@ -184,16 +184,131 @@ final class StripeLifecycle
     }
 
     /**
+     * THE SAME LIST, READ FOR ITS EMAIL ENTRIES (#193).
+     *
+     * Ian, 2026-08-22: *"I thought the whitelist would have them generating a
+     * wp-user like a normal new member join."* He is right, and #181's fence
+     * could not do it: it resolved an address to a WP user and asked
+     * `inCohort($id)`, so an address with NO ACCOUNT was refused before it
+     * could ever be provisioned. Every tester had to pre-exist, which made the
+     * one journey a real stranger takes at GA the one journey the test could
+     * not exercise.
+     *
+     * ONE STORE, TWO FORMS, AND THERE IS STILL NO SECOND LIST. The option holds
+     * positive ints (WP user ids) and email strings side by side. That is safe
+     * by construction rather than by care: `allowlist()` above accepts only
+     * ints and digit-strings, and the standalone membership-pages reader
+     * (`lg_membership_stripe_test_group_ids()`) applies the same test, so an
+     * email entry was already inert to every reader that predates this.
+     *
+     * NORMALIZATION IS TRIMMED, LOWER-CASED AND `is_email()`-VALIDATED, and a
+     * malformed entry WIDENS NOTHING — it is dropped, never guessed at. Same
+     * discipline as the id reader beside it, and the same reason: the failure
+     * that matters here is a wrong PASS.
+     *
+     * @return array<string, true> normalized set of allowed email addresses
+     */
+    public static function allowlistEmails(): array
+    {
+        $raw = get_option( self::ALLOWLIST_OPT, [] );
+        if ( ! is_array( $raw ) ) {
+            return [];
+        }
+        $emails = [];
+        foreach ( $raw as $v ) {
+            if ( ! is_string( $v ) ) {
+                continue;
+            }
+            $e = strtolower( trim( $v ) );
+            if ( $e === '' || ! self::looksLikeEmail( $e ) ) {
+                continue;
+            }
+            $emails[ $e ] = true;
+        }
+        return $emails;
+    }
+
+    /**
+     * Is this ADDRESS on the list, whether or not it has an account yet?
+     *
+     * The half of the decision that exists for a person WordPress has never
+     * heard of. Kept as its own predicate rather than folded into the caller so
+     * that the checkout door, the provision fence and `inCohort()` below all
+     * ask one function and cannot drift into three normalizations.
+     */
+    public static function inCohortEmail( ?string $email ): bool
+    {
+        $email = strtolower( trim( (string) $email ) );
+        if ( $email === '' ) {
+            return false;
+        }
+        return isset( self::allowlistEmails()[ $email ] );
+    }
+
+    /**
      * PUBLIC because the cohort fences TWO grant paths, not one. This class
      * guards the webhook; LGMS\Sync guards the entitlement sweep, which is how
      * a redeemed gift and the five-minute cron reach the very same Arbiter
      * write. One predicate, one normalization — a second copy of
      * `isset( allowlist()[ $id ] )` elsewhere is exactly how the two ends of a
      * fence drift apart.
+     *
+     * ⚠️ THE EMAIL UNION IS READ-SIDE, AND IT HAD TO BE (#193). The tempting
+     * alternative is the shape `Invites::consumeForUser()` already uses: when
+     * the account appears, promote its id onto the list. It fails the one
+     * constraint #181 is built on — *a session minted for an address that was
+     * LATER removed from the list must still fail to provision*. A promoted id
+     * outlives the address that earned it, so striking an email would stop
+     * closing the door. Read-side, removing the address shuts every door in the
+     * same instant.
+     *
+     * ⚠️ AND IT IS REQUIRED, NOT COSMETIC. Without it a listed address would
+     * mint a session and provision an account, and then this very predicate —
+     * asked by `Sync::customer()`'s fence with the NEW user's id — would skip
+     * the grant. The tester would end up with an account and no membership, and
+     * the rehearsal would look like it had passed.
+     *
+     * WITH NO EMAILS ON THE LIST THIS IS TODAY, EXACTLY: the id check
+     * short-circuits first, and the email set is never even read. That empty
+     * state is what stands in for a flag here (#193 ruling, keeper 8/22), so it
+     * is asserted rather than argued — gate 86 §J.
      */
     public static function inCohort( int $wpUserId ): bool
     {
-        return isset( self::allowlist()[ $wpUserId ] );
+        if ( isset( self::allowlist()[ $wpUserId ] ) ) {
+            return true;
+        }
+
+        // NOTHING BELOW RUNS ON A LIST OF PLAIN IDS. The guard is the no-op
+        // proof and the hot-path saving at once: `Sync::all()` asks this for
+        // every customer every five minutes.
+        if ( $wpUserId <= 0 || self::allowlistEmails() === [] ) {
+            return false;
+        }
+
+        $user = function_exists( 'get_userdata' ) ? get_userdata( $wpUserId ) : null;
+        if ( ! $user || ! isset( $user->user_email ) ) {
+            return false;
+        }
+        return self::inCohortEmail( (string) $user->user_email );
+    }
+
+    /**
+     * `is_email()` when WordPress is loaded, a conservative fallback when it is
+     * not — the poller's classes are loaded by gates and CLI harnesses that
+     * boot no WordPress, and a validator that throws there would make this
+     * unreachable rather than strict.
+     *
+     * The fallback is deliberately NARROWER than WordPress's: anything it is
+     * unsure of is dropped, because a dropped entry refuses and a wrongly
+     * accepted one admits.
+     */
+    private static function looksLikeEmail( string $email ): bool
+    {
+        if ( function_exists( 'is_email' ) ) {
+            return (bool) is_email( $email );
+        }
+        return (bool) filter_var( $email, FILTER_VALIDATE_EMAIL );
     }
 
     /* ------------------------------------------------------------------ */

@@ -606,7 +606,13 @@ final class Health
     {
         $state  = CheckoutAudience::state();
         $cohort = CohortAllowlist::ids();
-        $n      = count( $cohort );
+        /* #193 — BOTH KINDS OF ENTRY COUNT. A list holding nothing but tester
+           ADDRESSES admits people, so counting only the ids here would report
+           "the cohort is EMPTY, nobody at all can buy" about a cohort that is
+           working — the panel crying wolf on itself, which is the exact failure
+           #192 spent a rewrite removing. */
+        $addrs  = CohortAllowlist::emails();
+        $n      = count( $cohort ) + count( $addrs );
 
         $pagesLive     = (string) get_option( 'lgms_stripe_pages_live', '' );
         $testerPages   = (string) get_option( 'lgms_stripe_testgroup_pages', '' );
@@ -616,7 +622,7 @@ final class Health
         $lines = [
             self::line( 'Checkout audience', $state . ( get_option( CheckoutAudience::OPT, null ) === null ? ' (option not set — this is the default)' : '' ),
                 $state === 'on' ? 'warn' : 'ok' ),
-            self::line( 'Tester cohort', $n === 0 ? 'EMPTY' : $n . ' member(s)', $n === 0 ? 'warn' : 'ok' ),
+            self::line( 'Tester cohort', $n === 0 ? 'EMPTY' : self::cohortWords( count( $cohort ), count( $addrs ) ), $n === 0 ? 'warn' : 'ok' ),
             self::line( 'Join page open to everyone (lgms_stripe_pages_live)', $pagesLiveOn ? 'yes' : 'no', 'neutral' ),
             self::line( 'Join page open to the test group (lgms_stripe_testgroup_pages)', $testerPagesOn ? 'yes' : 'no', 'neutral' ),
         ];
@@ -646,12 +652,30 @@ final class Health
 
         $summary = $issues !== []
             ? ucfirst( implode( '; ', $issues ) ) . '.'
-            : 'Audience `' . $state . '` with ' . $n . ' member(s) in the cohort, and the join page agrees.';
+            : 'Audience `' . $state . '` with ' . self::cohortWords( count( $cohort ), count( $addrs ) )
+              . ' in the cohort, and the join page agrees.';
 
         return self::check( 'audience', 'Who may buy?', $status, $summary, $lines,
             'The audience decides who may CHECK OUT; the two page options decide who may SEE the '
             . 'join page. They are separate switches and are free to disagree, which is why they '
-            . 'are shown together. Edit the cohort on the **Testers** tab.' );
+            . 'are shown together. Edit the cohort on the **Testers** tab. A cohort entry is either '
+            . 'a MEMBER (an account here) or an ADDRESS (no account yet — the account is created by '
+            . 'their join, #193).' );
+    }
+
+    /**
+     * "6 member(s)" / "4 member(s) + 2 address(es)" — the two are different
+     * situations and an operator reading this panel is usually trying to tell
+     * them apart: an address still waiting on its tester looks exactly like a
+     * member who has already joined if you only ever print one number.
+     */
+    private static function cohortWords( int $members, int $addresses ): string
+    {
+        $s = $members . ' member(s)';
+        if ( $addresses > 0 ) {
+            $s .= ' + ' . $addresses . ' address(es)';
+        }
+        return $s;
     }
 
     // =========================================================================

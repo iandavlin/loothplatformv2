@@ -49,6 +49,8 @@ final class Admin
         add_action( 'admin_post_lgms_cohort_lookup', [ self::class, 'handleCohortLookup' ] );
         add_action( 'admin_post_lgms_cohort_add',    [ self::class, 'handleCohortAdd' ] );
         add_action( 'admin_post_lgms_cohort_remove', [ self::class, 'handleCohortRemove' ] );
+        add_action( 'admin_post_lgms_cohort_add_email',    [ self::class, 'handleCohortAddEmail' ] );
+        add_action( 'admin_post_lgms_cohort_remove_email', [ self::class, 'handleCohortRemoveEmail' ] );
         add_action( 'admin_post_lgms_invite_mint',   [ self::class, 'handleInviteMint' ] );
         add_action( 'admin_post_lgms_price_set', [ self::class, 'handlePriceSet' ] );
         add_action( 'admin_post_lgms_comp_timer_set', [ self::class, 'handleCompTimerSet' ] );
@@ -316,11 +318,93 @@ final class Admin
 
         $u = self::resolveCohortUser( $q );
         if ( $u === null ) {
+            /* #193 — AN ADDRESS WITH NO ACCOUNT IS NOW AN OFFER, NOT A DEAD END.
+               This branch used to be the whole of Ian's problem: he types a
+               tester's email, is told no user matches, and the only way forward
+               is to make them an account first — which is precisely the step
+               that made the rehearsal untrue to the real journey. If the value
+               is a valid address, offer to list the ADDRESS. Anything else
+               (a login, a typo, an id) still refuses exactly as before: we
+               store what somebody meant to store, never a guess at it. */
+            $email = CohortAllowlist::normalizeEmail( $q );
+            if ( $email !== '' ) {
+                self::cohortRedirect( [ 'lgms_cohort_confirm_email' => rawurlencode( $email ) ] );
+            }
             self::cohortRedirect( [ 'lgms_cohort_err' => rawurlencode(
-                "No user on this box matches \"{$q}\" — nothing stored. Check the value; user IDs differ per box."
+                "No user on this box matches \"{$q}\" — nothing stored. Check the value; user IDs differ per box. "
+                . "(A valid email address with no account can be added to the list as an address — this value is not one.)"
             ) ] );
         }
         self::cohortRedirect( [ 'lgms_cohort_confirm' => (int) $u->ID ] );
+    }
+
+    /**
+     * ADD AN ADDRESS (#193). Ian, 2026-08-22: *"I thought the whitelist would
+     * have them generating a wp-user like a normal new member join."*
+     *
+     * ⚠️ IT IS RE-CHECKED FOR AN ACCOUNT AT WRITE TIME, and when one exists the
+     * MEMBER is stored instead of the address. Not pedantry: between the lookup
+     * and this click the person may have signed up, and two entries for one
+     * human is the kind of list that later disagrees with itself. Storing the
+     * id also gives the row a login and a name to show. Either way they are
+     * admitted, so nothing is lost by preferring the more specific fact.
+     */
+    public static function handleCohortAddEmail(): void
+    {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( 'Insufficient permissions.', 403 );
+        }
+        check_admin_referer( 'lgms_cohort_add_email' );
+
+        $email = CohortAllowlist::normalizeEmail( (string) ( $_POST['cohort_email'] ?? '' ) );
+        if ( $email === '' ) {
+            self::cohortRedirect( [ 'lgms_cohort_err' => rawurlencode(
+                'That is not a valid email address — nothing stored.'
+            ) ] );
+        }
+
+        if ( ( $existing = get_user_by( 'email', $email ) ) instanceof \WP_User ) {
+            if ( CohortAllowlist::add( (int) $existing->ID ) ) {
+                self::cohortRedirect( [ 'lgms_cohort_ok' => rawurlencode( sprintf(
+                    '%s already has an account, so the member was added instead: #%d %s.',
+                    $email, $existing->ID, $existing->user_login
+                ) ) ] );
+            }
+            self::cohortRedirect( [ 'lgms_cohort_ok' => rawurlencode( sprintf(
+                '%s already has an account (#%d %s) and is already in the test group — nothing changed.',
+                $email, $existing->ID, $existing->user_login
+            ) ) ] );
+        }
+
+        if ( CohortAllowlist::addEmail( $email ) ) {
+            self::cohortRedirect( [ 'lgms_cohort_ok' => rawurlencode( sprintf(
+                'Added to the test group: %s. They have no account yet — one is created when they join, '
+                . 'exactly as it will be at go-live.', $email
+            ) ) ] );
+        }
+        self::cohortRedirect( [ 'lgms_cohort_ok' => rawurlencode( sprintf(
+            '%s is already on the list — nothing changed.', $email
+        ) ) ] );
+    }
+
+    /** Remove an ADDRESS. Striking it shuts every door in the same instant. */
+    public static function handleCohortRemoveEmail(): void
+    {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( 'Insufficient permissions.', 403 );
+        }
+        $email = CohortAllowlist::normalizeEmail( (string) ( $_POST['cohort_email'] ?? '' ) );
+        check_admin_referer( 'lgms_cohort_remove_email_' . $email );
+
+        if ( $email !== '' && CohortAllowlist::removeEmail( $email ) ) {
+            self::cohortRedirect( [ 'lgms_cohort_ok' => rawurlencode( sprintf(
+                'Removed %s from the test group. They can no longer check out, and a checkout they '
+                . 'started before now will no longer create an account either.', $email
+            ) ) ] );
+        }
+        self::cohortRedirect( [ 'lgms_cohort_err' => rawurlencode(
+            ( $email === '' ? 'That is not a valid email address' : $email . ' was not on the list' ) . ' — nothing changed.'
+        ) ] );
     }
 
     /** Step 2 of add: the id from the confirm panel, re-verified at write time. */
@@ -718,7 +802,10 @@ final class Admin
 
         $ok  = isset( $_GET['lgms_cohort_ok'] )  ? rawurldecode( (string) $_GET['lgms_cohort_ok'] )  : '';
         $err = isset( $_GET['lgms_cohort_err'] ) ? rawurldecode( (string) $_GET['lgms_cohort_err'] ) : '';
-        $confirmId = (int) ( $_GET['lgms_cohort_confirm'] ?? 0 );
+        $confirmId    = (int) ( $_GET['lgms_cohort_confirm'] ?? 0 );
+        $confirmEmail = isset( $_GET['lgms_cohort_confirm_email'] )
+            ? CohortAllowlist::normalizeEmail( rawurldecode( (string) $_GET['lgms_cohort_confirm_email'] ) )
+            : '';
 
         /**
          * THE INVITE PANEL. Shown with the list because it answers the same
@@ -732,10 +819,13 @@ final class Admin
         ?>
         <h2>Invite someone who has no account yet</h2>
         <p class="description">
-            The test group only takes people who already have an account. This mints a
-            one-time link for an email address, so a fresh recruit can walk the whole
-            join. The link opens the join flow <strong>only</strong>, expires, and is spent
-            by the account it creates — which is then added to the list automatically.
+            <strong>Usually you do not need this any more.</strong> Since #193 the list below
+            takes a plain email address, and a listed address joins and pays with no account
+            and no link — the account is created by the join, exactly as it will be at
+            go-live. This mints a one-time link instead, which is still the right tool when
+            you want to hand one named person a private way in: it opens the join flow
+            <strong>only</strong>, expires, and is spent by the account it creates — which is
+            then added to the list automatically.
         </p>
         <?php if ( ! $invitesOn ) : ?>
             <p><strong>Invites are switched off on this box.</strong> A minted link will not
@@ -764,6 +854,7 @@ final class Admin
         <?php
 
         $ids         = CohortAllowlist::ids();
+        $emails      = CohortAllowlist::emails();
         $lifecycleOn = StripeLifecycle::flagOn();
         $gateOn      = (bool) get_option( StripeLifecycle::IDENTITY_GATE_OPT, false );
 
@@ -776,17 +867,27 @@ final class Admin
 
         <h2>Stripe test group — the members allowed into the live test</h2>
         <p class="description" style="max-width:720px;">
-            Only members on this list transition through the Stripe webhook lifecycle. Everyone else's
+            Only people on this list transition through the Stripe webhook lifecycle. Everyone else's
             events are acknowledged and journaled but change <strong>nothing</strong> — an
             <strong>empty list means closed for everyone</strong>, even with the lifecycle flag on.
             Removing a member freezes them (cancellations are skipped too); it does not take their
             access away.
         </p>
+        <p class="description" style="max-width:720px;">
+            <strong>Two kinds of entry, one list.</strong> A <em>member</em> is somebody who already
+            has an account here. An <em>address</em> is somebody who does not — list the address and
+            they join, pay, and get their WordPress account made by the join itself, which is the
+            journey a real new member takes at go-live. Removing an address shuts every door for it
+            immediately, including a checkout they had already started.
+        </p>
 
         <p>
             <span class="lgms-chip" style="background:<?php echo $lifecycleOn ? '#dcfce7;color:#15803d' : '#f0f0f1;color:#666'; ?>;">lifecycle <?php echo $lifecycleOn ? 'ON' : 'OFF'; ?></span>
             <span class="lgms-chip" style="background:<?php echo $gateOn ? '#dcfce7;color:#15803d' : '#f0f0f1;color:#666'; ?>;">identity gate <?php echo $gateOn ? 'ON' : 'OFF'; ?></span>
-            <span class="lgms-chip" style="background:#e0f2fe;color:#0369a1;">in the test group: <?php echo count( $ids ); ?></span>
+            <span class="lgms-chip" style="background:#e0f2fe;color:#0369a1;">in the test group: <?php echo count( $ids ) + count( $emails ); ?></span>
+            <?php if ( $emails !== [] ) : ?>
+                <span class="lgms-chip" style="background:#fef3c7;color:#92400e;"><?php echo count( $emails ); ?> by address (no account yet)</span>
+            <?php endif; ?>
             <style>.lgms-chip { display:inline-block; padding:.15em .55em; border-radius:3px; font-size:.85em; font-weight:600; margin-right:.4em; }</style>
         </p>
 
@@ -817,19 +918,41 @@ final class Admin
             <?php endif; ?>
         <?php endif; ?>
 
-        <h3>Add a member</h3>
+        <?php if ( $confirmEmail !== '' ) : ?>
+            <div style="border:1px solid #f0d8b8;background:#fffaf0;border-radius:4px;padding:1em 1.2em;max-width:560px;margin-bottom:1.5em;">
+                <p style="margin:0 0 .6em;font-weight:600;">No account for that address yet — list the address itself?</p>
+                <table class="widefat" style="margin-bottom:.8em;max-width:520px;">
+                    <tr><th style="width:8em;">Address</th><td><?php echo esc_html( $confirmEmail ); ?></td></tr>
+                    <tr><th>Account</th><td>none on this box yet</td></tr>
+                </table>
+                <p class="description" style="margin:0 0 .8em;">
+                    They will be able to reach checkout and pay with no account. The WordPress account
+                    is created by the join, exactly as it will be for a real new member at go-live.
+                </p>
+                <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block;margin-right:.5em;">
+                    <?php wp_nonce_field( 'lgms_cohort_add_email' ); ?>
+                    <input type="hidden" name="action" value="lgms_cohort_add_email">
+                    <input type="hidden" name="cohort_email" value="<?php echo esc_attr( $confirmEmail ); ?>">
+                    <button type="submit" class="button button-primary">Add <?php echo esc_html( $confirmEmail ); ?> to the cohort</button>
+                </form>
+                <a class="button" href="<?php echo esc_url( add_query_arg( [ 'page' => self::OPT_PAGE, 'tab' => 'stripe_cohort' ], admin_url( self::PARENT_FILE ) ) ); ?>">Cancel</a>
+            </div>
+        <?php endif; ?>
+
+        <h3>Add a member, or an address</h3>
         <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="margin-bottom:2em;">
             <?php wp_nonce_field( 'lgms_cohort_lookup' ); ?>
             <input type="hidden" name="action" value="lgms_cohort_lookup">
             <input type="text" name="cohort_query" class="regular-text" placeholder="email, login, or user ID"
                    autocomplete="off" required>
             <button type="submit" class="button">Look up</button>
-            <p class="description">All digits = user ID · contains @ = email · anything else = login. Nothing is stored until you confirm the resolved member.</p>
+            <p class="description">All digits = user ID · contains @ = email · anything else = login. Nothing is stored until you confirm.
+            <br>An email that matches an account offers that <strong>member</strong>; an email that matches none offers the <strong>address</strong>.</p>
         </form>
 
-        <h3>Current cohort (<?php echo count( $ids ); ?>)</h3>
-        <?php if ( $ids === [] ) : ?>
-            <p><em>Empty — the lifecycle is closed for everyone until a member is added.</em></p>
+        <h3>Current cohort (<?php echo count( $ids ) + count( $emails ); ?>)</h3>
+        <?php if ( $ids === [] && $emails === [] ) : ?>
+            <p><em>Empty — the lifecycle is closed for everyone until a member or an address is added.</em></p>
         <?php else : ?>
         <table class="widefat striped" style="max-width:760px;">
             <thead>
@@ -864,13 +987,47 @@ final class Admin
                     </td>
                 </tr>
             <?php endforeach; ?>
+            <?php /* #193 — THE ADDRESSES. Each row says whether an account has
+                     appeared for it yet, because those are different situations
+                     and only one of them is still waiting on the tester: an
+                     address that has grown an account is admitted by the
+                     address entry AND resolves to a real person, and Ian should
+                     be able to see which of his testers have actually turned
+                     up without going to the users screen to find out. */ ?>
+            <?php foreach ( $emails as $addr ) :
+                $ue = get_user_by( 'email', $addr );
+            ?>
+                <tr>
+                    <td><span class="lgms-chip" style="background:#fef3c7;color:#92400e;margin:0;">addr</span></td>
+                    <?php if ( $ue ) : ?>
+                        <td><strong><?php echo esc_html( $ue->user_login ); ?></strong>
+                            <br><span class="description">signed up since — now #<?php echo (int) $ue->ID; ?></span></td>
+                    <?php else : ?>
+                        <td><span class="description">no account yet — created when they join</span></td>
+                    <?php endif; ?>
+                    <td><?php echo esc_html( $addr ); ?></td>
+                    <td><?php echo esc_html( CohortAllowlist::addedAt( $addr ) ?? '—' ); ?></td>
+                    <td>
+                        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+                            <?php wp_nonce_field( 'lgms_cohort_remove_email_' . $addr ); ?>
+                            <input type="hidden" name="action" value="lgms_cohort_remove_email">
+                            <input type="hidden" name="cohort_email" value="<?php echo esc_attr( $addr ); ?>">
+                            <button type="submit" class="button button-small">Remove</button>
+                        </form>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
             </tbody>
         </table>
         <?php endif; ?>
 
         <p class="description" style="margin-top:1.5em;">
-            CLI equivalent (same option, same shape):
-            <code>wp option update <?php echo esc_html( StripeLifecycle::ALLOWLIST_OPT ); ?> '[<?php echo esc_html( implode( ',', $ids ) ); ?>]' --format=json</code>
+            CLI equivalent (same option, same shape — ids and addresses in one array):
+            <code>wp option update <?php echo esc_html( StripeLifecycle::ALLOWLIST_OPT ); ?> '<?php
+                echo esc_html( wp_json_encode( array_merge(
+                    array_map( 'intval', $ids ),
+                    array_map( 'strval', $emails )
+                ) ) ); ?>' --format=json</code>
         </p>
         <?php
     }

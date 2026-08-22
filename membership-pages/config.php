@@ -252,11 +252,84 @@ function lg_membership_stripe_test_group_ids(): array {
 }
 }
 
+if (!function_exists('lg_membership_stripe_test_group_emails')) {
+/**
+ * THE SAME OPTION, READ FOR ITS ADDRESS ENTRIES (#193).
+ *
+ * Ian 2026-08-22 ruled the tester list takes plain email addresses beside the
+ * member ids, so somebody with no account can walk the whole join. The reader
+ * above has ALWAYS dropped non-numeric entries, which is why adding addresses
+ * to this option was safe before this function existed and is why an old copy
+ * of this file cannot be confused by one.
+ *
+ * Normalization mirrors LGMS\StripeLifecycle::allowlistEmails() exactly:
+ * trimmed, lower-cased, and dropped unless it validates. A malformed entry
+ * widens nothing.
+ *
+ * @return string[] the listed addresses, or [] for absent/empty/malformed
+ */
+function lg_membership_stripe_test_group_emails(): array {
+    static $emails = null;
+    if ($emails !== null) return $emails;
+
+    $raw = lg_membership_wp_option('lgms_stripe_lifecycle_allowlist', null);
+    if ($raw === null || $raw === '') return $emails = [];
+
+    $decoded = @unserialize($raw, ['allowed_classes' => false]);
+    if (!is_array($decoded)) return $emails = [];
+
+    $out = [];
+    foreach ($decoded as $v) {
+        if (!is_string($v)) continue;
+        $e = strtolower(trim($v));
+        if ($e === '' || !filter_var($e, FILTER_VALIDATE_EMAIL)) continue;
+        $out[$e] = true;
+    }
+    return $emails = array_keys($out);
+}
+}
+
+if (!function_exists('lg_membership_user_email')) {
+/** This box's email for a WP user id, or '' — one query, cached per request. */
+function lg_membership_user_email(int $wpUserId): string {
+    static $cache = [];
+    if ($wpUserId <= 0) return '';
+    if (array_key_exists($wpUserId, $cache)) return $cache[$wpUserId];
+    try {
+        $stmt = lg_membership_db()->prepare(
+            'SELECT user_email FROM ' . LG_MEMBERSHIP_TABLE_PREFIX . 'users WHERE ID = ? LIMIT 1'
+        );
+        $stmt->execute([$wpUserId]);
+        $val = $stmt->fetchColumn();
+        $cache[$wpUserId] = ($val === false) ? '' : strtolower(trim((string) $val));
+    } catch (\Throwable $e) {
+        $cache[$wpUserId] = '';          // a DB error must not ADMIT anyone
+    }
+    return $cache[$wpUserId];
+}
+}
+
 if (!function_exists('lg_membership_in_stripe_test_group')) {
 function lg_membership_in_stripe_test_group(int $wpUserId): bool {
     if ($wpUserId <= 0) return false;                        // anon is never listed
     if (!lg_membership_stripe_testgroup_pages()) return false;   // lock 1
-    return in_array($wpUserId, lg_membership_stripe_test_group_ids(), true);  // lock 2
+    if (in_array($wpUserId, lg_membership_stripe_test_group_ids(), true)) return true;  // lock 2
+
+    /* #193 — LISTED BY ADDRESS. Without this leg a tester whose account was
+       created by the join is admitted to CHECKOUT and refused the join page
+       itself the moment they arrive on a browser without #180's unlock cookie —
+       a second device, a cleared cookie jar, or simply /manage-subscription/
+       after they have paid. That is the "wired perfectly and lands nowhere"
+       shape this file already carries two warnings about, and it would land in
+       the middle of a real-money test.
+
+       NOTHING BELOW RUNS ON A LIST OF PLAIN IDS: no addresses listed means no
+       query and behaviour identical to before. */
+    $listed = lg_membership_stripe_test_group_emails();
+    if ($listed === []) return false;
+
+    $email = lg_membership_user_email($wpUserId);
+    return $email !== '' && in_array($email, $listed, true);
 }
 }
 

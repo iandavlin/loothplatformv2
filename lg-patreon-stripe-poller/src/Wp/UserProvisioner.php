@@ -69,15 +69,25 @@ final class UserProvisioner
             // LGMS\Membership\CompStanding is that predicate, and it is
             // deliberately read-only: re-arming comp expiry is #183.
             $refusedUser = get_user_by( 'email', $email );
-            $who         = $refusedUser
+            // ⚠️ "NO WORDPRESS ACCOUNT" IS NO LONGER THE REASON, AND SAYING SO
+            // WOULD SEND THE READER TO THE WRONG FIX (#193). Since Ian ruled the
+            // list takes plain addresses, having no account is a perfectly
+            // normal state for a tester who is about to buy — what refused this
+            // buyer is that neither their id nor their address is on the list.
+            // The operator action is the same in both halves (add them), but an
+            // alert that names the wrong cause is how somebody spends an hour
+            // making an account that was never needed.
+            $who = $refusedUser
                 ? \LGMS\Membership\CompStanding::describe( (int) $refusedUser->ID )
-                : 'no WordPress account';
+                : 'no WordPress account yet';
 
             $detail = sprintf(
-                'Stripe customer %d (%s — %s) is outside the soft-launch cohort, and the checkout '
-                . 'audience is `%s`, so no WordPress account was created and no membership was '
+                'Stripe customer %d (%s — %s) is outside the soft-launch cohort: neither the '
+                . 'address nor any account it belongs to is on the list, and the checkout '
+                . 'audience is `%s`. So no WordPress account was created and no membership was '
                 . 'granted. If this purchase is genuine it needs a refund, or the buyer needs '
-                . 'adding to the cohort (LG Member Sync -> Test Group).',
+                . 'adding to the cohort — LG Member Sync -> Testers, where the address can be '
+                . 'listed on its own if they have no account yet.',
                 $customerId,
                 $email,
                 $who,
