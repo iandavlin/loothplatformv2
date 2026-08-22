@@ -61,9 +61,21 @@ does *not* gate the master Profile-visibility chip — see the measurement below
 
 **Consequence the guide MUST state:** when an owner uses "View as → Public" or
 "View as → Member", the editor *disappears*. Not greys out — is not emitted. To get
-editing back they must click "View as → Me". A member who previews their profile and
-then wonders where their edit controls went is hitting designed behaviour, and it is
+editing back they must click **"View as → Edit"**. A member who previews their profile
+and then wonders where their edit controls went is hitting designed behaviour, and it is
 exactly the kind of thing an instruction set exists to pre-empt.
+
+> **The third position was called "Me" until 2026-08-22 (#195).** Ian: *"in the
+> profile, I'd like the view as controls in the privacy area to read edit instead
+> of me."* The other two positions name an AUDIENCE; "Me" looked like a third
+> audience and was not one — it is the working view, the one where things can be
+> changed, which is what the panel's own hint already said ("This IS your
+> editor"). ⚠️ **The LABEL moved and the VALUE did not:** the URL is still
+> `?view=me`, the predicate is still `$role === 'me'`, and every consumer keys on
+> that string. Gate 97 asserts the pair per position for exactly this reason —
+> anyone "tidying" the value to match the new word takes edit mode down with it.
+> The same rename landed on `/p/` (the practice page) so one position does not
+> wear two names, and on `/profile/edit`'s SSR editor, which is unreachable.
 
 The **View-as strip itself** stays visible in all three modes, because it is gated on
 `$isOwner || $adminEditing` (`u.php:728`), a weaker condition than `$editing`.

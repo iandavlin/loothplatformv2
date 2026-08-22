@@ -163,7 +163,7 @@ function looth_render_editor(array $profile, string $mode, string $role): void {
       <?php if ($isOwner): ?>
         <div class="viewer"><span>👁 viewing as</span>
           <div class="seg" id="role">
-            <button data-role="me"     class="<?= $role==='me'?'on':'' ?>">Me</button>
+            <button data-role="me"     class="<?= $role==='me'?'on':'' ?>">Edit</button>
             <button data-role="member" class="<?= $role==='member'?'on':'' ?>">Member</button>
             <button data-role="public" class="<?= $role==='public'?'on':'' ?>">Public</button>
           </div>
