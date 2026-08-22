@@ -518,7 +518,13 @@ function lg_fc_types(): array
                 ['_post_content',                'Tell people about it',  'What it does, what it’s for, anything worth knowing before they print it.', false, 'Summary'],
                 ['loothprint_category',          'What kind of print is it?', '',                                                          false, 'Type of Loothprint'],
                 ['content_topic_broad_terms',    'And roughly what area of work?', '',                                                     false, 'Content Topic'],
-                ['loothprint_creative_commons',  'Licence',               'The usual choice — leave it unless you know you want something else.', false, 'Creative Commons Use License (leave default if unsure)'],
+                /* PARED, Ian 2026-08-21 (#191): the hint used to read "The usual
+                   choice — leave it unless you know you want something else." —
+                   the same nudge he had just had removed from the paywall
+                   control (171ab17), and worse here, because it tells a member
+                   not to read the thing they are agreeing to. It DESCRIBES the
+                   field now and stops; the ⓘ carries the terms. */
+                ['loothprint_creative_commons',  'Licence',               'How other people may use your print files and photos.', false, 'Creative Commons Use License (leave default if unsure)'],
                 ['loothprint_video_instructions','A video of it in use',  '',                                                              false, 'Video instructions for use/build'],
             ],
             /* REMOVED FROM THE FORM 2026-08-16, Ian testing live: "remove tip jar
@@ -553,6 +559,397 @@ function lg_fc_types(): array
             'hero_from' => 'loothprint_more_images',
         ],
     ]);
+}
+
+/* ══════════════════════════ THE LICENCE LIST (#191) ═════════════════════════
+ *
+ * ⚠️ ONE OF THE FOUR OPTIONS DESCRIBED A LICENCE THAT DOES NOT EXIST, and
+ * members were picking legal terms off that sentence. The stored choice read:
+ *
+ *     BY ND NC (Credit given to creator, No Derivatives,
+ *               Adaptations shared with same terms)
+ *
+ * "No Derivatives" and "adaptations shared with same terms" contradict each
+ * other — the second clause is Share-Alike, which is a DIFFERENT LICENCE. The
+ * one the letters name is BY-NC-ND: credit, non-commercial, no derivatives.
+ *
+ * THE LETTERS WERE ALWAYS RIGHT AND THE ENGLISH BESIDE THEM WAS WRONG, which is
+ * the whole reason correcting it is safe (keeper's ruling with Ian, 2026-08-21:
+ * "Correct all three, both copies"). This changes nobody's licence; it makes the
+ * description match the licence its author actually chose. Anything that reached
+ * further than that — different letters, an ambiguous choice — would be a
+ * different act, and tools/migrations/191-licence-label.php refuses rather than
+ * guessing.
+ *
+ * ⚠️ THE STORED VALUE IS THE LABEL STRING. ACF radio choices are key => label and
+ * this field's key IS its label, so every word here is a value in wp_postmeta.
+ * Two consequences that shape everything below:
+ *
+ *   · CHANGING A LABEL ORPHANS EVERY ROW THAT STORED THE OLD ONE. An ACF radio
+ *     whose value matches no choice renders with NOTHING SELECTED. MEASURED on
+ *     this box, because the consequence turns on a flag: field_6564e26df56ba is
+ *     `required => 1`, so ACF REFUSES the save ("… value is required") rather
+ *     than storing the emptiness. So the damage is not a silently blanked
+ *     licence — it is a member LOCKED OUT of editing their own loothprint until
+ *     they pick a licence again, and whichever they pick is then a licence
+ *     change nobody asked for. `supersedes` and lg_fc_licence_forward() close
+ *     that, at RENDER time only. Nothing here rewrites a stored row.
+ *   · SO THE FORWARD MAP STAYS after the dev2 migration, deliberately. Live
+ *     keeps the old values until Ian runs the handed command, and a fresh cut of
+ *     dev2 from live would reintroduce them. A migration is a one-off; this is
+ *     the standing safety.
+ *
+ * ⚠️ AND IT IS DONE HERE, IN CODE, RATHER THAN BY EDITING ACF FIELD
+ * field_6564e26df56ba. Two reasons, and the second is the load-bearing one:
+ * a code override survives anyone editing that field in wp-admin, and a DB edit
+ * is not traceable to a commit — it would not reach live at all, since live
+ * deploys are a git pull. KNOWN AND REPORTED, NOT FIXED: wp-admin's own editor
+ * still offers the wrong label to anyone editing a loothprint there. That is
+ * Ian's call, not this route's.
+ *
+ * `legal` names a file in platform/licences/, held OFFLINE on purpose — see the
+ * README there. `can`/`cannot` are the plain summary the ⓘ shows first.
+ */
+const LG_FC_LICENCE_FIELD = 'loothprint_creative_commons';
+const LG_FC_LICENCE_DIR   = '/licences/';
+
+function lg_fc_licences(): array
+{
+    return [
+        [
+            'value'  => 'BY (Credit given to creator)',
+            'name'   => 'Creative Commons Attribution 4.0',
+            'short'  => 'CC BY 4.0',
+            'legal'  => 'cc-by-4.0.txt',
+            'can'    => [
+                'Share your files anywhere, and change them however they like.',
+                'Use them commercially — sell prints, or the files themselves.',
+            ],
+            'cannot' => [
+                'Use them without crediting you and saying what they changed.',
+                'Add terms that stop anyone else doing all of the above.',
+            ],
+            'supersedes' => [],
+        ],
+        [
+            'value'  => 'BY SA (Credit given to creator, Adaptations shared with same terms)',
+            'name'   => 'Creative Commons Attribution-ShareAlike 4.0',
+            'short'  => 'CC BY-SA 4.0',
+            'legal'  => 'cc-by-sa-4.0.txt',
+            'can'    => [
+                'Share your files anywhere, and change them however they like.',
+                'Use them commercially — sell prints, or the files themselves.',
+            ],
+            'cannot' => [
+                'Use them without crediting you and saying what they changed.',
+                'Release their version under any licence but this same one.',
+            ],
+            'supersedes' => [],
+        ],
+        [
+            'value'  => 'BY NC SA (Credit given to creator, Non-Commercial only, Adaptations shared with same terms)',
+            'name'   => 'Creative Commons Attribution-NonCommercial-ShareAlike 4.0',
+            'short'  => 'CC BY-NC-SA 4.0',
+            'legal'  => 'cc-by-nc-sa-4.0.txt',
+            'can'    => [
+                'Share your files, and change them however they like.',
+                'Print the result for themselves, for friends, for their own workshop.',
+            ],
+            'cannot' => [
+                'Use them without crediting you and saying what they changed.',
+                'Use them commercially — no selling the prints or the files.',
+                'Release their version under any licence but this same one.',
+            ],
+            'supersedes' => [],
+        ],
+        [
+            /* THE CORRECTED ONE. Letters in canonical order, matching both
+               Creative Commons' own name for it and its sibling "BY NC SA (…)"
+               three rows up — the old string put ND before NC and read as a
+               fifth, non-existent licence. */
+            'value'  => 'BY NC ND (Credit given to creator, Non-Commercial only, No Derivatives)',
+            'name'   => 'Creative Commons Attribution-NonCommercial-NoDerivatives 4.0',
+            'short'  => 'CC BY-NC-ND 4.0',
+            'legal'  => 'cc-by-nc-nd-4.0.txt',
+            'can'    => [
+                'Share your files exactly as you published them.',
+                'Print them for themselves, for friends, for their own workshop.',
+                'Change them in private — tweak the fit, scale a part.',
+            ],
+            'cannot' => [
+                'Use them without crediting you.',
+                'Use them commercially — no selling the prints or the files.',
+                'Share a changed version with anyone else.',
+            ],
+            'supersedes' => [
+                'BY ND NC (Credit given to creator, No Derivatives, Adaptations shared with same terms)',
+            ],
+        ],
+    ];
+}
+
+/**
+ * The ACF choices map for the licence radio: value => label, which for this
+ * field are the same string (see the warning above).
+ */
+function lg_fc_licence_choices(): array
+{
+    $out = [];
+    foreach (lg_fc_licences() as $lic) {
+        $out[$lic['value']] = $lic['value'];
+    }
+    return $out;
+}
+
+/**
+ * A stored value → the licence entry it belongs to, following `supersedes`.
+ * Null for anything this route does not recognise, which is deliberately not the
+ * same as guessing: an unknown value is left exactly as it is.
+ */
+function lg_fc_licence_for(string $stored): ?array
+{
+    $stored = trim($stored);
+    if ($stored === '') {
+        return null;
+    }
+    foreach (lg_fc_licences() as $lic) {
+        if ($lic['value'] === $stored || in_array($stored, $lic['supersedes'], true)) {
+            return $lic;
+        }
+    }
+    return null;
+}
+
+/**
+ * A stored value → the value that is offered TODAY. Unrecognised values come
+ * back untouched, so this can never blank a row it does not understand.
+ *
+ * ⚠️ RENDER ONLY. Called from lg_fc_relabel(), which ACF runs for display and
+ * never for validation or save, so nothing in wp_postmeta changes because of
+ * this. A member's own Post on their own loothprint is the only thing that ever
+ * writes the corrected string, and that is the same save they were making anyway.
+ */
+function lg_fc_licence_forward(string $stored): string
+{
+    $lic = lg_fc_licence_for($stored);
+    return $lic ? $lic['value'] : $stored;
+}
+
+/**
+ * The complete legal code for one licence, from platform/licences/.
+ *
+ * ⚠️ dirname(__DIR__), the same idiom lg_fc_enabled() uses for platform/config/.
+ * __DIR__ resolves THROUGH the mu-plugin symlink back into the checkout, so the
+ * files are found wherever the checkout is, and platform/licences/ needs no
+ * symlink of its own — which is the point, because mu-plugins are symlinked one
+ * entry at a time and a missed one would mean an ⓘ that opens on nothing.
+ *
+ * An unreadable file returns '' and the modal says so rather than rendering an
+ * empty slab: a legal document that silently is not there is worse than one that
+ * admits it.
+ */
+function lg_fc_licence_legal(array $lic): string
+{
+    $name = basename((string) ($lic['legal'] ?? ''));
+    if ($name === '') {
+        return '';
+    }
+    $path = dirname(__DIR__) . LG_FC_LICENCE_DIR . $name;
+    if (!is_readable($path)) {
+        error_log('[lg-frontend-compose] licence text unreadable at ' . $path);
+        return '';
+    }
+    return (string) file_get_contents($path);
+}
+
+/* ═══════════════════════════ THE ⓘ AND ITS MODAL (#191) ══════════════════════
+ *
+ * Ian, 2026-08-21: "Could we get a i that pops up a modal with the entire legal
+ * contract?" — and his ordering with it: the PLAIN SUMMARY FIRST, the complete
+ * legal text underneath for anyone who wants it.
+ *
+ * ⚠️ THIS IS NOT A BREACH OF #189's "NO MODAL" RULE, and the distinction is the
+ * reason both can be true. That rule was about a FILE PICKER: a modal there is a
+ * second place to do the one thing the form exists to do, and it took the member
+ * away from their own page to do it. This is REFERENCE TEXT — nineteen thousand
+ * words a member reads once and dismisses — which is exactly what a modal is for.
+ * Written down so nobody reverts this on #189's authority.
+ *
+ * ⚠️ IT MUST FOLLOW THE CURRENT SELECTION. Showing the terms of a licence the
+ * member did not pick is worse than showing nothing: it is a confident wrong
+ * answer to a legal question. So the ⓘ reads the checked radio AT OPEN TIME —
+ * not at page load, not from a value baked into the button — and the gate's
+ * central leg walks all four.
+ *
+ * ── WHERE THE BUTTON COMES FROM, because the obvious seam does not work ───────
+ * Appending markup to $field['label'] in lg_fc_relabel() renders it as VISIBLE
+ * TEXT: acf_get_field_label() runs esc_html() over the label BEFORE any filter
+ * sees it (acf-field-functions.php). The `acf/get_field_label` filter receives
+ * the already-escaped string, and what it returns is passed through
+ * acf_esc_html() — wp_kses with $allowedposttags — which keeps <button>, its
+ * aria-*, id, class and type untouched. Verified on this box against the exact
+ * markup below, not assumed from the allow-list.
+ *
+ * Server-rendered rather than built in JS, so the ⓘ is in the bytes curl fetches
+ * and a gate can measure it without a browser.
+ *
+ * ── WHY A NATIVE <dialog> ─────────────────────────────────────────────────────
+ * showModal() gives the inert background, the top layer, the backdrop and Escape
+ * for free, and they are the parts a hand-rolled overlay gets wrong. Focus return
+ * to the ⓘ is done explicitly anyway — browsers do restore it, but a behaviour
+ * this lane promised should be asserted rather than inherited.
+ *
+ * ⚠️ THE DIALOG IS PRINTED AFTER acf_form(), OUTSIDE THE <form>. A <button> in a
+ * form is a submit button unless told otherwise, and a modal full of controls
+ * inside the compose form is one missed type="button" away from publishing a
+ * half-finished loothprint. Out here that whole class cannot happen.
+ *
+ * ⚠️ THE TEXTS SHIP IN <template>, ALL FOUR, rather than being fetched on open.
+ * 78.7 KB raw, measured 7.4 KB gzipped for all four together against a 2.5 MB
+ * page budget — so the fetch would buy nothing and cost an error path, a spinner
+ * and a way for the ⓘ to open on an empty box. Template content is inert: it is
+ * not in the accessible tree, not focusable and not searchable until cloned.
+ */
+
+/**
+ * The ⓘ, appended to the licence field's label. Scoped by field name; the filter
+ * is added and removed around this route's render, like lg_fc_relabel().
+ */
+function lg_fc_licence_label_info($label, $field = [], $context = '')
+{
+    $name = $field['_name'] ?? ($field['name'] ?? '');
+    if ($name !== LG_FC_LICENCE_FIELD) {
+        return $label;
+    }
+    return $label
+        . ' <button type="button" id="lgfc-lic-i" class="lgfc-lic__i"'
+        . ' aria-haspopup="dialog" aria-expanded="false" aria-controls="lgfc-lic">'
+        . '<span aria-hidden="true">i</span>'
+        . '<span class="lgfc-sr">Read what this licence means</span></button>';
+}
+
+/**
+ * One licence's legal code as readable HTML.
+ *
+ * ⚠️ THE WORDS ARE VERBATIM; THE LINE BREAKS ARE NOT, and that is deliberate.
+ * The file on disk is byte-exact and checksummed (platform/licences/README.md),
+ * but it is hard-wrapped at ~70 columns, which on a phone is either a horizontal
+ * scrollbar or a column of ragged half-lines. So each blank-line-separated block
+ * is reflowed into one paragraph and left to wrap at the reader's width, keeping
+ * the leading indent as a hanging indent so the a./b./1. structure survives.
+ * Nothing is added, removed or reordered.
+ *
+ * ⚠️ SPLIT ON "\n" EXPLICITLY, never PCRE's \R: without /u, \R matches byte 0x85,
+ * which is the third byte of some UTF-8 characters — a recorded trap on this box
+ * that silently halved lines and made a later /u match return false.
+ */
+function lg_fc_licence_legal_html(array $lic): string
+{
+    $raw = lg_fc_licence_legal($lic);
+    if ($raw === '') {
+        return '<p class="lgfc-lic__missing">The full legal text could not be'
+             . ' loaded. The summary above still describes this licence, and the'
+             . ' complete terms are published by Creative Commons.</p>';
+    }
+
+    $out    = '';
+    $block  = [];
+    $flush  = function () use (&$block, &$out) {
+        if (!$block) {
+            return;
+        }
+        $first  = $block[0];
+        $indent = strlen($first) - strlen(ltrim($first, ' '));
+        $text   = trim(preg_replace('/\s+/u', ' ', implode(' ', $block)) ?? '');
+        $block  = [];
+        if ($text === '') {
+            return;
+        }
+        // A rule of === or --- is furniture, not prose: 70 characters of it
+        // wrapped on a phone reads as damage.
+        if (preg_match('/^[=\-]{3,}$/', $text)) {
+            $out .= "<hr class=\"lgfc-lic__rule\">\n";
+            return;
+        }
+        $style = $indent > 0 ? sprintf(' style="padding-left:%dch"', min($indent, 12)) : '';
+        $out  .= '<p' . $style . '>' . esc_html($text) . "</p>\n";
+    };
+
+    foreach (explode("\n", str_replace("\r\n", "\n", $raw)) as $line) {
+        if (trim($line) === '') {
+            $flush();
+        } else {
+            $block[] = rtrim($line);
+        }
+    }
+    $flush();
+
+    return $out;
+}
+
+/**
+ * One licence's plain summary — what people may and may not do — which is what
+ * Ian asked to come FIRST.
+ */
+function lg_fc_licence_summary_html(array $lic): string
+{
+    $list = function (string $heading, array $items, string $mod): string {
+        if (!$items) {
+            return '';
+        }
+        $h = '<div class="lgfc-lic__col lgfc-lic__col--' . $mod . '">'
+           . '<h4 class="lgfc-lic__ch">' . esc_html($heading) . '</h4><ul>';
+        foreach ($items as $i) {
+            $h .= '<li>' . esc_html($i) . '</li>';
+        }
+        return $h . '</ul></div>';
+    };
+
+    return '<div class="lgfc-lic__sum">'
+         . $list('People may', $lic['can'] ?? [], 'can')
+         . $list('People may not', $lic['cannot'] ?? [], 'cannot')
+         . '</div>';
+}
+
+/**
+ * The whole ⓘ apparatus: one dialog, and one inert <template> per licence.
+ *
+ * Keyed by the licence's stored VALUE, which is what the radio's checked input
+ * carries — so the lookup at open time is the member's own selection and cannot
+ * drift from it.
+ */
+function lg_fc_licence_dialog(): string
+{
+    $tpl = '';
+    foreach (lg_fc_licences() as $lic) {
+        $tpl .= sprintf(
+            '<template class="lgfc-lic__tpl" data-lic="%s" data-short="%s">'
+                . '<p class="lgfc-lic__name">%s</p>%s'
+                . '<h3 class="lgfc-lic__lh">The full legal text</h3>'
+                . '<div class="lgfc-lic__legal">%s</div>'
+            . '</template>',
+            esc_attr($lic['value']),
+            esc_attr($lic['short']),
+            esc_html($lic['name']),
+            lg_fc_licence_summary_html($lic),   // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the builder
+            lg_fc_licence_legal_html($lic)      // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the builder
+        );
+    }
+
+    /* data-field carries the ACF field name to the script, so the selector that
+       finds the checked radio comes from LG_FC_LICENCE_FIELD rather than being
+       spelled a second time in the JS. A name written twice is a name that rots
+       in one of the two places. */
+    return '<div class="lgfc-lic" hidden>' . $tpl . '</div>'
+        . '<dialog id="lgfc-lic" class="lgfc-lic__d" aria-labelledby="lgfc-lic-t"'
+        . ' data-field="' . esc_attr(LG_FC_LICENCE_FIELD) . '">'
+        . '<div class="lgfc-lic__hd">'
+        . '<h2 id="lgfc-lic-t" class="lgfc-lic__t">Your licence</h2>'
+        . '<button type="button" class="lgfc-lic__x" aria-label="Close">'
+        . '<span aria-hidden="true">&#10005;</span></button>'
+        . '</div>'
+        . '<div class="lgfc-lic__b" tabindex="-1"></div>'
+        . '</dialog>';
 }
 
 /* ────────────────────────────────────────────────────────────── the gate ───── */
@@ -1954,6 +2351,11 @@ function lg_fc_render(string $type, int $edit = 0, bool $embed = false): void
     // see lg_fc_relabel()'s prefill block for why ACF does not do it for us here.
     $GLOBALS['lg_fc_editing'] = $edit;
     add_filter('acf/prepare_field', 'lg_fc_relabel', 20);
+    /* #191 — the ⓘ on the licence label. A SEPARATE FILTER because ACF escapes
+       the label before any of lg_fc_relabel()'s work can reach it; see
+       lg_fc_licence_label_info() for the measurement. Same lifetime as the
+       relabel filter, and removed with it below. */
+    add_filter('acf/get_field_label', 'lg_fc_licence_label_info', 20, 3);
 
     /* #189 — THE SCOPED GETTEXT FILTER IS GONE, and deleting it is the point
        rather than an omission. It existed to replace ACF's "Maximum selection
@@ -2041,10 +2443,15 @@ function lg_fc_render(string $type, int $edit = 0, bool $embed = false): void
   printf('<script>window.LGFC_UP=%s;</script>',
          wp_json_encode(lg_fc_upload_config($lg_fc_pid)));
   acf_form('lg-fc-' . $type);
+  /* #191 — AFTER acf_form(), so the dialog is a sibling of the form and never a
+     descendant of it. A control inside a form submits it; see the section
+     comment above lg_fc_licence_dialog(). */
+  echo lg_fc_licence_dialog();   // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the builder
   ?>
 </div>
     <?php
     lg_fc_page_close($embed);
+    remove_filter('acf/get_field_label', 'lg_fc_licence_label_info', 20);
     remove_filter('acf/prepare_field', 'lg_fc_relabel', 20);
     unset($GLOBALS['lg_fc_editing']);
 }
@@ -2150,6 +2557,28 @@ function lg_fc_relabel($field)
        modal is already scoped to this post's own library by lg_fc_scope_library().
        A second, UNSCOPED uploader inside the editor would drive straight through
        that. */
+    /* THE LICENCE CHOICES COME FROM CODE, NOT FROM THE STORED FIELD (#191).
+       lg_fc_licences() carries the reasoning in full; the two lines here are the
+       whole mechanism.
+
+       ⚠️ THE SECOND LINE IS NOT COSMETIC — IT IS WHAT STOPS THIS FIX BREAKING
+       THE EDIT FORM. The choice key IS the stored string, so correcting a label
+       leaves every row holding the old one matching no choice; ACF's radio then
+       renders with nothing selected, and because this field is `required` the
+       save is REFUSED — the member cannot edit their own loothprint at all
+       without changing its licence. Forwarding the value here shows them the
+       licence they actually chose, under its corrected description.
+
+       Both are RENDER-only: acf/prepare_field does not run during validation or
+       update (acf-field-functions.php dispatches those through acf/load_field),
+       so no stored row is touched by either line. */
+    if ($name === LG_FC_LICENCE_FIELD) {
+        $field['choices'] = lg_fc_licence_choices();
+        if (is_string($field['value'] ?? null)) {
+            $field['value'] = lg_fc_licence_forward($field['value']);
+        }
+    }
+
     if ($name === '_post_content') {
         $field['type']         = 'wysiwyg';
         $field['toolbar']      = 'lgfc_light';
@@ -3347,6 +3776,83 @@ html[data-lguser-theme="dark"] .lgfc__card{box-shadow:0 10px 34px rgba(0,0,0,.28
    than as part of the card, and there is no token for "one step down". */
 html[data-lguser-theme="dark"] .lgfc-up__thumb,
 html[data-lguser-theme="dark"] .lgfc-up__thumb--none{background:#15171a}
+
+/* ---- the licence ⓘ and its modal (#191) ---- */
+
+/* The only visually-hidden text this file needs. Kept as its own class rather
+   than reusing WordPress's .screen-reader-text: this page loads no ACF and no
+   admin stylesheet, so that class has no rule here and the label would print. */
+.lgfc-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;
+  overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
+
+/* The ⓘ sits INSIDE the field's <label>, which for a radio ACF renders with no
+   `for` attribute (acf_render_field_label's multi-choice branch) — so a click on
+   it activates nothing else and the button is the only interactive thing there. */
+.lgfc-lic__i{display:inline-flex;align-items:center;justify-content:center;
+  width:18px;height:18px;margin-left:7px;padding:0;vertical-align:-3px;
+  border:1px solid var(--lg-line,#e3ddd0);border-radius:999px;
+  background:var(--lg-paper,#fdfdfa);color:var(--lg-mute,#6b6f6b);
+  font:700 11.5px/1 var(--lg-font-sans,system-ui,sans-serif);cursor:pointer}
+.lgfc-lic__i:hover{border-color:var(--lg-sage,#87986a);color:var(--lg-ink,#323532)}
+.lgfc-lic__i:focus-visible{outline:2px solid var(--lg-sage,#87986a);outline-offset:2px}
+
+/* THE DIALOG. Sized in vh/vw so a phone gets nearly the whole screen and a
+   desktop gets a readable column; the body scrolls, the header does not, because
+   nineteen thousand words with no visible way out is a trap. */
+.lgfc-lic__d{width:min(680px,94vw);max-height:88vh;padding:0;overflow:hidden;
+  border:1px solid var(--lg-line,#e3ddd0);border-radius:14px;
+  background:var(--lg-card-bg,#fff);color:var(--lg-ink,#323532);
+  box-shadow:0 24px 60px -24px rgba(26,29,26,.45)}
+.lgfc-lic__d:not([open]){display:none}
+.lgfc-lic__d::backdrop{background:rgba(26,29,26,.5)}
+.lgfc-lic__d[open]{display:flex;flex-direction:column}
+.lgfc-lic__hd{display:flex;align-items:center;gap:9px;flex:0 0 auto;
+  padding:13px 15px;border-bottom:1px solid var(--lg-line,#e3ddd0)}
+.lgfc-lic__t{margin:0;font:700 15px/1.2 var(--lg-font-sans,system-ui,sans-serif);
+  color:var(--lg-ink,#323532)}
+.lgfc-lic__x{margin-left:auto;border:0;background:none;color:var(--lg-mute,#6b6f6b);
+  font-size:16px;line-height:1;cursor:pointer;padding:5px 4px}
+.lgfc-lic__x:hover{color:var(--lg-ink,#323532)}
+.lgfc-lic__x:focus-visible{outline:2px solid var(--lg-sage,#87986a);outline-offset:2px}
+.lgfc-lic__b{flex:1 1 auto;overflow-y:auto;padding:14px 15px 18px}
+.lgfc-lic__b:focus{outline:none}
+
+/* THE SUMMARY COMES FIRST — Ian's ordering, 2026-08-21. Two columns where there
+   is room, stacked on a phone; nothing here relies on the columns existing. */
+.lgfc-lic__name{margin:0 0 12px;font:600 13px/1.4 var(--lg-font-sans,system-ui,sans-serif);
+  color:var(--lg-mute,#6b6f6b)}
+.lgfc-lic__sum{display:flex;flex-wrap:wrap;gap:14px;margin:0 0 20px}
+.lgfc-lic__col{flex:1 1 240px;min-width:0}
+.lgfc-lic__ch{margin:0 0 6px;font:700 12px/1.2 var(--lg-font-sans,system-ui,sans-serif);
+  letter-spacing:.02em;text-transform:uppercase;color:var(--lg-mute,#6b6f6b)}
+.lgfc-lic__col ul{margin:0;padding:0 0 0 17px}
+.lgfc-lic__col li{margin:0 0 5px;
+  font:400 13.5px/1.5 var(--lg-font-sans,system-ui,sans-serif);color:var(--lg-ink,#323532)}
+.lgfc-lic__col--can li::marker{color:var(--lg-sage-d,#6b7c52)}
+.lgfc-lic__col--cannot li::marker{color:var(--lg-rust,#b4573a)}
+
+/* THE FULL LEGAL TEXT, underneath. Smaller and quieter than the summary on
+   purpose: it is there for the member who wants it, not the one who does not. */
+.lgfc-lic__lh{margin:0 0 8px;padding-top:14px;
+  border-top:1px solid var(--lg-line,#e3ddd0);
+  font:700 12px/1.2 var(--lg-font-sans,system-ui,sans-serif);
+  letter-spacing:.02em;text-transform:uppercase;color:var(--lg-mute,#6b6f6b)}
+.lgfc-lic__legal p{margin:0 0 .7em;
+  font:400 12.5px/1.55 var(--lg-font-sans,system-ui,sans-serif);
+  color:var(--lg-ink,#323532);overflow-wrap:break-word}
+.lgfc-lic__rule{margin:1em 0;border:0;border-top:1px solid var(--lg-line,#e3ddd0)}
+.lgfc-lic__missing{margin:0;font:400 13px/1.5 var(--lg-font-sans,system-ui,sans-serif);
+  color:var(--lg-rust,#b4573a)}
+
+/* DARK. The tokens above already flip — .lgfc re-points --lg-paper and the app's
+   own set carries --lg-card-bg, --lg-line, --lg-ink and --lg-mute — so only the
+   two places that pair a token with a HARDCODED colour need a rule here.
+   ⚠️ --lg-sage-d resolves LIGHTER in dark (#b0c693), the trap recorded above the
+   chip rules: anything that puts white on it measures 1.85:1. Nothing here does,
+   and the ::marker use is ink-on-page rather than ink-on-fill, so it is left. */
+html[data-lguser-theme="dark"] .lgfc-lic__d{
+  box-shadow:0 24px 60px -24px rgba(0,0,0,.6)}
+html[data-lguser-theme="dark"] .lgfc-lic__d::backdrop{background:rgba(0,0,0,.62)}
 CSS;
 }
 
@@ -3978,6 +4484,93 @@ function lg_fc_js(): string
     });
 
     paint();
+  });
+})();
+
+/* THE LICENCE ⓘ (#191) — it opens the terms of whatever is CHECKED RIGHT NOW.
+   Ian, 2026-08-21: "Could we get a i that pops up a modal with the entire legal
+   contract?"
+
+   ⚠️ THE SELECTION IS READ AT OPEN TIME, and that is the whole correctness claim.
+   Reading it at page load, or baking a licence into the button, would show a
+   member the terms of something they did not pick — a confident wrong answer to
+   a legal question, which is worse than no modal at all. There is deliberately
+   no cached "current licence" variable here for the same reason: the checked
+   input IS the state, and anything else is a copy that can fall behind it.
+
+   The field name comes from the dialog's data-field, which PHP fills from
+   LG_FC_LICENCE_FIELD — not spelled again here.
+
+   NATIVE <dialog>. showModal() gives the top layer, the inert background, the
+   backdrop and Escape without a line of code, and those are exactly the parts a
+   hand-rolled overlay gets wrong. The `close` event is used rather than wiring
+   each exit separately, so Escape, the ✕ and a backdrop click all restore focus
+   and aria-expanded through one path — including any exit added later. */
+(function () {
+  var dlg = document.getElementById('lgfc-lic');
+  var btn = document.getElementById('lgfc-lic-i');
+  if (!dlg || !btn) return;
+
+  var body = dlg.querySelector('.lgfc-lic__b');
+  var ttl  = dlg.querySelector('.lgfc-lic__t');
+  var xBtn = dlg.querySelector('.lgfc-lic__x');
+  var name = dlg.getAttribute('data-field') || '';
+  if (!body || !ttl || !name) return;
+
+  function checkedValue() {
+    var sel = '.acf-field[data-name="' + name + '"] input:checked';
+    var input = document.querySelector(sel);
+    return input ? input.value : '';
+  }
+
+  function templateFor(value) {
+    var all = document.querySelectorAll('.lgfc-lic__tpl');
+    for (var i = 0; i < all.length; i++) {
+      if (all[i].getAttribute('data-lic') === value) return all[i];
+    }
+    return null;
+  }
+
+  function fill() {
+    var tpl = templateFor(checkedValue());
+    while (body.firstChild) body.removeChild(body.firstChild);
+
+    /* NOTHING CHECKED IS A REAL STATE, not an impossible one: the field has a
+       default, but an edit of a post whose stored licence this route does not
+       recognise leaves the radio empty. Say so, rather than opening on a blank
+       panel that reads as broken. */
+    if (!tpl) {
+      ttl.textContent = 'Your licence';
+      var p = document.createElement('p');
+      p.className = 'lgfc-lic__missing';
+      p.textContent = 'Pick a licence and this will show exactly what it means.';
+      body.appendChild(p);
+      return;
+    }
+    ttl.textContent = tpl.getAttribute('data-short') || 'Your licence';
+    body.appendChild(tpl.content.cloneNode(true));
+    body.scrollTop = 0;
+  }
+
+  btn.addEventListener('click', function () {
+    fill();
+    btn.setAttribute('aria-expanded', 'true');
+    /* The fallback is not ceremony: without showModal the [open] attribute still
+       reveals the panel inline, so the terms remain readable rather than the ⓘ
+       becoming a button that does nothing. */
+    if (typeof dlg.showModal === 'function') dlg.showModal();
+    else dlg.setAttribute('open', '');
+  });
+
+  if (xBtn) xBtn.addEventListener('click', function () { dlg.close(); });
+
+  /* Backdrop click. The dialog's own padding is 0 and its children fill it, so
+     a click whose target is the dialog element itself landed outside the panel. */
+  dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
+
+  dlg.addEventListener('close', function () {
+    btn.setAttribute('aria-expanded', 'false');
+    btn.focus();
   });
 })();
 JS;

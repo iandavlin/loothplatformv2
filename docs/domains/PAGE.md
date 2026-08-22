@@ -634,3 +634,156 @@ today. Same data gap, different field.
   https page. Left alone: they are site chrome and one of them stores a host
   whose file dev2 lacks, so rewriting it would break a working image to save
   nothing.
+
+---
+
+## ⚠️ #191 wears the `page` label and is NOT a lanes-page issue — the SEVENTH in seven days
+
+After #171 (Patreon/join dark mode → MEMBERSHIP.md), #179 (the Loothprint
+bundle), #185 (the compose write-up editor), #186 (compose uploads), #189 (the
+form's own uploader) and #187 (article image delivery). **#191 is the compose
+form's licence control** — a mislabelled Creative Commons option, and an ⓘ that
+shows the real terms. Nothing in it touches `/lanes/`, `tools/lanes-page.py`,
+`lanes.json` or the timer. Recorded here rather than silently relabelled, because
+the domain rule says a domain-labelled issue updates its domain file in the same
+commit — so this line IS that update.
+
+**Seven in seven days, five different lanes.** Every one of them has now spent a
+paragraph explaining what the label does not mean. It needs Ian's ruling, and an
+eighth footnote is not it.
+
+### What #191 was
+
+One of four licence options read *"BY ND NC (Credit given to creator, No
+Derivatives, **Adaptations shared with same terms**)"* — and those two clauses
+contradict each other, the second belonging to Share-Alike. Members were choosing
+legal terms off that sentence; three published loothprints stored it, on both
+boxes. The letters were always right (BY-NC-ND is real); the English beside them
+was not.
+
+### ⚠️ THE ONE THING EVERY LANE SHOULD TAKE: ASK THE DATABASE WHICH KEYS HOLD IT
+
+The migration was written for **two** stores — the postmeta and the licence
+sentence baked into `_lg_layout_v2` (only 4 of 172 loothprints are synthesized at
+render; the rest have it baked). It ran, it verified, and its sweep — which asked
+about *the two keys it already knew about* — reported **zero left**.
+
+There was a **third**. `_lg_layout_v2_rendered_html`, WpRenderer's anon render
+cache, still held the contradictory sentence on one of the three. Keeper found it.
+
+Two things make this general:
+
+- **`invalidate_render_cache()` deletes only the TIMESTAMP** (`Plugin.php`, one
+  line: `delete_post_meta($post_id, LG_LAYOUT_V2_RENDERED_AT_META)`). The cached
+  HTML body stays in the row for ever. The cache was correctly *not being served*
+  — `cached_html()` returns null once the stamp is gone — but the stale bytes
+  survive every invalidation this platform performs. **133 posts carry one of
+  these rows.** Any audit that asks "is this string still stored anywhere" and
+  reads only the source-of-truth keys will be wrong on all 133.
+- **The cure is a one-line change of question.** Not `WHERE meta_key = …` for
+  keys you thought of, but `SELECT meta_key, COUNT(*) … WHERE meta_value LIKE …
+  GROUP BY meta_key`. That found the third store by itself, and also surfaced 17
+  rows in `_elementor_data` (old templates and revisions — out of scope, recorded
+  so nobody re-finds them and panics). `tools/migrations/191-licence-label.php`
+  now sweeps that way and labels each key as in-scope or not.
+- And a derived-data rule: the cache is **deleted, not patched**. A hand-edited
+  cache agrees with nothing and can silently disagree with its source later.
+
+### ⚠️ FIXING THE WORDING BROKE A DIFFERENT FILE, SILENTLY
+
+There are **two licence tables on this box**, and they cannot be merged:
+
+| | |
+|---|---|
+| `lg_fc_licences()` in `platform/mu-plugins/lg-frontend-compose.php` | what the compose form **offers**, and therefore what gets **stored** |
+| `Licenses::ACF_CHOICES` in `lg-layout-v2/src/Licenses.php` | what the layout engine **recognises** when it reads that stored value |
+
+The compose form is an mu-plugin and must not depend on a regular plugin's class
+being loaded, so the duplication is deliberate.
+
+**Correcting the fourth choice's wording broke the second one.**
+`Licenses::from_exact_prose()` matches the ACF choice string **exactly** — on
+purpose, because a loose match there would rewrite an author's prose — so every
+post saved after the fix stopped being recognised, and
+`upgrade_license_callouts()` would simply walk past them and never render the
+licence block. **Nothing errors.** Measured on main:
+`from_exact_prose('BY NC ND (…Non-Commercial only, No Derivatives)')` → `''`.
+
+Both spellings now live in `ACF_CHOICES` and both are load-bearing: without the
+new one the migrated posts break; without the old one **live** breaks, because
+its values are unchanged until Ian runs the migration, and so does any box cut
+from live.
+
+Two general points:
+
+- **It was found by grepping the repo for the old string, which is not a
+  method.** Gate 92 §F now asserts the two tables agree — the honest answer to
+  duplication you cannot remove is to gate the agreement rather than to remember
+  it.
+- ⚠️ **§F has to load the BRANCH's copy explicitly.** Under WordPress the
+  autoloader resolves `Licenses` out of the **serving checkout** — `lg-layout-v2`
+  is symlinked there — which is main, and main is the broken state being tested
+  for. So the probe runs as **plain PHP with an absolute `require`** and echoes
+  back the file it actually loaded, and the gate asserts that path. Any gate
+  comparing a plugin class against a branch has this problem.
+
+### Minting a gate number from MAIN is blind to a concurrent lane
+
+`run-all.sh` on main stopped at 90, so 91 looked free. **It was not** — lane
+192-dash-health already had `GATE 91` on its branch, unmerged and therefore
+invisible to main. Diffing *every live worktree* against main is what showed it:
+
+    for w in ~/worktrees/*/; do git -C "$w" diff --name-only main...HEAD \
+        | grep -c tools/gates/run-all.sh; done
+
+**Second near-collision in two days.** #191 took **92**, from keeper. The same
+sweep is also the cheap way to answer "does my change overlap another lane's
+files" — it showed no other live lane touching `lg-frontend-compose.php`.
+
+### Three smaller ones, each paid for
+
+1. **`acf/get_field_label` is the ONLY seam for markup in an ACF field label.**
+   `acf_get_field_label()` runs `esc_html()` over `$field['label']` *before* any
+   filter sees it, so appending markup in `acf/prepare_field` renders as visible
+   text. What the filter returns is then passed through `acf_esc_html()` —
+   `wp_kses` with `$allowedposttags` — which keeps `<button>` with its `type`,
+   `id`, `class` and `aria-*` intact (verified against the exact markup, not read
+   off the allow-list). And for a radio, ACF renders the label with **no `for`
+   attribute**, so a button inside it activates nothing else.
+2. **An ACF radio's choice KEY is its stored value**, so correcting a label
+   orphans every row holding the old one — and whether that is a blanked value or
+   a locked-out member depends on `required`. Measured: this field is
+   `required => 1`, so ACF **refuses the save** rather than storing the emptiness,
+   and the member cannot edit their own post without changing its licence.
+   Forwarding the stored value at render (`lg_fc_licence_forward()`) is what
+   closes it, and it stays after the migration because live keeps the old values
+   until Ian runs the command and a fresh cut of dev2 reintroduces them.
+3. **A "no external host" assertion must be about REQUESTS, not words.** The
+   gate's first version looked for the string `creativecommons.org` and went
+   **red on a correct build** — the CC legal code names that host in its own
+   prose. It now asserts that nothing in the modal *loads* or *links*, and
+   separately that the prose IS there, which is the pair that tells "held
+   offline" apart from "not there at all". Its region is bounded at `</dialog>`:
+   run it to the end of the document and it measures the page footer's scripts.
+
+### And one about gates that abort
+
+`compose-licence-gate.py` raised `CannotRun` at its browser leg and printed one
+line, **throwing away fifteen failures it had already recorded** in the curl leg.
+That made two halves of the same run look like they disagreed, and a paragraph
+was written about a disagreement that never happened. A gate that aborts must
+print what it already measured.
+
+### Reported by #191, not fixed
+
+- **wp-admin still offers the wrong label.** The fix is a code override at
+  `acf/prepare_field`, deliberately, so it survives a wp-admin edit and reaches
+  live by pull — but ACF field `field_6564e26df56ba` in the DB is untouched, so
+  anyone editing a loothprint in wp-admin still sees the contradictory option.
+- **Live's three posts stay wrong** until Ian runs the handed command. Live is in
+  the same state dev2 was, and sitewide it is exactly 3 and 3, so the id list is
+  complete there too.
+- ACF's required-field refusal names the **raw** stored label ("Creative Commons
+  Use License (leave default if unsure) value is required"), not the relabelled
+  "Licence", because validation does not run `acf/prepare_field`. Near-unreachable
+  now that the forward map exists, but it is the wrong words if it ever shows.
