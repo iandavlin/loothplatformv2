@@ -246,11 +246,44 @@ still on the "/19" numbering.
   gate edit.
 - **§F the dash names pinned vs consented** and refuses a Private pin.
 
-**Gate 39 needs one honest edit, not a suppression.** §C's "OFF is byte-identical"
-is no longer the whole truth once OFF renders a fallback band. I will restate it
-as the property that actually matters — OFF publishes no *real member* — and say
-so in the gate's own comment, rather than deleting an assertion that has been
-doing real work.
+### Gate 39 impact — read before building, so no RED is a surprise at merge
+
+I read every section of `featured-member-gate.py` against the planned change.
+**Exactly two sections move, both for a real reason, and both get restated
+rather than suppressed:**
+
+- **§C1 does not move.** It is already per-state and reads the flag: setting
+  `enabled => false` lands on its `"[C1] the tracked flag defaults to false"`
+  branch. The default flip needs **no** gate edit — which is exactly what
+  `feedback-gate-reads-the-flag-not-a-hardcoded-state` asks of a gate.
+- **§C3 moves.** It matches the literal structure
+  `if ($lg_fm_on) { … lg_resolve_featured_member(…) … } else { $lg_fm = null;`.
+  The empty-pool law replaces that `null` with the fallback, so the regex
+  fails. Its *property* — no real member resolves while the flag is off — is
+  untouched, so §C3 gets restated to assert the property (the resolve call is
+  unreachable when off, and the off branch reads no member field from the
+  config) instead of the one spelling of it.
+- **§F3 moves.** It pins the resolver's card guard to the literal
+  `if (trim((string) $u['avatar_url']) === '' …) return null;` and requires
+  `$role === ''` inside it, because the pool endpoint reproduces that rule and
+  must not drift. Adding the pinned bypass changes the guard's shape, so §F3
+  is restated to assert **both** arms: the consented path still refuses on
+  avatar-or-role, and the predictor still mirrors *that* arm.
+- **§C4 and §G4 constrain HOW I write the reader.** They extract the literal
+  `@include __DIR__ . '…featured-members.php'` expression from each caller and
+  ask PHP to resolve it for real. The new `.local.php` merge therefore keeps
+  that exact literal in place and adds the local read beside it — a refactor
+  that hid the include behind a variable would red both, correctly.
+- **§D is a rule the pin must not break, and does not.** An admin may never
+  tick a member's consent, not even `?as=` them. Pinning writes only to
+  `config.json`; it never touches `users.featured_opt_in`. **Gate 94 asserts
+  that directly**, so the two halves of "admin can place, admin cannot consent"
+  are each fenced.
+
+**The restatement, stated plainly.** "OFF is byte-identical" is no longer the whole truth
+once OFF renders a fallback band. It becomes the property that actually
+matters — **OFF publishes no real member** — said so in the gate's own comment,
+rather than an assertion quietly deleted because it went red.
 
 `docs/CRAFT-STANDARD.md` gets gate 94's row (its table is already missing rows
 19 and 22 — noted, not fixed here).
