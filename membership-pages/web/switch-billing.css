@@ -1,0 +1,178 @@
+/* /switch-billing/ — standalone surface styles (#196).
+ *
+ * Deliberately the same visual language as manage-subscription.css (card,
+ * pill-less, one CTA weight plus a secondary) rather than a new one: the two
+ * pages are one journey and a member arrives here from that page's neighbour in
+ * the same menu.
+ *
+ * The ORDERED LIST is the whole point of the page, so it is styled as the
+ * primary structure — numbered, spaced, each step owning its own CTA — rather
+ * than as prose with links in it. The sequence IS the instruction.
+ */
+
+.lg-switch__main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 4rem;
+}
+
+.lg-switch__head { text-align: center; margin: 0 0 2rem; }
+.lg-switch__title { margin: 0; font-size: 1.75rem; font-weight: 700; line-height: 1.25; }
+
+.lg-switch__card {
+    border: 1px solid rgba(0,0,0,.08);
+    border-radius: 8px;
+    padding: 1.5rem 1.75rem;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    line-height: 1.6;
+}
+.lg-switch__card p { margin: 0 0 1rem; }
+.lg-switch__card p:last-child { margin-bottom: 0; }
+
+.lg-switch__card--intro { border-left: 4px solid #6b7c52; }
+.lg-switch__lede { font-size: 1.05rem; }
+
+/* The one sentence that changes the outcome if it is skimmed past. */
+.lg-switch__warn {
+    margin: 1.1rem 0 0;
+    padding: .75rem 1rem;
+    background: #f6f4ea;
+    border-radius: 6px;
+}
+
+/* ── the steps ── */
+.lg-switch__steps {
+    list-style: none;
+    counter-reset: lgswitch;
+    margin: 1.25rem 0 0;
+    padding: 0;
+}
+.lg-switch__step {
+    counter-increment: lgswitch;
+    position: relative;
+    margin: 0 0 1.25rem;
+    padding: 1.4rem 1.75rem 1.5rem 3.9rem;
+    border: 1px solid rgba(0,0,0,.08);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    line-height: 1.6;
+}
+.lg-switch__step:before {
+    content: counter(lgswitch);
+    position: absolute;
+    left: 1.35rem;
+    top: 1.45rem;
+    width: 1.7rem;
+    height: 1.7rem;
+    border-radius: 50%;
+    background: #6b7c52;
+    color: #fff;
+    font-weight: 700;
+    font-size: .95rem;
+    line-height: 1.7rem;
+    text-align: center;
+}
+.lg-switch__step-title { margin: 0 0 .6rem; font-size: 1.12rem; font-weight: 700; line-height: 1.3; }
+.lg-switch__step p { margin: 0 0 1rem; }
+.lg-switch__step p:last-child { margin-bottom: 0; }
+
+/* ── CTAs (same weights as manage-subscription) ── */
+.lg-switch__cta {
+    display: inline-block;
+    margin: 0 .5rem .5rem 0;
+    padding: .62rem 1.15rem;
+    background: #1a1a1a;
+    color: #fff;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 600;
+}
+.lg-switch__cta:hover { background: #333; color: #fff; }
+.lg-switch__cta--secondary {
+    background: transparent;
+    color: #1a1a1a;
+    box-shadow: inset 0 0 0 2px #1a1a1a;
+}
+.lg-switch__cta--secondary:hover { background: #1a1a1a; color: #fff; }
+
+/* ── the questions ── */
+.lg-switch__faq { margin-top: .25rem; }
+.lg-switch__faq-q { margin: 1.35rem 0 .5rem; font-size: 1.02rem; font-weight: 700; }
+.lg-switch__faq-q:first-child { margin-top: 0; }
+.lg-switch__faq a { color: #4f5d3c; }
+
+.lg-switch__foot { margin: 1.5rem 0 0; text-align: center; }
+.lg-switch__foot a { color: #5b6066; text-decoration: none; }
+.lg-switch__foot a:hover { text-decoration: underline; }
+
+@media (max-width: 560px) {
+    .lg-switch__title { font-size: 1.45rem; }
+    .lg-switch__card { padding: 1.25rem 1.15rem; }
+    .lg-switch__step { padding: 1.2rem 1.15rem 1.25rem 3.3rem; }
+    .lg-switch__step:before { left: .95rem; top: 1.25rem; }
+}
+
+/* ═══ DARK MODE ═══════════════════════════════════════════════════════════════
+ * Ian, 2026-07-31: "All of this stuff needs a dark mode pass."
+ *
+ * THE SIGNAL is html[data-lguser-theme="dark"] — the RESOLVED APP THEME set by
+ * app-settings.js, never prefers-color-scheme: the media query disagrees with
+ * the app's own switch, which is the whole point of the attribute.
+ *
+ * ⚠️ THE TRAP THIS PAGE WOULD OTHERWISE FALL INTO, measured on /lgjoin/ by #169:
+ * app-settings.js sets --lg-ink as an INLINE STYLE ON <html>, and an inline
+ * style beats any stylesheet rule targeting that same element. So a card left at
+ * `background:#fff` keeps its white while the ink beside it flips near-white —
+ * every one of the four Subscribe buttons on the join funnel rendered at 1.25:1
+ * that way. The fills below are therefore repointed explicitly rather than
+ * trusted to a token.
+ *
+ * ADDITIVE: every rule is a NEW selector carrying the dark prefix; not one light
+ * rule is edited, so light is byte-identical by construction.
+ */
+html[data-lguser-theme="dark"] {
+    --lgsw-card:   #1b1e21;   /* the chrome's --lg-panel-bg */
+    --lgsw-raise:  #22262a;
+    --lgsw-border: #2c312d;
+    --lgsw-ink:    #e5e7e1;
+    --lgsw-mute:   #9aa097;
+    --lgsw-sage:   #b0c693;   /* dark accent, NOT the light #6b7c52 */
+}
+
+html[data-lguser-theme="dark"] .lg-switch__title { color: var(--lgsw-ink); }
+
+html[data-lguser-theme="dark"] .lg-switch__card,
+html[data-lguser-theme="dark"] .lg-switch__step {
+    background: var(--lgsw-card);
+    border-color: var(--lgsw-border);
+    box-shadow: 0 1px 3px rgba(0,0,0,.5);
+    color: var(--lgsw-ink);
+}
+html[data-lguser-theme="dark"] .lg-switch__card--intro { border-left-color: var(--lgsw-sage); }
+html[data-lguser-theme="dark"] .lg-switch__step-title,
+html[data-lguser-theme="dark"] .lg-switch__faq-q { color: var(--lgsw-ink); }
+
+/* #f6f4ea is a pale wash designed to sit on white; on a dark card it reads as a
+   bright chip. Re-pointed to the chrome's dark tint, not the light one dimmed. */
+html[data-lguser-theme="dark"] .lg-switch__warn {
+    background: var(--lgsw-raise);
+    color: var(--lgsw-ink);
+}
+
+html[data-lguser-theme="dark"] .lg-switch__step:before { background: var(--lgsw-sage); color: #15171a; }
+
+/* The primary CTA is near-black on a near-black card in dark — invisible, the
+   same 1.05:1 boundary #169 found on the Patreon page's own button. Inverted. */
+html[data-lguser-theme="dark"] .lg-switch__cta { background: var(--lgsw-ink); color: #15171a; }
+html[data-lguser-theme="dark"] .lg-switch__cta:hover { background: #fff; color: #15171a; }
+html[data-lguser-theme="dark"] .lg-switch__cta--secondary {
+    background: transparent;
+    color: var(--lgsw-ink);
+    box-shadow: inset 0 0 0 2px var(--lgsw-ink);
+}
+html[data-lguser-theme="dark"] .lg-switch__cta--secondary:hover { background: var(--lgsw-ink); color: #15171a; }
+
+html[data-lguser-theme="dark"] .lg-switch__faq a { color: var(--lgsw-sage); }
+html[data-lguser-theme="dark"] .lg-switch__foot a { color: var(--lgsw-mute); }

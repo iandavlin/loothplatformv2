@@ -73,6 +73,14 @@ const LG_MS_PAGES = [
     'welcome'                        => ['welcome.php',                        'testgroup', 'public'],  // transient post-checkout landing
     'regional-pricing-not-available' => ['regional-pricing-not-available.php', 'testgroup', 'public'],  // transient
     'join'                           => ['join.php',                           'public', 'public'],  // already live; flag no-op
+    /* #196 — where the header's "Switch" lands for a member Patreon is already
+       charging. PRELAUNCH 'testgroup' MIRRORS WHO GETS THE MENU ITEM: the swap
+       lives inside the header's $stripe_tester branch, and a menu that offers a
+       tester a door this gate then shuts is the presence-is-not-reachability
+       trap in its most annoying form. LIVE 'member', not 'public': the page
+       reads the viewer's own pledge and its whole body is addressed to somebody
+       signed in, so an anonymous visitor could only ever be told to sign in. */
+    'switch-billing'                 => ['switch-billing.php',                 'testgroup', 'member'],
 
     // scaffolded surfaces (shell + gate live; verbatim body port pending)
     'lgjoin'                         => ['lgjoin.php',                         'testgroup', 'public'],
