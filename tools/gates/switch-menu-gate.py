@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-switch-menu-gate — GATE 93 — a member Patreon is already charging is offered
+switch-menu-gate — GATE 95 — a member Patreon is already charging is offered
 SWITCH, never JOIN, and the place Switch goes actually exists.
 (Number minted from MAIN by this lane per feedback-gate-number-from-main-not-branch;
 lanes 193 and 194 are in flight and will mint 93 too — keeper keeps all three.)
@@ -725,7 +725,7 @@ def leg_e():
 
 def main():
     log("=" * 78)
-    log("GATE 93 — a Patreon payer is offered SWITCH, and Switch goes somewhere")
+    log("GATE 95 — a Patreon payer is offered SWITCH, and Switch goes somewhere")
     log("=" * 78)
     for tool, name in ((["php", "-v"], "php"), (["node", "-v"], "node")):
         if shutil.which(tool[0]) is None:
@@ -751,9 +751,9 @@ def main():
         log("\n  FINDINGS:")
         for f in findings:
             log(f"    FAIL  {f}")
-        log("\n  GATE 93 RED")
+        log("\n  GATE 95 RED")
         return 1
-    log("  GATE 93 GREEN")
+    log("  GATE 95 GREEN")
     return 0
 
 

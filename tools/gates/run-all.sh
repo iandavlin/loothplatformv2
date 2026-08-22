@@ -2364,7 +2364,7 @@ echo "=== GATE 92: the licence a member picks is described correctly, and the â“
 # PROMISE Ian was made and not our implementation of it.
 run "compose-licence" python3 "$(dirname "$0")/compose-licence-gate.py"
 echo
-echo "=== GATE 93: a Patreon payer is offered SWITCH, and Switch goes somewhere ==="
+echo "=== GATE 95: a Patreon payer is offered SWITCH, and Switch goes somewhere ==="
 # Ian, 2026-08-22 (#196): "Can you check and see if a user that has a patreon
 # would have a menu for join in the profile chip? If so we need to change that
 # to switch." MEASURED on main first: user 1953 is a listed soft-launch tester

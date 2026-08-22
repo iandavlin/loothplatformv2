@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-RED-FIRST for GATE 93 (#196) — every assertion proven to bite.
+RED-FIRST for GATE 95 (#196) — every assertion proven to bite.
 
 A gate nobody has watched go red is decoration. This breaks the feature one way
 at a time and requires the NAMED assertion to fail — not merely "the gate went
@@ -271,7 +271,7 @@ NOOPS = [
 
 def main():
     print("=" * 78)
-    print("RED-FIRST — GATE 93 (#196)")
+    print("RED-FIRST — GATE 95 (#196)")
     print(f"snapshots: {SNAPDIR}")
     print("=" * 78)
 
