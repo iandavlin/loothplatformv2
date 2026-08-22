@@ -96,6 +96,12 @@ html[data-lguser-theme="dark"] .p196{color:#e5e7e1}
      exactly as today, whatever their Patreon standing.</p>
   <p><b>anon</b> — untouched by #196.</p>
   <p style="margin-top:1.4rem"><a href="<?= $h($base) ?>/switch-billing/">The Switch page itself &rarr;</a></p>
+  <p><small><b>One thing to expect on that page:</b> its own header still shows
+     the old <b>Join</b> pill. That is correct today and not a mistake &mdash; the
+     Switch swap reads a fact about the viewer that WordPress computes, and dev2&rsquo;s
+     WordPress is running <code>main</code>, which does not compute it yet. Both
+     halves arrive in the same merge; until then the menu is looked at here and
+     the page is looked at there.</small></p>
 </main>
 <?php lg_shared_render_site_footer([]); ?>
 </body>
