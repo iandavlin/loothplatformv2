@@ -180,6 +180,110 @@
   `PatreonStanding` without either being added to its require list. Revived:
   20 assertions, including the *"body chooses NOTHING"* section.
 
+## State (8/22, #192 — the panel that answers the five questions nobody could)
+
+- **WHAT THIS ADDS:** a **Health** tab on the LG Member Sync dash (second, after
+  Settings — the default tab is unchanged, so every bookmark and every #190
+  redirect still lands where it did). Split out of #190, which landed everything
+  else and explicitly did not reach this. Read-only; **no button on it changes
+  anything**, per Ian's ruling that server-file settings are read-only with a
+  copy button.
+- ⚠️ **QUESTION ONE HAD NO DATA SOURCE AT ALL, and that is the finding, not the
+  feature.** `WebhookController` verified, dispatched and returned; **nothing
+  anywhere recorded that Stripe had ever reached us**, so "are webhooks
+  arriving?" could only be answered on Stripe's own dashboard. Receipts now go
+  to **`audit_log`** in `lg_membership` — which already names `'webhook'` in its
+  own `actor_type` comment, has **no FK on `subject_id`**, indexes
+  `(action, created_at)`, and held **ZERO rows on dev2 AND live** (measured
+  8/21). Reusing it rather than adding a table is what makes the whole feature
+  land on a plain `git pull`: **no migration, and no live DDL for Ian to run.**
+- ⚠️ **THE TWO RECEIPT KINDS ARE NOT SYMMETRICAL.** A verified event is
+  Stripe-signed, unforgeable, and recorded unconditionally. A **signature
+  failure arrives at an UNAUTHENTICATED endpoint** — anyone can POST rubbish at
+  `/billing/v1/webhook` — so those are throttled to **one row per five
+  minutes**, bounded at 288/day. The signal is the valuable half: **a rising
+  failure count beside a silent success count IS a mismatched webhook secret
+  showing itself**, and it is the only place that disagreement is visible from
+  outside Stripe.
+- **IT READS THE BILLING APP'S `.env` OFF DISK, NOT OVER HTTP, and that is the
+  design.** Asking the app about itself goes UNKNOWN in the one moment the panel
+  matters, and the natural way to authenticate such a call is the shared secret
+  — one of the things under test. A file read has neither problem.
+- ⚠️ **A SECRET CANNOT REACH THE SCREEN EVEN BY MISTAKE, structurally.**
+  `Health::envFacts()` reduces every secret-shaped key to **present / length /
+  sha256** at the moment it parses the file; the sha is consumed by
+  `hash_equals` and never returned; even the Stripe key prefix is collapsed to
+  `test` / `live` / `unknown` before it crosses the boundary. So *"never print a
+  secret"* is a property of the data, not a rule the renderer has to remember.
+- ⚠️ **THE BOXES ARE NOT THE SAME SHAPE — MEASURED 8/21, and this supersedes any
+  reading of "/srv/lg-stripe-billing is a symlink" as true everywhere.** On
+  **dev2** it is a symlink into the serving checkout with `.env` at `-rw-rw-r--`
+  (world-readable). On **LIVE it is a REAL DIRECTORY owned by `www-data`** with
+  `.env` at mode **0640**; live's WordPress pool user `looth-dev` is in group
+  `www-data` (verified), so it *should* read — but "should" is the word this
+  panel exists to remove. The four states (missing / unreadable / empty / ok)
+  are never conflated, because each needs a different fix.
+- **THE PROBE USES RAW CURL WITH `CURLOPT_RESOLVE`**, this plugin's documented
+  convention (`lg-patreon-stripe-poller/CLAUDE.md`: *"wp_remote_post does NOT
+  work for these"*). The URL keeps the real hostname so SNI, the certificate and
+  nginx's `server_name` all still match; only the TCP connection is pinned to
+  127.0.0.1, so Cloudflare's bot-challenge 403 — which reads exactly like an
+  outage — can never happen.
+- ⚠️ **THE FIRST REAL RUN FOUND A FALSE ALARM IN THE PANEL ITSELF.** Pointed at
+  dev2 it said *"a payment completed with no webhook recorded"* against **109
+  customers and subscriptions that ALL predated the recorder**. A panel that
+  cries wolf on its own deployment day is a panel nobody reads twice. *Since
+  recording started* is now the **recorder file's own mtime on that box** — a
+  fact that can be read rather than assumed, and one that can only ever make the
+  check quieter, never invent a failure. History is counted separately and
+  labelled; with no recorder found the verdict is **`unknown`**, not a guess.
+- **#192 BUILT** on `192-dash-health`, gate **91** (95 assertions; red-first
+  **63/63** — 60 mutations each reddening its own named assertion, 3 no-op
+  controls proven inert). **Dash-only pieces carry no flag**, matching #190,
+  #148 and #183; the webhook receipt is a swallowed INSERT on a path that
+  already runs, and every receipt path catches `Throwable` so bookkeeping can
+  never turn a delivered webhook into a three-day Stripe retry.
+
+### What the panel says RIGHT NOW (measured 2026-08-21/22 through the real reader)
+
+**LIVE — nothing is configured, and one line of that is urgent.**
+- `lgms_shared_secret` **ABSENT**. Still. The billing app has one; WordPress
+  does not, so every server-to-server call fails closed.
+- `lgms_stripe_webhook_secret` ABSENT · `lgms_stripe_secret_key` ABSENT.
+- `lgms_stripe_lifecycle_allowlist` **ABSENT — the tester cohort is EMPTY on
+  live**, so with the audience at its `allowlist` default nobody at all can buy.
+- `lgms_checkout_audience` absent ⇒ `allowlist` (fail-closed, correct).
+  `lgms_stripe_pages_live` = 0.
+- Catalogue **empty**: 0 products, 0 prices, 0 customers, 0 subscriptions, 0
+  bridge rows, 0 `audit_log` rows.
+- The billing app **is up** — `/billing/health` answers 200 over loopback — and
+  reports `env=dev`. ✅ **Checked, not guessed: `APP_ENV` only labels that
+  endpoint and gates nothing** (only `APP_DEBUG` does), so it is cosmetic. Do
+  not spend an hour on it.
+
+**dev2 — two real findings, plus one this lane discovered.**
+- ⚠️ `STRIPE_WEBHOOK_SECRET` is set in the billing app (38 ch) and
+  `lgms_stripe_webhook_secret` is **ABSENT in WordPress**. Inert today (the WP
+  webhook ingest is behind `lgms_stripe_lifecycle`, off everywhere) and a real
+  disagreement the moment it is not.
+- ⚠️ **BuddyBoss is still eating the route the billing app calls after every
+  checkout.** Loopback with the real secret: `checkout-audience` → **200**
+  (#181's exemption works), `sync-customer` → **401
+  `bb_rest_authorization_required`**. Reported, not opened, per #181.
+- ⚠️ **`APP_DEBUG=true` in dev2's billing app** — found by the panel on its
+  first real run, and not previously written down anywhere. It displays errors
+  to visitors. Harmless on dev2, a real problem if that shape reaches live.
+- Healthy: shared secret **AGREES** (same sha256, both 64 ch); both keys
+  `sk_test_`; sync URL host matches (the dead-host bug is fixed); catalogue
+  resolves cleanly (6 active membership products, looth2 + looth3, 0 unmapped);
+  audience `allowlist` with 6 in the cohort and the tester page open.
+
+- **Owed:** Ian looks at the tab on dev2 after the merge. The two live gaps that
+  block go-live are **`lgms_shared_secret`** and the **empty cohort** — both are
+  live writes and therefore his. Not reached by this lane: a Stripe-side check
+  (asking Stripe whether a webhook endpoint is even registered for our URL),
+  which would need the WP secret key that live does not have yet.
+
 ## State (8/21, #190 — one membership dash, and the tester link stops living in a chat message)
 
 - **THE LAW THIS ADDS (Ian 8/21):** *"Can we round up all of the membership

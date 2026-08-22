@@ -1006,6 +1006,11 @@ final class Admin
         $tab = isset( $_GET['tab'] ) ? sanitize_key( (string) $_GET['tab'] ) : 'settings';
         $tabs = [
             'settings'      => 'Settings',
+            // #192: the five questions that each cost an hour on 8/21 and none
+            // of which announced itself. Second, not first, on purpose — the
+            // default tab stays 'settings', so every existing bookmark and
+            // every redirect #190 preserved still lands exactly where it did.
+            'health'        => 'Health',
             'member_tools'  => 'Member Tools',
             'welcome_email' => 'Welcome Email',
             // #190: renamed for what it now answers end to end — the link that
@@ -1035,6 +1040,7 @@ final class Admin
 
             <?php
             match ( $tab ) {
+                'health'        => HealthPanel::render(),
                 'member_tools'  => MemberTools::renderContent(),
                 'welcome_email' => self::renderWelcomeEmailTab(),
                 'stripe_cohort' => self::renderStripeCohortTab(),
