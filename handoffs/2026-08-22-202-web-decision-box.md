@@ -42,8 +42,12 @@ answering a question.
   (keeper's ruling): main's next-free line said 98 while lane 201 already held
   98 unmerged, and minting would have meant editing `CRAFT-STANDARD.md` and
   `run-all.sh`, both held by live lanes.
-- **Red-first**: every new assertion has a mutation that reddens *it*, plus
-  no-op mutations that must stay green.
+- **Red-first: 70 proved, 0 unproved.** 18 mutations for #202, every one
+  reddening the assertion that *names* it, plus **6 no-ops that stayed green**
+  so the gate is not merely edit-sensitive. Includes one mutation that must stay
+  **GREEN** — remove first-answer-wins' fast path and the atomic claim alone
+  still holds the line — which is a positive proof of *which* guard carries the
+  guarantee.
 - **Live, on the real box, over real HTTPS through the dev gate**: a POST to
   `/lanes-decide.php` → the spool → the worker → **the real board**:
 
