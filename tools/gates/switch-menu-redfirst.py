@@ -181,8 +181,14 @@ def m10():   # the header grows a lookup of its own — seven apps, no database
                   "$patreon_paying = (bool) get_option('lgms_double_pay_block');")
 
 def m11():   # the poller stops computing it at all
-    patch(POLLER, "$caps['patreon_paying'] = false;\n        try {",
-                  "$caps['x_disabled'] = false;\n        if (false) try {")
+    # ⚠️ BOTH assignments, not just the first. The initial version renamed only
+    # the `= false` line and left `$caps['patreon_paying'] = ...forUser...`
+    # inside the try, so "the poller computes the capability" still passed and
+    # the leg reddened a NEIGHBOUR instead. A mutation that half-applies is the
+    # same class of lie as one that does not apply at all.
+    patch(POLLER, "$caps['patreon_paying'] = false;", "$caps['x_disabled'] = false;")
+    patch(POLLER, "            $caps['patreon_paying'] =\n",
+                  "            $caps['x_disabled'] =\n")
 
 def m12():   # a SECOND definition of "already paying" — the field both rails overwrite
     patch(POLLER,
@@ -242,15 +248,15 @@ LEGS = [
     ("M05 the href is hardcoded (word changes, door does not)", "derived ONCE", m05),
     ("M06 the menu item stops using the derivation", "not a literal", m06),
     ("M07 the PWA sheet's hook removed — no phone door below 641", "hook", m07),
-    ("M08 an indented island inside the menu (12 stray bytes)", "EXACTLY", m08),
+    ("M08 an indented island inside the menu (12 stray bytes)", "NOTHING else moved", m08),
     ("M09 the swap escapes the cohort", "NEITHER door appears", m09),
     ("M10 the header grows a database lookup of its own", "no database to ask", m10),
     ("M11 the poller stops computing the capability", "the poller computes", m11),
     ("M12 a SECOND definition of already-paying (payment_source)", "payment_source", m12),
     ("M13 an unreadable database reads as PAYING", "reads as NOT paying", m13),
     ("M14 the named pass-through drops it (the 8/16 bug, exactly)", "pass-through", m14),
-    ("M15 the PWA sheet hardcodes the word again", "LABEL", m15),
-    ("M16 the sheet row ejects a member from the installed PWA", "ONLY for an off-site", m16),
+    ("M15 the PWA sheet hardcodes the word again", "follows the menu to Switch", m15),
+    ("M16 the sheet row ejects a member from the installed PWA", "eject a member from the installed PWA", m16),
     ("M17 the router forgets the slug — Switch lands on a 404", "router registers", m17),
     ("M18 the page is opened to anyone pre-launch", "testgroup", m18),
     ("M19 nginx never hears about the slug", "slug regex lists", m19),

@@ -2323,6 +2323,43 @@ echo "=== GATE 92: the licence a member picks is described correctly, and the �
 # PROMISE Ian was made and not our implementation of it.
 run "compose-licence" python3 "$(dirname "$0")/compose-licence-gate.py"
 echo
+echo "=== GATE 93: a Patreon payer is offered SWITCH, and Switch goes somewhere ==="
+# Ian, 2026-08-22 (#196): "Can you check and see if a user that has a patreon
+# would have a menu for join in the profile chip? If so we need to change that
+# to switch." MEASURED on main first: user 1953 is a listed soft-launch tester
+# with an ACTIVE PAID Patreon pledge, and the account menu offered her Join —
+# a door to #150's refusal, on a box where that refusal is not even armed.
+#
+# ⚠️ THE OBVIOUS ASSERTION IS THE VACUOUS ONE. "a Patreon payer sees Switch" is
+# equally true of a build that shows Switch to EVERYBODY, which would send every
+# non-Patreon tester to instructions for cancelling a pledge they do not have.
+# The assertions that bite are §B's negatives: a non-Patreon tester still sees
+# Join, a payer outside the cohort sees neither, a no-caps ctx sees neither.
+# Same lesson #148 paid for in this domain.
+#
+# §E IS THE COUPLING. Three files must name one slug — the header's href, the
+# router's registry, the nginx location regex, which enumerates every membership
+# slug and has no catch-all. The RUNNING snippet is a root-owned COPY, so the
+# repo change does NOT arrive by pull: while the box lacks it this leg reports
+# the gap and names the command, and proves the page routable through the lane
+# preview meanwhile, so "held" never means "unmeasured".
+#
+# ⚠️ #196 ALSO RULED OUT #170's SIGNED-IN JOIN PILL (Ian: "Why is there a
+# superfluous join button for logged in users now"). Gates 79 and 85 had legs
+# asserting that pill EXISTS; they were INVERTED, not deleted. And the phone
+# door moved with it: measured on /hub/ AND the front page, below 641 the
+# account chip is invisible and #lg-account-menu is display:none, so
+# bottom-nav.js's account-sheet row — re-sourced from the menu entry — is the
+# only signed-in door there.
+#
+# RED-FIRST: 21 mutations + 2 no-op controls, 23/23 --
+# tools/gates/switch-menu-redfirst.py. Three of its legs found real defects in
+# THIS gate rather than in the code: a stray-line check that .strip()ed away the
+# whitespace leak it existed to catch, a bottom-nav leg asserting a hand-written
+# TRANSCRIPTION of the rule instead of the rule, and a missing guard reported as
+# CANNOT RUN instead of as a finding.
+run "switch-menu" python3 "$(dirname "$0")/switch-menu-gate.py"
+echo
 
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then

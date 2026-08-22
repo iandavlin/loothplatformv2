@@ -194,24 +194,44 @@ def leg_a():
           re.search(r"\$tester_join_label\s*=\s*\$patreon_paying\s*\?", hdr) is not None)
     check("the href is derived ONCE, from the capability",
           re.search(r"\$tester_join_href\s*=\s*\$patreon_paying\s*\?", hdr) is not None)
-    check(f"both destinations are named exactly once each in the derivation",
-          hdr.count(f"'{DEST}'") == 1 and hdr.count("'/lgjoin/'") == 1,
-          f"{DEST}x{hdr.count(chr(39)+DEST+chr(39))} /lgjoin/x{hdr.count(chr(39)+'/lgjoin/'+chr(39))}")
+    # ⚠️ /lgjoin/ IS NAMED TWICE AND BOTH ARE CORRECT — measured, not assumed:
+    # once as the ANONYMOUS destination ($join_href, #165's flag) and once in
+    # this signed-in derivation. They are different controls for different
+    # viewers and must not be folded together. The switch page, by contrast, is
+    # reachable only from the signed-in door, so a second mention of it would be
+    # a second place to forget.
+    check("the switch destination is named exactly ONCE — one derivation, no copies",
+          hdr.count(f"'{DEST}'") == 1,
+          f"{hdr.count(chr(39)+DEST+chr(39))} occurrences")
+    check("/lgjoin/ is named exactly twice: the anon destination and this one",
+          hdr.count("'/lgjoin/'") == 2,
+          f"{hdr.count(chr(39)+'/lgjoin/'+chr(39))} occurrences")
 
-    # Both renderings must read the derived values — a literal in either is the
-    # drift this derivation exists to prevent.
-    for what, pat in (("menu item", r'role="menuitem" href="<\?=\s*\$h\(\$tester_join_href\)'),
-                      ("tester pill", r'class="lg-chrome__join" href="<\?=\s*\$h\(\$tester_join_href\)')):
-        check(f"the {what} takes its href from the derivation, not a literal",
-              re.search(pat, hdr) is not None)
+    # The one rendering must read the derived values — a literal is the drift
+    # this derivation exists to prevent.
+    check("the menu item takes its href from the derivation, not a literal",
+          re.search(r'role="menuitem" href="<\?=\s*\$h\(\$tester_join_href\)', hdr) is not None)
     check("the menu item takes its LABEL from the derivation too",
           re.search(r'\$h\(\$tester_join_href\)\s*\?>"><\?=\s*\$h\(\$tester_join_label\)', hdr) is not None)
 
-    # The tab rule is a fact about the DESTINATION, not about which branch chose
-    # it (#165's law). Written the other way, a later change of destination
-    # silently keeps whichever tab behaviour today happened to imply.
-    check("the pill's tab rule is derived from its href, not from the branch",
-          re.search(r"\$tester_join_external\s*=.*preg_match\(.*\$tester_join_href", hdr) is not None)
+    # ⚠️ THE SIGNED-IN PILL IS RULED OUT (Ian, 2026-08-22: "Why is there a
+    # superfluous join button for logged in users now"), so the door must NOT be
+    # drawn a second time beside the chip. Exactly one lg-chrome__join anchor
+    # survives, and it is the ANONYMOUS one — which #196 never touches.
+    check("no signed-in Join pill is drawn — one door, in the account menu",
+          "$join_pill_authed" not in hdr)
+    check("...and exactly one join pill anchor remains, the anon one",
+          len(re.findall(r'class="lg-chrome__join"', hdr)) == 1,
+          f'{len(re.findall(chr(0x22) + "lg-chrome__join" + chr(0x22), hdr))} found')
+
+    # THE HOOK THE PHONE READS. Measured 2026-08-22 on /hub/ AND the front page
+    # as a real signed-in tester: at 390 and 640 the account chip is invisible
+    # and #lg-account-menu is display:none, so below 641 the menu is in the DOM
+    # the whole time and is not a door at all. bottom-nav.js draws it in the
+    # account sheet by reading this hook; without it the ruling would leave a
+    # signed-in tester no join or switch door on a phone anywhere.
+    check("the menu item carries the hook the PWA account sheet reads at <=640",
+          'class="lg-chrome__menu-join"' in hdr)
 
     # ⚠️ THE HEADER MUST NOT LOOK ANYTHING UP. It renders on seven apps under
     # seven unix users with no database of their own.
@@ -373,20 +393,18 @@ def leg_b(tmp):
         check(f"{s}: an admin who pays Patreon gets Switch as well",
               f'href="{DEST}">Switch<' in ma and "/lgjoin/" not in ma)
 
-        # ── THE TWO COPIES MUST AGREE. The pill only exists in 'allowlist'.
-        p_pay  = pill_of(R[(s, "tester+pat")])
-        p_free = pill_of(R[(s, "tester-pat")])
-        if s == "allowlist":
-            check("allowlist: the pill beside the chip says Switch too",
-                  p_pay == f'<a class="lg-chrome__join" href="{DEST}">Switch</a>', p_pay)
-            check("allowlist: ...and still says Join for a tester with no Patreon",
-                  p_free == '<a class="lg-chrome__join" href="/lgjoin/">Join</a>', p_free)
-            check("allowlist: neither internal destination opens a new tab — an "
-                  "installed PWA has no chrome to come back through",
-                  "target=" not in p_pay and "target=" not in p_free)
-        else:
-            check(f"{s}: no authed pill is drawn at all, as #170 confined it",
-                  p_pay == "" and p_free == "", f"{p_pay!r} {p_free!r}")
+        # ── ONE DOOR. #196 ruled the signed-in pill out in EVERY state, so the
+        # menu entry is the whole of it — and it must carry the hook, or the
+        # phone loses its only copy.
+        check(f"{s}: a signed-in tester is drawn NO Join pill in any state",
+              pill_of(R[(s, "tester+pat")]) == "" and pill_of(R[(s, "tester-pat")]) == "",
+              f"{pill_of(R[(s, 'tester+pat')])!r}")
+        check(f"{s}: ...and the menu entry carries the hook the phone reads",
+              'class="lg-chrome__menu-join"' in R[(s, "tester+pat")]
+              and 'class="lg-chrome__menu-join"' in R[(s, "tester-pat")])
+        check(f"{s}: neither destination opens a new tab — an installed PWA has "
+              f"no chrome to come back through",
+              "target=" not in m and "target=" not in m2)
 
         # ── ANON IS UNTOUCHED. It cannot even reach the branch: an anonymous
         # ctx carries no capabilities, which is the same structural argument
@@ -409,7 +427,7 @@ def leg_c(tmp, R):
     M = {}
     for s in STATES:
         for mode in ("anon", "member+pat", "member-pat", "member",
-                     "tester-pat", "tester", "admin-pat", "admin", "nocaps"):
+                     "tester-pat", "tester+pat", "tester", "admin-pat", "admin", "nocaps"):
             M[(s, mode)] = render(main_trees[s], mode)
 
     check("liveness: main's baseline render really produced the header",
@@ -418,8 +436,13 @@ def leg_c(tmp, R):
           f"{len(M[('allowlist','tester-pat')])} bytes")
 
     for s in STATES:
-        for mode in ("anon", "member+pat", "member-pat", "member",
-                     "tester-pat", "tester", "admin-pat", "nocaps"):
+        # ⚠️ ONLY THE VIEWERS #196 MUST NOT REACH. A tester or an admin now
+        # DELIBERATELY differs from main — Ian ruled the signed-in pill out on
+        # 2026-08-22 — and demanding identity from them would be the hardcoded-
+        # historical-baseline trap that reddened eleven of gate 79's legs on
+        # #173 and six of gate 85's on this very issue. What they changed by is
+        # asserted line-for-line below instead, which is the stronger claim.
+        for mode in ("anon", "member+pat", "member-pat", "member", "nocaps"):
             same = R[(s, mode)] == M[(s, mode)]
             check(f"{s}/{mode}: byte-identical to origin/main",
                   same, f"{len(R[(s,mode)])} vs {len(M[(s,mode)])} bytes")
@@ -429,17 +452,72 @@ def leg_c(tmp, R):
     # above. The whitespace leak this lane shipped in its own first draft — an
     # indented <?php ?> island adding 12 bytes to every tester render — is
     # invisible to every href assertion and lands here.
-    for s, want in (("allowlist", 2), ("off", 1), ("on", 1)):
-        a = M[(s, "tester-pat")].splitlines()
-        b = R[(s, "tester+pat")].splitlines()
-        diffs = [i for i in range(max(len(a), len(b)))
-                 if (a[i] if i < len(a) else None) != (b[i] if i < len(b) else None)]
-        ok = len(diffs) == want and all(
-            ("lg-chrome__join" in b[i] or 'role="menuitem"' in b[i]) and "Switch" in b[i]
-            for i in diffs)
-        check(f"{s}: a paying tester differs from main by EXACTLY {want} line(s), "
-              f"and they are the swap",
-              ok, f"{len(diffs)} differing line(s)")
+    # ⚠️ WHAT MOVED, NOT HOW MANY LINES. A real diff (the pill is REMOVED, so a
+    # positional compare reports the whole rest of the document as changed), and
+    # then every changed line must be one of the four this issue is allowed to
+    # touch. That is what catches a change which also moved something else while
+    # making the swap — including the 12-byte whitespace leak this lane shipped
+    # in its own first draft, which no href assertion can see.
+    import difflib
+
+    OLD_LI   = '<li role="none">'
+    # The exact bytes each allowed line must arrive with. A line whose CONTENT
+    # is permitted but whose INDENTATION moved is a stray — that is the leak.
+    EXPECT   = {}
+    NEW_LI   = '<li role="none" class="lg-chrome__menu-join">'
+    OLD_JOIN = '<a role="menuitem" href="/lgjoin/">Join</a>'
+    NEW_SWAP = f'<a role="menuitem" href="{DEST}">Switch</a>'
+    PILL     = 'class="lg-chrome__join"'
+    EXPECT.update({
+        '<li role="none" class="lg-chrome__menu-join">': '            <li role="none" class="lg-chrome__menu-join">',
+        f'<a role="menuitem" href="{DEST}">Switch</a>':  f'              <a role="menuitem" href="{DEST}">Switch</a>',
+    })
+
+    for s_ in STATES:
+        for who, pays in (("tester+pat", True), ("tester-pat", False)):
+            d = list(difflib.ndiff(M[(s_, "tester-pat")].splitlines(),
+                                   R[(s_, who)].splitlines()))
+            # ⚠️ NOT .strip(). The whole point of this leg is a change that is
+            # ONLY whitespace: an indented <?php ?> island emits its own leading
+            # spaces as inline HTML whether or not the branch is taken. The
+            # first version of this gate stripped these lines and its red-first
+            # M08 stayed GREEN — the assertion was decoration about the exact
+            # defect it was written for. Compare raw; strip only for display.
+            added   = [l[2:] for l in d if l.startswith("+ ")]
+            removed = [l[2:] for l in d if l.startswith("- ")]
+
+            # THE RULING: the signed-in pill goes, and only where main drew one.
+            pill_gone = any(PILL in r for r in removed)
+            check(f"{s_}/{who}: the ruled-out signed-in pill is removed "
+                  f"{'(main drew one here)' if s_ == 'allowlist' else '(main drew none here)'}",
+                  pill_gone == (s_ == "allowlist"),
+                  f"removed: {removed}")
+
+            # THE HOOK: the menu row gains the class the phone reads.
+            check(f"{s_}/{who}: the menu row gains the PWA hook",
+                  any(x.strip() == NEW_LI for x in added)
+                  and any(x.strip() == OLD_LI for x in removed),
+                  f"+{[x.strip() for x in added]} -{[x.strip() for x in removed]}")
+
+            # THE SWAP: only for a payer, and it is the only href that moves.
+            if pays:
+                check(f"{s_}/{who}: the entry becomes Switch -> {DEST}",
+                      any(x.strip() == NEW_SWAP for x in added)
+                      and any(x.strip() == OLD_JOIN for x in removed),
+                      f"+{[x.strip() for x in added]}")
+            else:
+                check(f"{s_}/{who}: a non-paying tester's Join is untouched",
+                      DEST not in " ".join(added), f"+{[x.strip() for x in added]}")
+
+            # NOTHING ELSE. The assertion the whitespace leak lands on.
+            allowed_add = {NEW_LI, NEW_SWAP}
+            allowed_rem = {OLD_LI, OLD_JOIN}
+            # EXACT, including indentation — see the note above.
+            stray_a = [x for x in added if x.strip() not in allowed_add or x != EXPECT.get(x.strip(), x)]
+            stray_r = [x for x in removed if x.strip() not in allowed_rem and PILL not in x]
+            check(f"{s_}/{who}: NOTHING else moved — no stray line, no stray byte",
+                  stray_a == [] and stray_r == [],
+                  f"stray +{stray_a} -{stray_r}")
     log("")
 
 
@@ -448,36 +526,65 @@ def leg_d():
     log("§D  THE PWA COPY — the phone's only door, its rule RUN not read")
 
     js = js_code(BOTTOMNV)
-    check("the account sheet reads the header's pill rather than a flag",
-          "querySelector('.lg-chrome__join')" in js)
-    check("...and takes the LABEL from it too, not a hardcoded word",
-          "testerJoinLabel" in js and "textContent" in js)
-    check("the sheet row hardcodes neither destination",
-          DEST not in js.split("buildAnonSheet")[-1] or True)  # see below
+    check("the account sheet reads the header's MENU ENTRY rather than a flag",
+          "querySelector('.lg-chrome__menu-join a')" in js)
+    check("...and no longer reads the ruled-out signed-in pill",
+          "hdrHref('.lg-chrome__join', null)" not in js)
+    check("bottom-nav reads NO flag and NO cohort list of its own",
+          "lgms_stripe_lifecycle_allowlist" not in js and "header-join-stripe" not in js)
 
-    # ⚠️ RUN IT. The real origin serves MAIN, so §E's browser can never exercise
-    # this branch (trap-harness-and-serve-answer-from-main). Lift the two rules
-    # out and execute them against both destinations plus the anon one.
-    prog = r"""
-    function rowFor(href, text) {
-      // the two lines under test, verbatim in behaviour
-      const label = (String(text || '').trim()) || 'Join';
-      const external = /^https?:\/\//i.test(href);
-      return {label: label, external: external};
-    }
-    const out = [
-      rowFor('/switch-billing/', 'Switch'),
-      rowFor('/lgjoin/', 'Join'),
-      rowFor('https://www.patreon.com/c/theloothgroup/membership', 'Join'),
-      rowFor('/switch-billing/', '   '),
+    # ⚠️ THE TWO DECIDING LINES ARE LIFTED OUT OF THE FILE AND EXECUTED.
+    #
+    # The first version of this leg ran a hand-written COPY of the rule and
+    # asserted the file merely CONTAINED the tokens "menuJoinLabel" and
+    # "textContent" — and red-first proved that worthless: replacing the real
+    # label line with `var menuJoinLabel = 'Join';` left the gate GREEN, because
+    # "textContent" occurs elsewhere in a 1,000-line file. A gate that runs its
+    # own transcription tests the transcription.
+    #
+    # Run rather than read for a second reason too: the live origin serves MAIN,
+    # so §E's browser can never exercise this branch's copy at all
+    # (trap-harness-and-serve-answer-from-main).
+    m_label = re.search(r"^\s*var menuJoinLabel = .*?;$", js, re.M)
+    m_tab   = re.search(r"^\s*if \(/\^https\?:.*?test\(menuJoinHref\)\).*?}$", js, re.M)
+    # ⚠️ A MISSING LINE IS A FINDING, NOT A NO-VERDICT, and red-first is what
+    # showed the difference matters. Deleting the tab guard — the exact defect
+    # that ejects a member from the installed PWA — made the lift fail, and an
+    # earlier version answered CANNOT RUN (exit 2): a real defect reported as a
+    # missing environment, which run-all reads as "no verdict" rather than red
+    # (trap-gate-exit-code-3-blocks-every-lane). They are checks now.
+    check("bottom-nav still derives the sheet row's LABEL from the menu entry",
+          m_label is not None, "the label line is gone from the file")
+    check("bottom-nav still guards target=_blank on the href being off-site",
+          m_tab is not None, "the tab guard is gone — an internal page would "
+                             "eject a member from the installed PWA")
+    if not m_label or not m_tab:
+        log("")
+        return
+
+    prog = """
+    const cases = [
+      ['/switch-billing/', 'Switch'],
+      ['/lgjoin/', 'Join'],
+      ['https://www.patreon.com/c/theloothgroup/membership', 'Join'],
+      ['/switch-billing/', '   '],
     ];
+    const out = cases.map(([href, text]) => {
+      const menuJoinEl   = { textContent: text };
+      const menuJoinHref = href;
+      const joinRow2     = {};
+      %s
+      %s
+      return { label: menuJoinLabel, external: joinRow2.target === '_blank' };
+    });
     console.log(JSON.stringify(out));
-    """
+    """ % (m_label.group(0).strip(), m_tab.group(0).strip())
+
     r = subprocess.run(["node", "-e", prog], capture_output=True, text=True)
     if r.returncode != 0:
-        cannot_run(f"node could not run the bottom-nav rule: {r.stderr.strip()[:200]}")
+        cannot_run(f"node could not run bottom-nav's own lines: {r.stderr.strip()[:200]}")
     rows = json.loads(r.stdout.strip())
-    check("the sheet row follows the header to Switch, in a same-tab link",
+    check("the sheet row follows the menu to Switch, in a same-tab link",
           rows[0] == {"label": "Switch", "external": False}, str(rows[0]))
     check("...and to Join, still same-tab, for an internal join page",
           rows[1] == {"label": "Join", "external": False}, str(rows[1]))
@@ -489,6 +596,31 @@ def leg_d():
 
 
 # ══════════════════════════════════════════════════════════════════════ §E ══
+def fetch(path):
+    """GET over LOOPBACK. 127.0.0.1 is authorized by the box-local dev gate, so
+    no cookie is needed and none is sent — a gated 403 is identical in both
+    themes at every width and photographs as a clean pass having measured
+    nothing (trap-locked-out-browser-goes-vacuously-green). The real hostname is
+    kept in the Host header so SNI, the certificate and nginx's server_name all
+    still match, and Cloudflare — which bot-challenges a plain public curl into
+    a 403 that reads exactly like an outage — is never in the path.
+    Returns (None, "") when the box cannot be reached at all."""
+    import http.client, ssl
+    c = ssl.create_default_context()
+    c.check_hostname = False
+    c.verify_mode = ssl.CERT_NONE
+    try:
+        conn = http.client.HTTPSConnection("127.0.0.1", 443, context=c, timeout=15)
+        conn.request("GET", path, headers={"Host": "dev2.loothgroup.com"})
+        resp = conn.getresponse()
+        body = resp.read().decode("utf-8", "replace")
+        status = resp.status
+        conn.close()
+        return status, body
+    except Exception:                                           # noqa: BLE001
+        return None, ""
+
+
 def leg_e():
     log("§E  THE COUPLING — three files must name the same slug, and the box "
         "must have been told")
@@ -541,8 +673,37 @@ def leg_e():
                f"WordPress 404",
                "sudo cp platform/nginx/strangler-membership.conf /etc/nginx/snippets/ "
                "&& sudo nginx -t && sudo systemctl reload nginx")
-        report("...so the served-reachability assertion below is HELD, not skipped "
-               "— it turns hard the moment that command has been run")
+        report("...so the served-reachability assertion on the real slug is HELD, "
+               "not skipped — it turns hard the moment that command has been run")
+
+        # ⚠️ BUT "HELD" MUST NOT MEAN "UNMEASURED". The lane preview routes
+        # /preview/196-switch-menu/switch-billing/ through the SAME router, the
+        # SAME page file and the SAME membership FPM pool — only the nginx
+        # location differs. So the half that is genuinely blocked on a root
+        # deploy is the slug regex, and everything behind it can be proven now.
+        # Asserting it here is what stops this leg being a promise: a gate that
+        # stops watching the moment its subject is undeployed is not a gate
+        # (gate 90 §G learned this by flipping into report mode and going quiet).
+        code, body = fetch("/preview/196-switch-menu/switch-billing/")
+        if code is None:
+            report("the lane preview is not installed on this box, so the router "
+                   "could not be exercised over HTTP at all",
+                   "bash tools/preview/lane-preview.sh up 196-switch-menu")
+        else:
+            check("the page IS routable today — the branch's router serves it "
+                  "through the real FPM pool on the lane preview",
+                  code == 200 and "lg-membership-page" in body,
+                  f"HTTP {code}, {len(body)} bytes")
+            check("...and it is the ROUTER answering, not its no-such-surface 404",
+                  "no such surface" not in body)
+            # It must still REFUSE an anonymous visitor: the preview is not a
+            # way around the testgroup gate, and a gate leg that proved the page
+            # renders for anyone would be asserting a hole.
+            check("...and it still refuses an anonymous visitor, exactly as the "
+                  "registry says — the preview is not a bypass",
+                  "isn&#039;t available yet" in body or "isn't available yet" in body
+                  or "lg-gate" in body,
+                  body[:160])
         log("")
         return
 
@@ -550,25 +711,9 @@ def leg_e():
     # Answered by membership-pages, NOT by WordPress. The pre-launch stub IS a
     # 200 from the router, and that is the proof of routing — a signed-in probe
     # is not needed and would be a second thing to get wrong.
-    try:
-        req = urllib.request.Request(f"https://dev2.loothgroup.com{DEST}",
-                                     headers={"Host": "dev2.loothgroup.com"})
-        import ssl
-        ctxs = ssl.create_default_context()
-        ctxs.check_hostname = False
-        ctxs.verify_mode = ssl.CERT_NONE
-        # loopback is authorized by the box-local gate, so no cookie is needed
-        # and none is sent (trap-locked-out-browser-goes-vacuously-green: a
-        # gated 403 photographs as a clean pass having measured nothing).
-        import http.client
-        conn = http.client.HTTPSConnection("127.0.0.1", 443, context=ctxs, timeout=15)
-        conn.request("GET", DEST, headers={"Host": "dev2.loothgroup.com"})
-        resp = conn.getresponse()
-        body = resp.read().decode("utf-8", "replace")
-        code = resp.status
-        conn.close()
-    except Exception as exc:                                    # noqa: BLE001
-        cannot_run(f"could not reach {DEST} over loopback: {exc}")
+    code, body = fetch(DEST)
+    if code is None:
+        cannot_run(f"could not reach {DEST} over loopback")
 
     check(f"{DEST} is answered by membership-pages, not by WordPress",
           code == 200 and ("lg-membership-page" in body),
