@@ -72,3 +72,8 @@ profile-app/config/*.local.php
 platform/config/frontend-compose.local.php
 platform/config/back-pill.local.php
 platform/config/weekly-front.local.php
+
+# 202: tools/preview/202-decision-preview.sh renders the branch page here.
+# A build artifact, not work — but an UNTRACKED one, and a lane lost its shots
+# to a loose-file sweep on 2026-08-22, so it is named rather than left to luck.
+.preview/
