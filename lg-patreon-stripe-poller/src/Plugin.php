@@ -238,6 +238,20 @@ final class Plugin
             [ Wp\CheckoutAudienceRestController::class, 'exemptFromBuddyBossRestriction' ]
         );
 
+        // THE PASSWORD DOOR, ANSWERING FOR ITSELF (#193). Same hook, same
+        // one-route-at-a-time discipline: this names `/auth` and its alias
+        // `/gift-auth` and nothing else, so `/sync-customer`,
+        // `/patreon-standing` and `/send-gift-codes` stay restricted exactly as
+        // #181 left them. Without it a tester listed by ADDRESS reaches
+        // /lgjoin/, presses Continue and is told "Sign-in failed" — the route
+        // that creates their account answers 401 to anon. The route's own
+        // hardening is untouched; see RestController for what that is and for
+        // what #162 does and does NOT cover here.
+        add_filter(
+            'bb_exclude_endpoints_from_restriction',
+            [ Wp\RestController::class, 'exemptAuthFromBuddyBossRestriction' ]
+        );
+
         // Front-end shortcodes (gift redemption etc.).
         add_action( 'init', [ Wp\Shortcodes::class, 'register' ] );
 
