@@ -1,11 +1,19 @@
 # 196 — a Patreon payer sees SWITCH, never JOIN
 
-Lane `196-switch-menu`, issue #196. Ian, 8/22, verbatim:
+> ⚠️ **AMENDED MID-BUILD, 2026-08-22 — read this before §2(b) or §4.**
+> §2(b) proposed relabelling all THREE renderings of the Join door, and §4 asked
+> whether to. Ian answered *all three* — and then, on seeing the built result,
+> ruled the signed-in pill out altogether: *"Why is there a superfluous join
+> button for logged in users now."* So `$join_pill_authed` is **gone**, not
+> relabelled, and the PWA account-sheet row is re-sourced from the account-menu
+> entry — because the account menu is `display:none` below 641 on every surface,
+> so deleting both would have left a signed-in tester no door on a phone. Keeper
+> confirmed that reading before I built it. §4's other answers: cut the reminder
+> sentence, slug `/switch-billing/`. Everything else shipped as written.
+> A stale artifact is confidently wrong, so this note lives here and not only in
+> the handoff — see `docs/domains/MEMBERSHIP.md`, State (8/22, #196).
 
-> "Can you check and see if a user that has a patreon would have a menu for join
-> in the profile chip? If so we need to change that to switch and give people a
-> page with instructions for Patreon deactivation and reactivation through
-> stripe."
+Lane `196-switch-menu`, issue #196. Ian, 8/22, verbatim:
 
 ---
 
