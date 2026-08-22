@@ -328,7 +328,13 @@ function lg_membership_in_stripe_test_group(int $wpUserId): bool {
     $listed = lg_membership_stripe_test_group_emails();
     if ($listed === []) return false;
 
-    $email = lg_membership_user_email($wpUserId);
+    /* NORMALIZED HERE, AT THE COMPARE, not only in the lookup that feeds it.
+       Gate 34b found this: the first draft leaned on lg_membership_user_email()
+       to lower-case, so the door was correct only for as long as that one
+       helper stayed the only caller. A predicate whose correctness lives in
+       somebody else's function is one refactor from a silent miss, and the
+       miss here reads as "this tester is not on the list". */
+    $email = strtolower(trim(lg_membership_user_email($wpUserId)));
     return $email !== '' && in_array($email, $listed, true);
 }
 }

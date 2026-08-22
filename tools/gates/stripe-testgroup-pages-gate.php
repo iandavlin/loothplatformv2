@@ -114,6 +114,60 @@ fwrite(STDERR, "ALLOWED");   // only reached when the gate RETURNS
     return str_contains($err, 'ALLOWED') ? 'ALLOWED' : 'REFUSED';
 }
 
+/* ---------------------------------------------------------------------- *
+ * #193 — THE SAME BEHAVIOURAL RUN, with the viewer's ADDRESS controllable.
+ *
+ * lg_membership_user_email() is function_exists-guarded like everything else in
+ * config.php, precisely so a caller can pre-empt it — which is what lets this
+ * run with no database, exactly as the reader stub above does. Pre-empting it
+ * is also what keeps the assertion honest: what is under test is the DECISION,
+ * not whether a SELECT works.
+ * ---------------------------------------------------------------------- */
+function scenarioEmail(string $MP, ?string $flag, ?string $listSerialized, array $ctx, string $viewerEmail): string
+{
+    $opts = [
+        'lgms_stripe_testgroup_pages'     => $flag,
+        'lgms_stripe_lifecycle_allowlist' => $listSerialized,
+    ];
+    $harness = '<?php
+declare(strict_types=1);
+$OPTS  = ' . var_export($opts, true) . ';
+$CTX   = ' . var_export($ctx, true) . ';
+$EMAIL = ' . var_export($viewerEmail, true) . ';
+
+function lg_membership_wp_option(string $name, ?string $default = null): ?string {
+    global $OPTS;
+    return array_key_exists($name, $OPTS) && $OPTS[$name] !== null ? $OPTS[$name] : $default;
+}
+// The viewer\'s own address, pre-empted: no DB, and the decision is what is measured.
+function lg_membership_user_email(int $wpUserId): string {
+    global $EMAIL;
+    $GLOBALS["EMAIL_LOOKUPS"][] = $wpUserId;
+    return $wpUserId > 0 ? $EMAIL : "";
+}
+function lg_shared_render_site_header(array $c = []): void {}
+function lg_shared_render_site_footer(array $c = []): void {}
+
+$GLOBALS["EMAIL_LOOKUPS"] = [];
+require ' . var_export($MP . '/config.php', true) . ';
+require ' . var_export($MP . '/web/_admin-gate.php', true) . ';
+
+ob_start();
+lg_membership_testgroup_gate_or_exit($CTX);
+ob_end_clean();
+fwrite(STDERR, "ALLOWED:" . count($GLOBALS["EMAIL_LOOKUPS"]));
+';
+    $tmp = tempnam(sys_get_temp_dir(), 'lgtge') . '.php';
+    file_put_contents($tmp, $harness);
+    $d = [1 => ['pipe','w'], 2 => ['pipe','w']];
+    $pr = proc_open(PHP_BINARY . ' ' . escapeshellarg($tmp), $d, $pipes);
+    if (!is_resource($pr)) { @unlink($tmp); cannot('could not spawn php'); }
+    stream_get_contents($pipes[1]); $err = stream_get_contents($pipes[2]);
+    foreach ($pipes as $pp) fclose($pp);
+    proc_close($pr); @unlink($tmp);
+    return str_contains($err, 'ALLOWED') ? 'ALLOWED' : 'REFUSED';
+}
+
 /**
  * The READER, in isolation: what ids does this option actually resolve to?
  *
@@ -815,6 +869,56 @@ if ($hash === '') {
             $leaked === [] ? 'none' : implode(', ', $leaked)));
     }
 }
+
+/* ═══ #193 — THE DOOR ALSO KNOWS AN ADDRESS ══════════════════════════════ *
+ *
+ * Ian ruled the tester list takes plain email addresses. Without this leg a
+ * tester whose account was created BY the join is admitted to checkout and then
+ * refused the join page itself the moment they arrive on a browser without
+ * #180's unlock cookie — a second device, a cleared cookie jar, or simply
+ * /manage-subscription/ after they have paid. That is the "wired perfectly and
+ * lands nowhere" shape this repo has three memories about, and it would land in
+ * the middle of a real-money test.
+ */
+echo "\n#193 — the page door recognises a listed ADDRESS\n";
+
+$addrList   = serialize(['someone@example.test']);
+$mixedList  = serialize([9001, 'someone@example.test']);
+$idOnlyList = serialize([9001]);
+$viewer     = ['authenticated' => true, 'wp_user_id' => 4242];
+
+is_(scenarioEmail($MP, '1', $addrList, $viewer, 'someone@example.test') === 'ALLOWED',
+    '#193 a viewer whose ADDRESS is listed is admitted, though their id is not');
+is_(scenarioEmail($MP, '1', $addrList, $viewer, 'SOMEONE@Example.Test') === 'ALLOWED',
+    '#193 ...however their address is cased');
+is_(scenarioEmail($MP, '1', $addrList, $viewer, 'other@example.test') === 'REFUSED',
+    '#193 a viewer whose address is NOT listed is still refused');
+is_(scenarioEmail($MP, '1', $addrList, $viewer, '') === 'REFUSED',
+    '#193 a viewer whose address cannot be read is REFUSED — a DB failure must never admit');
+
+/* LOCK 1 STILL OUTRANKS IT. The flag off means the Test Group unlocks nothing,
+   addresses included — or #193 would have quietly become a fourth way in. */
+is_(scenarioEmail($MP, '0', $addrList, $viewer, 'someone@example.test') === 'REFUSED',
+    '#193 the pages flag OFF still refuses a listed address — lock 1 is unchanged');
+is_(scenarioEmail($MP, null, $addrList, $viewer, 'someone@example.test') === 'REFUSED',
+    '#193 ...and so does an ABSENT flag');
+
+/* ANON IS NEVER LISTED, and cannot become listed by carrying an address. */
+is_(scenarioEmail($MP, '1', $addrList, ['authenticated' => false, 'wp_user_id' => 0], 'someone@example.test') === 'REFUSED',
+    '#193 an unauthenticated viewer is refused even with a listed address');
+
+/* MIXED AND ID-ONLY LISTS. The id half is untouched by any of this. */
+is_(scenarioEmail($MP, '1', $mixedList, ['authenticated' => true, 'wp_user_id' => 9001], 'nobody@example.test') === 'ALLOWED',
+    '#193 a listed MEMBER is still admitted from a mixed list');
+is_(scenarioEmail($MP, '1', $idOnlyList, $viewer, 'someone@example.test') === 'REFUSED',
+    '#193 an id-only list admits nobody by address');
+
+/* THE READER ITSELF: address entries must not corrupt the id list, which is
+   what made adding them to this option safe in the first place. */
+is_(idsFor($MP, '1', $mixedList) === [9001],
+    '#193 the id reader is UNCHANGED by address entries — it has always dropped non-numerics');
+is_(idsFor($MP, '1', $addrList) === [],
+    '#193 an addresses-only list resolves to NO ids, exactly as before');
 
 echo "\n$pass passed, $fail failed\n";
 if ($fail > 0) {
