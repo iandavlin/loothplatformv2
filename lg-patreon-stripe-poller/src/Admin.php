@@ -54,6 +54,8 @@ final class Admin
         add_action( 'admin_post_lgms_comp_timer_set', [ self::class, 'handleCompTimerSet' ] );
         add_action( 'admin_post_lgms_tester_rotate', [ self::class, 'handleTesterRotate' ] );
         add_action( 'admin_post_lgms_tester_clear',  [ self::class, 'handleTesterClear' ] );
+        // #194: the Products tab owns its own handler — see ProductsPanel's docblock.
+        ProductsPanel::boot();
     }
 
     public static function menu(): void
@@ -1011,6 +1013,11 @@ final class Admin
             // default tab stays 'settings', so every existing bookmark and
             // every redirect #190 preserved still lands exactly where it did.
             'health'        => 'Health',
+            // #194: Ian, 8/22 — "Do we have a spot in the dash where we
+            // register the stripe products. Like looth-lite regional A ?" Sits
+            // beside Health because Health REPORTS an unmapped product and this
+            // is where it gets FIXED; the two show the same number.
+            'products'      => 'Products',
             'member_tools'  => 'Member Tools',
             'welcome_email' => 'Welcome Email',
             // #190: renamed for what it now answers end to end — the link that
@@ -1041,6 +1048,7 @@ final class Admin
             <?php
             match ( $tab ) {
                 'health'        => HealthPanel::render(),
+                'products'      => ProductsPanel::render(),
                 'member_tools'  => MemberTools::renderContent(),
                 'welcome_email' => self::renderWelcomeEmailTab(),
                 'stripe_cohort' => self::renderStripeCohortTab(),
