@@ -90,6 +90,18 @@
     box-shadow: inset 0 0 0 2px #1a1a1a;
 }
 .lg-manage-sub__cta--secondary:hover { background: #1a1a1a; color: #fff; }
+/* THE LINKED PATREON ADDRESS (Ian 2026-08-22). It sits between the "charged
+   twice" explanation and the two buttons, because it is the fact the member
+   needs BEFORE they act on either of them: the address to use when they change
+   or cancel. Given a rule of its own in BOTH themes deliberately — a class
+   styled only under data-lguser-theme renders unstyled in light, which is the
+   exact defect gate 75's mutation 20 was written after. */
+.lg-manage-sub__dual-linked {
+    margin: .75rem 0 0;
+    padding-left: .85rem;
+    border-left: 3px solid #d97706;
+    color: #4a4a4a;
+}
 .lg-manage-sub__dual-actions { display: flex; flex-wrap: wrap; gap: .75rem; margin: 1rem 0 0; }
 
 .lg-manage-sub__hint { margin-top: 1rem; color: #666; }
@@ -411,6 +423,7 @@ html[data-lguser-theme="dark"] .lg-manage-sub__status-pill            { backgrou
 html[data-lguser-theme="dark"] .lg-manage-sub__status-pill--active    { background: #1f3524; color: #9fd8ae; }
 html[data-lguser-theme="dark"] .lg-manage-sub__status-pill--declined  { background: #3a2320; color: #f0a08a; }
 html[data-lguser-theme="dark"] .lg-manage-sub__status-pill--dual      { background: #3a2f1c; color: #f2c98a; }
+html[data-lguser-theme="dark"] .lg-manage-sub__dual-linked           { border-left-color: #b4791f; color: var(--lgms-mute); }
 html[data-lguser-theme="dark"] .lg-manage-sub__cta--secondary        { color: var(--lgms-ink); box-shadow: inset 0 0 0 2px var(--lgms-ink); }
 html[data-lguser-theme="dark"] .lg-manage-sub__cta--secondary:hover  { background: var(--lgms-ink); color: #15171a; }
 

@@ -120,6 +120,22 @@ final class PatreonStandingRestController
      * The answer is deliberately thin: whether they are paying, what it is
      * called, and the exact words to show them. The caller renders nothing of
      * its own, so the copy cannot fork between the API and the join page.
+     *
+     * ⚠️ AND IT DELIBERATELY DOES **NOT** CARRY `patreon_email`, THOUGH THE
+     * VERDICT IT READS FROM NOW HAS ONE (Ian 2026-08-22: the linked Patreon
+     * address belongs on any double-pay or switch surface). Keeper's rail the
+     * same day: that address is for the SIGNED-IN MEMBER on their own surface,
+     * never for an anonymous caller. This route is the only channel the Slim
+     * billing app has into WordPress, and that app answers
+     * `POST /billing/v1/checkout` — which takes an arbitrary email, carries no
+     * auth, and replies to a stranger. Passing the address across this boundary
+     * would let anyone who types a member's WordPress address learn that
+     * member's linked Patreon address.
+     *
+     * So the rail is enforced HERE, by omission, rather than downstream by
+     * every renderer remembering: the app cannot leak what it never receives.
+     * The signed-in surfaces read it in-process instead. Gate 75 §10 asserts
+     * this response contains no address at all.
      */
     public static function standing( WP_REST_Request $req )
     {

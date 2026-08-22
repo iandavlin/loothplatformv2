@@ -180,6 +180,99 @@
   `PatreonStanding` without either being added to its require list. Revived:
   20 assertions, including the *"body chooses NOTHING"* section.
 
+## State (8/22, #193 rider — the double-pay guard was ON and BLIND)
+
+- **WHAT HAPPENED:** Ian flipped `lgms_double_pay_block` ON on dev2 (#150's
+  pending flip). Measured immediately after, from 127.0.0.1, **with the correct
+  shared secret**: `POST /wp-json/lg-member-sync/v1/patreon-standing` still
+  answered **401 `bb_rest_authorization_required`**.
+- ⚠️ **THE GUARD'S BEST QUALITY IS WHAT MADE THAT FATAL, and this is the shape
+  worth remembering.** It is **fail-open by design** — a WordPress blip must
+  never stop a legitimate sale — so a route that cannot answer produces UNKNOWN,
+  and UNKNOWN waves **every** checkout through. The guard read as armed on the
+  dash and refused nobody, **including the listed tester who actively pays
+  Patreon: the exact person it exists to stop.** #181 measured this 401 and
+  REPORTED it rather than opening it, which was right while the flag was off
+  everywhere. **The flip is what turned a report into a live defect** — a
+  reported-not-fixed finding can become urgent without anybody touching the
+  code.
+- **EXEMPTED on keeper's ruling**, same three conditions as #193's `/auth`:
+  the route's own secret check untouched (it is a membership **oracle** — it
+  says whether a named address pays us — so an open one is worse than a closed
+  one); surgical, its own filter on its own controller; and **gate 86's
+  still-restricted list shrank DELIBERATELY** — `/sync-customer` and
+  `/send-gift-codes` stay shut, the sweep covers the first, nothing waits on the
+  second. **This supersedes #181's one-route-only condition**, and the gate says
+  so in its own comment so the change reads as decided rather than drifted.
+- ⚠️ **THE FILTER IS UNCONDITIONAL THOUGH THE ROUTE IS FLAG-GATED.** Naming a
+  route that does not exist changes nothing — WordPress 404s it either way, so
+  OFF is untouched (gate 75 §9d) — while a flag-conditional exemption would be a
+  SECOND place the flag has to be read correctly. Gate 86 §K3k/§K3l pin both
+  halves so a tidy-up cannot merge them.
+- **THREE FILTERS ON THAT HOOK NOW, ONE PER CONTROLLER**, and gate 86 §K9b pins
+  the count so a fourth must be a decision somebody writes down.
+- **Gate 75 §9** drives the **REAL adapter over REAL HTTP** against a real 401,
+  because §5 stubs the probe and **a stub always answers** — which is precisely
+  why the reachability half was invisible for that gate's whole life. 9a the 401
+  decodes to UNKNOWN; 9b UNKNOWN lets the buyer through (a silently disarmed
+  guard); **9c\* THE MIKELLE CASE — a paying patron is REFUSED end to end**;
+  9c4 a non-patron on the same reachable route still buys.
+
+## State (8/22, Ian's ruling — the linked Patreon email on every double-pay and switch surface)
+
+- **THE LAW (Ian 8/22, verbatim):** *"its critical to add to any double pay or
+  switch surface the email associated with their patreon account and that that
+  is the email to use when adjusting thier membership."*
+- **WHY IT MATTERS:** the linkage between the two rails is the EMAIL. A member
+  who cancels Patreon and rejoins here under a **different** address is the #149
+  lost-membership class — they pay again and land on a second account that knows
+  nothing about the first. Naming the address before they choose one prevents
+  it, and it costs a sentence.
+- ⚠️ **MEASURED ON LIVE BEFORE BUILDING, AND THE NUMBER IS ZERO.** Of **1,223**
+  active paying patrons, **1,223 carry a Patreon email and 0 differ** from their
+  WordPress address. So this changes nothing anybody can see today; its value is
+  entirely **preventive** — it names the address before a member picks a
+  different one, and it is already correct on the day one diverges. Do not quote
+  it as fixing a live divergence. *(The query needs the explicit cross-database
+  `COLLATE utf8mb4_unicode_ci`; without it MySQL raises ERROR 1267 — the trap
+  `report-dual-payers.sql` already records.)*
+- **KEEPER'S ONE RAIL: SIGNED-IN MEMBER, THEIR OWN SURFACE, ONLY.** An anonymous
+  caller's refusal never carries it — `POST /billing/v1/checkout` takes an
+  arbitrary email and answers a stranger, so including it there would turn the
+  double-pay guard into an **address-lookup service** for anyone who types a
+  member's WordPress email.
+- ⚠️ **AND THE RAIL IS STRUCTURAL, NOT REMEMBERED.** `patreon_email` is
+  deliberately **NOT returned by `PatreonStandingRestController`** — the only
+  channel the Slim billing app has into WordPress — so **the anonymous 403
+  cannot include it even by mistake, because the app never receives it.** Same
+  discipline #192 used for the health panel's secrets: a property of the data,
+  not a rule the renderer has to remember. Gate 75 §10g asserts the absence
+  **with a fixture that HOLDS an address**, since a fixture with none leaves
+  nothing for a broken build to leak.
+- **WHERE IT SHOWS:** `/manage-subscription/` (the dual-payer notice),
+  `/lgjoin/`'s blocked-by-Patreon block (a switch surface by definition — and
+  that branch is reachable only when `$isLoggedIn && $wpUserId > 0`, so the rail
+  holds structurally there too), and the WP `/me/checkout-session` 409. That
+  last one is safe because it is session-authenticated **and** takes the member
+  from `get_current_user_id()`, never the body — gate 75 §10i2/§10i3/§10i4
+  assert all three, because 10i is a leak if any of them stops being true.
+- **ONE SENTENCE, TWO APPS, WORD FOR WORD** (`PatreonStanding::
+  linkedEmailSentence()` and `lg_membership_linked_email_sentence()`), compared
+  by gate 75 §10k. **No linked address produces NOTHING** — never an invented or
+  guessed one, because the member would act on it.
+- **Gate 75 at 131**; red-first **17/17** + 1 no-op via the new
+  `tools/gates/double-pay-redfirst.py`.
+- ⚠️ **THREE OF MY OWN §10 ASSERTIONS WERE BLIND FIRST TIME, and the gate was
+  fixed, not the mutation:** a *"renders it"* check that looked for the function
+  NAME (satisfied by a call pinned to `false`); a selector regex whose `[^{}]*`
+  swallowed a `-DISABLED` suffix, so a **prefix match read as a hit**; and no
+  assertion at all that the standalone app SELECTs the address — its sentence
+  had nothing to say while every copy check passed.
+- **OBSERVED, NOT FIXED:** `.lg-join__patreon-block` — the whole
+  blocked-by-Patreon refusal block on `/lgjoin/` — **has no CSS rule anywhere in
+  the repo**. It renders as bare `h3` and `p`. Pre-existing from #150, and
+  Ian decides from pictures, so it is worth a look; not this lane's to restyle.
+
 ## State (8/22, #193 — the tester list takes ADDRESSES, not only existing accounts)
 
 - **THE LAW THIS ADDS (Ian 8/22, verbatim):** *"Is this an accurate test? I

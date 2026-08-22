@@ -386,7 +386,7 @@ if (!function_exists('lg_membership_patreon_standing')) {
 /**
  * Is this member being CHARGED by Patreon right now?
  *
- * @return array{active:bool,tier:?string,tier_label:?string,reason:string}
+ * @return array{active:bool,tier:?string,tier_label:?string,reason:string,patreon_email:?string}
  *
  * Same three facts the sweep decides a role from: the Patreon link, the entitled
  * tier through lgpo_tier_map, and the live patron_status snapshot. A tier that
@@ -399,7 +399,7 @@ if (!function_exists('lg_membership_patreon_standing')) {
  * test would unblock exactly the wrong members.
  */
 function lg_membership_patreon_standing(int $wpUserId): array {
-    $none = ['active' => false, 'tier' => null, 'tier_label' => null, 'reason' => 'no_patreon_link'];
+    $none = ['active' => false, 'tier' => null, 'tier_label' => null, 'reason' => 'no_patreon_link', 'patreon_email' => null];
     if ($wpUserId <= 0) return $none;
 
     try {
@@ -421,7 +421,7 @@ function lg_membership_patreon_standing(int $wpUserId): array {
 
     try {
         $st = lg_membership_poller_db()->prepare(
-            'SELECT patron_status, currently_entitled_amount_cents, tier_label
+            'SELECT patron_status, currently_entitled_amount_cents, tier_label, email
                FROM lg_patreon_members WHERE wp_user_id = ? LIMIT 1'
         );
         $st->execute([$wpUserId]);
@@ -431,14 +431,19 @@ function lg_membership_patreon_standing(int $wpUserId): array {
         return $none;
     }
     if (!is_array($row) || $row === []) {
-        return ['active' => false, 'tier' => null, 'tier_label' => null, 'reason' => 'no_patreon_record'];
+        return ['active' => false, 'tier' => null, 'tier_label' => null, 'reason' => 'no_patreon_record', 'patreon_email' => null];
     }
 
     // A row that says NOTHING is not a row that says PAYING.
     $status = ($row['patron_status'] ?? null) !== null ? (string) $row['patron_status'] : null;
     $label  = ($row['tier_label'] ?? null) !== null ? (string) $row['tier_label'] : null;
+    // THE LINKED PATREON ADDRESS (Ian 2026-08-22). Mirrors
+    // LGMS\Membership\PatreonStanding exactly, because this app never boots
+    // WordPress and gate 75 compares the two.
+    $pemail = (isset($row['email']) && is_string($row['email']) && trim($row['email']) !== '')
+        ? strtolower(trim((string) $row['email'])) : null;
     if ($status !== 'active_patron') {
-        return ['active' => false, 'tier' => null, 'tier_label' => $label, 'reason' => 'not_active_patron'];
+        return ['active' => false, 'tier' => null, 'tier_label' => $label, 'reason' => 'not_active_patron', 'patreon_email' => $pemail];
     }
 
     // lgpo_tier_map is a WordPress array option, so it is PHP-SERIALIZED in the
@@ -459,10 +464,11 @@ function lg_membership_patreon_standing(int $wpUserId): array {
     $paying = $tier !== null || ($cents !== null && $cents > 0);
 
     return [
-        'active'     => $paying,
-        'tier'       => $tier,
-        'tier_label' => $label,
-        'reason'     => $paying ? 'active_paid_patron' : 'active_patron_not_paying',
+        'active'        => $paying,
+        'tier'          => $tier,
+        'tier_label'    => $label,
+        'reason'        => $paying ? 'active_paid_patron' : 'active_patron_not_paying',
+        'patreon_email' => $pemail,
     ];
 }
 }
@@ -548,6 +554,42 @@ function lg_membership_dual_payer_message(): string {
          . ' an active subscription here. You only need one of them. Cancel whichever you prefer and'
          . ' your access carries on through the other — nothing is interrupted. If you would like the'
          . ' overlap refunded, ask us and we will sort it out.';
+}
+}
+
+if (!function_exists('lg_membership_linked_email_sentence')) {
+/**
+ * THE LINKED PATREON ADDRESS, AND WHY IT IS ON THE SCREEN.
+ *
+ * Ian, 2026-08-22, verbatim: *"its critical to add to any double pay or switch
+ * surface the email associated with their patreon account and that that is the
+ * email to use when adjusting thier membership."*
+ *
+ * The linkage between the two rails is the EMAIL. A member who cancels Patreon
+ * and rejoins here under a different address is the #149 lost-membership class:
+ * they pay again and land on a second account that knows nothing about the
+ * first. Naming the address before they choose one is what prevents it.
+ *
+ * ⚠️ ONE RAIL (keeper, same day): SIGNED-IN MEMBER, THEIR OWN SURFACE, ONLY.
+ * Every caller of this is behind a session — /manage-subscription/ and the
+ * signed-in branch of /lgjoin/. The anonymous Slim 403 keeps the existing
+ * sentence and never receives an address to add (the poller's REST route omits
+ * it on purpose), so a stranger who types a member's email learns nothing.
+ *
+ * WORD FOR WORD the same as LGMS\Membership\PatreonStanding::linkedEmailSentence().
+ * Two apps, one sentence — gate 75 compares them, because a member who reads
+ * one wording here and another there has to work out which is true.
+ *
+ * '' when there is no linked address: callers append nothing rather than
+ * inventing one, because the member would act on it.
+ */
+function lg_membership_linked_email_sentence(?string $patreonEmail): string {
+    $email = strtolower(trim((string) $patreonEmail));
+    if ($email === '') return '';
+
+    return 'Your Patreon membership is linked to the email address ' . $email
+         . '. Use that address when you change or cancel your membership — it is how we'
+         . ' match your Patreon to your account here.';
 }
 }
 

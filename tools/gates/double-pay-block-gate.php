@@ -133,6 +133,27 @@ function literalsIn( string $file, string $fn ): string {
 }
 
 /** Source with comments and strings-in-comments removed, so prose can never satisfy an assertion. */
+/**
+ * THE BODY OF ONE FUNCTION, BRACE-MATCHED — never a fixed-width window, which
+ * runs past the end of one function into its neighbour (#190 paid for that) and
+ * never a `[^}]*` regex, which stops at the first `if`'s closing brace.
+ */
+function fn_body( string $src, string $name ): string {
+    $at = strpos( $src, 'function ' . $name );
+    if ( $at === false ) { return ''; }
+    $open = strpos( $src, '{', $at );
+    if ( $open === false ) { return ''; }
+    $depth = 0;
+    for ( $i = $open, $n = strlen( $src ); $i < $n; $i++ ) {
+        if ( $src[ $i ] === '{' ) { $depth++; }
+        elseif ( $src[ $i ] === '}' ) {
+            $depth--;
+            if ( $depth === 0 ) { return substr( $src, $open + 1, $i - $open - 1 ); }
+        }
+    }
+    return '';
+}
+
 function bare( string $file ): string {
     $t = token_get_all( (string) file_get_contents( $file ) );
     $out = '';
@@ -857,6 +878,152 @@ is_( \LGMS\Wp\PatreonStandingRestController::authSharedSecret(
         new WP_REST_Request( [], [ 'x_lgms_token' => 'guessed' ] ) ) === false,
      '9f3 ...so a caller WITHOUT the secret is still refused — only WHICH check refuses changed' );
 
+/* ═══ §10 — THE LINKED PATREON ADDRESS (Ian 2026-08-22) ═══════════════════ *
+ *
+ * Verbatim: *"its critical to add to any double pay or switch surface the email
+ * associated with their patreon account and that that is the email to use when
+ * adjusting thier membership."*
+ *
+ * The linkage between the rails is the EMAIL. A member who cancels Patreon and
+ * rejoins here under a different address is the #149 lost-membership class.
+ *
+ * ⚠️ AND KEEPER'S RAIL IS THE HALF THAT NEEDS GATING HARDEST: the address is
+ * for the SIGNED-IN MEMBER on their own surface, and an anonymous caller's
+ * refusal must NEVER carry it — `POST /billing/v1/checkout` takes an arbitrary
+ * email from a stranger, so leaking it there would turn the double-pay guard
+ * into an address-lookup service. Both directions are asserted below, and the
+ * ABSENCE is asserted with a fixture that HOLDS an address, because a fixture
+ * with none leaves nothing for a broken build to leak.
+ */
+section( '[10] THE LINKED PATREON ADDRESS — shown to the member, never to a stranger' );
+
+$PS = '\LGMS\Membership\PatreonStanding';
+
+/* ── the sentence itself ── */
+$withEmail = [ 'active' => true, 'tier' => 'looth2', 'patreon_email' => 'patron@patreon-side.test' ];
+$sentence  = $PS::linkedEmailSentence( $withEmail );
+is_( $sentence !== '', '10a  a standing WITH a linked address produces a sentence' );
+is_( strpos( $sentence, 'patron@patreon-side.test' ) !== false,
+     '10b  ...naming the address itself, which is the whole point' );
+is_( stripos( $sentence, 'change or cancel' ) !== false,
+     '10c  ...and saying it is the address to use when adjusting membership (Ian\'s words)' );
+
+is_( $PS::linkedEmailSentence( [ 'active' => true, 'patreon_email' => null ] ) === '',
+     '10d  NO linked address produces NOTHING — never an invented or guessed one' );
+is_( $PS::linkedEmailSentence( [] ) === '', '10d2 ...and neither does an empty standing' );
+is_( $PS::linkedEmailSentence( [ 'patreon_email' => '   ' ] ) === '', '10d3 ...nor whitespace' );
+is_( strpos( $PS::linkedEmailSentence( [ 'patreon_email' => '  Patron@Patreon-Side.TEST ' ] ),
+             'patron@patreon-side.test' ) !== false,
+     '10e  the address is normalized, so it renders the same however it was stored' );
+
+/* ── ⚠️ THE ABSENCE, on the one channel the Slim app has into WordPress. The
+      fixture HOLDS an address, so a build that leaked it would be caught. ── */
+$GLOBALS['OPTS'][ PatreonStanding::FLAG ] = '1';
+$GLOBALS['OPTS']['lgms_shared_secret']    = 'the-real-secret';
+$routeResp = \LGMS\Wp\PatreonStandingRestController::standing(
+    new WP_REST_Request( [ 'email' => 'patron@example.com' ] ) );
+$routeBody = $routeResp instanceof WP_REST_Response ? (array) $routeResp->get_data() : [];
+is_( ( $routeBody['active'] ?? null ) === true,
+     '10f  the standing route still answers ACTIVE for a paying patron (the fixture is live)' );
+$standingNow = $PS::forEmail( 'patron@example.com' );
+is_( ! empty( $standingNow['patreon_email'] ),
+     '10f2 ...and the VERDICT it read really does carry an address, so 10g is not vacuous' );
+is_( ! array_key_exists( 'patreon_email', $routeBody ),
+     '10g  *** THE ROUTE DOES NOT RETURN THE ADDRESS *** — the Slim app cannot leak what it never receives' );
+$routeJson = (string) json_encode( $routeBody );
+is_( stripos( $routeJson, (string) $standingNow['patreon_email'] ) === false,
+     '10g2 ...and it appears NOWHERE in the response body, under any key' );
+is_( stripos( $routeJson, '@' ) === false,
+     '10g3 ...in fact the response carries no address-shaped value at all' );
+unset( $GLOBALS['OPTS'][ PatreonStanding::FLAG ] );
+
+/* ── the ANONYMOUS refusal keeps the plain sentence. ── */
+$slimRefusalMsg = $PS::refusalMessage( $withEmail );
+is_( stripos( $slimRefusalMsg, 'patron@patreon-side.test' ) === false,
+     '10h  the shared refusal copy carries NO address — it is what the anon 403 renders' );
+is_( stripos( $slimRefusalMsg, '@' ) === false,
+     '10h2 ...and no address-shaped value at all, so no fixture can sneak one in' );
+
+/* ── the SIGNED-IN doors show it. Door 2 is authenticated by construction:
+      permission_callback authLoggedInUser, and $uid comes from the session. ── */
+$wpDoorSrc = bare( $wpCheckout );
+is_( strpos( $wpDoorSrc, 'linkedEmailSentence' ) !== false,
+     '10i  the WP checkout door (signed-in, nonce-checked) appends the address' );
+/* ⚠️ 10i IS ONLY SAFE IF THIS IS TRUE, so it is asserted rather than assumed —
+   and the first draft got it wrong, looking for self::class when the callback
+   is actually RestController's. TWO properties, because either alone would
+   leave a hole: the route is session-authenticated, AND the user id comes from
+   that session rather than from the request body. If $uid could be supplied by
+   the caller, an authenticated member could ask about somebody ELSE and 10i
+   would be handing them a stranger's Patreon address. */
+$wpDoorTight = str_replace( ' ', '', $wpDoorSrc );
+is_( strpos( $wpDoorTight, "'permission_callback'=>[RestController::class,'authLoggedInUser']" ) !== false,
+     '10i2 ...and that door really is session-authenticated, or 10i is a leak' );
+$authBodyWp = fn_body( bare( $POLLER . '/src/Wp/RestController.php' ), 'authLoggedInUser' );
+is_( $authBodyWp !== '' && strpos( $authBodyWp, 'is_user_logged_in()' ) !== false
+     && strpos( $authBodyWp, 'wp_verify_nonce' ) !== false,
+     '10i3 ...and that callback really requires a session AND a valid nonce' );
+is_( strpos( $wpDoorTight, '$uid=(int)get_current_user_id()' ) !== false,
+     '10i4 ...and the member is taken from the SESSION, never from the body — so the '
+   . 'address can only ever be the caller\'s own' );
+
+$slimGuardSrc = bare( $slimGuard );
+is_( strpos( $slimGuardSrc, 'linkedEmailSentence' ) === false
+     && strpos( $slimGuardSrc, 'patreon_email' ) === false,
+     '10j  the SLIM guard — which answers anonymous callers — knows nothing about it' );
+
+/* ── the two apps say it in the SAME words. One member, two surfaces; a
+      wording that forks makes them work out which is true. ── */
+$cfgSrc = (string) file_get_contents( $MP . '/config.php' );
+/* THE MIRRORED READER MUST ACTUALLY FETCH IT. Without this the standalone app
+   holds the right sentence and never has an address to put in it — the member
+   sees nothing and every copy assertion below still passes. Found by red-first. */
+is_( preg_match( '/SELECT\s+patron_status[^\x27]*\bemail\b/', $cfgSrc ) === 1,
+     '10k0 the standalone app SELECTs the linked address, or its sentence has nothing to say' );
+is_( strpos( $cfgSrc, "'patreon_email' => \$pemail" ) !== false,
+     '10k0b ...and returns it in the verdict the surfaces read' );
+foreach ( [ 'Your Patreon membership is linked to the email address',
+            'Use that address when you change or cancel your membership' ] as $frag ) {
+    is_( strpos( $cfgSrc, $frag ) !== false,
+         '10k  the standalone app mirrors the sentence: "' . substr( $frag, 0, 44 ) . '..."' );
+    is_( strpos( (string) file_get_contents( $standingFile ), $frag ) !== false,
+         '10k2 ...and so does the poller, word for word' );
+}
+
+/* ── the member-facing surfaces actually render it. ── */
+$msSrc = (string) file_get_contents( $MP . '/web/manage-subscription.php' );
+/* ⚠️ ASSERT THE ASSIGNMENT, NOT THE CALL. The red-first caught this: pinning
+   the condition to `false && $is_dual_payer` leaves the function name sitting
+   in the file, so a "renders it" check that looks for the call passes on a
+   page that renders nothing. Third time this shape appeared in this lane. */
+is_( preg_match( '/\$linked_email_sentence\s*=\s*\$is_dual_payer\s*\?\s*lg_membership_linked_email_sentence\(/', $msSrc ) === 1,
+     '10l  /manage-subscription/ renders it, reachably — the signed-in double-pay surface' );
+is_( strpos( $msSrc, '<?= $h($linked_email_sentence) ?>' ) !== false,
+     '10l1 ...and the value actually reaches the markup, escaped' );
+is_( strpos( $msSrc, 'lg-manage-sub__dual-linked' ) !== false,
+     '10l2 ...in its own element, so it can be styled and found' );
+
+$msCss = (string) file_get_contents( $MP . '/web/manage-subscription.css' );
+/* ⚠️ THE SELECTOR MUST END WHERE WE THINK IT DOES. The red-first renamed it to
+   `.lg-manage-sub__dual-linked-DISABLED` and the first draft of this regex
+   still matched, because `[^{}]*` happily swallowed the suffix — a prefix match
+   reading as a hit. The (?![-\w]) is what makes it the whole class name. */
+$lightRule = (bool) preg_match( '/(^|\})[^{}]*\.lg-manage-sub__dual-linked(?![-\w])[^{}]*\{/m',
+                                preg_replace( '/html\[data-lguser-theme="dark"\][^{]*\{[^}]*\}/', '', $msCss ) );
+is_( $lightRule, '10l3 ...with a LIGHT rule behind it, not dark-only (gate 75 mutation 20\'s lesson)' );
+is_( strpos( $msCss, 'html[data-lguser-theme="dark"] .lg-manage-sub__dual-linked' ) !== false,
+     '10l4 ...and a dark rule of its own' );
+
+$joinSrc = (string) file_get_contents( $MP . '/web/lgjoin.php' );
+is_( strpos( $joinSrc, 'lg_membership_linked_email_sentence' ) !== false,
+     '10m  /lgjoin/ renders it on the switch surface — the member is there to move billing' );
+$blockAt = strpos( $joinSrc, 'lg-join__patreon-block' );
+$callAt2 = strpos( $joinSrc, 'lg_membership_linked_email_sentence' );
+is_( $blockAt !== false && $callAt2 !== false && $callAt2 > $blockAt,
+     '10m2 ...INSIDE the blocked-by-Patreon branch, which is reachable only when signed in' );
+is_( strpos( $joinSrc, '$isLoggedIn && $wpUserId > 0' ) !== false,
+     '10m3 ...and that branch\'s own guard still requires a session, or 10m2 means nothing' );
+
 echo "\n$pass passed, $fail failed\n";
 if ( $fail > 0 ) {
     echo "RED — the double-pay block is not holding.\n";
@@ -870,6 +1037,15 @@ echo "        refusal tells the member how to switch rails.\n";
  * RED-FIRST — every assertion above was falsified by mutation before it was
  * trusted. Run order: apply the mutation, run this gate, confirm the NAMED
  * assertion reddens (and only it), revert.
+ *
+ * §9 and §10 (#193, 2026-08-22) are AUTOMATED rather than hand-run:
+ *     python3 tools/gates/double-pay-redfirst.py
+ * 17/17 caught, 1/1 no-op inert, baseline 131. The two that matter most are R5
+ * (the guard stops refusing an active patron — THE MIKELLE CASE reopens, and it
+ * must redden 9c*) and I2 (the linked Patreon address leaks across the
+ * server-to-server boundary, breaking keeper's signed-in-only rail — it must
+ * redden 10g). Three others were BLIND on the first run and the GATE was fixed:
+ * see that harness's header.
  *
  *  1. Delete src/Membership/PatreonStanding.php
  *     → §0 RED, and the gate stops with the #150 defect spelled out. This is

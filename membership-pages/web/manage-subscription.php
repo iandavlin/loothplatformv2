@@ -88,6 +88,13 @@ if (lg_membership_double_pay_block() && $wp_user_id > 0) {
     }
     $is_dual_payer = lg_membership_is_dual_payer($wp_user_id, $dual_email);
 }
+/* THE LINKED PATREON ADDRESS (Ian 2026-08-22). Resolved only when the notice
+   will actually be shown, so a switched-off feature still does no work — the
+   same discipline the flag-first check above exists for. This page is behind a
+   session, which is the whole reason the address may appear here at all. */
+$linked_email_sentence = $is_dual_payer
+    ? lg_membership_linked_email_sentence(lg_membership_patreon_standing($wp_user_id)['patreon_email'] ?? null)
+    : '';
 $status_label = lg_membership_format_status_label($membership['patron_status'] ?? null);
 $status_kind  = lg_membership_format_status_kind($membership['patron_status'] ?? null);
 $last_charge  = lg_membership_format_date($membership['last_charge_date'] ?? null);
@@ -117,6 +124,9 @@ $asset_v = (string)(@filemtime(__DIR__ . '/manage-subscription.css') ?: '1');
     <section class="lg-manage-sub__card lg-manage-sub__card--dual" role="status">
         <p class="lg-manage-sub__status-pill lg-manage-sub__status-pill--dual">Charged twice</p>
         <p><?= $h(lg_membership_dual_payer_message()) ?></p>
+        <?php if ($linked_email_sentence !== ''): ?>
+            <p class="lg-manage-sub__dual-linked"><?= $h($linked_email_sentence) ?></p>
+        <?php endif; ?>
         <p class="lg-manage-sub__dual-actions">
             <a class="lg-manage-sub__cta" href="<?= $h($patreon_link) ?>" target="_blank" rel="noopener">Manage your pledge on Patreon &rarr;</a>
             <a class="lg-manage-sub__cta lg-manage-sub__cta--secondary" href="/request-refund/">Ask us about a refund &rarr;</a>

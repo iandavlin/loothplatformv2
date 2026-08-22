@@ -114,6 +114,11 @@ final class PatreonStanding
             : null;
 
         $extra = [
+            // THE LINKED PATREON ADDRESS (Ian 2026-08-22). See
+            // linkedEmailSentence() below for the ruling and the one rail on it.
+            'patreon_email'    => isset( $row['email'] ) && is_string( $row['email'] ) && trim( $row['email'] ) !== ''
+                ? strtolower( trim( (string) $row['email'] ) )
+                : null,
             'tier'             => $tier,
             'tier_id'          => $tierId,
             'patron_status'    => $status,
@@ -173,6 +178,53 @@ final class PatreonStanding
              . ' back and join here once it lapses.';
     }
 
+    /**
+     * THE LINKED PATREON ADDRESS, AND WHY IT IS ON THE SCREEN.
+     *
+     * Ian, 2026-08-22, verbatim: *"its critical to add to any double pay or
+     * switch surface the email associated with their patreon account and that
+     * that is the email to use when adjusting thier membership."*
+     *
+     * The identity linkage between the two rails is the EMAIL. A member who
+     * cancels Patreon and rejoins here under a different address is the #149
+     * lost-membership class — they pay again and land on a second account that
+     * knows nothing about the first. Naming the address before they choose one
+     * is what prevents it, and it costs a sentence.
+     *
+     * ⚠️ ONE RAIL, RULED BY KEEPER THE SAME DAY: THIS IS FOR THE SIGNED-IN
+     * MEMBER, ON THEIR OWN SURFACE, AND NOWHERE ELSE. An anonymous caller's
+     * refusal must never carry it — `POST /billing/v1/checkout` takes an
+     * arbitrary email and answers a stranger, so including it there would hand
+     * anyone who types a member's WordPress address that member's linked
+     * Patreon address. That is a disclosure, not a courtesy.
+     *
+     * ⚠️ AND THE RAIL IS STRUCTURAL, NOT REMEMBERED. `patreon_email` is
+     * deliberately NOT returned by PatreonStandingRestController — the only
+     * channel the Slim billing app has into WordPress — so the anonymous 403
+     * cannot include it even by mistake, because the app never receives it.
+     * Same discipline #192 used for the secrets on the health panel: make it a
+     * property of the data rather than a rule the renderer has to remember.
+     * Gate 75 asserts the absence on the route and the presence on the
+     * signed-in surfaces.
+     *
+     * Returns '' when there is no linked address, and callers append nothing:
+     * an invented or guessed address here is worse than silence, because the
+     * member would act on it.
+     */
+    public static function linkedEmailSentence( array $standing = [] ): string
+    {
+        $email = isset( $standing['patreon_email'] ) && is_string( $standing['patreon_email'] )
+            ? strtolower( trim( $standing['patreon_email'] ) )
+            : '';
+        if ( $email === '' ) {
+            return '';
+        }
+
+        return 'Your Patreon membership is linked to the email address ' . $email
+             . '. Use that address when you change or cancel your membership — it is how we'
+             . ' match your Patreon to your account here.';
+    }
+
     /** Where the member goes to cancel. Same option /manage-subscription/ links. */
     public static function manageUrl(): string
     {
@@ -200,7 +252,7 @@ final class PatreonStanding
             $st = Db::pdo()->prepare(
                 'SELECT patron_status, last_charge_status, next_charge_date,
                         currently_entitled_amount_cents, will_pay_amount_cents,
-                        tier_label, synced_at
+                        tier_label, synced_at, email
                    FROM lg_patreon_members
                   WHERE wp_user_id = ?
                   LIMIT 1'
@@ -221,6 +273,7 @@ final class PatreonStanding
     {
         return $extra + [
             'active'           => $active,
+            'patreon_email'    => null,
             'tier'             => null,
             'tier_id'          => null,
             'patron_status'    => null,
