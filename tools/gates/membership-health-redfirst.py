@@ -73,9 +73,10 @@ MUTATIONS = [
      "$out['reason'] = '';",
      "A2b", "the panel knows it is not a file and declines to say so"),
 
+    # Re-pointed by #201: the unknown verdict now originates in secretPair().
     ("M4", HEALTH,
-     "                $worst = self::worseOf( $worst, 'unknown' );\n                continue;",
-     "                continue;",
+     "            'verdict'   => 'cannot_compare',\n            'status'    => 'unknown',",
+     "            'verdict'   => 'cannot_compare',\n            'status'    => 'ok',",
      "A5", "an unreadable settings file leaves the secrets question looking HEALTHY"),
 
     ("M5", HEALTH,
@@ -93,40 +94,54 @@ MUTATIONS = [
      "$lines[] = self::line( 'WordPress Stripe key', (string) get_option( 'lgms_stripe_secret_key', '' ), 'neutral' );",
      "A6b", "the live Stripe secret key itself is handed to the renderer"),
 
-    # ---- B. do the two halves agree --------------------------------------
+    # ---- B. does the webhook secret agree ---------------------------------
+    # ⚠️ RE-POINTED BY #201. The comparison moved into the shared
+    # Health::secretPair(), and the shared-secret pair moved to its own section
+    # with its own gate (98). These anchors follow the code; the assertions they
+    # name are the same behaviours on the pair this card still owns.
     ("M8", HEALTH,
-     "$agree = hash_equals( $appFact['sha'], hash( 'sha256', $wp ) );",
-     "$agree = true;",
+     "$agree          = hash_equals( (string) $appFact['sha'], hash( 'sha256', $wp ) );",
+     "$agree          = true;",
      "B2", "two DIFFERENT secrets are reported as agreeing — failure #2, undetected"),
 
     ("M9", HEALTH,
-     "'billing app: set (' . $appFact['len'] . ' characters) · WordPress: NOT SET'",
-     "'not configured'",
-     "B3", "live's exact shape today is reported without naming WHICH half is missing"),
+     "$out['line']    = 'billing app: set (' . $out['app']['len'] . ' characters) · WordPress: NOT SET';",
+     "$out['line']    = 'not configured';",
+     "B3", "dev2's exact shape today is reported without naming WHICH half is missing"),
 
     ("M10", HEALTH,
-     "'WordPress: set (' . strlen( $wp ) . ' characters) · billing app: NOT SET'",
-     "'not configured'",
+     "$out['line']    = 'WordPress: set (' . strlen( $wp ) . ' characters) · billing app: NOT SET';",
+     "$out['line']    = 'not configured';",
      "B4", "the mirror case is equally anonymous"),
 
     ("M11", HEALTH,
-     """                $lines[]  = self::line( $label, 'NOT SET on either side', 'fail' );
-                $issues[] = $label . ' is missing everywhere';
-                $worst    = self::worseOf( $worst, 'fail' );
-                continue;""",
-     """                $lines[]  = self::line( $label, 'NOT SET on either side', 'ok' );
-                continue;""",
+     """            $out['verdict'] = 'both_missing';
+            $out['status']  = 'fail';""",
+     """            $out['verdict'] = 'both_missing';
+            $out['status']  = 'ok';""",
      "B5", "a secret absent on BOTH sides is scored as healthy"),
 
+    # ⚠️ THE RATCHET, red-first. #199's two-stacked-panels shape is one merge
+    # away at all times; this proves B6 would catch it.
     ("M12", HEALTH,
-     "        foreach ( $pairs as [ $label, $opt, $key, $why ] ) {",
-     "        foreach ( $pairs as [ $label, $opt, $key, $why ] ) {\n            if ( $label !== 'Shared secret' ) { continue; }",
-     "B6", "only the first pair is judged, so a broken webhook secret is invisible"),
+     "            [ 'Stripe webhook secret', 'lgms_stripe_webhook_secret', 'STRIPE_WEBHOOK_SECRET' ],",
+     "            [ 'Stripe webhook secret', 'lgms_stripe_webhook_secret', 'STRIPE_WEBHOOK_SECRET' ],\n            [ 'Shared secret', 'lgms_shared_secret', 'LGMS_SHARED_SECRET' ],",
+     "B6", "the shared secret is reported a SECOND time on the same screen"),
+
+    ("M12b", HEALTH,
+     "            [ 'Stripe webhook secret', 'lgms_stripe_webhook_secret', 'STRIPE_WEBHOOK_SECRET' ],",
+     "            [ 'Shared secret', 'lgms_shared_secret', 'LGMS_SHARED_SECRET' ],",
+     "B6c", "the card SWAPS to the wrong pair and stops reporting the one it owns"),
 
     ("M13", HEALTH,
-     "                    ? 'AGREE — both set, ' . strlen( $wp ) . ' characters'",
-     "                    ? 'AGREE'",
+     "            ? 'AGREE — both set, ' . strlen( $wp ) . ' characters'",
+     "            ? 'AGREE'",
      "B7", "the length — the most a secret may say about itself — is dropped"),
+
+    ("M13b", HEALTH,
+     "            'shared_secret' => self::sharedSecret(),\n",
+     "",
+     "B8", "the tab stops carrying the shared-secret section at all"),
 
     # ---- C. test or live --------------------------------------------------
     ("M14", HEALTH,

@@ -85,6 +85,8 @@ function report( string $m ): void  { global $reports; $reports[] = $m; }
 function cannot( string $why ): void { echo "CANNOT RUN: $why\n"; exit( 2 ); }
 function section( string $t ): void { echo "\n$t\n"; }
 
+if ( ! defined( 'ABSPATH' ) ) { define( 'ABSPATH', '/var/www/dev/' ); }
+
 if ( ! extension_loaded( 'pdo_sqlite' ) ) {
     cannot( 'pdo_sqlite is not available; the catalogue and webhook questions run real SQL' );
 }
@@ -144,6 +146,13 @@ function apply_filters( $tag, $value ) {
 }
 function has_filter( $tag, $fn = false ) { global $FILTERS; return in_array( $tag, $FILTERS, true ) ? 10 : false; }
 function sanitize_key( $k ) { return preg_replace( '/[^a-z0-9_\-]/', '', strtolower( (string) $k ) ); }
+/* #201's section renders inside this panel; these are what it reaches for. Its
+   own behaviour is gate 98's subject — what matters HERE is that the tab still
+   renders and still cannot print a secret. */
+function wp_create_nonce( $a ) { return 'nonce-' . substr( md5( (string) $a ), 0, 10 ); }
+function wp_json_encode( $v, $f = 0 ) { return json_encode( $v, $f ); }
+function wp_cache_delete( $k, $g = '' ) { return true; }
+function current_user_can( $c ) { return true; }
 
 /* The probe's transport is swapped through Health::$transport rather than
    stubbed at the WordPress layer, because it is NOT a WordPress call: this
@@ -221,6 +230,11 @@ require $GATE_ROOT . '/lg-patreon-stripe-poller/src/Wp/RestController.php';
 require $GATE_ROOT . '/lg-patreon-stripe-poller/src/Wp/CheckoutAudienceRestController.php';
 require $GATE_ROOT . '/lg-patreon-stripe-poller/src/Wp/PatreonStandingRestController.php';
 require $GATE_ROOT . '/lg-patreon-stripe-poller/src/Membership/Health.php';
+/* ⚠️ #201 gave HealthPanel a dependency, and this gate died at exit 255 with NO
+   FAIL LINE until this line was added — the FIFTH time a file in this plugin has
+   died that way because a door gained a require nobody listed. run-all reads a
+   bare 255 as "red, culprit unknown". */
+require $GATE_ROOT . '/lg-patreon-stripe-poller/src/SharedSecretPanel.php';
 require $GATE_ROOT . '/lg-patreon-stripe-poller/src/HealthPanel.php';
 
 use LGMS\Membership\Health;
@@ -516,8 +530,18 @@ foreach ( [ APP_SHARED, APP_WHSEC, APP_SK_TEST ] as $secret ) {
 is_( ! $dirty, 'A6b describe() itself carries no secret value and no sha256 of one' );
 
 // ===========================================================================
-section( 'B. DO THE TWO HALVES AGREE — failure #2, and live\'s shape today' );
+section( 'B. DOES THE WEBHOOK SECRET AGREE — failure #2\'s shape, one pair on' );
 // ===========================================================================
+
+/* ⚠️ RE-POINTED, NOT DELETED (#201, the §I9 discipline). This card used to
+   carry TWO pairs; the shared secret now has its own section at the top of the
+   tab, with a refresh button, because reporting one fact twice on one screen in
+   two presentations is #199's two-stacked-panels shape. The comparison itself is
+   unchanged and is now shared — Health::secretPair() — so these assertions
+   exercise exactly the same code path through the pair this card still owns.
+   Everything the shared secret used to be asserted on lives in GATE 98.
+   B6 below is the ratchet: it asserts the shared secret is NOT here, so
+   re-adding it is a RED and never a silent duplicate. */
 
 $d = scenario( healthy_env() );
 $c = chk( $d, 'secrets' );
@@ -526,23 +550,22 @@ is_( $c['status'] === 'ok' && str_contains( words( $c ), 'AGREE' ),
 
 /* THE BROKEN STATE. One value in two homes with nothing comparing them is how
    a rotation breaks verification silently. */
-$d = scenario( healthy_env(), [ 'lgms_shared_secret' => 'A-DIFFERENT-SECRET-ENTIRELY-0123456789' ] );
+$d = scenario( healthy_env(), [ 'lgms_stripe_webhook_secret' => 'whsec_A_DIFFERENT_SECRET_ENTIRELY_0123' ] );
 $c = chk( $d, 'secrets' );
 is_( $c['status'] === 'fail' && str_contains( words( $c ), 'DISAGREE' ),
-     'B2 a MISMATCHED shared secret is a FAIL and says DISAGREE' );
+     'B2 a MISMATCHED webhook secret is a FAIL and says DISAGREE' );
 
-/* LIVE'S EXACT SHAPE, MEASURED 2026-08-21: the app has one, WordPress does not.
-   The panel must name WHICH half is missing — "not configured" would send
-   whoever reads it to the wrong file. */
-$d = scenario( healthy_env(), [ 'lgms_shared_secret' => '' ] );
+/* dev2's EXACT SHAPE, measured 2026-08-21 and still true: the billing app has
+   STRIPE_WEBHOOK_SECRET and WordPress does not. The panel must name WHICH half
+   is missing — "not configured" would send whoever reads it to the wrong file. */
+$d = scenario( healthy_env(), [ 'lgms_stripe_webhook_secret' => '' ] );
 $c = chk( $d, 'secrets' );
 is_( $c['status'] === 'fail' && stripos( words( $c ), 'WordPress: NOT SET' ) !== false,
-     'B3 set in the billing app and absent in WordPress is a FAIL that names WordPress' );
+     'B3 set in the billing app and absent in WordPress is a FAIL that names WordPress — dev2 today' );
 
-$d = scenario( healthy_env( [ 'LGMS_SHARED_SECRET' => null ] ) );
 $d = scenario( write_env( [
         'STRIPE_MODE' => 'test', 'STRIPE_SECRET_KEY' => APP_SK_TEST,
-        'STRIPE_WEBHOOK_SECRET' => APP_WHSEC,
+        'LGMS_SHARED_SECRET' => APP_SHARED,
         'LGMS_SYNC_URL' => 'https://dev2.loothgroup.com/wp-json/lg-member-sync/v1/sync-customer',
      ] ) );
 $c = chk( $d, 'secrets' );
@@ -555,17 +578,32 @@ $c = chk( $d, 'secrets' );
 is_( $c['status'] === 'fail' && stripos( words( $c ), 'NOT SET on either side' ) !== false,
      'B5 absent on BOTH sides is still a FAIL, not a shrug' );
 
-/* dev2's shape today: shared secret agrees, webhook secret absent in WordPress.
-   Two pairs, independently judged — a panel that reported only the worst would
-   hide the healthy one and make the fix look bigger than it is. */
-$d = scenario( healthy_env(), [ 'lgms_stripe_webhook_secret' => '' ] );
+/* ⚠️ THE RATCHET. This card must NOT report the shared secret: it has its own
+   section, and one fact in two presentations on one screen is the shape a member
+   was shown two identical stacked gate panels by on #199. A merge that puts the
+   pair back here is a RED, not a silent duplicate. */
+$d = scenario( healthy_env(), [ 'lgms_shared_secret' => '' ] );
 $c = chk( $d, 'secrets' );
 $w = words( $c );
-is_( $c['status'] === 'fail' && str_contains( $w, 'AGREE' ) && stripos( $w, 'WordPress: NOT SET' ) !== false,
-     'B6 the two pairs are judged independently — one can AGREE while the other is absent' );
+is_( stripos( $w, 'Shared secret' ) === false,
+     'B6 the shared secret is NOT reported on this card — it has its own section (#201)' );
+is_( $c['status'] === 'ok' && str_contains( $w, 'AGREE' ),
+     'B6b and an absent SHARED secret does not make the WEBHOOK card red — the pairs are independent' );
+is_( stripos( $w, 'webhook' ) !== false,
+     'B6c liveness: this card really does still report the webhook pair' );
 
-is_( str_contains( $w, (string) strlen( APP_SHARED ) ),
+$d = scenario( healthy_env() );
+is_( str_contains( words( chk( $d, 'secrets' ) ), (string) strlen( APP_WHSEC ) ),
      'B7 lengths are reported, which is the most a secret may ever say about itself' );
+
+/* THE SHARED SECRET IS STILL ON THE TAB, and still cannot be printed. Where it
+   is asserted in depth is gate 98; what matters here is that this panel carries
+   it and that §A6's leak sweep therefore still covers it. */
+$d = scenario( healthy_env(), [ 'lgms_shared_secret' => '' ] );
+is_( isset( $d['shared_secret'] ) && $d['shared_secret']['status'] === 'fail',
+     'B8 the tab still carries the shared secret, in its own section, and it is FAIL in live\'s shape' );
+is_( Health::worst( array_merge( $d['checks'], [ $d['shared_secret'] ] ) ) === 'fail',
+     'B8b and that section reaches the tab headline — a healthy chip over a broken card is the old failure' );
 
 // ===========================================================================
 section( 'C. TEST OR LIVE MODE' );
@@ -1043,7 +1081,10 @@ foreach ( $states as $name => [ $envp, $opts ] ) {
 is_( ! str_contains( $allOut, 'Fatal error' ) && ! str_contains( $allOut, 'Warning:' ),
      'I2 no state produces a PHP notice, warning or fatal in the markup' );
 
-scenario( healthy_env(), [ 'lgms_shared_secret' => 'OTHER-VALUE-ENTIRELY' ] );
+/* #201 moved the shared secret off this card, so the fixture moves with it —
+   otherwise I3 poses a state this panel no longer reports and passes on the
+   headline instead. */
+scenario( healthy_env(), [ 'lgms_stripe_webhook_secret' => 'whsec_OTHER_VALUE_ENTIRELY_0123456' ] );
 $m = render_panel();
 is_( str_contains( $m, 'BROKEN' ),
      'I3 a broken state renders the word BROKEN, not a neutral chip' );
