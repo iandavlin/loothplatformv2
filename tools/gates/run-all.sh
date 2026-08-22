@@ -2224,6 +2224,65 @@ echo "=== GATE 90: the tester link is recoverable, and rotating kills the old on
 run "tester-dash" php "$(dirname "$0")/tester-dash-gate.php"
 echo
 
+echo "=== GATE 92: the licence a member picks is described correctly, and the ⓘ follows it ==="
+# #191. Ian 2026-08-21: "pare it down. Could we get a i that pops up a modal with
+# the entire legal contract ?"
+#
+# ⚠️ NUMBER 92, MINTED BY KEEPER FROM MAIN — and 91 was NOT free even though
+# run-all.sh on main stopped at 90 when this lane opened. #192 already had 91 on
+# an UNMERGED branch, invisible to main. Diffing every live worktree against main
+# is the only thing that shows that, and this is the second near-collision in two
+# days. Lanes never self-number.
+#
+# WHY IT EXISTS. One of four Creative Commons options read "BY ND NC (Credit given
+# to creator, No Derivatives, Adaptations shared with same terms)" — and those two
+# clauses contradict each other, the second belonging to Share-Alike. Members were
+# picking legal terms off that sentence; three published loothprints stored it, on
+# both boxes. That is not a typo class, it is "a legal description drifts from the
+# licence it names", and a human reading the form is what found it.
+#
+# THE LEG IT EXISTS FOR is C2-C11: select each of the four options in turn, open
+# the ⓘ, and require the modal to be TITLED for that licence and to open with THAT
+# licence's own first paragraph. A13 is the coupling that stops it being vacuous —
+# every offered radio value must have its own template, so "it follows the
+# selection" cannot pass by opening one panel four times.
+#
+# ⚠️ THREE OF ITS LEGS EXIST BECAUSE THE RED-FIRST PROVED THE OBVIOUS ONES
+# VACUOUS, and each is a shape worth recognising elsewhere:
+#   · B1-B3 called lg_fc_licence_forward() themselves, so deleting the line in
+#     lg_fc_relabel() that CALLS it left all three green — the function worked and
+#     nothing reached it. B3b drives the real render filter instead.
+#   · "the dialog is not transparent" was satisfied by the UA stylesheet, which
+#     paints every <dialog> Canvas. D2b requires OUR card token.
+#   · "flag OFF emits zero bytes" was true with the guard deleted, because wp-cli
+#     has no current user and the route refuses anon for another reason entirely.
+#     E2 now signs a real member in and asserts they WOULD be served.
+#
+# ⚠️ §F GATES A DUPLICATION THAT CANNOT BE REMOVED. Two licence tables exist —
+# lg_fc_licences() decides what gets STORED, Licenses::ACF_CHOICES decides what
+# lg-layout-v2 RECOGNISES — and an mu-plugin must not depend on a plugin class,
+# so they stay separate. #191 broke the pair: correcting the wording made the
+# engine's EXACT-match recogniser stop matching every post saved afterwards, and
+# nothing errors — upgrade_license_callouts() just walks past them. §F must load
+# the BRANCH's Licenses.php by absolute path, because under WordPress the
+# autoloader resolves it out of the serving checkout, which is main, which is the
+# broken state being tested for.
+#
+# Reads the flag rather than hardcoding a state; mints a PID-keyed looth1, not
+# qa-disposable (an administrator); loads the branch by mirroring the mu-plugin
+# dir and ASSERTS the swap both for wp-cli and for the mirror nginx serves the
+# browser from. Teardown runs in the abort path too — it did not, and leaked two
+# probe users. An abort that already has findings exits 1, not 2, so one branch's
+# bug cannot report GATES INCOMPLETE and block every lane.
+#
+# RED-FIRST: 19 mutations + 2 no-op controls + 1 documented known-green
+# (tools/gates/compose-licence-redfirst.py). The known-green is honest rather than
+# convenient: deleting our own btn.focus() leaves the focus-return assertion green
+# because a native <dialog> restores focus by spec, so that leg asserts the
+# PROMISE Ian was made and not our implementation of it.
+run "compose-licence" python3 "$(dirname "$0")/compose-licence-gate.py"
+echo
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"

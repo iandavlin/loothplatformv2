@@ -1,7 +1,7 @@
 <?php
 /**
  * 191-licence-label.php — correct the contradictory Creative Commons description
- * on the three loothprints that stored it. BOTH copies.
+ * on the three loothprints that stored it. ALL THREE copies.
  *
  *   dry run :  wp --path=/var/www/dev eval-file tools/migrations/191-licence-label.php
  *   apply   :  LG191_APPLY=1 wp --path=/var/www/dev eval-file tools/migrations/191-licence-label.php
@@ -28,12 +28,30 @@
  * are ambiguous, that would be a different act — changing what someone licensed
  * — so this REFUSES that row, says so, and leaves it exactly as it is.
  *
- * ── TWO COPIES, NOT ONE ─────────────────────────────────────────────────────
+ * ── THREE COPIES, NOT ONE ───────────────────────────────────────────────────
  * Only 4 of 172 loothprints are synthesized at render; the rest have the licence
  * sentence BAKED into their stored `_lg_layout_v2` blocks. A migration that
  * touched only the postmeta would leave the wrong text still rendering on the
- * page — the copy a member actually reads. Both are corrected together, or
- * neither is.
+ * page — the copy a member actually reads.
+ *
+ * ⚠️ AND THERE IS A THIRD, which the first version of this script missed and
+ * keeper found: `_lg_layout_v2_rendered_html`, WpRenderer's anon render cache
+ * (133 posts carry one; one of our three did). It is NOT served after this runs
+ * — updating `_lg_layout_v2` fires `updated_post_meta`, which reaches
+ * Plugin::on_post_meta_changed and invalidates — but invalidation only DELETES
+ * THE TIMESTAMP (`invalidate_render_cache`, one line), so the stale HTML body
+ * sits in the row indefinitely, still holding the contradictory sentence.
+ *
+ * THE LESSON, WHICH IS BIGGER THAN THIS FIELD: "how many copies of this string
+ * are stored" is a question for the DATABASE, not for a reading of the code. The
+ * first sweep here asked about two keys it already knew about and reported zero
+ * left. Asking `GROUP BY meta_key` over every row holding the string is what
+ * found the third — and 17 more in `_elementor_data`, which are out of scope and
+ * recorded so the next person does not re-find them and panic.
+ *
+ * IT IS DELETED, NOT PATCHED. A cache is derived data: a hand-edited cache is a
+ * row that agrees with nothing and can silently disagree with its source later.
+ * Deleting makes the next anon view regenerate it from the corrected blocks.
  *
  * ── RULES IT KEEPS ──────────────────────────────────────────────────────────
  *  · THREE LITERAL IDS. No LIKE, no glob, no "all posts matching" — keeper's
@@ -42,7 +60,7 @@
  *  · IDEMPOTENT. It rewrites only an EXACT match of the legacy string. A post
  *    already correct is reported and left untouched, so a second run is a no-op
  *    and a re-run after a partial failure is safe.
- *  · IT PRINTS BEFORE AND AFTER for every id, in both stores.
+ *  · IT PRINTS BEFORE AND AFTER for every id, in all three stores.
  *  · DRY RUN BY DEFAULT.
  *  · dev2 ONLY. Live writes are Ian's; this script never reaches for another box.
  *    The same three ids on live are handed to him as a command to run.
@@ -68,6 +86,8 @@
     $ids   = [33871, 51126, 57824];
     $key   = 'loothprint_creative_commons';
     $lay   = '_lg_layout_v2';
+    $cache = '_lg_layout_v2_rendered_html';
+    $stamp = '_lg_layout_v2_rendered_at';   // WpRenderer's freshness stamp
     $apply = getenv('LG191_APPLY') === '1';
 
     echo $apply ? "MODE: APPLY (writing)\n" : "MODE: DRY RUN (nothing is written)\n";
@@ -86,7 +106,7 @@
     };
     $want = $letters($legacy);          // ['BY','NC','ND']
 
-    $changed = ['meta' => 0, 'layout' => 0];
+    $changed = ['meta' => 0, 'layout' => 0, 'cache' => 0];
     $skipped = 0;
     $refused = [];
 
@@ -173,12 +193,30 @@
         } else {
             $changed['layout'] += $hits;
         }
+
+        /* ── copy 3: WpRenderer's anon render cache ───────────────────────── */
+        $html = get_post_meta($id, $cache, true);
+        if (!is_string($html) || $html === '') {
+            echo "  cache         : (no rendered-html cache on this post)\n";
+        } elseif (strpos($html, $legacy) === false) {
+            echo "  cache         : (present, " . strlen($html) . " bytes, does not hold the legacy string)\n";
+        } else {
+            echo "  cache  before : " . strlen($html) . " bytes, HOLDS the legacy string\n";
+            echo "  cache  after  : deleted — the next anon view re-renders from the corrected blocks\n";
+            if ($apply) {
+                delete_post_meta($id, $cache);
+                delete_post_meta($id, $stamp);
+                $gone = get_post_meta($id, $cache, true) === '';
+                echo "  cache  verify : " . ($gone ? 'OK' : '*** STILL PRESENT ***') . "\n";
+            }
+            $changed['cache']++;
+        }
     }
 
     echo "\n" . str_repeat('=', 78) . "\n";
-    printf("%s  meta rows: %d   layout blocks: %d   already-correct: %d   refused: %d\n",
+    printf("%s  meta rows: %d   layout blocks: %d   stale caches: %d   already-correct: %d   refused: %d\n",
            $apply ? 'WROTE   ' : 'WOULD DO', $changed['meta'], $changed['layout'],
-           $skipped, count($refused));
+           $changed['cache'], $skipped, count($refused));
     foreach ($refused as $r) {
         echo "  REFUSED  $r\n";
     }
@@ -195,7 +233,24 @@
     $leftLayout = (int) $wpdb->get_var($wpdb->prepare(
         "SELECT COUNT(*) FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value LIKE %s",
         '_lg_layout_v2', '%' . $wpdb->esc_like('BY ND NC (Credit given to creator, No Derivatives') . '%'));
-    echo "\nWHOLE-SITE SWEEP (reported, not acted on):\n";
-    echo "  postmeta rows still holding the legacy string : $left\n";
-    echo "  stored layouts still holding it               : $leftLayout\n";
+    /* ⚠️ ASK THE DATABASE WHICH KEYS HOLD IT, do not list the keys you already
+       know about. The first version of this sweep named two keys and reported
+       zero left while a third store still held the string. This one groups over
+       every row in wp_postmeta, so a copy nobody thought of shows up by itself. */
+    $rows = $wpdb->get_results($wpdb->prepare(
+        "SELECT meta_key, COUNT(*) c, COUNT(DISTINCT post_id) p FROM {$wpdb->postmeta}
+         WHERE meta_value LIKE %s GROUP BY meta_key ORDER BY c DESC",
+        '%' . $wpdb->esc_like('BY ND NC (Credit given to creator, No Derivatives') . '%'));
+    echo "\nWHOLE-SITE SWEEP — every postmeta key still holding the legacy string:\n";
+    if (!$rows) {
+        echo "  (none)\n";
+    }
+    foreach ($rows as $r) {
+        $mine = in_array($r->meta_key, ['loothprint_creative_commons', '_lg_layout_v2',
+                                        '_lg_layout_v2_rendered_html'], true);
+        printf("  %-34s %4d row(s) on %d post(s)%s\n", $r->meta_key, $r->c, $r->p,
+               $mine ? '   *** THIS MIGRATION SHOULD HAVE CLEARED THIS ***'
+                     : '   (not this migration: elementor templates / revisions, out of scope)');
+    }
+    echo "  named-key check: loothprint_creative_commons=$left  _lg_layout_v2=$leftLayout\n";
 })();

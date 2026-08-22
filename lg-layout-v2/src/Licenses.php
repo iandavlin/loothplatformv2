@@ -85,11 +85,30 @@ final class Licenses
      * longer paragraph must not be swallowed and replaced, which would delete
      * an author's prose.
      */
+    /* ⚠️ FIVE ENTRIES FOR FOUR LICENCES, and the fifth is not redundant (#191).
+       The self-contradictory fourth choice this file's header describes has been
+       CORRECTED at the source — lg_fc_licences() in
+       platform/mu-plugins/lg-frontend-compose.php now offers "BY NC ND (Credit
+       given to creator, Non-Commercial only, No Derivatives)" — and the three
+       dev2 posts that stored the old wording were migrated to it.
+
+       BOTH SPELLINGS MUST STAY HERE. This is an EXACT-match recogniser, so:
+         · without the new string, the three migrated posts silently stop being
+           recognised and upgrade_license_callouts() walks straight past them —
+           a regression caused by fixing the wording, in a completely different
+           file, with no error anywhere;
+         · without the old one, live (where the values are unchanged until Ian
+           runs tools/migrations/191-licence-label.php) and any box cut from live
+           stop being recognised instead.
+       from_meta() already handles both — it reads the CC tokens before the
+       parenthesis, order-insensitively — but from_exact_prose() cannot, by
+       design, because loose matching here would rewrite an author's prose. */
     public const ACF_CHOICES = [
         'BY (Credit given to creator)'                                                                 => 'by',
         'BY SA (Credit given to creator, Adaptations shared with same terms)'                          => 'by-sa',
         'BY NC SA (Credit given to creator, Non-Commercial only, Adaptations shared with same terms)'  => 'by-nc-sa',
         'BY ND NC (Credit given to creator, No Derivatives, Adaptations shared with same terms)'       => 'by-nc-nd',
+        'BY NC ND (Credit given to creator, Non-Commercial only, No Derivatives)'                      => 'by-nc-nd',
     ];
 
     /**

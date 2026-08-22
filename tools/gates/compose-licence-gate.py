@@ -54,6 +54,13 @@ WHAT IT ASSERTS, and why each leg is here rather than the obvious cheaper versio
       lg-set-theme is never written to localStorage — that key persists on the
       SHARED chrome profile and takes every other lane's browser dark.
 
+  §F  THE TWO LICENCE TABLES AGREE. lg_fc_licences() decides what gets STORED;
+      Licenses::ACF_CHOICES decides what the layout engine RECOGNISES. They
+      cannot be merged (an mu-plugin must not depend on a plugin class), so the
+      agreement is gated instead. This leg exists because #191 BROKE it: fixing
+      the wording made the engine's exact-match recogniser stop matching every
+      post saved afterwards, silently.
+
   §E  IT READS THE FLAG, it does not hardcode a state. With the flag off the
       route returns before anything is registered, so there is no ⓘ, no dialog
       and no licence CSS. That state is free to test: lg_fc_enabled() resolves
@@ -132,6 +139,33 @@ def build_mirror():
         fh.write("<?php\ndefine('WPMU_PLUGIN_DIR', %r);\n" % MIRROR)
     os.chmod(boot, 0o644)
     return boot
+
+
+# ⚠️ THE HTTP LEGS DO NOT GO THROUGH THE MIRROR ABOVE, and pretending otherwise
+# would be exactly the failure this gate warns about. nginx names its own mirror
+# in a fastcgi_param, because a fastcgi_param is the only thing a visitor cannot
+# set — so the PID-keyed mirror serves the wp-cli legs and THIS one serves the
+# browser. Both are read out of the conf rather than spelled here, and the
+# swapped symlink is ASSERTED, so "which file did the browser measure" has an
+# answer instead of an assumption.
+def http_preview():
+    conf = os.path.join(REPO, "platform", "nginx", "lane-preview-191-licence-modal.conf")
+    src = io.open(conf, encoding="utf-8").read()
+    m = re.search(r"^\s*fastcgi_param\s+LG_MU_MIRROR\s+(\S+);", src, re.M)
+    u = re.search(r"^#\s+(https://\S+/preview/\S+)", src, re.M)
+    if not m or not u:
+        raise CannotRun(f"could not read the mirror path / preview URL out of {conf}")
+    mirror, url = m.group(1), u.group(1)
+    link = os.path.join(mirror, os.path.basename(MUFILE))
+    # Rebuilt only when it is not already this branch — mu-mirror.sh starts with
+    # rm -rf, and doing that unconditionally would yank the directory out from
+    # under a concurrent run's in-flight request.
+    if os.path.realpath(link) != MUFILE:
+        r = sh(["bash", os.path.join(REPO, "tools", "preview", "mu-mirror.sh"), MUFILE, mirror])
+        if r.returncode != 0:
+            raise CannotRun("could not build the HTTP preview mirror: "
+                            + (r.stderr or r.stdout).strip()[:300])
+    return mirror, link, url
 
 
 def wp(boot, php, flag_on=True):
@@ -252,17 +286,19 @@ def main() -> int:
     env  = gate_env()
     dom  = env["LG_GATE_DOMAIN"]
     tokn = env["LG_GATE_TOKEN"]
-    url  = f"https://{dom}/preview/191-licence-modal/compose/?type=loothprint"
-
     BOOT = build_mirror()
+    _httpmirror, httplink, url = http_preview()
 
     # ── §Z  provenance ───────────────────────────────────────────────────────
     out, _ = wp(BOOT, """
 $r = new ReflectionFunction('lg_fc_licences');
 echo $r->getFileName();
 """)
-    ok(out.strip() == MUFILE, "Z1 the file under test is THIS BRANCH's mu-plugin",
+    ok(out.strip() == MUFILE, "Z1 the wp-cli legs load THIS BRANCH's mu-plugin",
        f"loaded {out.strip() or '(nothing)'}")
+    ok(os.path.realpath(httplink) == MUFILE,
+       "Z1b …and so does the mirror nginx serves the BROWSER from",
+       f"{httplink} -> {os.path.realpath(httplink)}")
 
     who = probe_make()
     ok("looth1" in (who.get("roles") or []) and "administrator" not in (who.get("roles") or []),
@@ -300,6 +336,13 @@ echo $r->getFileName();
        "A8 exactly one ⓘ, inside the licence field")
     ok('aria-haspopup="dialog"' in field and 'aria-controls="lgfc-lic"' in field,
        "A9 the ⓘ announces itself as opening a dialog")
+    # ⚠️ LOAD-BEARING, not tidiness. The ⓘ is inside the field's <label>, which is
+    # inside the compose <form> — a <button> with no type is a SUBMIT button, so
+    # dropping this attribute turns "read the licence" into "publish the
+    # half-finished loothprint". The dialog itself is outside the form (A11); the
+    # button cannot be.
+    ok(re.search(r'<button type="button"[^>]*id="lgfc-lic-i"', field) is not None,
+       "A9b the ⓘ is type=button — inside the form, anything else SUBMITS it")
 
     ok(html.count('<dialog id="lgfc-lic"') == 1, "A10 exactly one licence dialog")
     fend = html.find("</form>")
@@ -369,6 +412,37 @@ echo json_encode($r);
        "B2 an already-correct value is returned untouched")
     ok(b["forward_junk"] == "a licence nobody offered" and b["forward_empty"] == "",
        "B3 an unrecognised value is left EXACTLY as it is, never guessed at")
+
+    # ⚠️ B1–B3 ARE TAUTOLOGICAL ON THEIR OWN, and the red-first proved it rather
+    # than my noticing: they call lg_fc_licence_forward() themselves, so deleting
+    # the line in lg_fc_relabel() that CALLS it left all three green. They show
+    # the function works. They show nothing about whether the form ever reaches
+    # it — which is the whole safety. This drives the real render filter with a
+    # real legacy value, through the field ACF would actually hand it.
+    php = """
+$f = acf_get_field('field_6564e26df56ba');
+$f['value'] = %s;
+$out = lg_fc_relabel($f);
+echo json_encode([
+  'value'   => $out['value'],
+  'checked' => isset($out['choices'][$out['value']]),
+  'count'   => count($out['choices']),
+]);
+""" % json.dumps(LEGACY)
+    out, _ = wp(BOOT, php)
+    try:
+        w = json.loads(out.splitlines()[-1])
+    except Exception:
+        raise CannotRun("the relabel probe produced no JSON: " + out[:300])
+    ok(w["value"] == FIXED,
+       "B3b the RENDER FILTER forwards a legacy value — the map is WIRED, not "
+       "merely present", f"lg_fc_relabel left the value {w['value']!r}")
+    ok(w["checked"],
+       "B3c …so that radio renders CHECKED. Unchecked plus required means the "
+       "member cannot save their own post at all")
+    ok(w["count"] == 4,
+       "B3d the filter replaces the stored choices with the four from code",
+       f"got {w['count']}")
 
     readme = io.open(os.path.join(REPO, "platform/licences/README.md"), encoding="utf-8").read()
     for lic in b["lics"]:
@@ -487,7 +561,16 @@ echo json_encode($r);
               const dlg = document.getElementById('lgfc-lic');
               document.getElementById('lgfc-lic-i').click();
               const c = getComputedStyle(dlg);
-              const out = {bg: c.backgroundColor, fg: c.color, open: dlg.open === true};
+              // The card token as THIS PAGE resolves it, read off a throwaway
+              // probe inside .lgfc so the comparison is against a real computed
+              // colour in the current theme, not against a string written here.
+              const probe = document.createElement('div');
+              probe.style.background = 'var(--lg-card-bg,#fff)';
+              (document.querySelector('.lgfc') || document.body).appendChild(probe);
+              const card = getComputedStyle(probe).backgroundColor;
+              probe.remove();
+              const out = {bg: c.backgroundColor, fg: c.color, card: card,
+                           open: dlg.open === true};
               dlg.close();
               return JSON.stringify(out);
             })()"""))
@@ -507,9 +590,18 @@ echo json_encode($r);
 
         transparent = ("rgba(0, 0, 0, 0)", "transparent", "")
         ok(light["open"] and dark["open"], "D1 the dialog opened in both themes")
+        # ⚠️ "NOT TRANSPARENT" IS VACUOUS ON A <dialog>, and the red-first caught
+        # it: the UA stylesheet gives every dialog a Canvas background, so
+        # deleting our own background rule left this green. It has to match the
+        # CARD TOKEN — the same surface the rest of the form uses — or the dialog
+        # is being painted by something that is not this stylesheet.
         ok(light["bg"] not in transparent and dark["bg"] not in transparent,
-           "D2 the dialog paints its own background in both themes — it never "
-           "borrows the page's", f"light={light['bg']} dark={dark['bg']}")
+           "D2 the dialog paints a background in both themes",
+           f"light={light['bg']} dark={dark['bg']}")
+        ok(light["bg"] == light["card"] and dark["bg"] == dark["card"],
+           "D2b …and it is OUR card token, not the browser's default dialog white",
+           f"light dialog={light['bg']} vs card={light['card']} · "
+           f"dark dialog={dark['bg']} vs card={dark['card']}")
         # THE DELTA. An absolute value proves nothing: a light page wearing a dark
         # attribute passes every absolute assertion ever written against it.
         ok(light["bg"] != dark["bg"] and light["fg"] != dark["fg"],
@@ -519,46 +611,153 @@ echo json_encode($r);
         tab.close()
 
     # ── §E  it READS the flag ────────────────────────────────────────────────
+    #
+    # ⚠️ SIGN THE PROBE MEMBER IN FIRST, and assert they WOULD be served. Without
+    # that this leg was vacuous, and the red-first proved it: deleting the flag
+    # guard from lg_fc_route() entirely left the old E2 GREEN, because wp-cli has
+    # no current user and the route refuses an anon visitor for a completely
+    # different reason. "Nothing was emitted" is true on a box with nobody logged
+    # in. An absence assertion needs a viewer the feature would otherwise reach.
     out, _ = wp(BOOT, """
+wp_set_current_user(%d);
 echo lg_fc_enabled() ? 'ON' : 'OFF';
 $_SERVER['REQUEST_URI'] = '/compose/';
+$_GET['type'] = 'loothprint';
+echo '|' . (lg_fc_may_compose('loothprint', get_current_user_id()) ? 'CAN' : 'CANNOT');
 ob_start(); lg_fc_route(); $bytes = ob_get_clean();
 echo '|' . strlen($bytes);
-""", flag_on=False)
+""" % who["uid"], flag_on=False)
     parts = out.strip().split("|")
     ok(parts[0] == "OFF",
        "E1 with no override the branch reads its TRACKED config, which is OFF",
        f"lg_fc_enabled() said {parts[0]!r}")
-    ok(len(parts) > 1 and parts[1] == "0",
-       "E2 flag OFF: the route emits ZERO bytes — no ⓘ, no dialog, no licence CSS",
-       f"emitted {parts[1] if len(parts) > 1 else '?'} bytes")
+    ok(len(parts) > 1 and parts[1] == "CAN",
+       "E2 LIVENESS FOR THE ABSENCE — this member is one the route would serve, "
+       "so E3's silence is the FLAG's doing and not the visitor's",
+       f"lg_fc_may_compose said {parts[1] if len(parts) > 1 else '?'}")
+    ok(len(parts) > 2 and parts[2] == "0",
+       "E3 flag OFF: the route emits ZERO bytes to that member — no ⓘ, no dialog, "
+       "no licence CSS", f"emitted {parts[2] if len(parts) > 2 else '?'} bytes")
 
     out, _ = wp(BOOT, "echo lg_fc_enabled() ? 'ON' : 'OFF';", flag_on=True)
     ok(out.strip() == "ON",
-       "E3 …and the SAME build reads ON when the flag is armed — so E1/E2 are a "
+       "E4 …and the SAME build reads ON when the flag is armed — so E1–E3 are a "
        "flag reading, not a build that cannot switch on", f"got {out.strip()!r}")
 
+
+    # ── §F  THE TWO LICENCE TABLES AGREE ─────────────────────────────────────
+    #
+    # ⚠️ THERE ARE TWO, they cannot be merged, and drift between them is SILENT.
+    #   · lg_fc_licences()            — what the form OFFERS, so what gets STORED
+    #   · Licenses::ACF_CHOICES       — what the layout engine RECOGNISES
+    # The compose form is an mu-plugin and must not depend on a regular plugin's
+    # class being loaded, so the duplication is deliberate. The honest answer to
+    # duplication you cannot remove is to gate the agreement.
+    #
+    # THIS LEG EXISTS BECAUSE #191 BROKE IT. Correcting the fourth choice's
+    # wording made Licenses::from_exact_prose() stop matching every post saved
+    # afterwards — that recogniser is exact ON PURPOSE (a loose match would
+    # rewrite an author's prose), so upgrade_license_callouts() would simply walk
+    # past those posts and the licence block would never appear. Nothing errors.
+    # Measured on main before the fix: from_exact_prose of the corrected string
+    # returned ''. Found by grepping the repo for the old string, not by the gate
+    # — which is exactly why it is a gate now.
+    lic_src = os.path.join(REPO, "lg-layout-v2", "src", "Licenses.php")
+    payload = json.dumps({"values": [l["value"] for l in b["lics"]],
+                          "legacy": [LEGACY]})
+    r = sh(["php", os.path.join(REPO, "tools", "gates", "compose-licence-crosscheck.php"),
+            lic_src], env={**os.environ, "LG191_IN": payload})
+    try:
+        x = json.loads(r.stdout.strip().splitlines()[-1])
+    except Exception:
+        raise CannotRun("the cross-check probe produced no JSON: "
+                        + (r.stderr or r.stdout).strip()[:300])
+
+    # ⚠️ LIVENESS FOR THIS LEG. Under WordPress the autoloader resolves this
+    # class out of the SERVING CHECKOUT — main — which is the very state being
+    # tested for, so a green here would mean nothing at all.
+    ok(x["file"] == lic_src,
+       "F1 the cross-check read THIS BRANCH's Licenses.php, not the serve's",
+       f"loaded {x['file']}")
+
+    for lic in b["lics"]:
+        seen = x["offered"].get(lic["value"], {})
+        ok(seen.get("exact") != "",
+           f"F2 [{lic['short']}] the layout engine recognises the offered string "
+           f"EXACTLY — the recogniser that upgrades a legacy licence callout",
+           f"from_exact_prose returned {seen.get('exact')!r}")
+        ok(seen.get("short") == lic["short"],
+           f"F3 [{lic['short']}] both tables name the SAME licence",
+           f"the engine calls it {seen.get('short')!r}")
+
+    old = x["legacy"].get(LEGACY, {})
+    ok(old.get("exact") != "" and old.get("short") == "CC BY-NC-ND 4.0",
+       "F4 the LEGACY spelling is still recognised — live keeps it until Ian runs "
+       "the migration, and a fresh cut of dev2 reintroduces it",
+       f"exact={old.get('exact')!r} short={old.get('short')!r}")
+
     # ── §Z end  teardown, asserted ───────────────────────────────────────────
+    ok(teardown(), "Z9 the probe member is deleted — a leaked fixture makes the "
+                   "NEXT run blame the feature")
+    return 0
+
+
+def teardown() -> bool:
+    """Delete the run's own fixtures. Returns whether the probe is really gone.
+
+    ⚠️ CALLED FROM A finally AS WELL AS FROM §Z-END, because it was NOT and that
+    leaked. Two `lg191probe-*` users were found on the box after red-first runs
+    whose gate aborted with CannotRun: the teardown sat at the end of main() and
+    an abort walked straight past it. A gate that leaves fixtures behind is the
+    exact thing feedback-gate-probe-must-be-per-run warns about — the next run
+    finds someone else's rows and blames the feature.
+    """
     if os.environ.get("LG191_KEEP") == "1":
         print(f"LG191_KEEP=1 — leaving probe {LOGIN} and mirror {MIRROR}")
-    else:
-        ok(probe_kill(), "Z9 the probe member is deleted — a leaked fixture makes "
-                         "the NEXT run blame the feature")
-        sh(["rm", "-rf", MIRROR])
-        for f in (BOOT, f"/tmp/lg191-gate-{TAG}.php"):
+        return True
+    gone = probe_kill()
+    sh(["rm", "-rf", MIRROR])
+    for f in (globals().get("BOOT"), f"/tmp/lg191-gate-{TAG}.php"):
+        if f:
             try:
                 os.unlink(f)
             except OSError:
                 pass
-    return 0
+    return gone
 
 
 if __name__ == "__main__":
     try:
         main()
     except CannotRun as e:
+        # ⚠️ PRINT WHAT WAS ALREADY MEASURED. The first version exited here with
+        # one line, and threw away fifteen recorded failures — so a run whose
+        # cookie name was wrong reported only "the browser never got the form",
+        # and the fact that the CURL half had failed for the very same reason was
+        # invisible. It made the two halves look like they disagreed, and a whole
+        # paragraph was written about a disagreement that never happened.
         print(f"CANNOT RUN: {e}")
-        sh(["rm", "-rf", MIRROR])
+        # ⚠️ TEAR DOWN ON THE ABORT PATH TOO — see teardown()'s docstring. This
+        # was `rm -rf MIRROR` alone, which left the probe USER behind: two of
+        # them were found on the box after red-first runs whose gate aborted.
+        try:
+            teardown()
+        except Exception as te:
+            print(f"  (teardown also failed: {te})")
+        if fails:
+            # ⚠️ EXIT 1, NOT 2 — findings were recorded, so this is an OPEN
+            # DEFECT and not a missing environment. run-all.sh reads 2 as "could
+            # not run", which reports GATES INCOMPLETE and blocks every lane on
+            # the box for what is actually one branch's bug. The recorded rule is
+            # that an open defect exits 1. The red-first is what surfaced this:
+            # deleting the ⓘ filter reddened four curl assertions and then
+            # aborted the browser leg, and the whole run came back CANNOT RUN.
+            print(f"  …and {len(fails)} of {checks[0]} checks had ALREADY failed "
+                  f"before that — very likely the same cause:")
+            for f in fails:
+                print("  FAIL  " + f)
+            print(f"compose-licence  FAIL  ({len(fails)} of {checks[0]}, run aborted)")
+            sys.exit(1)
         sys.exit(2)
     if fails:
         print(f"compose-licence  FAIL  ({len(fails)} of {checks[0]})")
