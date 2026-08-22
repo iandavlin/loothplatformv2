@@ -481,6 +481,126 @@
   verified over HTTP until it is merged** — the `/auth` 401 above was measured
   against main and is the state that will change on the pull. Live writes stay
   his.
+## State (8/22, #196 — a Patreon payer is offered SWITCH, never JOIN)
+
+- **THE LAW THIS ADDS (Ian 8/22, verbatim):** *"Can you check and see if a user
+  that has a patreon would have a menu for join in the profile chip? If so we
+  need to change that to switch and give people a page with instructions for
+  Patreon deactivation and reactivation through stripe."* This is the FRONT half
+  of the one-payment-source law (8/19) finally telling the member the truth
+  before the guard has to.
+- **AND THE RULING THAT ARRIVED MID-BUILD (Ian 8/22, verbatim):** *"Why is there
+  a superfluous join button for logged in users now."* **#170's
+  `$join_pill_authed` is DEAD** — no signed-in viewer gets a Join pill at any
+  width, in any flag state. The signed-in door is the **account-menu entry and
+  nothing else**. This does not touch the ANONYMOUS pill, which is what #165 and
+  #170 are actually about and which stays byte-identical to main.
+- ⚠️ **THE DEFECT HAD A NAME ON DEV2, and the guard behind it was not armed.**
+  Asked `PatreonStanding` about all six cohort members: **user 1953
+  (mikelle.davlin) is a listed tester with an ACTIVE PAID Patreon pledge**
+  (looth2, "Looth (Legacy Member)", next charge 2026-09-02) and the menu offered
+  her Join. The other five, Ian included, have no Patreon link and correctly see
+  Join. `lgms_double_pay_block` is **ABSENT on dev2 ⇒ OFF**, so #150's refusal —
+  the thing that makes offering her checkout "merely" a bad experience rather
+  than a second charge — **is not running there at all**. The menu was the only
+  thing in the way.
+- **PATREON STANDING RIDES THE EXISTING CAPABILITY CHANNEL. There is no new
+  store and no new detection.** `patreon_paying` is computed in
+  `InternalRestController::capabilities()` from `PatreonStanding::forUser()` —
+  the one definition #150's three doors ask — and carried to the header exactly
+  as `stripe_testgroup` is: poller → `Whoami::capabilitiesFor()`'s **named
+  pass-through** → each app's ctx. The shared header renders on seven apps under
+  seven unix users with **no database**, so a capability is the only honest way
+  for it to ask. Cost: `wp_user_id` is the **PRIMARY KEY** of
+  `lg_patreon_members`, so it is one PK read on a path that already makes a
+  loopback HTTP call. Computed **unconditionally**, not only for the cohort — a
+  capability whose `false` means two different things is the trap that cost a day
+  on 8/16. Fails closed to `false` = Join = today's behaviour, because an unknown
+  must never send a member with no Patreon to a page about cancelling one.
+  ⚠️ **Gate 34b already cross-checks that pass-through**, so forgetting the far
+  end is a RED and not a silent false — it happened on 8/16, to
+  `stripe_testgroup`, to this menu, to **this same member**.
+- **NO FLAG, and the issue's own escape clause says why.** Every byte lives
+  inside `if ($stripe_tester)`, so the render differs only for members already
+  inside the soft-launch narrowing. Proven, not argued: anon, a non-tester (cap
+  true / false / **absent**) and a no-caps ctx are **byte-identical to
+  origin/main in all three flag states**; the tester and admin renders differ by
+  exactly the ruled-out pill plus the swapped entry, asserted line by line.
+- ⚠️ **THE ACCOUNT MENU IS DESKTOP-ONLY, AND THAT IS WHY THE PWA SHEET ROW WAS
+  RE-SOURCED RATHER THAN DELETED WITH THE PILL. Presence-is-not-reachability,
+  FOURTH INSTANCE.** Measured three independent ways: on `/hub/`, on the front
+  page **and** on the branch preview, at 390 and 640 the account chip is
+  `display:none` and `#lg-account-menu` is `display:none`. Below 641 the menu is
+  in the DOM the whole time and **is not a door at all**. `bottom-nav.js`'s
+  account-sheet row existed precisely BECAUSE the pill was in the DOM (it reads
+  the href with `getAttribute`, which works on a hidden element), so removing the
+  pill alone would have left a signed-in tester **no join or switch door on a
+  phone, on any surface**. The row now mirrors the **menu entry** through a hook
+  class `.lg-chrome__menu-join` — the `.lg-chrome__menu-signin` shape that file
+  already uses — and reads **both** the href and the LABEL from it, because since
+  #196 the word itself varies. One door, in the account menu, drawn on a phone in
+  the sheet that IS the account menu on a phone.
+- **`/switch-billing/` — the instructions page.** Standalone,
+  `manage-subscription.php`'s shape, no WP boot. Reads
+  `lg_membership_patreon_standing()` and the existing Patreon snapshot, **both
+  already in that app** and already kept honest against `PatreonStanding` by gate
+  75 — no third definition of "already paying". It asks the standing AGAIN rather
+  than trusting the menu's cached answer, because the page can be reached by a
+  bookmark or a link and instructions for cancelling a pledge shown to somebody
+  with no pledge are worse than no page; that viewer gets a different body.
+  Router: `['switch-billing.php', 'testgroup', 'member']` — pre-launch mirrors
+  who gets the menu entry, so the menu never offers a door the gate shuts.
+- ⚠️ **THE SEAM IS REAL AND THE PAGE SAYS SO.** Ian's own 8/19 ruling blocks
+  holding both rails, so cancel-then-rejoin necessarily meets at the lapse date.
+  The page prints that date three times (from her real row), says what happens if
+  they are late, and says nothing is deleted. **The copy is drafted and is Ian's
+  to overrule.** One sentence was cut before shipping on his instruction: a
+  promise of a reminder email that does not exist.
+- ⚠️ **DECLARED CONFIG COUPLING — A PULL DOES NOT DELIVER IT.** A new slug means
+  editing the location regex in all three `platform/nginx/strangler-membership*.conf`;
+  there is **no catch-all**. And the RUNNING snippet is a **root-owned COPY, not
+  a symlink**: `sudo cp platform/nginx/strangler-membership.conf
+  /etc/nginx/snippets/ && sudo nginx -t && sudo systemctl reload nginx`. Without
+  it Switch is wired perfectly and lands on a WordPress 404. Gate 93 §E asserts
+  the three-file agreement unconditionally, reports the box gap and names the
+  command, and proves the page routable through the lane preview meanwhile so
+  "held" never means "unmeasured".
+  ⚠️ Separately: that box copy is **already behind the repo** — it is missing the
+  tracked `fastcgi_param LG_FOLLOWING_CADENCE 1`. Reported, not touched.
+- **#196 BUILT** on `196-switch-menu`, gate **93** (128 assertions; red-first
+  **23/23** — 21 mutations + 2 no-op controls). Gates **79 and 85 had legs
+  asserting the signed-in pill EXISTS and were INVERTED, not deleted** (the gate
+  86 §I9 discipline): 79 now holds #165's ratchet WIDENED back to every state
+  (167 passed), 85's §A3 is restated against what exists (118 assertions).
+  34b and 87 green.
+- ⚠️ **FOUR GATE DEFECTS FOUND, THREE IN THIS LANE'S OWN GATE AND ONE
+  PRE-EXISTING NEXT DOOR** — all by red-first, none by review:
+  **(1)** gate 93's stray-line check `.strip()`ed its lines, so the 12-byte
+  whitespace leak it exists to catch was invisible to it;
+  **(2)** its bottom-nav leg ran a hand-written **transcription** of the rule and
+  asserted the file merely CONTAINED `textContent`, which occurs elsewhere in a
+  1,000-line file — replacing the real line left it green. It **lifts both
+  deciding lines out of the file and executes them** now;
+  **(3)** deleting the tab guard made that lift fail and the gate answered
+  **CANNOT RUN** — a real defect reported as a missing environment, which
+  run-all reads as no-verdict rather than red;
+  **(4)** gate **79's red-first had no proof a mutation applied**, and the guard
+  added here immediately found that its **caching-law leg — the most important in
+  the file — had been silently inert since #180** moved its target, recording
+  RED-OK for a mutation that changed nothing.
+- ⚠️ **AND ONE IN THE SCREENSHOT HARNESS**: it clicked the account chip at 390
+  and 640 — where the chip is `display:none` — and hit-tested the menu it had
+  just opened, reporting REACHABLE. A synthetic click opens a hidden element
+  quite happily. The trigger is hit-tested first now.
+- **THE 821–904 DEAD BAND IS STILL OPEN AND STILL IAN'S, and this narrows it.**
+  Measured as a signed-in tester with the menu open: at **821** MAIN overflows
+  too — `/hub/` scrollWidth **905**, `/manage-subscription/` **938**, this branch
+  **871**; at **900** main still overflows and this branch fits. Held in the shot
+  run as a known main gap: reported, self-expiring, scoring again the moment main
+  stops overflowing.
+- **Owed:** Ian looks at the two preview URLs and rules on the page's words;
+  keeper deploys the nginx snippet in the same window as the merge. The `#170`
+  `.local.php` on dev2 needs no change.
 
 ## State (8/22, #192 — the panel that answers the five questions nobody could)
 

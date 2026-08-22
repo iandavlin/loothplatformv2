@@ -281,11 +281,14 @@ function lg_shared_render_site_header(array $ctx): void
      * cookie is not consulted), 'on' already means everybody. Fails closed to
      * false when the reader is absent, the flag is off, or no token is armed.
      *
-     * ⚠️ IT MOVES THE HREF, NOT THE PILL — deliberately. $join_pill_authed below
-     * is untouched, so the unlock's whole visible effect is on the ANONYMOUS
-     * header, which is the only viewer it exists for. A marked browser that then
-     * signs in as a non-cohort member sees exactly what #170 proved it sees, and
-     * every byte-identity proof of the authed header survives this change.
+     * ⚠️ IT MOVES THE HREF, NOT THE PILL — deliberately. The unlock's whole
+     * visible effect is on the ANONYMOUS header, which is the only viewer it
+     * exists for. A marked browser that then signs in as a non-cohort member
+     * sees exactly what #170 proved it sees, and every byte-identity proof of
+     * the authed header survives this change. (#170's $join_pill_authed, which
+     * this paragraph used to point at, was RULED OUT on 2026-08-22 by #196 —
+     * see the block below. Nothing about the unlock changes: it never touched
+     * that pill, and it still does not touch the signed-in header at all.)
      */
     $join_unlocked = function_exists('lg_tester_unlock_marked') && lg_tester_unlock_marked();
 
@@ -298,21 +301,84 @@ function lg_shared_render_site_header(array $ctx): void
     $join_external = (bool) preg_match('#^https?://#i', $join_href);
 
     /**
-     * DOES A SIGNED-IN VIEWER GET A JOIN PILL AT ALL?  Measured on main before
-     * #170 was designed: no — .lg-chrome__join lives in the anon branch of the
-     * aside and renders for exactly nobody who is logged in, at any width. So
-     * "the join button goes to patreon unless a test user is there" could not
-     * be delivered by swapping an href; the control has to EXIST for the tester
-     * first, or the state would render byte-identically to 'off' and its gate
-     * would be green having measured nothing.
+     * ⚠️ A SIGNED-IN VIEWER GETS NO JOIN PILL. RULED 2026-08-22 (#196), and it
+     * REVERSES #170's $join_pill_authed rather than tidying it away.
      *
-     * Confined to 'allowlist' ON PURPOSE. In 'off' and 'on' the signed-in
-     * header stays byte-for-byte what #165 proved it was, so every one of those
-     * proofs survives this change and the new markup exists only in the new
-     * state, only for a hand-picked cohort, only on a box where someone has
-     * deliberately armed a soft launch.
+     * Ian, on seeing the pill beside his own chip: "Why is there a superfluous
+     * join button for logged in users now." At 641 and up he is plainly right —
+     * the account menu carries the same entry two inches away, and #170 added
+     * the pill only because a signed-in tester had no Join anywhere and the
+     * state would otherwise have rendered byte-identically to 'off'. The menu
+     * entry is that door. One door, in the account menu.
+     *
+     * ⚠️ MEASURED BEFORE REMOVING IT, because below 641 the answer changes.
+     * On BOTH /hub/ and the front page, at 390 and 640, the account CHIP is
+     * invisible and #lg-account-menu is display:none — the menu is in the DOM
+     * the whole time and is not a door at all. So the pill was the only
+     * signed-in door on a phone, and webroot/bottom-nav.js's account-sheet row
+     * existed precisely BECAUSE the pill was in the DOM (it reads the href with
+     * getAttribute, which works on a hidden element).
+     *
+     * The sheet row therefore now mirrors the MENU ENTRY instead of the pill —
+     * see .lg-chrome__menu-join below. That keeps the ruling exactly: one door,
+     * in the account menu, drawn on a phone in the sheet that IS the account
+     * menu on a phone. Removing the pill without that would have left a
+     * signed-in tester no join or switch door below 641 on any surface.
+     *
+     * The ANONYMOUS pill in the aside further down is untouched and stays
+     * byte-identical to origin/main in every flag state — it is a different
+     * control for a different viewer, and it is the one #165 and #170 are about.
      */
-    $join_pill_authed = ($join_state === 'allowlist' && $stripe_tester);
+
+    /**
+     * A PATREON PAYER IS OFFERED "SWITCH", NEVER "JOIN" (#196).
+     *
+     * Ian, 2026-08-22, verbatim: "Can you check and see if a user that has a
+     * patreon would have a menu for join in the profile chip? If so we need to
+     * change that to switch and give people a page with instructions for
+     * Patreon deactivation and reactivation through stripe."
+     *
+     * $caps['patreon_paying'] is LGMS\Membership\PatreonStanding's verdict —
+     * the one definition of "already paying" that #150's guard uses — computed
+     * in the poller beside stripe_testgroup and carried here on the same
+     * capability channel. This partial has no database and seven callers, so a
+     * capability is the only honest way to ask; it needs no user id, no option
+     * name and no query, and gate 93 §A asserts it contains none of them.
+     *
+     * WHAT IT REPLACES, and why an href swap alone is not enough. Offering a
+     * paying patron OUR checkout is offering them a second charge for the
+     * membership they already have. #150 refuses them at the till, so the
+     * control was a door to a refusal — presence-is-not-reachability on a money
+     * door. On dev2 the refusal is not even armed (`lgms_double_pay_block` is
+     * absent), which makes this menu the ONLY thing in the way.
+     *
+     * ⚠️ SCOPE: SIGNED-IN ONLY, and inside $stripe_tester only. The anonymous
+     * aside below is untouched — an anonymous visitor has no Patreon standing
+     * to read and no capability to carry one, so no anon input reaches this
+     * branch. That is the same structural argument #170's caching law rests on,
+     * and gate 93 §C holds it with cmp against origin/main rather than trusting
+     * this paragraph. It is also why #196 needs NO FLAG: every byte of it lives
+     * inside the soft-launch narrowing that is already there.
+     *
+     * FAILS CLOSED to Join — today's behaviour — when the capability is absent,
+     * false, or a ctx carries no capabilities at all.
+     */
+    $patreon_paying = ($caps['patreon_paying'] ?? false) === true;
+
+    /**
+     * ONE label and ONE href, derived once and used by all THREE renderings of
+     * this control: the account-menu item, the tester pill beside the chip
+     * (#170), and — through webroot/bottom-nav.js reading them back out of the
+     * DOM — the PWA account sheet, which at <=640 on the hub is the only one a
+     * phone gets (bb-mirror/web/forums.css hides the whole aside there).
+     *
+     * Derived rather than written down three times on purpose: three copies of
+     * "if paying then Switch" is three places for the next change to miss one,
+     * and this repo has paid for that exact shape twice (the profile tray's
+     * unwired socials, the reader sheet's un-embedded HTML).
+     */
+    $tester_join_label = $patreon_paying ? 'Switch' : 'Join';
+    $tester_join_href  = $patreon_paying ? '/switch-billing/' : '/lgjoin/';
 
     // Tier pill label: Admin overrides paid-tier labels for manage_options users.
     $tier_label = match($tier) {
@@ -733,25 +799,6 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
           <span class="lg-chrome__badge" data-lg-conn-count hidden>0</span>
         </button>
 
-<?php if ($join_pill_authed): /* #170 — the Stripe soft-launch tester's
-                 own door to /lgjoin/, and on live the ONLY one they have at a
-                 phone width: at ≤640 the hub hides this entire aside, account
-                 menu included (bb-mirror/web/forums.css), so webroot/bottom-nav.js
-                 mirrors this pill into the "You" sheet by reading it from here.
-                 Same class as the anon pill, so it cannot be styled into
-                 invisibility separately; same href-derived tab rule, so an
-                 internal page never ejects a member from the installed PWA. */ ?>
-        <a class="lg-chrome__join" href="<?= $h($join_href) ?>"<?= $join_external ? ' target="_blank" rel="noopener"' : '' ?>>Join</a>
-<?php endif;
-      /* ⚠️ THE TAGS ABOVE SIT AT COLUMN 0 ON PURPOSE, and the blank line after
-         them is gone for the same reason. Indented `<?php if ?>` tags emit
-         their own leading spaces as inline HTML whether the branch is taken or
-         not, so the first draft of this block added 8 spaces and a newline — 9
-         bytes — to EVERY signed-in render in EVERY state, including 'off'.
-         Invisible on screen, invisible to every assertion about hrefs, and
-         caught only by gate 79 §C's byte-identity comparison against
-         origin/main, which is the leg that exists for exactly this. Do not
-         re-indent these two tags. */ ?>
         <!-- Account dropdown trigger -->
         <div class="lg-chrome__account-wrap" data-lg-account-wrap style="position:relative">
           <button class="lg-chrome__account" type="button"
@@ -820,11 +867,28 @@ html[data-lguser-theme="dark"] .lg-hubmenu {
                      Checklist stay ADMIN-ONLY there, so they stay admin-only
                      here. A menu that offers a tester a door the gate then
                      shuts on them is the presence-is-not-reachability trap in
-                     its most annoying form. */ ?>
+                     its most annoying form.
+
+                     #196: the FIRST entry is Join for a tester with no Patreon
+                     and Switch -> /switch-billing/ for one Patreon is already
+                     charging — same position, same shape, only the word and the
+                     destination move. Both come from $tester_join_label /
+                     $tester_join_href, derived once above and shared with the
+                     pill, so the two cannot disagree.
+
+                     ⚠️ DO NOT ADD AN INDENTED <?php ?> ISLAND INSIDE THIS LIST.
+                     One does emit its own leading whitespace as inline HTML
+                     whether or not the branch is taken: the first draft of #196
+                     put a three-line comment beside the item below and added 12
+                     bytes to EVERY tester render, invisible on screen and to
+                     every href assertion. Caught only by the byte comparison
+                     against origin/main — the same leak #170 hit, one comment
+                     over. Explanations belong in this island, which already
+                     exists, or in the PHP above. */ ?>
             <?php if ($stripe_tester): ?>
             <li role="none" class="lg-chrome__account-menu-divider"></li>
-            <li role="none">
-              <a role="menuitem" href="/lgjoin/">Join</a>
+            <li role="none" class="lg-chrome__menu-join">
+              <a role="menuitem" href="<?= $h($tester_join_href) ?>"><?= $h($tester_join_label) ?></a>
             </li>
             <li role="none">
               <a role="menuitem" href="/lggift-buy/">Gift Memberships</a>

@@ -251,12 +251,15 @@ def leg_a():
         cannot_run(f"{HEADER} not found under {REPO}")
     code = php_code(hdr_path)
 
-    # TWO join anchors since #170, and exactly two: the anon one, and the one a
-    # signed-in soft-launch tester gets in the 'allowlist' state. A third would
-    # mean a third place to forget.
+    # ⚠️ ONE join anchor again. It was two from #170 (anon + the signed-in
+    # tester's pill) until #196 ruled the signed-in one out — Ian, 2026-08-22:
+    # "Why is there a superfluous join button for logged in users now." A
+    # SECOND would now mean the ruled-out control is back; a THIRD would mean a
+    # third place to forget. The signed-in door is the account-menu entry, which
+    # carries no lg-chrome__join class and is asserted separately below.
     anchors = re.findall(r'<a class="lg-chrome__join"[^>]*>', code)
-    check("the header emits exactly TWO join anchors (anon + tester)", len(anchors) == 2,
-          f"found {len(anchors)}: {anchors}")
+    check("the header emits exactly ONE join anchor, and it is the anon one (#196)",
+          len(anchors) == 1, f"found {len(anchors)}: {anchors}")
 
     # BOTH hrefs must be PHP expressions, not literals. This is the assertion
     # that catches "someone hardcoded /lgjoin/ and deleted the flag" — a change
@@ -269,19 +272,38 @@ def leg_a():
         check(f"join anchor {i+1}: neither destination written into the anchor itself",
               PATREON not in a and "lgjoin" not in a.lower(), a[:160])
 
-    # ── #170: the tester pill exists, and is CONFINED to 'allowlist' ─────────
-    # Without the first assertion the whole state is a no-op: measured on main
-    # before #170, .lg-chrome__join rendered for ANON ONLY, so swapping an href
-    # for "a test user" changed a control no test user could see. Without the
-    # second, `on` would start changing signed-in headers too and every #165
-    # authed byte-identity proof would quietly stop meaning anything.
-    check("the tester pill is gated on $join_pill_authed",
-          len(re.findall(r"if\s*\(\s*\$join_pill_authed\s*\)", code)) == 1,
-          "exactly one guarded copy")
-    m = re.search(r"\$join_pill_authed\s*=\s*\(([^;]*)\);", code)
-    check("$join_pill_authed is confined to 'allowlist' AND a tester",
-          m is not None and "'allowlist'" in m.group(1) and "$stripe_tester" in m.group(1),
-          m.group(1).strip() if m else "assignment not found")
+    # ── #170's TESTER PILL WAS RULED OUT ON 2026-08-22 BY #196 ───────────────
+    #
+    # Ian, decision box, on seeing it beside his own chip: "Why is there a
+    # superfluous join button for logged in users now." The signed-in Join door
+    # is the ACCOUNT MENU ENTRY and nothing else.
+    #
+    # ⚠️ INVERTED, NOT DELETED — the same discipline as gate 86 §I9, and for the
+    # same reason. These two assertions used to say "the pill exists and is
+    # confined to allowlist"; deleting them would leave the state they policed
+    # unwatched, so they now say the pill CANNOT exist for a signed-in viewer.
+    # The scar they were protecting against is unchanged and still live: before
+    # #170, .lg-chrome__join rendered for ANON ONLY, so an href swap "for a test
+    # user" changed a control no test user could see. That is now the CORRECT
+    # state, and it is what these assert.
+    check("no signed-in Join pill is drawn at all (#196 ruled it out)",
+          "$join_pill_authed" not in code,
+          "the signed-in door is the account menu entry")
+    check("...and the pill markup is reached only from the ANON aside",
+          len(re.findall(r'class="lg-chrome__join"', code)) == 1,
+          f'{len(re.findall(chr(0x22) + "lg-chrome__join" + chr(0x22), code))} pill anchor(s) in the file')
+
+    # LIVENESS BESIDE THE ABSENCE. "No pill" is trivially true of a file that
+    # stopped drawing a header at all (feedback-absence-assertion-needs-liveness).
+    check("liveness: the anon aside still draws its own Join pill",
+          re.search(r'<a class="lg-chrome__join" href="<\?= \$h\(\$join_href\)', code) is not None)
+
+    # AND THE DOOR IT WAS REPLACED BY MUST EXIST, or the ruling would have left
+    # a signed-in tester with no Join anywhere — the very no-op #170 was built
+    # to avoid, arrived at from the other side.
+    check("the signed-in tester's Join lives in the account menu, with the hook "
+          "the PWA sheet reads",
+          'class="lg-chrome__menu-join"' in code)
 
     # THE COHORT IS READ ONCE, ELSEWHERE. A second definition of "a test user"
     # is how the two ends of a fence drift apart — the header must keep asking
@@ -389,14 +411,22 @@ def leg_a():
     # tester has NO path to /lgjoin/ at a phone width — the pill in the DOM the
     # whole time. Route-agnostic contract, same as gate 12's: "a tester can
     # reach Join", never "this pill is visible".
-    check("bottom-nav's AUTHED sheet mirrors the tester pill from the header",
-          "hdrHref('.lg-chrome__join', null)" in js
-          and "testerJoinHref" in js)
-    check("the tester row EXISTS only when the header drew a pill",
-          re.search(r"if\s*\(\s*testerJoinHref\s*\)", js) is not None,
-          "no flag of its own — it cannot drift from the control beside it")
+    # ⚠️ RE-SOURCED BY #196. It mirrored the header PILL; the pill is ruled out,
+    # so mirroring it would have made this row vanish — and MEASURED on /hub/
+    # AND the front page as a real signed-in tester, at 390 and 640 the account
+    # chip is invisible and #lg-account-menu is display:none. Below 641 the menu
+    # is in the DOM the whole time and is not a door at all, so losing both
+    # leaves a signed-in tester no Join on a phone anywhere. It mirrors the MENU
+    # ENTRY now, through .lg-chrome__menu-join — the same hook shape as
+    # .lg-chrome__menu-signin. Contract unchanged and still route-agnostic:
+    # "a tester can reach Join", never "this particular control is visible".
+    check("bottom-nav's AUTHED sheet mirrors the account MENU entry",
+          "querySelector('.lg-chrome__menu-join a')" in js and "menuJoinHref" in js)
+    check("the tester row EXISTS only when the header drew that entry",
+          re.search(r"if\s*\(\s*menuJoinHref\s*\)", js) is not None,
+          "no flag of its own — it cannot drift from the control it mirrors")
     check("the tester row derives target=_blank from the href too",
-          re.search(r"if\s*\(\s*/\^https\?:\\/\\//i\.test\(testerJoinHref\)\s*\)", js) is not None)
+          re.search(r"if\s*\(\s*/\^https\?:\\/\\//i\.test\(menuJoinHref\)\s*\)", js) is not None)
     check("bottom-nav still reads NO flag and NO cohort list of its own",
           "header-join-stripe" not in js.replace("header-join-stripe.php", "")
           and "stripe_testgroup" not in js
@@ -530,8 +560,17 @@ def render(header_path, mode="anon", env=None):
     return r.stdout
 
 def join_anchor(html):
-    m = re.search(r'<a class="lg-chrome__join"[^>]*>Join</a>', html)
+    m = re.search(r'<a class="lg-chrome__join"[^>]*>[^<]*</a>', html)
     return m.group(0) if m else ""
+
+def menu_join(html):
+    """The signed-in Join door since #196: the account-menu entry, which is the
+    ONLY one a logged-in viewer gets. Matched by its hook class rather than by
+    its href, because #196 also lets the href and the word change together for a
+    member Patreon is already charging (Switch -> /switch-billing/), and an
+    href-matched probe would silently find nothing in exactly that case."""
+    m = re.search(r'<li role="none" class="lg-chrome__menu-join">\s*(<a [^>]*>[^<]*</a>)', html)
+    return m.group(1) if m else ""
 
 
 def leg_bc(tmp):
@@ -587,44 +626,50 @@ def leg_bc(tmp):
         check(f"{state}: and still in a new tab — nothing about anon moved",
               'target="_blank"' in a_anon and 'rel="noopener"' in a_anon, a_anon[:140])
         check(f"{state}: a signed-in member NOT on the list gets no Join at all",
-              join_anchor(authed[state]) == "", join_anchor(authed[state])[:140])
-        for who, doc in (("tester", tester), ("admin", admin)):
-            a = join_anchor(doc[state])
-            check(f"{state}: a signed-in {who} gets Join -> {LGJOIN}",
-                  f'href="{LGJOIN}"' in a, a[:140] or "(no anchor rendered at all)")
-            check(f"{state}: {who}'s Join does NOT open a new tab (our page, inside the PWA)",
-                  a != "" and "target=" not in a and "rel=" not in a, a[:140])
+              join_anchor(authed[state]) == "" and menu_join(authed[state]) == "",
+              join_anchor(authed[state])[:140])
 
-    # ⚠️ THE VACUITY GUARD, and the reason this gate is shaped this way.
-    # Implemented literally — "swap the href for a listed member" — this state
-    # would have rendered BYTE-IDENTICALLY to `off` for every viewer, because on
-    # main the Join pill rendered for ANON ONLY and a signed-in test user could
-    # never see it. That version passes every assertion above about anon and
-    # about not-listed members, and measures nothing.
-    check("allowlist ACTUALLY DIFFERS from off for a tester — not a silent no-op",
-          tester["allowlist"] != tester["off"],
-          f"{len(tester['allowlist'])} vs {len(tester['off'])} bytes")
-    # A real diff, not an index-by-index compare: the pill is INSERTED, so every
-    # line after it shifts and a positional compare reports the whole rest of
-    # the document as changed (it said 459). The claim is "one line added, none
-    # removed" — which is also the assertion that would catch this state
-    # quietly moving or dropping something else while it added its anchor.
-    diff = list(difflib.ndiff(tester["off"].splitlines(),
-                              tester["allowlist"].splitlines()))
-    added   = [l[2:] for l in diff if l.startswith("+ ")]
-    removed = [l[2:] for l in diff if l.startswith("- ")]
-    check("and it adds EXACTLY one line, removes none, and that line is the anchor",
-          len(added) == 1 and not removed and "lg-chrome__join" in added[0],
-          f"+{len(added)} / -{len(removed)}: {(added[0][:90] if added else '')}")
-
-    # CONFINED TO 'allowlist'. If `on` also grew a signed-in pill, every #165
-    # authed byte-identity proof would stop meaning anything with nothing going
-    # red to say so.
+    # ══ #196 RESTORES #165's RATCHET: THE FLAG REACHES NO SIGNED-IN VIEWER ══
+    #
+    # Ian, 2026-08-22, decision box, on the pill #170 added beside his own chip:
+    # "Why is there a superfluous join button for logged in users now." The
+    # signed-in Join door is the ACCOUNT MENU ENTRY and nothing else, so
+    # $join_pill_authed is gone and no state of this flag draws a signed-in
+    # control any more.
+    #
+    # ⚠️ REPLACED, NOT DELETED. What stood here was #170's VACUITY GUARD —
+    # "allowlist ACTUALLY DIFFERS from off for a tester" — which existed because
+    # implemented literally, 'allowlist' would have rendered byte-identically to
+    # 'off' for every viewer and its gate would have been green having measured
+    # nothing. That guard's premise was the signed-in pill. With the pill ruled
+    # out the honest claim inverts: the flag must now move NOTHING for any
+    # signed-in viewer in ANY state, which is #165's original ratchet that #170
+    # narrowed. Asserting the OLD claim would demand a control Ian has ruled out;
+    # deleting it would leave the ratchet unwatched. So it is inverted, with a
+    # liveness partner, exactly as gate 86 §I9 was.
     for who, doc in (("tester", tester), ("admin", admin)):
-        check(f"'on' gives a signed-in {who} no pill — the new markup is confined",
-              join_anchor(doc["on"]) == "", join_anchor(doc["on"])[:140])
-        check(f"'off' gives a signed-in {who} no pill either",
-              join_anchor(doc["off"]) == "", join_anchor(doc["off"])[:140])
+        for state in ("off", "allowlist", "allow-local", "on", "absent"):
+            check(f"'{state}' draws a signed-in {who} NO pill (#196)",
+                  join_anchor(doc[state]) == "", join_anchor(doc[state])[:140])
+        check(f"the flag moves not one byte for a signed-in {who}, in any state",
+              len({doc[st] for st in ("off", "allowlist", "allow-local", "on", "absent")}) == 1,
+              f"{sorted({len(doc[st]) for st in ('off','allowlist','allow-local','on','absent')})} bytes")
+
+    # LIVENESS BESIDE THE ABSENCE, and it is the assertion that keeps the ruling
+    # honest: "no pill" is trivially true of a build in which a tester has no
+    # Join at all, which is the very no-op #170 was created to prevent, arrived
+    # at from the other side. The door must EXIST — in the menu.
+    for who, doc in (("tester", tester), ("admin", admin)):
+        mj = menu_join(doc["allowlist"])
+        check(f"...but a signed-in {who} DOES have a Join door, in the account menu",
+              mj != "", "no account-menu Join entry rendered at all")
+        check(f"...{who}'s menu Join points at {LGJOIN}",
+              f'href="{LGJOIN}"' in mj, mj[:140])
+        check(f"...and does NOT open a new tab (our page, inside the PWA)",
+              "target=" not in mj and "rel=" not in mj, mj[:140])
+        check(f"...carrying the hook the PWA account sheet reads at <=640, where "
+              f"the menu itself is display:none",
+              'class="lg-chrome__menu-join"' in doc["allowlist"])
 
     # ── #170: THE MIGRATION — dev2's exact on-box shape ─────────────────────
     # If this leg reddens, merging this branch reverts dev2's header to
@@ -655,9 +700,17 @@ def leg_bc(tmp):
         r = join_anchor(render(trees["off"], "anon", env={"LG_HEADER_JOIN_STRIPE": word}))
         check(f"LG_HEADER_JOIN_STRIPE={word}: anon gets the right destination",
               f'href="{expect}"' in r, r[:140])
-    r = join_anchor(render(trees["off"], "tester", env={"LG_HEADER_JOIN_STRIPE": "allowlist"}))
-    check("LG_HEADER_JOIN_STRIPE=allowlist: a signed-in tester gets /lgjoin/",
-          f'href="{LGJOIN}"' in r, r[:140])
+    # ⚠️ The signed-in half of this leg CHANGED WITH THE RULING, not with the
+    # override. Under #170 an env-forced 'allowlist' handed a tester a PILL, and
+    # that is what this asserted. Since #196 no state hands a signed-in viewer a
+    # pill at all, so the honest assertion is that the override cannot conjure
+    # one — paired with the door that DOES exist, or "no pill" would pass on a
+    # tester who has no Join anywhere.
+    t_html = render(trees["off"], "tester", env={"LG_HEADER_JOIN_STRIPE": "allowlist"})
+    check("LG_HEADER_JOIN_STRIPE=allowlist cannot conjure a signed-in pill (#196)",
+          join_anchor(t_html) == "", join_anchor(t_html)[:140])
+    check("...and the tester's account-menu Join door is there regardless of the flag",
+          f'href="{LGJOIN}"' in menu_join(t_html), menu_join(t_html)[:140])
 
     # The gitignored box override is the deploy mechanism for dev2, so it is
     # asserted to actually beat the tracked default rather than assumed to.
@@ -775,12 +828,15 @@ def leg_bc(tmp):
           all(join_anchor(authed[s]) == "" for s in trees))
 
     # ⚠️ #165's ratchet read "the flag must not reach a signed-in member AT ALL,
-    # in any state, including ON". #170 NARROWS that to off/on — deliberately,
-    # because 'allowlist' exists precisely to reach one — and narrows it rather
-    # than deleting it: the two states that were proven stay proven, and the
-    # third is pinned by the exactly-one-line assertions in §B.
+    # in any state, including ON". #170 narrowed it to off/on, because
+    # 'allowlist' existed precisely to reach one. #196 RULED THAT CONTROL OUT
+    # (Ian: "Why is there a superfluous join button for logged in users now"),
+    # so the ratchet is WIDENED BACK to every state — including 'allowlist',
+    # which no longer has a signed-in control to draw. §B holds the same claim
+    # as a byte-set equality; this holds it per state, against this tree's own
+    # no-config render.
     for who, doc in (("tester", tester), ("admin", admin)):
-        for state in ("absent", "off", "on"):
+        for state in ("absent", "off", "allowlist", "allow-local", "on"):
             check(f"{who}, {state}: byte-identical across flag states",
                   doc[state] == doc["absent"],
                   f"{len(doc[state])} bytes vs {len(doc['absent'])}")
@@ -794,10 +850,15 @@ def leg_bc(tmp):
     # The same scar, one viewer over: every tester assertion above is an
     # equality or an absence, and both are trivially true of a render that died
     # before it reached the aside (feedback-absence-assertion-needs-liveness).
-    check("liveness: the tester render is a real header, and DOES carry the pill",
+    # ⚠️ THE LIVENESS ANCHOR MOVED WITH THE RULING (#196). It used to require
+    # the tester render to CARRY THE PILL; the pill is ruled out, so requiring it
+    # would demand the control Ian removed. The account-menu Join is the door
+    # now, so that is what "this render is real" means for a tester.
+    check("liveness: the tester render is a real header, and DOES carry its "
+          "account-menu Join door",
           len(tester["allowlist"]) > 5000
           and 'class="lg-chrome__account"' in tester["allowlist"]
-          and 'class="lg-chrome__join"' in tester["allowlist"],
+          and 'class="lg-chrome__menu-join"' in tester["allowlist"],
           f"{len(tester['allowlist'])} bytes")
 
     # And the ON state must differ from main by EXACTLY the one anchor — a
