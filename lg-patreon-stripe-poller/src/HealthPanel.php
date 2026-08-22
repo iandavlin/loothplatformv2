@@ -40,7 +40,13 @@ final class HealthPanel
     {
         $h      = Health::describe();
         $checks = $h['checks'];
-        $worst  = Health::worst( $checks );
+        $shared = $h['shared_secret'];
+        /* #201: the shared-secret section is folded into the headline rather
+           than sitting beside it. A tab whose chip says everything is healthy
+           while its first card says DIFFER is the "a blank cell reads like
+           health" failure wearing a different hat — and this is the one channel
+           whose failure makes every other answer on the screen meaningless. */
+        $worst  = Health::worst( array_merge( $checks, [ $shared ] ) );
         $env    = $h['app_env'];
         ?>
         <style>
@@ -66,7 +72,7 @@ final class HealthPanel
         <h2 style="margin-top:0;">Health</h2>
 
         <p class="description" style="max-width:860px;">
-            The five questions that, on 2026-08-21, each cost about an hour to answer by hand —
+            The questions that, on 2026-08-21, each cost about an hour to answer by hand —
             and none of which announced itself. Every failure that day was a <strong>silence</strong>:
             nothing went red, nothing logged an error, and the site kept serving pages.
             <strong>Nothing on this screen changes anything.</strong>
@@ -119,6 +125,14 @@ final class HealthPanel
             </div>
         <?php endif; ?>
 
+        <?php
+        /* FIRST CARD ON THE TAB, and #201's whole subject. It authenticates the
+           billing app's calls into WordPress, so when it is wrong every other
+           answer below is answering about a channel that cannot carry anything.
+           It is ABSENT ON LIVE today. */
+        SharedSecretPanel::render( $shared );
+        ?>
+
         <?php foreach ( $checks as $c ) : ?>
             <div class="lgms-h-card s-<?php echo esc_attr( $c['status'] ); ?>">
                 <h3>
@@ -166,7 +180,8 @@ final class HealthPanel
                 <button type="button" class="button" id="lgms-health-copy">Copy path</button>
             </p>
             <p class="lgms-h-note">
-                The WordPress half of each pair is edited on the <strong>Settings</strong> tab.
+                The <strong>shared secret</strong> is set on the command line — both halves; the section
+                at the top of this tab carries the two lines.
                 The cohort is edited on the <strong>Testers</strong> tab.
             </p>
         </div>
@@ -210,7 +225,7 @@ final class HealthPanel
     private static function headline( string $worst ): string
     {
         return match ( $worst ) {
-            'ok'      => 'All five answers are healthy',
+            'ok'      => 'Every answer on this screen is healthy',
             'warn'    => 'Healthy, with something worth a look',
             'unknown' => 'Something cannot be seen from here',
             default   => 'Something is broken',

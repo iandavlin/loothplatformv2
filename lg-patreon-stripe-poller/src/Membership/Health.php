@@ -133,7 +133,7 @@ final class Health
     /**
      * Every check, in the order the charter asks them.
      *
-     * @return array{checks:list<array>,app_env:array}
+     * @return array{checks:list<array>,app_env:array,shared_secret:array}
      */
     public static function describe(): array
     {
@@ -145,6 +145,16 @@ final class Health
                 'path'   => $env['path'],
                 'reason' => $env['reason'],
             ],
+            /* #201: the shared secret is its own section, ABOVE the checks —
+               but it is carried here, not fetched separately by the renderer,
+               for two reasons. One call means one `checked_at` stamp for the
+               whole screen instead of two that drift apart by a millisecond and
+               invite the reader to wonder which is current. And it keeps the
+               section inside `worst()`'s reach: a screen whose headline says
+               everything is healthy while its top section says DIFFER is the
+               "a blank cell reads like health" failure wearing a different
+               hat. */
+            'shared_secret' => self::sharedSecret(),
             'checks'  => [
                 self::checkWebhooks(),
                 self::checkSecrets(),
@@ -169,6 +179,8 @@ final class Health
      */
     public static function worst( array $checks ): string
     {
+        /* Anything carrying a `status` counts, which is how #201's shared-secret
+           section is folded in beside the six checks — see describe(). */
         $rank = [ 'ok' => 0, 'warn' => 1, 'unknown' => 2, 'fail' => 3 ];
         $out  = 'ok';
         foreach ( $checks as $c ) {
@@ -351,95 +363,249 @@ final class Health
     // =========================================================================
 
     /**
+     * ONE PAIR, COMPARED — the one definition of "do these two halves agree",
+     * used by the Stripe-webhook check below AND by sharedSecret() above it,
+     * which is what SharedSecretPanel renders. #201 extracted it rather than
+     * writing a second comparison: two definitions of "agree" is two answers to
+     * one question, and this dash exists because two halves disagreed.
+     *
+     * ⚠️ NOTHING DERIVED FROM EITHER VALUE IS IN THE RETURN. The comparison is
+     * `hash_equals` over sha256 and it happens INSIDE this method; what comes
+     * out is present/absent, a length, and a verdict word. That is what makes
+     * "never print a secret" a property of the data rather than a rule every
+     * renderer has to remember — see the class docblock, decision (2).
+     *
+     * @return array{
+     *   label:string, opt:string, key:string, env_state:string,
+     *   wp:array{present:bool,len:int}, app:array{present:bool,len:int,visible:bool},
+     *   verdict:string, status:string, line:string, issue:string
+     * }
+     */
+    public static function secretPair( string $label, string $opt, string $key ): array
+    {
+        $env     = self::envFacts();
+        $wp      = (string) get_option( $opt, '' );
+        $wpHas   = $wp !== '';
+        $appFact = $env['secrets'][ $key ] ?? null;
+
+        $out = [
+            'label'     => $label,
+            'opt'       => $opt,
+            'key'       => $key,
+            'env_state' => $env['state'],
+            'wp'        => [ 'present' => $wpHas, 'len' => strlen( $wp ) ],
+            'app'       => [ 'present' => false, 'len' => 0, 'visible' => false ],
+            'verdict'   => 'cannot_compare',
+            'status'    => 'unknown',
+            'line'      => '',
+            'issue'     => '',
+        ];
+
+        /* THE FOUR ENV STATES COLLAPSE TO ONE ANSWER HERE AND ONLY HERE: we
+           cannot see the other half. WHICH of the four it is stays available to
+           the caller in env_state, because "there is no file" and "this user
+           may not read the file" need opposite fixes. */
+        if ( $env['state'] !== 'ok' ) {
+            $out['line'] = ( $wpHas ? 'WordPress: set (' . strlen( $wp ) . ' characters)' : 'WordPress: NOT SET' )
+                . ' · billing app: cannot see it';
+            return $out;
+        }
+
+        $appHas          = ( $appFact !== null && $appFact['present'] );
+        $out['app']      = [
+            'present' => $appHas,
+            'len'     => (int) ( $appFact['len'] ?? 0 ),
+            'visible' => true,
+        ];
+
+        if ( ! $wpHas && ! $appHas ) {
+            $out['verdict'] = 'both_missing';
+            $out['status']  = 'fail';
+            $out['line']    = 'NOT SET on either side';
+            $out['issue']   = $label . ' is missing everywhere';
+            return $out;
+        }
+        if ( ! $wpHas ) {
+            $out['verdict'] = 'wp_missing';
+            $out['status']  = 'fail';
+            $out['line']    = 'billing app: set (' . $out['app']['len'] . ' characters) · WordPress: NOT SET';
+            $out['issue']   = $label . ' is set in the billing app but absent in WordPress';
+            return $out;
+        }
+        if ( ! $appHas ) {
+            $out['verdict'] = 'app_missing';
+            $out['status']  = 'fail';
+            $out['line']    = 'WordPress: set (' . strlen( $wp ) . ' characters) · billing app: NOT SET';
+            $out['issue']   = $label . ' is set in WordPress but absent in the billing app';
+            return $out;
+        }
+
+        $agree          = hash_equals( (string) $appFact['sha'], hash( 'sha256', $wp ) );
+        $out['verdict'] = $agree ? 'match' : 'differ';
+        $out['status']  = $agree ? 'ok' : 'fail';
+        $out['line']    = $agree
+            ? 'AGREE — both set, ' . strlen( $wp ) . ' characters'
+            : 'DISAGREE — WordPress ' . strlen( $wp ) . ' characters, billing app ' . $out['app']['len'] . ' characters';
+        if ( ! $agree ) {
+            $out['issue'] = $label . ' differs between the two halves';
+        }
+
+        return $out;
+    }
+
+    /**
+     * THE SHARED SECRET, ON ITS OWN, WITH A TIMESTAMP. Issue #201.
+     *
+     * Ian, 2026-08-22: *"Should just be a refresh button or something with a
+     * status check."* This is the status check; SharedSecretPanel is the screen
+     * and the button.
+     *
+     * ⚠️ IT IS REPORTED HERE AND NOWHERE ELSE ON THAT TAB. checkSecrets() used
+     * to carry this pair as well, and leaving it there would have put one fact
+     * on one screen twice in two different presentations — the same shape that
+     * showed a member two stacked identical gate panels on #199. So this pair
+     * came OUT of that check and the card below now names the webhook secret it
+     * still holds.
+     *
+     * ⚠️ WHY IT DESERVES ITS OWN SECTION AT ALL: when this channel is down,
+     * every other answer on the Health tab is meaningless. It is what
+     * authenticates the billing app's calls into WordPress, and it is ABSENT ON
+     * LIVE today — which is why #181's checkout guard, fail-open by design,
+     * answers UNKNOWN and waves every purchase through.
+     *
+     * The per-half facts are spelled out in EVERY branch, healthy included.
+     * `AGREE — both set, 64 characters` is a true sentence that answers a
+     * different question from "is each half set, and how long is it", and a
+     * panel that only itemises once something is broken cannot be used to check
+     * that a rotation landed.
+     *
+     * @return array{
+     *   checked_at:string, status:string, verdict:string, headline:string,
+     *   summary:string, lines:list<array{label:string,value:string,status:string}>,
+     *   env:array{state:string,path:string,reason:string}, pair:array
+     * }
+     */
+    public static function sharedSecret(): array
+    {
+        $pair = self::secretPair(
+            'Shared secret',
+            'lgms_shared_secret',
+            'LGMS_SHARED_SECRET'
+        );
+        $env = self::envFacts();
+
+        $wpLine = $pair['wp']['present']
+            ? 'set — ' . $pair['wp']['len'] . ' characters'
+            : 'NOT SET';
+
+        /* "Cannot read it" and "it is not set" are opposite findings and are
+           never conflated: one is a permissions job for root, the other is a
+           value nobody has entered. Naming the state is what sends the reader
+           to the right file. */
+        $appLine = match ( true ) {
+            ! $pair['app']['visible'] => match ( $env['state'] ) {
+                'missing'    => 'cannot see it — there is no settings file at that path',
+                'unreadable' => 'cannot see it — the file is there and WordPress may not read it',
+                'empty'      => 'cannot see it — the settings file parsed to nothing at all',
+                default      => 'cannot see it — the settings file could not be used',
+            },
+            $pair['app']['present']   => 'set — ' . $pair['app']['len'] . ' characters',
+            default                   => 'NOT SET',
+        };
+
+        [ $headline, $summary ] = match ( $pair['verdict'] ) {
+            'match'         => [ 'MATCH', 'Both halves hold the same value. Server-to-server calls can authenticate.' ],
+            'differ'        => [ 'DIFFER', 'The two halves hold DIFFERENT values, so every server-to-server call fails closed. A rotation that landed on one side only looks exactly like this.' ],
+            'wp_missing'    => [ 'NOT SET in WordPress', 'The billing app holds one and WordPress does not. This is the state live is in, and it is why the checkout guard answers UNKNOWN instead of refusing anybody.' ],
+            'app_missing'   => [ 'NOT SET in the billing app', 'WordPress holds one and the billing app does not, so the app cannot sign the calls it makes back.' ],
+            'both_missing'  => [ 'NOT SET anywhere', 'Neither half is set. Nothing server-to-server can authenticate at all.' ],
+            default         => [ 'CANNOT COMPARE', 'WordPress\'s half can be read; the billing app\'s cannot, so the two cannot be compared from here. That is reported rather than guessed — a number nobody can trust is worse than a sentence saying we cannot see it.' ],
+        };
+
+        return [
+            /* THE STAMP IS THE POINT OF THE REFRESH. Without it a re-rendered
+               section is indistinguishable from a stale one, and the button
+               becomes decoration. UTC because both boxes disagree with it
+               (America/New_York) and a health screen read across two boxes at
+               3am needs one clock. */
+            'checked_at' => gmdate( 'H:i:s' ) . ' UTC',
+            'status'     => $pair['status'],
+            'verdict'    => $pair['verdict'],
+            'headline'   => $headline,
+            'summary'    => $summary,
+            'lines'      => [
+                self::line( 'WordPress', $wpLine, $pair['wp']['present'] ? 'neutral' : 'fail' ),
+                self::line( 'Billing app', $appLine, $pair['app']['visible'] ? ( $pair['app']['present'] ? 'neutral' : 'fail' ) : 'unknown' ),
+                self::line( 'Do they match?', $headline, $pair['status'] ),
+            ],
+            'env'        => [
+                'state'  => $env['state'],
+                'path'   => $env['path'],
+                'reason' => $env['reason'],
+            ],
+            'pair'       => $pair,
+        ];
+    }
+
+    /**
      * ONE VALUE IN TWO HOMES WITH NOTHING COMPARING THEM is how a rotation
      * breaks verification silently — the charter's words, and failure #2's
      * exact shape.
      *
-     * The comparison is `hash_equals` over sha256. Nothing derived from either
-     * value reaches the returned array: only present/absent, length and a
-     * boolean.
+     * ⚠️ THE SHARED SECRET IS DELIBERATELY NOT HERE ANY MORE (#201). It has its
+     * own section at the top of this tab, with a refresh button; reporting it
+     * in both places would be the same fact twice on one screen. Gate 91 §B
+     * asserts its ABSENCE from this card, so re-adding it is a red rather than
+     * a silent duplicate.
+     *
+     * The comparison is `hash_equals` over sha256, in secretPair(). Nothing
+     * derived from either value reaches the returned array: only present/absent,
+     * length and a verdict.
      */
     private static function checkSecrets(): array
     {
-        $env   = self::envFacts();
         $pairs = [
-            [ 'Shared secret', 'lgms_shared_secret',         'LGMS_SHARED_SECRET',
-              'Authenticates the billing app\'s server-to-server calls into WordPress.' ],
-            [ 'Stripe webhook secret', 'lgms_stripe_webhook_secret', 'STRIPE_WEBHOOK_SECRET',
-              'Verifies that an incoming webhook really came from Stripe.' ],
+            [ 'Stripe webhook secret', 'lgms_stripe_webhook_secret', 'STRIPE_WEBHOOK_SECRET' ],
         ];
 
         $lines  = [];
         $worst  = 'ok';
         $issues = [];
 
-        foreach ( $pairs as [ $label, $opt, $key, $why ] ) {
-            $wp     = (string) get_option( $opt, '' );
-            $wpHas  = $wp !== '';
-            $appFact = $env['secrets'][ $key ] ?? null;
-
-            if ( $env['state'] !== 'ok' ) {
-                $lines[] = self::line(
-                    $label,
-                    ( $wpHas ? 'WordPress: set (' . strlen( $wp ) . ' characters)' : 'WordPress: NOT SET' )
-                    . ' · billing app: cannot see it',
-                    'unknown'
-                );
-                $worst = self::worseOf( $worst, 'unknown' );
-                continue;
-            }
-
-            $appHas = ( $appFact !== null && $appFact['present'] );
-
-            if ( ! $wpHas && ! $appHas ) {
-                $lines[]  = self::line( $label, 'NOT SET on either side', 'fail' );
-                $issues[] = $label . ' is missing everywhere';
-                $worst    = self::worseOf( $worst, 'fail' );
-                continue;
-            }
-            if ( ! $wpHas ) {
-                $lines[]  = self::line( $label, 'billing app: set (' . $appFact['len'] . ' characters) · WordPress: NOT SET', 'fail' );
-                $issues[] = $label . ' is set in the billing app but absent in WordPress';
-                $worst    = self::worseOf( $worst, 'fail' );
-                continue;
-            }
-            if ( ! $appHas ) {
-                $lines[]  = self::line( $label, 'WordPress: set (' . strlen( $wp ) . ' characters) · billing app: NOT SET', 'fail' );
-                $issues[] = $label . ' is set in WordPress but absent in the billing app';
-                $worst    = self::worseOf( $worst, 'fail' );
-                continue;
-            }
-
-            $agree = hash_equals( $appFact['sha'], hash( 'sha256', $wp ) );
-            $lines[] = self::line(
-                $label,
-                $agree
-                    ? 'AGREE — both set, ' . strlen( $wp ) . ' characters'
-                    : 'DISAGREE — WordPress ' . strlen( $wp ) . ' characters, billing app ' . $appFact['len'] . ' characters',
-                $agree ? 'ok' : 'fail'
-            );
-            if ( ! $agree ) {
-                $issues[] = $label . ' differs between the two halves';
-                $worst    = self::worseOf( $worst, 'fail' );
+        foreach ( $pairs as [ $label, $opt, $key ] ) {
+            $p       = self::secretPair( $label, $opt, $key );
+            $lines[] = self::line( $label, $p['line'], $p['status'] );
+            $worst   = self::worseOf( $worst, $p['status'] );
+            if ( $p['issue'] !== '' ) {
+                $issues[] = $p['issue'];
             }
         }
 
         $summary = match ( true ) {
             $issues !== []       => ucfirst( implode( '; ', $issues ) ) . '.',
             $worst === 'unknown' => 'Cannot compare — the billing app\'s settings file could not be read.',
-            default              => 'Both halves hold the same values.',
+            default              => 'Both halves hold the same value.',
         };
 
         return self::check(
             'secrets',
-            'Do the two halves agree?',
+            'Does the webhook secret agree?',
             $worst,
             $summary,
             $lines,
+            /* ⚠️ THE OLD NOTE HERE POINTED AT A CONTROL THAT DOES NOT EXIST.
+               It said to set the WordPress side on the Settings tab;
+               `lgms_stripe_webhook_secret` is not in registerSettings() and has
+               no field there, measured on main 2026-08-22. Half a sentence
+               pointing at a missing control is how an operator concludes the
+               dash is broken. */
             'Values are never shown. The comparison is a sha256 comparison done in code; this '
             . 'screen only ever reports present, absent, length and agree-or-disagree. '
-            . 'Set the WordPress side on the **Settings** tab; the billing app side is a server '
-            . 'file and is deliberately read-only from here.'
+            . '**Both halves of this pair are set on the command line** — `wp option update '
+            . 'lgms_stripe_webhook_secret` for the WordPress side, and the `STRIPE_WEBHOOK_SECRET` '
+            . 'line of the billing app\'s settings file for the other. There is no field for '
+            . 'either, on this tab or any other. The **shared secret** has its own section at '
+            . 'the top of this tab.'
         );
     }
 

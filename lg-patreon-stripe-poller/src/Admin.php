@@ -58,6 +58,9 @@ final class Admin
         add_action( 'admin_post_lgms_tester_clear',  [ self::class, 'handleTesterClear' ] );
         // #194: the Products tab owns its own handler — see ProductsPanel's docblock.
         ProductsPanel::boot();
+        // #201: the shared-secret status section owns its own AJAX handler, for
+        // the same reason and in the same shape.
+        SharedSecretPanel::boot();
     }
 
     public static function menu(): void
@@ -199,7 +202,27 @@ final class Admin
             'lgms_db_user'                    => 'lg_membership',
             'lgms_db_pass'                    => '',
             'lgms_stripe_secret_key'          => '',
-            'lgms_shared_secret'              => '',
+            /* ⚠️ `lgms_shared_secret` IS DELIBERATELY NOT HERE (#201), AND
+               DELETING THE FIELD WITHOUT DELETING THIS LINE WOULD HAVE BLANKED
+               IT ON EVERY SAVE. Measured in the running WordPress rather than
+               recalled — wp-admin/options.php:336-345 walks the registered
+               options of the submitted group and calls
+               `update_option( $option, $value )` with `$value = null` for any
+               option NOT present in POST. A registered setting with no field is
+               therefore not "left alone"; it is emptied by anyone who presses
+               Save on this tab, silently, and server-to-server auth fails
+               closed from that moment. The two must move together.
+
+               WHY IT MOVED AT ALL — keeper's ruling on #201, 2026-08-22,
+               applying Ian's own shape for this surface ("Should just be a
+               refresh button or something with a status check", explicitly no
+               input field): the field could only ever set ONE of the two halves,
+               which is exactly how the halves come to DISAGREE; and its
+               `value=` attribute printed the live secret into this page's HTML
+               source, where `type="password"` hides it from the eye and not
+               from View Source. Both halves are set on the command line now,
+               and the Health tab's Shared secret section carries the two lines
+               and reports the result. */
             'lgms_refund_email'               => '',
             'lgms_refund_window_days'         => '30',
             'lgms_plan_switch_cooldown_hours' => '24',
@@ -1582,6 +1605,26 @@ final class Admin
             <p><button type="submit" class="button">Re-create / sync membership pages</button></p>
         </form>
 
+        <?php
+        /* ⚠️ THE POINTER MOVES IN THE SAME COMMIT AS THE CONTROL (#201).
+           This tab held the shared-secret field for its whole life, and it is
+           named in ENV-AND-SECRETS.md, in the handoffs and in the Health tab's
+           own note. A control that vanishes with nothing where it stood reads
+           as a broken dash; this says where it went and why. */
+        ?>
+        <h2>Slim ↔ plugin shared secret</h2>
+        <p class="description" style="max-width:760px;">
+            Authenticates the billing app's calls into
+            <code>/wp-json/lg-member-sync/v1/…</code>.
+            <strong>It is no longer set here.</strong> A form on this page could only ever move the
+            WordPress half — the billing app's half lives in a server file the web user cannot write —
+            and one half moving on its own is exactly how the two come to disagree.
+            Both halves are set on the command line, and the
+            <a href="<?php echo esc_url( self::pageUrl( [ 'tab' => 'health' ] ) ); ?>">Health tab</a>
+            shows whether each is present, how long it is and whether they agree, with a Refresh button
+            and the two commands to copy.
+        </p>
+
         <form method="post" action="options.php">
             <?php settings_fields( self::OPT_GROUP ); ?>
 
@@ -1605,12 +1648,6 @@ final class Admin
                 <tr><th><label>Refund email</label></th><td><input type="email" name="lgms_refund_email" value="<?php echo esc_attr( get_option( 'lgms_refund_email', '' ) ); ?>" class="regular-text" placeholder="<?php echo esc_attr( get_option( 'admin_email' ) ); ?>"> <span class="description">Leave blank to use the WordPress admin email.</span></td></tr>
                 <tr><th><label>Refund window (days)</label></th><td><input type="number" name="lgms_refund_window_days" value="<?php echo esc_attr( get_option( 'lgms_refund_window_days', '30' ) ); ?>" class="small-text" min="1" max="365"> <span class="description">Number of days after a charge that a customer is eligible for an automated refund.</span></td></tr>
                 <tr><th><label>Plan-switch cooldown (hours)</label></th><td><input type="number" name="lgms_plan_switch_cooldown_hours" value="<?php echo esc_attr( get_option( 'lgms_plan_switch_cooldown_hours', '24' ) ); ?>" class="small-text" min="0" max="720"> <span class="description">Minimum hours between customer-initiated plan changes. Set to 0 to disable.</span></td></tr>
-            </table>
-
-            <h2>Slim ↔ plugin shared secret</h2>
-            <p class="description">Used to authenticate Slim's calls to <code>/wp-json/lg-member-sync/v1/sync-customer</code>. Set the same value on Slim's <code>LGMS_SHARED_SECRET</code> in <code>.env</code>.</p>
-            <table class="form-table">
-                <tr><th><label>Shared secret</label></th><td><input type="password" name="lgms_shared_secret" value="<?php echo esc_attr( get_option( 'lgms_shared_secret', '' ) ); ?>" class="regular-text" autocomplete="off"></td></tr>
             </table>
 
             <?php submit_button(); ?>
