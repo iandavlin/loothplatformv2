@@ -79,7 +79,7 @@ run() {
     if [ "$expect" = green ]; then
         if [ "$rc" -eq 0 ]; then echo "  ✓ $name — stayed GREEN, as it must"; pass=$((pass+1))
         else echo "  ✗ $name — went RED on a change that breaks nothing:"
-             printf '%s\n' "$out" | grep '^  FAIL' | sed 's/^/        /'; fail=$((fail+1)); fi
+             grep '^  FAIL' <<<"$out" | sed 's/^/        /'; fail=$((fail+1)); fi
         return
     fi
     if [ "$rc" -eq 0 ]; then
@@ -88,11 +88,32 @@ run() {
     if [ "$rc" -ne 1 ]; then
         echo "  ✗ $name — gate exited $rc (expected 1); a CANNOT-RUN is not a finding"; fail=$((fail+1)); return
     fi
-    if printf '%s\n' "$out" | grep -q "FAIL  $want"; then
+    # ⚠ HERESTRING, NOT A PIPE, AND THIS IS NOT STYLE.
+    #
+    # `printf ... | grep -q` under `set -o pipefail` reports the PIPELINE's
+    # worst status, and `grep -q` exits the instant it matches — which closes
+    # the pipe and kills `printf` with SIGPIPE (141). So a SUCCESSFUL match
+    # returns 141 and the harness declares a perfectly good assertion "RED, but
+    # NOT for the stated reason", printing the very line it just failed to find.
+    #
+    # It is SIZE-DEPENDENT, which is why it lay dormant: while the gate's output
+    # fitted the 64KB pipe buffer, printf finished before grep exited and the
+    # bug never fired. #202 pushed gate 77 past that buffer and it began
+    # misreporting the FIRST mutations whose named check appears early in the
+    # output — the earlier the match, the more unwritten output, the likelier
+    # the SIGPIPE. Reproduced deliberately:
+    #
+    #     set -uo pipefail
+    #     printf '%s\n' "$small" | grep -q target   → 0
+    #     printf '%s\n' "$big"   | grep -q target   → 141
+    #
+    # A herestring feeds grep without a pipe, so there is no pipeline status to
+    # poison and no writer to signal.
+    if grep -q "FAIL  $want" <<<"$out"; then
         echo "  ✓ $name — RED, naming: $want"; pass=$((pass+1))
     else
         echo "  ✗ $name — RED, but NOT for the stated reason. It said:"
-        printf '%s\n' "$out" | grep '^  FAIL' | sed 's/^/        /'
+        grep '^  FAIL' <<<"$out" | sed 's/^/        /'
         echo "        expected: $want"
         fail=$((fail+1))
     fi
@@ -408,6 +429,14 @@ run red "the worker stops marking the store, so the other channel never clears" 
     "#202 the store is marked answered, by the page" tools/lanes-poke-worker.sh \
     'if rec=$(python3 "$DECIDE_CLI" answer "$qid" "$key" --via page 2>"$err"); then' \
     'if rec=$(python3 "$DECIDE_CLI" show "$qid" --json 2>"$err"); then'
+run red "the endpoint stops checking that anything will DRAIN the spool" \
+    "#202 an UNDEPLOYED delivery worker refuses the answer, loudly" webroot/lanes-decide.php \
+    "if (strpos(\$worker, 'LG_DECIDE_WORKER_V1') === false) {" \
+    "if (false) {"
+run red "the marker is renamed, so a deployed worker reads as undeployed" \
+    "#202 …and the SAME answer goes through once the worker knows the verb" tools/lanes-poke-worker.sh \
+    'LG_DECIDE_WORKER_V1' \
+    'LG_DECIDE_WORKER_RENAMED'
 run red "the button is drawn even when nothing is pending" \
     "#202 nothing pending ⇒ SILENCE (quiet when healthy)" tools/lanes-page.py \
     '    elif dcount:' \

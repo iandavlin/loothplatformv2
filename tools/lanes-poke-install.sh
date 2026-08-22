@@ -39,6 +39,13 @@ if [ "${1:-}" = "--verify" ]; then
     chk "question store"      "$([ -d $STORE ] && echo yes || echo no)"        yes
     chk "question store mode" "$(stat -c %a $STORE 2>/dev/null || echo -)"     755
     chk "store owner"         "$(stat -c %U $STORE 2>/dev/null || echo -)"     ubuntu
+    # ⚠ THE DEPLOYED WORKER, NOT THE ONE IN THIS CHECKOUT. lanes-poke.service
+    # runs ~/keeper-repo's copy, so a branch can hold a perfect worker while the
+    # box drains the spool with main's — which knows no `decide` verb and drops
+    # every answer on its seat-name charset. lanes-decide.php refuses rather
+    # than queue into that gap; this line is how you see it coming.
+    chk "delivery worker understands answers" \
+        "$(grep -q LG_DECIDE_WORKER_V1 /home/ubuntu/keeper-repo/tools/lanes-poke-worker.sh 2>/dev/null && echo yes || echo no)" yes
     chk "lanes-poke.path"     "$(systemctl is-active lanes-poke.path 2>/dev/null || echo inactive)" active
     chk "lanes-poke.path boot" "$(systemctl is-enabled lanes-poke.path 2>/dev/null || echo no)"     enabled
     for f in lanes-poke.php lanes-decisions.php lanes-decide.php; do

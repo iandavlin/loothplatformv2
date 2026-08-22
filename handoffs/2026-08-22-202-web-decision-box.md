@@ -38,7 +38,7 @@ answering a question.
 
 ## Proof
 
-- **Gate 77 GREEN — 179 checks**, up from 130. **Extended, never renumbered**
+- **Gate 77 GREEN — 183 checks**, up from 130. **Extended, never renumbered**
   (keeper's ruling): main's next-free line said 98 while lane 201 already held
   98 unmerged, and minting would have meant editing `CRAFT-STANDARD.md` and
   `run-all.sh`, both held by live lanes.
@@ -121,7 +121,28 @@ answered it"*, and the assertion means something.
   never ran.** A harness that aborts mid-suite reports fewer proofs than it has,
   and the missing ones look like they were never written.
 
-### 7. A lane verifying on dev2 is testing main — this time through systemd
+### 7. Queueing is not delivering — so the endpoint now refuses rather than lies
+
+The one remaining way this button could have lied the way **Poke keeper** did.
+`lanes-decide.php` only ever *appends* to a spool; the thing that *drains* it is
+`lanes-poke-worker.sh`, run out of **`~/keeper-repo`** — a clone carrying
+**main**, not whatever branch introduced the verb. So an answer tapped before
+keeper's clone pulls would be validated, queued, dropped on the seat-name
+charset, and reported to Ian as *"keeper has been told"*.
+
+The endpoint now greps the deployed worker for the marker
+**`LG_DECIDE_WORKER_V1`** and refuses **503** with a sentence naming the fix. An
+*unreadable* worker refuses too, with its **own** sentence — *"I could not
+check"* and *"it is not deployed"* are different answers and neither is *"sent"*.
+
+Four gate checks, and the fourth is the one that matters: **the same answer goes
+through once the worker knows the verb.** Without that pairing the two refusals
+above would be satisfied by an endpoint that refuses everything.
+
+`--verify` reports it too, and says **no** today, correctly, because the box is
+still draining with main's worker.
+
+### 8. A lane verifying on dev2 is testing main — this time through systemd
 
 The first live end-to-end probe queued correctly, the path unit fired, the spool
 drained, and **nothing was marked.** `lanes-poke.service` runs
@@ -132,6 +153,37 @@ the spaces, and dropped it.
 That is exactly the back-compat behaviour designed and gated for — but it means
 **the decide verb starts working only when keeper's clone pulls**, not when this
 merges. Worth saying out loud in the merge note.
+
+### 9. The red-first harness reported a GOOD assertion as broken — a latent SIGPIPE
+
+The one worth carrying furthest, because it is not about this feature at all.
+
+    printf '%s\n' "$out" | grep -q "FAIL  $want"      # under set -o pipefail
+
+`grep -q` exits the moment it matches → the pipe closes → `printf` dies with
+**SIGPIPE (141)** → `pipefail` reports **141 for the pipeline**. A *successful*
+match returns failure, and the harness prints *"RED, but NOT for the stated
+reason"* followed by the exact line it just failed to find.
+
+**Size-dependent, so it lay dormant.** While gate 77's output fitted the
+65,536-byte pipe buffer, `printf` finished first and nothing happened. #202's
+checks pushed it past that, and a **pre-existing, perfectly good** #159 mutation
+started failing. Proved deliberately rather than guessed:
+
+    printf '%s\n' "$small" | grep -q target   → 0
+    printf '%s\n' "$big"   | grep -q target   → 141
+
+Fixed with a herestring. **It gets worse as any gate grows, and it lies in the
+direction that invents findings** — I nearly spent the evening hunting a defect
+in somebody else's working code.
+
+**Swept box-wide and measured, not assumed:** 18 files on main pair `pipefail`
+with a pipe into `grep -q`. Only >64KB input can trip it. The two that would
+matter are both in this domain and both **measured safe**:
+`tools/lanes-status.sh:66` (the working-detector — a false negative there reads
+a WORKING lane as PARKED; real panes are **1,327–1,455 bytes** against 65,536,
+~45× headroom) and `tools/approved-watcher.sh:203` (a list of session names).
+Neither changed. Full reasoning in PAGE.md.
 
 ---
 
@@ -158,24 +210,86 @@ box where the preview serves the branch's own worker.
 
 ## Deploy — the steps a `git pull` does not do
 
-1. `git -C ~/keeper-repo pull` — **the renderer and the worker both run from
-   there.** Until this happens the button cannot appear and an answer cannot be
-   delivered.
-2. `bash tools/lanes-poke-install.sh` (as ubuntu) — creates `~/.lg-decisions`.
-   **Already done on dev2** by this lane.
-3. `sudo ~/loothplatformv2-clean/webroot/install-symlinks.sh --new-only` — the
-   two new endpoints. **Not yet done** (they cannot exist until this is in the
-   serving checkout).
-4. `bash tools/lanes-poke-install.sh --verify` — read what it prints.
+**Everything a lane can do alone is done.** What is left needs the merge,
+because both remaining steps read from checkouts a lane must never write.
 
-Current live state, measured:
+    # after the merge to main, in this order:
+    git -C ~/loothplatformv2-clean pull --ff-only origin main   # the SERVING checkout
+    git -C ~/keeper-repo pull                                   # the renderer AND the worker
+    sudo ~/loothplatformv2-clean/webroot/install-symlinks.sh --new-only
+    bash ~/keeper-repo/tools/lanes-poke-install.sh              # idempotent; store already made
+    bash ~/keeper-repo/tools/lanes-poke-install.sh --verify      # read what it prints
+
+⚠️ **`keeper-repo` before anyone taps anything.** `lanes-poke.service` runs
+*that* clone's worker. The endpoint now refuses rather than queueing into a
+worker that would drop the answer, so the failure is loud rather than silent —
+but a refused tap is still a tap that did not work.
+
+Current live state, measured at 21:16:
 
     spool / stamps / store / path unit / poke symlink     OK
-    docroot lanes-decisions.php, lanes-decide.php         MISSING (step 3)
     web user can read store / cannot write it             OK / OK
+    delivery worker understands answers                   no    ← keeper-repo pull
+    docroot lanes-decisions.php, lanes-decide.php         MISSING ← install-symlinks
+
+Those last two are **expected** before the merge and are exactly what `--verify`
+is for. `install-symlinks.sh --new-only` picks the two endpoints up on its own —
+it scans `webroot/` — so there is no per-file step to remember.
+
+### ⚠️ SO A TAP ON THE PREVIEW IS REFUSED TONIGHT, AND THAT IS CORRECT
+
+Measured just now against a real pending question over real HTTPS:
+
+    {"ok":false,"error":"the answer path is not deployed yet — keeper's
+     checkout still has the old delivery worker, which would drop this
+     silently. Nothing was sent. Ask keeper to pull."}
+
+and it left **zero trace** — spool 0 bytes, no duplicate-guard stamp, the
+question still pending. The refusal happens before anything is written.
+
+**This is the feature working, not the feature broken.** The preview really
+cannot deliver an answer until keeper's clone pulls, and the alternative — the
+behaviour this endpoint had two hours ago — is a green tick over a dropped
+answer. The full delivery path *was* proven end to end earlier, before the check
+existed: a real browser click at 20:37 reached the board as `ian-via-page`.
+
+After `git -C ~/keeper-repo pull`, taps go through with no further change.
 
 Take the preview down when it is no longer wanted:
 `sudo bash tools/preview/lane-preview.sh down 202-web-decision-box`.
+
+## ⚠️ IAN'S QUESTION, 8/22 evening: what would it take to guide lanes from the page?
+
+Answered from what is actually on the page, not from what could be:
+
+**What he can do from the page after this merge — four verbs, all one-tap:**
+
+| | |
+|---|---|
+| **approve a plan** | `lanes-approve.php` (#139) — adds `approved`, which is what spin-lane needs |
+| **poke keeper** about a seat that looks idle | `lanes-poke.php` (#156) — *and it only started working today; it had never been deployed* |
+| **redraw the page** | `lanes-refresh.php` (#143) |
+| **answer a decision** | `lanes-decide.php` (#202) — **new**, and the only one that carries a choice rather than a signal |
+
+**So most of "guiding" already reduces to a structured question**, and keeper can
+pose one about anything: which of two designs, whether to flip a flag, whether a
+thing landed as expected (#178's Landed button is folded in as exactly that).
+Ian answers with one tap; keeper is woken inside a minute; the box closes in
+both channels.
+
+**The one thing he still cannot do from the page is send a SENTENCE.** A lane's
+free-text question (todo family 1) and any correction in his own words still go
+through **Copy for keeper** and a paste into chat. That is a deliberate gap, not
+an oversight: a text box that reaches a lane is a different security posture
+(free text into a board message into an agent's context) and a different design
+conversation. **If Ian wants it, that is the next issue, and it should be its own
+seat.**
+
+⚠️ And the honest caveat, because it is the difference between "guiding lanes"
+and "guiding keeper": **every verb above talks to KEEPER, never to a lane
+directly.** Nothing on this page touches another seat's tmux session — that is
+LANE-RULES, and it is what stops the page becoming a way to corrupt a running
+agent's context. Ian steers; keeper drives.
 
 ## Keeper's half of the contract, now recorded as law in PAGE.md
 

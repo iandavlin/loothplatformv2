@@ -1275,6 +1275,55 @@ assertion beside it is a green light for the broken state.**
    any box where the deploy step has not been run. A gate whose output moves with
    the box's live state reports somebody else's Tuesday.
 
+### ⚠️ A HARNESS BUG THAT REPORTS GOOD ASSERTIONS AS BROKEN, AND GETS WORSE AS A GATE GROWS
+
+`tools/gates/lanes-page-truth-redfirst.sh` decided whether a mutation reddened
+the *right* check with:
+
+    printf '%s\n' "$out" | grep -q "FAIL  $want"
+
+Under `set -o pipefail` that is a **latent false-negative**. `grep -q` exits the
+instant it matches, which closes the pipe and kills `printf` with **SIGPIPE
+(141)**; `pipefail` then reports 141 for the whole pipeline. **A successful match
+returns failure.** The harness then prints *"RED, but NOT for the stated
+reason"* — followed by the very line it just failed to find, which is what makes
+it so confusing to read.
+
+It is **size-dependent**, which is why it lay dormant for months:
+
+    set -uo pipefail
+    printf '%s\n' "$small" | grep -q target   → 0      (fits the 64KB buffer)
+    printf '%s\n' "$big"   | grep -q target   → 141    (printf still writing)
+
+While gate 77's output fitted the **65,536-byte** pipe buffer, `printf` finished
+before `grep` exited and nothing went wrong. #202 pushed the gate past that, and
+the harness immediately started misreporting a **pre-existing, perfectly good**
+#159 mutation — *the earlier in the output the match occurs, the more unwritten
+output remains, and the likelier the SIGPIPE.* So it worsens as any gate grows,
+and it lies in the direction that invents findings.
+
+**Fixed with a herestring** (`grep -q … <<<"$out"`) — no pipe, no writer to
+signal, no pipeline status to poison.
+
+**Box-wide exposure, swept and MEASURED rather than assumed.** 18 files on main
+combine `pipefail` with a pipe into `grep -q`. Only input **larger than 64KB**
+can trip it, so almost all are safe — but the sweep is worth repeating because
+the two most alarming candidates are in this domain:
+
+- **`tools/lanes-status.sh:66` — the working-detector itself.** It pipes a
+  `tmux capture-pane` into `grep -qE "$AGENT_RE"`, and a false negative there
+  reads a **WORKING lane as PARKED**: precisely the class of lie #151's truth
+  rules exist to prevent. **Measured safe:** `capture-pane` without `-S` returns
+  the visible pane only, and real panes on this box are **1,327–1,455 bytes**
+  against a 65,536-byte buffer — roughly 45× of headroom. It would take a pane
+  fifty times taller to fire.
+- **`tools/approved-watcher.sh:203`** pipes a list of session names — bytes, not
+  kilobytes. Safe.
+
+Neither was changed. Recorded so the next person meets the reasoning instead of
+re-deriving it, and so that a future change which starts feeding either of them
+something large knows what it is walking into.
+
 ### Verifying it before the merge
 
 `platform/nginx/lane-preview-202-web-decision-box.conf` +
