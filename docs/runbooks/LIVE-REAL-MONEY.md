@@ -56,7 +56,7 @@ Read the billing app's value and write the same into WordPress:
 
     S=$(grep '^LGMS_SHARED_SECRET=' /srv/lg-stripe-billing/.env | cut -d= -f2- | tr -d '"'"'"'')
     echo "len=${#S}"    # sanity only, never paste the value anywhere
-    sudo -u looth-live wp --path=/var/www/dev eval "update_option('lgms_shared_secret', '$S'); echo 'set, len=' . strlen((string)get_option('lgms_shared_secret','')) . \"\n\";"
+    sudo -u looth-dev wp --path=/var/www/dev eval "update_option('lgms_shared_secret', '$S'); echo 'set, len=' . strlen((string)get_option('lgms_shared_secret','')) . \"\n\";"
 
 **Keeper verifies:** the audience route answers 200 instead of 401.
 
@@ -147,7 +147,7 @@ a stray active price is something a checkout can be pointed at.
 
 Testers must each have a WordPress account, then:
 
-    sudo -u looth-live wp --path=/var/www/dev eval '
+    sudo -u looth-dev wp --path=/var/www/dev eval '
     $ids = [/* tester user ids */];
     update_option("lgms_stripe_lifecycle_allowlist", array_values(array_unique(array_map("intval", $ids))));
     echo count($ids) . " on the list\n";'
@@ -216,7 +216,7 @@ shown once and stored as a hash. Rotate remakes it and kills the old one.
 Still ABSENT on live (measured 8/21). Copy the billing app's value into WP:
 
     S=$(grep '^LGMS_SHARED_SECRET=' /srv/lg-stripe-billing/.env | cut -d= -f2- | tr -d '"'"'"'')
-    sudo -u looth-live wp --path=/var/www/dev eval "update_option('lgms_shared_secret', '$S'); echo strlen((string)get_option('lgms_shared_secret','')) . \"\n\";"
+    sudo -u looth-dev wp --path=/var/www/dev eval "update_option('lgms_shared_secret', '$S'); echo strlen((string)get_option('lgms_shared_secret','')) . \"\n\";"
 
 ## C. Confirm the app is in LIVE mode and points at live  ▢
 
@@ -253,7 +253,7 @@ After the webhook creates the rows, confirm each live product's `ref`
 Each tester needs a WordPress account. **Ian must be on it himself** — #181 has
 no admin bypass.
 
-    sudo -u looth-live wp --path=/var/www/dev eval '
+    sudo -u looth-dev wp --path=/var/www/dev eval '
     $ids = [/* tester user ids */];
     update_option("lgms_stripe_lifecycle_allowlist", array_values(array_unique(array_map("intval", $ids))));
     echo count($ids) . " on the list\n";'
