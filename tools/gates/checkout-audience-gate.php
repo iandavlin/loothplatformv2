@@ -1318,17 +1318,33 @@ $twice = LGMS\Wp\RestController::exemptAuthFromBuddyBossRestriction(
 is_( count( $twice ) === 2, 'K6  idempotent — a double-registered filter does not duplicate' );
 
 /* CONDITION 1: the route's OWN hardening is untouched. The exemption removes a
-   blanket pre-emption; it must not remove a single one of this door's checks. */
+   blanket pre-emption; it must not remove a single one of this door's checks.
+
+   ⚠️ ASSERT THE COMPARISON, NOT THE KEY NAME. The first draft of this section
+   looked for the strings `lgms_ga_ip_` and `wp_check_password`, and the
+   red-first caught it: turning `if ( $ipHits >= 20 )` into `if ( false )`
+   leaves both strings sitting right there, so the throttle could be disabled
+   with the gate none the wiser. What follows names the DECISIONS. This gate
+   cannot execute giftAuth() — it would need most of WordPress — so a source
+   assertion is the honest ceiling here; it is at least aimed at the thing that
+   would actually break. */
 is_( strpos( $restSrc, "'permission_callback' => '__return_true'" ) !== false,
      'K7  the route is still the public sign-in it was designed to be' );
-foreach ( [ 'lgms_ga_ip_'  => 'K8  the per-IP throttle is still there',
-            'lgms_ga_em_'  => 'K8b the per-email throttle is still there',
-            'wp_check_password' => 'K8c the password is still actually checked',
-            'rate_limited' => 'K8d the throttle still refuses with 429' ] as $needle => $label ) {
-    is_( strpos( $restSrc, $needle ) !== false, $label );
+
+$authBody = fn_body( $restSrc, 'giftAuth' );
+is_( $authBody !== '', 'K8  giftAuth() is still there to assert about' );
+foreach ( [
+    '$ipHits >= 20'                => 'K8b the per-IP throttle still COMPARES (20/hour)',
+    '$emailHits >= 5'              => 'K8c the per-email throttle still COMPARES (5 fails/15min)',
+    'wp_check_password( $password' => 'K8d the password is still actually checked',
+    'strlen( $password ) < 8'      => 'K8e the 8-character minimum is still enforced',
+    'is_email( $email )'           => 'K8f the address is still validated',
+    "'rate_limited' => true"       => 'K8g a throttled caller is still told so',
+] as $needle => $label ) {
+    is_( strpos( $authBody, $needle ) !== false, $label );
 }
-is_( strpos( $restSrc, 'strlen( $password ) < 8' ) !== false,
-     'K8e the 8-character minimum is still enforced' );
+is_( substr_count( $authBody, 'set_transient' ) >= 2,
+     'K8h both throttle counters are still WRITTEN — a read-only throttle never trips' );
 
 $plugSrc2 = bare( $FILES['plugin'] );
 is_( strpos( $plugSrc2, 'exemptAuthFromBuddyBossRestriction' ) !== false,
