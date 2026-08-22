@@ -946,14 +946,32 @@
     // — an internal page must never open a new tab, which would eject a member
     // from the installed PWA (display:standalone) to buy a membership in a
     // browser.
-    var testerJoinHref = hdrHref('.lg-chrome__join', null);
+    //
+    // #196 — THE LABEL IS READ FROM THE HEADER TOO, not written down here.
+    //
+    // The header now draws "Switch" -> /switch-billing/ instead of "Join" ->
+    // /lgjoin/ for a tester Patreon is already charging, because offering them
+    // our checkout is offering them a second charge for a membership they have.
+    // This row mirrored the HREF and hardcoded the WORD, so it would have read
+    // "Join" while pointing at the switch page — a control that lies about
+    // where it goes, on the one copy a phone gets. Reading both from the same
+    // element is what makes the two copies unable to disagree; a comparison
+    // against a flag, or a second Patreon lookup here, could drift.
+    //
+    // Falls back to 'Join' when the pill carries no text, so a header that
+    // somehow renders an empty anchor still produces a labelled row rather than
+    // an invisible one.
+    var testerJoinEl   = document.querySelector('.lg-chrome__join');
+    var testerJoinHref = (testerJoinEl && testerJoinEl.getAttribute('href')) || null;
     if (testerJoinHref) {
+      var testerJoinLabel = ((testerJoinEl.textContent || '').trim()) || 'Join';
       var joinRow2 = document.createElement('a');
       joinRow2.className = 'lt-sheet__row lt-sheet__row--join';
       joinRow2.style.cssText = 'display:flex;align-items:center;gap:10px';
       joinRow2.href = testerJoinHref;
       if (/^https?:\/\//i.test(testerJoinHref)) { joinRow2.target = '_blank'; joinRow2.rel = 'noopener'; }
-      joinRow2.innerHTML = '<svg class="lt-row-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg><span>Join</span>';
+      joinRow2.innerHTML = '<svg class="lt-row-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg><span></span>';
+      joinRow2.querySelector('span').textContent = testerJoinLabel;
       sheet.appendChild(joinRow2);
     }
 

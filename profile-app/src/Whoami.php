@@ -194,7 +194,14 @@ final class Whoami
         // capability nobody remembered to name, and the discard looks identical
         // to the capability being false. Anything the header learns to key on
         // must be added here too.
-        foreach (['edit_posts', 'moderate_forums', 'stripe_testgroup'] as $k) {
+        //
+        // `patreon_paying` joined the list for #196: the same menu that keys on
+        // stripe_testgroup now asks "is Patreon already charging this member?"
+        // so that a paying patron is offered Switch instead of Join. Dropped
+        // here it would read as false, which is exactly the Join they must not
+        // be offered — the identical failure to Mikelle's, on the identical
+        // member. Gate 34b cross-checks this list against the header.
+        foreach (['edit_posts', 'moderate_forums', 'stripe_testgroup', 'patreon_paying'] as $k) {
             if (array_key_exists($k, $pollerCaps)) $caps[$k] = (bool)$pollerCaps[$k];
         }
         return $caps;

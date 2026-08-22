@@ -178,6 +178,51 @@ final class InternalRestController
         $caps['stripe_testgroup'] = ( $caps['manage_options'] ?? false )
             || \LGMS\StripeLifecycle::inCohort( $wpUserId );
 
+        /**
+         * IS PATREON CHARGING THIS MEMBER RIGHT NOW?  (#196.)
+         *
+         * Ian, 2026-08-22, verbatim: "Can you check and see if a user that has
+         * a patreon would have a menu for join in the profile chip? If so we
+         * need to change that to switch."
+         *
+         * Measured before this line existed: user 1953 is a listed tester with
+         * an active paid Patreon pledge (looth2, next charge 2026-09-02), and
+         * the account menu offered her Join. #150's guard would refuse her at
+         * checkout — the presence-is-not-reachability trap on a money door, and
+         * on dev2 the guard is not even armed (`lgms_double_pay_block` absent),
+         * so the menu is the ONLY thing between her and a second charge.
+         *
+         * WHY A CAPABILITY, and why here. The shared header renders on seven
+         * apps under seven unix users with NO database of their own, so it
+         * cannot ask this question itself. `capabilities` is the channel that
+         * already answers per-viewer questions for it — it is how
+         * stripe_testgroup reaches the same menu — and it costs nothing to
+         * extend: `wp_user_id` is the PRIMARY KEY of `lg_patreon_members`, so
+         * this is a PK read on a path that already makes a loopback HTTP call.
+         *
+         * COMPUTED UNCONDITIONALLY, not only for the cohort. Narrowing it to
+         * `stripe_testgroup` would save one PK read and make `false` mean two
+         * different things — "not paying Patreon" and "not a tester" — which is
+         * the same shape as the named-pass-through discard that cost a day on
+         * 8/16. One fact, one answer.
+         *
+         * NO SECOND DEFINITION. PatreonStanding is the one place that decides
+         * what "already paying" means (#150); all three purchase doors ask it,
+         * and so does this. Never `payment_source` — one slot, descriptive
+         * only, and the two rails overwrite each other in it.
+         *
+         * FAILS CLOSED TO FALSE, which is today's behaviour (Join). An unknown
+         * must never send a member who has no Patreon to a page about
+         * cancelling one, so the catch is a `false`, not a `true`.
+         */
+        $caps['patreon_paying'] = false;
+        try {
+            $caps['patreon_paying'] =
+                \LGMS\Membership\PatreonStanding::forUser( $wpUserId )['active'] === true;
+        } catch ( \Throwable $e ) {
+            error_log( 'LGMS InternalRestController patreon_paying: ' . $e->getMessage() );
+        }
+
         return $caps;
     }
 }
