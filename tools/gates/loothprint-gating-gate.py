@@ -259,6 +259,7 @@ def run_legs(tree, off, on):
     # ── §F the poisoner — #198 BUG A ────────────────────────────────────────
     print("\n  §F a metabox save cannot empty a list it has no field for")
     rc, out = metabox_roundtrip(tree)
+    rc2, out2 = metabox_roundtrip(tree, flag="1")
     if rc != 0:
         FAILS.append("metabox round-trip probe failed: %s" % out[:200])
         CHECKS[0] += 1
@@ -277,8 +278,27 @@ def run_legs(tree, off, on):
     check("a slot that changed type carries nothing", res["type_change_carried"], False)
     check("a columns container is NOT carried", res["columns_carried"], False)
 
+    # ── §G the gate-CTA dispatch table itself ───────────────────────────────
+    print("\n  §G a gated files-callout is a DOWNLOAD, not a video")
+    if rc2 != 0:
+        CHECKS[0] += 1
+        FAILS.append("variantFor probe (flag ON) failed: %s" % out2[:160])
+        print("  FAIL %-58s %s" % ("variantFor probe ran with the flag on", out2[:110]))
+        return
+    on_res = json.loads(out2)
+    check("the two probe runs really differ on the flag",
+          (res["flag"], on_res["flag"]), (False, True))
+    # This is the whole second panel: `callout` is in neither dispatch list, so
+    # it fell through to the embed DEFAULT and drew the video card over a ZIP.
+    check("[OFF] a files-callout still gets the old face", res["variant_files_callout"], "embed")
+    check("[ON]  a files-callout gets the download face", on_res["variant_files_callout"], "download")
+    # Scoped to variant=files: a note callout is prose, not a deliverable.
+    check("[ON]  a NOTE callout is untouched", on_res["variant_note_callout"], "embed")
+    check("[ON]  a download block is unchanged", on_res["variant_download"], "download")
+    check("[ON]  an embed is unchanged", on_res["variant_embed"], "embed")
 
-def metabox_roundtrip(tree):
+
+def metabox_roundtrip(tree, flag=None):
     """Round-trip a gallery through the real MetaBox parser + carry-across.
 
     Plain PHP with an absolute require, never through WordPress: under WP the
@@ -319,20 +339,40 @@ $cols = ['type'=>'columns','id'=>'c1'];
 $prevCols = ['c1' => ['type'=>'columns','id'=>'c1','columns'=>[['blocks'=>[]],['blocks'=>[]]]]];
 $rm->invokeArgs(null, [&$cols, Manifest::get('columns'), $prevCols]);
 
+/* The gate-CTA dispatch table, asked directly. A gated `callout variant=files`
+   IS a download and used to fall through to the EMBED default — the second of
+   the two identical video panels. Asked here rather than through a render
+   because with the flag ON the synthesizer no longer emits that shape, so a
+   render can never reach it; 3 stored layouts still can. */
+$flagOn = method_exists('LG\LayoutV2\Renderer','loothprintGatingEnabled')
+        && \LG\LayoutV2\Renderer::loothprintGatingEnabled();
+$rv = new ReflectionMethod('LG\LayoutV2\GateCta', 'variantFor');
+$vf = function(string $t, array $b) use ($rv) {
+    return $rv->getNumberOfParameters() >= 2 ? $rv->invoke(null, $t, $b) : $rv->invoke(null, $t);
+};
+
 echo json_encode([
   'metabox_file'        => (new ReflectionClass('LG\LayoutV2\MetaBox'))->getFileName(),
+  'flag'                => $flagOn,
+  'variant_files_callout' => $vf('callout', ['variant'=>'files']),
+  'variant_note_callout'  => $vf('callout', ['variant'=>'note']),
+  'variant_download'      => $vf('download', []),
+  'variant_embed'         => $vf('embed', []),
   'form_only'           => $formOnly,
   'carried'             => array_values((array)($block['image_ids'] ?? [])),
   'type_change_carried' => array_key_exists('image_ids', $other),
   'columns_carried'     => array_key_exists('columns', $cols),
 ]);
 '''
-    path = "/tmp/lg199-metabox-%s.php" % TAG
+    path = "/tmp/lg199-metabox-%s-%s.php" % (TAG, flag or "off")
     with open(path, "w") as fh:
         fh.write(php)
     os.chmod(path, 0o644)
     try:
-        r = subprocess.run(["env", "LG199_TREE=" + tree, "php", path],
+        env = ["LG199_TREE=" + tree]
+        if flag is not None:
+            env.append("LG_V2_LOOTHPRINT_GATING=" + flag)
+        r = subprocess.run(["env"] + env + ["php", path],
                            capture_output=True, text=True, timeout=60)
         line = next((l for l in (r.stdout or "").splitlines() if l.startswith("{")), "")
         if r.returncode != 0 or not line:

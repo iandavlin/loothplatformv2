@@ -255,7 +255,7 @@ final class Renderer
                 if ($ctx['editor_mode']) {
                     return self::indent($depth) . "<!-- lg-layout-v2: block '$type' gated (requires tier '$gated') -->";
                 }
-                $variant = GateCta::variantFor($type);
+                $variant = GateCta::variantFor($type, $b);
                 return GateCta::render($variant, $ctx, $depth, $b);
             }
         }
