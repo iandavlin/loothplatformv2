@@ -125,6 +125,26 @@ if (!Whoami::verifyInternalAuth()) profile_app_json(401, ['error' => 'bad_secret
    path for real too rather than trusting the dot count. */
 $fmConsentCfg = @include __DIR__ . '/../../../platform/config/featured-consent.php';
 $fmConsentOn  = is_array($fmConsentCfg) && !empty($fmConsentCfg['enabled']);
+/* PER-BOX OVERRIDE, gitignored (#200, 2026-08-22). This layer did not exist and
+   the file DID: dev2's serving checkout has carried featured-consent.local.php
+   saying enabled => true since 2026-08-20 with nothing reading it, so the box
+   was believed to be running the consent rule ON while running it OFF.
+   MERGED PER KEY, unlike u.php's boolean-only read, because this endpoint reads
+   BOTH: `enabled` decides whether the question is asked at all, and
+   `informed_copy_since` decides which ticks count as informed. Overriding one
+   without the other is the "flag reads as working, does nothing" pairing gate
+   39 §G1 exists to catch — an ON with a null cutover means nobody is informed,
+   so both keys must be able to travel together in the same override file. */
+$fmConsentLoc = @include __DIR__ . '/../../../platform/config/featured-consent.local.php';
+if (is_array($fmConsentLoc)) {
+    if (array_key_exists('enabled', $fmConsentLoc)) {
+        $fmConsentOn = ($fmConsentLoc['enabled'] === true);
+    }
+    if (array_key_exists('informed_copy_since', $fmConsentLoc)) {
+        if (!is_array($fmConsentCfg)) $fmConsentCfg = [];
+        $fmConsentCfg['informed_copy_since'] = $fmConsentLoc['informed_copy_since'];
+    }
+}
 foreach ([getenv('LG_FEATURED_CONSENT'), $_SERVER['LG_FEATURED_CONSENT'] ?? false] as $o) {
     if ($o !== false && $o !== '') $fmConsentOn = ($o === '1' || $o === 'true');
 }

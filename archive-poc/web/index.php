@@ -509,6 +509,16 @@ define('LG_CTA_PUBLIC',   is_array($_lg_overlay['cta_public']   ?? null) ? $_lg_
 define('LG_FEATURED_MEMBER', is_array($_lg_overlay['featured_member'] ?? null) ? $_lg_overlay['featured_member'] : ($_lg_defaults['featured_member'] ?? []));
 define('LG_HUB_TEASER', is_array($_lg_overlay['hub_teaser'] ?? null) ? $_lg_overlay['hub_teaser'] : ($_lg_defaults['hub_teaser'] ?? []));
 define('LG_MEMBER_GREETING', is_array($_lg_overlay['member_greeting'] ?? null) ? $_lg_overlay['member_greeting'] : ($_lg_defaults['member_greeting'] ?? []));
+// ⚠️ THE ONE CONSTANT HERE THAT DELIBERATELY IGNORES THE OVERLAY (#200).
+// Every line above reads config.json first and falls back to defaults.php. This
+// one reads defaults.php ONLY, because it IS the fallback — a value the overlay
+// could replace would be no protection at all against the overlay being wrong,
+// which is precisely the state live was found in (a `featured_member` map whose
+// name, bio and cta_href each described a different member). _config.php's
+// $allowed_keys does not carry this key either, so neither the dash nor the
+// front-end editor can write it: it changes by commit and by nothing else.
+define('LG_FEATURED_MEMBER_FALLBACK', is_array($_lg_defaults['featured_member_fallback'] ?? null)
+    ? $_lg_defaults['featured_member_fallback'] : []);
 unset($_lg_defaults, $_lg_overlay, $_lg_raw, $_lg_parsed);
 
 function thumb_url(array $it): string {
@@ -992,6 +1002,15 @@ $lg_fm = (defined('LG_FEATURED_MEMBER') && !empty(LG_FEATURED_MEMBER['enabled'])
 if ($lg_fm && !empty($lg_fm['member_uuid'])) {
     $lg_fm_cfg = @include __DIR__ . '/../../platform/config/featured-members.php';
     $lg_fm_on  = is_array($lg_fm_cfg) && !empty($lg_fm_cfg['enabled']);
+    // PER-BOX OVERRIDE, gitignored — the three-layer read every other flag in
+    // docs/FLAGS.md uses, and the one this flag was MISSING until #200
+    // (2026-08-22). The gap was live: keeper's stopgap for Ian was "place a
+    // featured-members.local.php on live to turn it off", and it would have
+    // changed nothing, on any of this flag's three readers.
+    $lg_fm_loc = @include __DIR__ . '/../../platform/config/featured-members.local.php';
+    if (is_array($lg_fm_loc) && array_key_exists('enabled', $lg_fm_loc)) {
+        $lg_fm_on = ($lg_fm_loc['enabled'] === true);
+    }
     foreach ([getenv('LG_FEATURED_MEMBERS'), $_SERVER['LG_FEATURED_MEMBERS'] ?? false] as $lg_fm_o) {
         if ($lg_fm_o !== false && $lg_fm_o !== '') $lg_fm_on = ($lg_fm_o === '1' || $lg_fm_o === 'true');
     }
@@ -1000,6 +1019,13 @@ if ($lg_fm && !empty($lg_fm['member_uuid'])) {
     // stale/malformed member_uuid must degrade to "no band", never a 500 for
     // every visitor to the front page. Found in review 2026-08-15: the
     // resolver runs with PDO::ERRMODE_EXCEPTION and nothing guarded its call.
+    // #200: PINNED — Ian placed this member by hand rather than picking them out
+    // of the self-serve pool. It rides beside member_uuid, is written on EVERY
+    // save (false included, same discipline and same reason as consent_ack: the
+    // webhook merges with `+`, so an omitted key PERSISTS and a stale true would
+    // silently reclassify a consented pick as one of his), and it is what lets
+    // the resolver drop the criteria Ian overruled.
+    $lg_fm_pinned = !empty($lg_fm['pinned']);
     if ($lg_fm_on) {
         try {
             // consent_ack: the admin featured this member from the dash while it
@@ -1017,15 +1043,107 @@ if ($lg_fm && !empty($lg_fm['member_uuid'])) {
             $lg_fm = lg_resolve_featured_member(
                 (string) $lg_fm['member_uuid'],
                 $is_member,
-                !empty($lg_fm['consent_ack'])
+                !empty($lg_fm['consent_ack']),
+                $lg_fm_pinned
             );
         } catch (\Throwable $e) {
-            error_log('[featured-member resolve] ' . $e->getMessage());
+            // ⚠️ THIS CATCH IS NOT HYPOTHETICAL AND IT COST A FRONT PAGE.
+            // The resolver reads profile_app under COLUMN-SCOPED grants. When
+            // tools/cut/featured-member-grants.sql has not been applied — as it
+            // had not been on live when this feature deployed there on
+            // 2026-08-21 — Postgres raises "permission denied for table users"
+            // and this line ate it, leaving no band and nothing anywhere to say
+            // why. It stays non-fatal by contract (a transient profile_app
+            // outage must not 500 the front page for everyone), but it no
+            // longer degrades to SILENCE: the fallback below draws, so a
+            // misconfigured box shows a card instead of a hole.
+            // The log line names the remedy, because the person reading it at
+            // 2am is not the person who wrote the grants file.
+            error_log('[featured-member resolve] ' . $e->getMessage()
+                . ' — if this is "permission denied for table users", apply'
+                . ' tools/cut/featured-member-grants.sql on this box (gate 39 §G2)');
             $lg_fm = null;
         }
     } else {
+        // Flag off with a member_uuid in config: the real-member path is not
+        // merely skipped, it is unreachable — no lg_resolve_featured_member call
+        // exists on this branch, so a stale uuid cannot leak a real card back on.
+        // What CHANGED in #200 is only what happens next: this used to be
+        // `$lg_fm = null`, i.e. no band, and that is how "turn the flag off"
+        // came to be handed to Ian as a way to restore the hand-placed band when
+        // measurement says it removes it (flag ON: 1 band, flag OFF: 0).
         $lg_fm = null;
     }
+}
+
+// ── THE EMPTY-POOL LAW (#200, Ian 2026-08-22) ───────────────────────────────
+// "with zero eligible members and zero picks, the band must render the old
+// hand-placed content or a designed fallback — never nothing."
+//
+// Every way the band could vanish funnels through here: nobody selected, a pick
+// that no longer resolves (opted out, went private, no photo, no public role), a
+// missing DB grant, a transient profile_app outage, or the flag simply off with
+// a stale uuid left in config.json. All of them now draw the fallback.
+//
+// The ONE remaining way to have no band is deliberate and admin-driven:
+// `featured_member.enabled = false`, which the dash's own "Hide the band
+// entirely" control sets. That is a person choosing silence, not the page
+// failing to speak, and the two must not look alike.
+if ($lg_fm === null && (defined('LG_FEATURED_MEMBER') && !empty(LG_FEATURED_MEMBER['enabled']))) {
+    $lg_fm = lg_fm_fallback_card(LG_FEATURED_MEMBER_FALLBACK);
+}
+
+/**
+ * The fallback card, as data — PURE, so gate 94 can lift it out by name and run
+ * it, the same way gate 39 §G3 lifts lg_fm_card_role(). No database, no config
+ * read, no globals: everything it decides, it decides from its argument.
+ *
+ * `kind` picks the shape (defaults.php carries both and Ian chooses between
+ * them from the drawn mock):
+ *   'member'  a real hand-placed person — the card that shipped from June
+ *   'invite'  a designed empty state that asks members to put themselves forward
+ *
+ * Returns null only if the fallback itself is switched off or unusable, which
+ * is the one case where drawing nothing is still correct — a half-built card is
+ * worse than no card, and this function is the last thing standing between the
+ * page and an <img src="">.
+ */
+function lg_fm_fallback_card(array $fb): ?array {
+    if (empty($fb['enabled'])) return null;
+
+    if (($fb['kind'] ?? 'member') === 'invite') {
+        $inv = is_array($fb['invite'] ?? null) ? $fb['invite'] : [];
+        // No avatar by design: the invite card draws a glyph, not a face, and
+        // the template's own !empty() guard is what makes that renderable.
+        return [
+            'enabled'   => true,
+            'kind'      => 'invite',
+            'avatar'    => '',
+            'name'      => (string) ($inv['name'] ?? 'This spot is open'),
+            'role'      => (string) ($inv['role'] ?? ''),
+            'where'     => '',
+            'bio'       => (string) ($inv['bio'] ?? ''),
+            'cta_href'  => (string) ($inv['cta_href'] ?? ''),
+            'cta_label' => (string) ($inv['cta_label'] ?? ''),
+        ];
+    }
+
+    // 'member': a hand-placed card. It must still clear the bar the template
+    // needs — a name and something to show — or we are back to publishing a
+    // blank line, which is the defect this whole law exists to end.
+    $name = trim((string) ($fb['name'] ?? ''));
+    if ($name === '') return null;
+    return [
+        'enabled'   => true,
+        'kind'      => 'member',
+        'avatar'    => (string) ($fb['avatar'] ?? ''),
+        'name'      => $name,
+        'role'      => (string) ($fb['role'] ?? ''),
+        'where'     => (string) ($fb['where'] ?? ''),
+        'bio'       => (string) ($fb['bio'] ?? ''),
+        'cta_href'  => (string) ($fb['cta_href'] ?? ''),
+        'cta_label' => (string) ($fb['cta_label'] ?? ''),
+    ];
 }
 
 /**
@@ -1056,6 +1174,9 @@ if ($lg_fm && !empty($lg_fm['member_uuid'])) {
  *                                MUST carry a UTC offset — see below.
  * @param ?string $optedInAt      users.featured_opt_in_at, stamped on the tick.
  * @param bool    $consentAck     the admin featured them knowingly (config.json).
+ * @param bool    $pinned         #200 — Ian placed this member by hand. Defaults
+ *                                false, so every existing caller and gate 39
+ *                                §G3's whole truth table are unchanged.
  */
 function lg_fm_card_role(
     string $glance,
@@ -1065,9 +1186,34 @@ function lg_fm_card_role(
     bool $consentOn,
     ?string $informedSince,
     ?string $optedInAt,
-    bool $consentAck
+    bool $consentAck,
+    bool $pinned = false
 ): string {
     $glance = trim($glance);
+
+    // ── #200: A PINNED PICK HAS GIVEN NO CONSENT, SO IT BORROWS NONE ────────
+    // Ian's ruling is that a member he places appears "even if they didn't meet
+    // the criteria". The criteria that ruling overrides are the platform's own
+    // bars — the tick, and the card-ready guard. It does NOT reach the member's
+    // own choices about their own text, and this is the line where that
+    // distinction is enforced rather than merely stated.
+    //
+    // Standing ruling consent-A (#107) reads "the tick is consent": every route
+    // through $mayRepublish below is a claim about a TICK — that it was made
+    // under copy describing this republication, or that an admin knowingly
+    // accepted an older one. A pinned member has not ticked at all, so there is
+    // no consent to be informed or acknowledged, and inferring one from the act
+    // of pinning would make "Ian features them knowingly" mean "Ian consents on
+    // their behalf" — which is the opposite of what that clause says.
+    //
+    // So a pinned card prints only what the profile already publishes: their
+    // glance if their header block is public, else business_name, else nothing.
+    // Ian asks them personally, exactly as consent-A says; the dash says so at
+    // the point he clicks.
+    if ($pinned) {
+        $consentOn = false;
+        $consentAck = false;
+    }
 
     // ── May this card repeat a one-liner the profile itself keeps back? ─────
     // Only ever with the flag ON, and then by ONE of two routes:
@@ -1121,7 +1267,7 @@ function lg_fm_card_role(
  * gone Private, untuck their consent, or the row is simply gone — the caller
  * treats that exactly like "nothing selected" (no band), never a broken card.
  */
-function lg_resolve_featured_member(string $uuid, bool $isMember, bool $consentAck = false): ?array {
+function lg_resolve_featured_member(string $uuid, bool $isMember, bool $consentAck = false, bool $pinned = false): ?array {
     static $pdo = null;
     if ($pdo === null) {
         $pdo = new PDO('pgsql:host=/var/run/postgresql;dbname=profile_app', null, null);
@@ -1139,7 +1285,23 @@ function lg_resolve_featured_member(string $uuid, bool $isMember, bool $consentA
                 featured_opt_in_at,
                 (profile_layout IS NULL OR profile_layout @> \'["location"]\'::jsonb) AS loc_on_profile
            FROM users
-          WHERE uuid = :u AND featured_opt_in = true AND profile_visibility = \'public\''
+          WHERE uuid = :u AND profile_visibility = \'public\''
+        // ── #200: THE TICK IS DROPPED FOR A PINNED PICK, THE PRIVACY IS NOT ──
+        // Ian, 2026-08-22: "The override I wanted would still have them on the
+        // frontpage even if they didn't meet the criteria." featured_opt_in is
+        // the criterion; pinning is the override, so it comes out of the WHERE.
+        //
+        // profile_visibility STAYS, for a pinned pick as much as any other, and
+        // that is a ruling not an oversight (keeper, 2026-08-22, upholding this
+        // lane's recommendation): a member who has set their whole profile to
+        // Private has said "I am not public", which is their own switch rather
+        // than one of the platform's bars, and it outranks admin pinning under
+        // the same consent-A principle. Publishing their face on the open web
+        // pointing at a page the public cannot open would be the one thing
+        // pinning must not do. Exactly 1 member on each box today; the dash
+        // lists them marked "cannot be pinned", so the refusal is legible
+        // rather than a name that silently does not appear.
+        . ($pinned ? '' : ' AND featured_opt_in = true')
     );
     $st->execute([':u' => $uuid]);
     $u = $st->fetch();
@@ -1181,6 +1343,24 @@ function lg_resolve_featured_member(string $uuid, bool $isMember, bool $consentA
     // tick — the two things that separate informed consent from assumed.
     $lg_fm_ccfg = @include __DIR__ . '/../../platform/config/featured-consent.php';
     $lg_fm_con  = is_array($lg_fm_ccfg) && !empty($lg_fm_ccfg['enabled']);
+    // PER-BOX OVERRIDE, gitignored, merged PER KEY. Both keys are read below —
+    // `enabled` here and `informed_copy_since` in the lg_fm_card_role() call —
+    // so both must be overridable together, or a box could be switched ON with
+    // a null cutover, which means "nobody is informed" (gate 39 §G1).
+    // ⚠️ dev2 has carried this .local.php since 2026-08-20 with nothing reading
+    // it, so the box has been believed ON and has been OFF. Placing the file is
+    // therefore a REAL behaviour change on dev2 from this commit forward, and
+    // wants Ian's eyes before it counts as "on" anywhere.
+    $lg_fm_cloc = @include __DIR__ . '/../../platform/config/featured-consent.local.php';
+    if (is_array($lg_fm_cloc)) {
+        if (array_key_exists('enabled', $lg_fm_cloc)) {
+            $lg_fm_con = ($lg_fm_cloc['enabled'] === true);
+        }
+        if (array_key_exists('informed_copy_since', $lg_fm_cloc)) {
+            if (!is_array($lg_fm_ccfg)) $lg_fm_ccfg = [];
+            $lg_fm_ccfg['informed_copy_since'] = $lg_fm_cloc['informed_copy_since'];
+        }
+    }
     foreach ([getenv('LG_FEATURED_CONSENT'), $_SERVER['LG_FEATURED_CONSENT'] ?? false] as $lg_fm_co) {
         if ($lg_fm_co !== false && $lg_fm_co !== '') $lg_fm_con = ($lg_fm_co === '1' || $lg_fm_co === 'true');
     }
@@ -1192,7 +1372,8 @@ function lg_resolve_featured_member(string $uuid, bool $isMember, bool $consentA
         $lg_fm_con,
         is_array($lg_fm_ccfg) ? ($lg_fm_ccfg['informed_copy_since'] ?? null) : null,
         $u['featured_opt_in_at'] ?? null,
-        $consentAck
+        $consentAck,
+        $pinned
     );
 
     // Location: members only (pre-existing rule, unchanged — the template's
@@ -1246,7 +1427,26 @@ function lg_resolve_featured_member(string $uuid, bool $isMember, bool $consentA
     // Location is deliberately NOT required here — it is optional and already
     // hides itself; most real cards will have none (see docs/FEATURED-MEMBERS-PLAN.md
     // §3b, the measured "ordinary case"), and that is a fine card, not a broken one.
-    if (trim((string) $u['avatar_url']) === '' || $role === '') return null;
+    // ⚠️ THE CARD-READY GUARD, AND THE ONE PLACE #200 CHANGES ITS ANSWER.
+    // For a CONSENTED pick this is unchanged and must be: the pool endpoint
+    // reproduces this exact rule to predict "will the front page draw?" for the
+    // dash, and gate 39 §F3 fails if the two drift.
+    //
+    // For a PINNED pick it does not apply. The guard exists because the template
+    // used to render avatar and role UNCONDITIONALLY, so an empty either shipped
+    // an <img src=""> and a blank line to the open web. That is now fixed at the
+    // template (both are behind !empty(), the way where/bio already were), so
+    // the guard is no longer what stands between us and a broken card — and
+    // returning null here for a pinned member is the exact behaviour Ian
+    // overruled. MEASURED: it is what removes his own current pick, whose
+    // header is members-only, whose one-liner is empty, and whose business_name
+    // is a tail of his display name, so $role resolves to ''.
+    if (!$pinned && (trim((string) $u['avatar_url']) === '' || $role === '')) return null;
+    // A pinned pick with NEITHER a photo nor anything public to say would still
+    // be a card with only a name on it. That is thin, but it is a deliberate
+    // thin card rather than a hole, and it is what "regardless of the criteria"
+    // asks for — so it draws, and the dash warns before the click, which is
+    // where a person can still change their mind.
 
     return [
         'enabled'   => true,
@@ -1422,12 +1622,33 @@ if ($lg_ht_enabled) {
       endif; ?>
 <?php if ($lg_fm && ($row_id === 'video-promo-members' || $row_id === 'video-promo-public')): ?>
       <section class="row row--featured-member" data-row-id="featured-member">
-        <div class="lg-fm">
+        <div class="lg-fm<?= ($lg_fm['kind'] ?? '') === 'invite' ? ' lg-fm--empty' : '' ?>">
           <span class="lg-fm__badge">Featured member</span>
-          <span class="lg-fm__avi"><img src="<?= h((string)($lg_fm['avatar'] ?? '')) ?>" alt="" width="104" height="104" loading="lazy"></span>
+<?php /* ⚠️ BOTH OF THESE USED TO RENDER UNCONDITIONALLY, and that is the whole
+         reason lg_resolve_featured_member kept a guard returning NULL — no band
+         at all — rather than let a card ship an <img src=""> and a blank line to
+         every visitor. #200 fixes the cause instead of living with the
+         consequence: guard them here, the way where/bio already were, and the
+         resolver stops having to choose between a broken card and no card.
+
+         ⚠️ THE CONDITIONALS SIT AT COLUMN 0 ON PURPOSE, and it is not a style
+         choice. PHP eats the ONE newline following a closing `?>`, so a tag at
+         column 0 contributes nothing at all to the output while the guarded line
+         below keeps its original indentation — which is what makes a card that
+         HAS both fields render byte-identically to before this change.
+         Indenting these to match the markup around them is what breaks it: it
+         was written that way first, and diffing the two renders showed the
+         card's whitespace moving on every line. Measured, not assumed. */ ?>
+<?php if (!empty($lg_fm['avatar'])): ?>
+          <span class="lg-fm__avi"><img src="<?= h((string)$lg_fm['avatar']) ?>" alt="" width="104" height="104" loading="lazy"></span>
+<?php elseif (($lg_fm['kind'] ?? '') === 'invite'): ?>
+          <span class="lg-fm__avi" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.4 5.2 5.6.7-4.1 3.9 1.1 5.6L12 15.7 6.9 18.4 8 12.8 3.9 8.9l5.6-.7z"/></svg></span>
+<?php endif; ?>
           <div class="lg-fm__body">
             <h2 class="lg-fm__name"><?= h((string)($lg_fm['name'] ?? '')) ?></h2>
-            <div class="lg-fm__role"><?= h((string)($lg_fm['role'] ?? '')) ?></div>
+<?php if (!empty($lg_fm['role'])): ?>
+            <div class="lg-fm__role"><?= h((string)$lg_fm['role']) ?></div>
+<?php endif; ?>
             <?php /* Location is members-visibility profile data (per-user privacy
                      ruling) — never render it to the logged-out page. */ ?>
             <?php if ($is_member && !empty($lg_fm['where'])): ?><div class="lg-fm__where"><?= h((string)$lg_fm['where']) ?></div><?php endif; ?>

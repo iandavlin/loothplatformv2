@@ -50,6 +50,55 @@ return [
         'cta_href'  => '/hub/?author=Dan%20Erlewine&type=video',
     ],
 
+    // ── THE EMPTY-POOL FALLBACK (#200, Ian 2026-08-22) ──────────────────────
+    // "with zero eligible members and zero picks, the band must render the old
+    // hand-placed content or a designed fallback — never nothing."
+    //
+    // ⚠️ A SEPARATE TOP-LEVEL KEY, AND THAT IS THE WHOLE POINT. config.json's
+    // overlay replaces `featured_member` WHOLESALE, and _config.php's
+    // $allowed_keys does not carry this one — so no dash write, no front-end
+    // editor save and no stale config can ever clobber it. Putting the fallback
+    // inside `featured_member` would have made it exactly as loseable as the
+    // thing it exists to replace.
+    //
+    // MEASURED, which is why it is not merely tidy: live's `featured_member`
+    // had already drifted into a Frankenstein of leftovers — display name
+    // "Jonathan Scott Chisels & Picks" beside a bio about Beau Hannam and a
+    // cta_href for a third member — because the dash writes name/role/uuid and
+    // merges onto whatever hand-typed keys were there before. Falling back to
+    // THAT would have published a card describing nobody.
+    //
+    // `kind` selects the shape index.php draws:
+    //   'member'  a real hand-placed person, the card that shipped from June
+    //   'invite'  a designed empty state that asks members to put themselves
+    //             forward — the only surface that ever could, since 8 members
+    //             of 1,934 have ticked the box
+    // Ian has both drawn side by side at /footer-mockups/200-featured-override/
+    // and picks; until he does, 'member' ships because it is the status quo and
+    // changes nothing he has not already seen for three months.
+    'featured_member_fallback' => [
+        'enabled'   => true,
+        'kind'      => 'member',
+        'name'      => 'Dan Erlewine',
+        'role'      => 'Master Luthier & Repair Authority',
+        'where'     => 'Athens, Ohio',
+        'bio'       => 'Sixty years on the bench. Author of the Guitar Player Repair Guide - now sharing the craft, hands-on, with the Looth Group.',
+        'avatar'    => 'https://i.ytimg.com/vi/2IBxue3zPxE/hqdefault.jpg',
+        'cta_label' => "See Dan's videos",
+        'cta_href'  => '/hub/?author=Dan%20Erlewine&type=video',
+
+        // The 'invite' copy, carried here rather than hardcoded in the template
+        // so switching kinds is a one-line data change and neither shape can
+        // rot unrendered — gate 94 §A draws BOTH.
+        'invite' => [
+            'name'      => 'This spot is open',
+            'role'      => 'Every week we put one member here',
+            'bio'       => 'Fancy it? Tick “include me as a possible featured member” on your profile and you are in the running. Your photo, what you do, and a link to your bench.',
+            'cta_label' => 'Put me forward',
+            'cta_href'  => '/u/',
+        ],
+    ],
+
     // Public front-page Hub teaser ("What members are talking about") —
     // Bento/Classic deck section, Buck 2026-06-11. Snapshot of real public-tier
     // posts; refresh via the config.json overlay (or wire live data later).

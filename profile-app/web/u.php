@@ -174,6 +174,13 @@ if ($isOwner || $adminEditing) {
 $lg_fmOptIn = false; $lg_fmOptInAt = null; $lg_fmCompleteness = null;
 $lg_fmCfg = @include __DIR__ . '/../../platform/config/featured-members.php';
 $lg_fmOn  = is_array($lg_fmCfg) && !empty($lg_fmCfg['enabled']);
+// PER-BOX OVERRIDE, gitignored — see me-featured.php's note. #200: this layer
+// did not exist on any of this flag's three readers, so the stopgap handed to
+// Ian on 2026-08-22 (place a featured-members.local.php on live) was inert.
+$lg_fmLoc = @include __DIR__ . '/../../platform/config/featured-members.local.php';
+if (is_array($lg_fmLoc) && array_key_exists('enabled', $lg_fmLoc)) {
+    $lg_fmOn = ($lg_fmLoc['enabled'] === true);
+}
 foreach ([getenv('LG_FEATURED_MEMBERS'), $_SERVER['LG_FEATURED_MEMBERS'] ?? false] as $lg_fmO) {
     if ($lg_fmO !== false && $lg_fmO !== '') $lg_fmOn = ($lg_fmO === '1' || $lg_fmO === 'true');
 }
@@ -187,6 +194,20 @@ foreach ([getenv('LG_FEATURED_MEMBERS'), $_SERVER['LG_FEATURED_MEMBERS'] ?? fals
 // correctly treated as an old-copy ticker by everything downstream.
 $lg_fmConsentCfg = @include __DIR__ . '/../../platform/config/featured-consent.php';
 $lg_fmConsentOn  = is_array($lg_fmConsentCfg) && !empty($lg_fmConsentCfg['enabled']);
+// PER-BOX OVERRIDE, gitignored. ⚠️ THIS ONE HAS BEEN PLACED AND INERT SINCE
+// 2026-08-20: platform/config/featured-consent.local.php exists in dev2's
+// serving checkout saying enabled => true, and nothing read it, so dev2 has
+// been believed to be running the consent rule ON and has been running it OFF.
+// ONLY `enabled` is merged here, deliberately. This page uses the consent flag
+// for one thing — whether the tickbox copy says the one-liner may be
+// republished — and never reads informed_copy_since, which decides whether a
+// PAST tick counts. Merging a key nothing on this page reads would be dead code
+// wearing the appearance of a rule; index.php and internal-featured-pool.php
+// are where that key is actually consulted, and both merge it.
+$lg_fmConsentLoc = @include __DIR__ . '/../../platform/config/featured-consent.local.php';
+if (is_array($lg_fmConsentLoc) && array_key_exists('enabled', $lg_fmConsentLoc)) {
+    $lg_fmConsentOn = ($lg_fmConsentLoc['enabled'] === true);
+}
 foreach ([getenv('LG_FEATURED_CONSENT'), $_SERVER['LG_FEATURED_CONSENT'] ?? false] as $lg_fmCO) {
     if ($lg_fmCO !== false && $lg_fmCO !== '') $lg_fmConsentOn = ($lg_fmCO === '1' || $lg_fmCO === 'true');
 }

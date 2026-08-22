@@ -3295,6 +3295,24 @@ body.view-discover .lg-fm__cta {
 }
 body.view-discover .lg-fm__cta:hover { background: var(--fp-cta-hover-bg, #3a4a3a); }
 
+/* ── #200: the empty-state ("invite") shape of the same band. Ian's law is that
+   the band NEVER renders as absent, so when nobody is picked it draws this
+   instead of a hole. Same shell, same weight in the page, no new visual
+   language — only the avatar slot changes, from a face to a glyph.
+   Every colour here is a TOKEN, so the dark counterpart above re-points it with
+   no second rule: a token with no dark value silently stays light, which is the
+   class of defect #189 found three of in one stylesheet. ── */
+body.view-discover .lg-fm--empty .lg-fm__avi {
+  display: grid; place-items: center;
+  border: 2px dashed var(--lg-sage-3, #dde3cd);
+  background: var(--lg-sage-tint, #f0f2e9);
+  box-shadow: none;
+}
+body.view-discover .lg-fm--empty .lg-fm__avi svg {
+  width: 46px; height: 46px; color: var(--lg-sage-d, #6b7751); opacity: .8;
+}
+body.view-discover .lg-fm--empty .lg-fm__name { font-size: 23px; }
+
 /* ── Bento pair: member-map tile + events ── */
 body.view-discover .lg-bento {
   display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 18px; align-items: stretch;

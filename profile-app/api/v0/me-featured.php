@@ -34,6 +34,24 @@ function me_featured_flag_on(): bool
 {
     $cfg = @include __DIR__ . '/../../../platform/config/featured-members.php';
     $on  = is_array($cfg) && !empty($cfg['enabled']);
+    // PER-BOX OVERRIDE, gitignored (platform/config/*.local.php), the same
+    // three-layer read every other flag in the register uses. #200, 2026-08-22:
+    // this layer DID NOT EXIST for featured-members, on any of its three
+    // readers, and the gap was not theoretical — keeper handed Ian a live
+    // stopgap that consisted of placing this exact file, and it would have done
+    // NOTHING. (dev2's featured-consent.local.php, placed 2026-08-20, had
+    // likewise been inert ever since: the box was believed to be running the
+    // consent rule ON and was running it OFF.) A flag whose documented override
+    // mechanism is not wired is worse than one with no override at all, because
+    // the register says it has one.
+    //
+    // Sits BEFORE the env loop so a gate forcing a state still wins over the
+    // box. Only an explicit boolean true flips it — a malformed file leaves the
+    // tracked value standing rather than being coerced into ON.
+    $loc = @include __DIR__ . '/../../../platform/config/featured-members.local.php';
+    if (is_array($loc) && array_key_exists('enabled', $loc)) {
+        $on = ($loc['enabled'] === true);
+    }
     foreach ([getenv('LG_FEATURED_MEMBERS'), $_SERVER['LG_FEATURED_MEMBERS'] ?? false] as $o) {
         if ($o !== false && $o !== '') $on = ($o === '1' || $o === 'true');
     }
