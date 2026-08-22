@@ -1318,6 +1318,9 @@ double-pay guard's app half #150, webhook receipts #192, catalogue importer)
 exists only on dev2. Cutover is its own go-live blocker issue; until it lands,
 any "deployed to live" claim about billing-side code is false by construction.
 Found by lane 194's plan measurement; confirmed via live-ro.
+**#197 measured it in full and built the cutover — see
+`docs/LIVE-BILLING-CUTOVER-2026-08-22.md` and
+`tools/infra/live-billing-cutover.sh`, and the section at the end of this file.**
 
 ## The Patreon-linked email is shown on every double-pay/switch surface (Ian 8/22)
 Verbatim: *"its critical to add to any double pay or switch surface the email
@@ -1327,3 +1330,56 @@ different address is the #149 lost-membership class. Keeper's privacy rail:
 the Patreon email is revealed ONLY to the authenticated member on their own
 signed-in surface — never in an anonymous API refusal. Applied by #193 (guard
 surfaces) and #196 (switch page/menu).
+
+## The billing cutover, measured (#197, 2026-08-22)
+
+Read-only on live via `live-ro`. The swap itself is
+`docs/LIVE-BILLING-CUTOVER-2026-08-22.md`; these are the facts behind it.
+
+- **The old app IS serving today.** `/billing/health`, `/billing/v1/products` and
+  `/billing/v1/config` all answer **200 JSON** on loopback. The `/billing/` alias
+  bug from `LIVE-BILLING-PREFLIGHT-2026-08-16.md` is **fixed** — the vhost line
+  ends in a slash. "Stale" described the CODE, never the availability.
+- **Live's standalone repo carried an UNCOMMITTED edit** —
+  `CheckoutController.php`, retiring personal one-time memberships with a 400.
+  Live behaviour existing in exactly one place, which a naive `mv` destroys
+  silently. **The monorepo carries the same block**, so nothing is lost — but the
+  general lesson stands: *diff the working tree, not the last commit, before
+  retiring a box-local checkout.*
+- **`vendor/` is byte-identical** old vs monorepo (890 files, same manifest hash)
+  and `composer.lock` matches, so the cutover **copies** it. No `composer install`
+  on live, no packagist egress in a change window.
+- **`routes.php` is byte-identical** — the swap changes no route surface.
+- Only `.env` and `.env.example` exist solely in the old tree. Everything else the
+  monorepo either matches or is ahead on.
+
+### ⚠️ The swap ARMS #181, and today that means 503, not 403
+
+The new tree runs `CheckoutAudienceGuard` as the **first** gate on
+`POST /v1/checkout`; the old tree has no gate. Enumerating every `lgms%` option on
+live (not querying a guessed list): **only `lgms_stripe_pages_live = 0` is set** —
+`lgms_shared_secret` is **absent**. So the probe is refused by WordPress, the
+probe maps non-200 to `null`, and `CheckoutAudienceGuard` maps `null` to **503
+STATUS_UNKNOWN**.
+
+Post-swap live checkout therefore refuses **everyone** with the UNKNOWN sentence.
+Fail-safe-closed, and not member-visible (`pages_live = 0` keeps the purchase
+pages administrator-only). Reaching the 403 state needs `lgms_shared_secret` set
+WP-side to match `.env`, then the tester list.
+
+**Assert the SENTENCE, never "it refused."** 503-unknown and 403-tester are
+different findings that both look like "checkout refuses ✓".
+
+### The two 401s are not the same 401
+
+Anonymous, over loopback, in the `lg-member-sync/v1` namespace:
+
+| Route | Code | Means |
+|---|---|---|
+| `sync-customer` | `bb_rest_authorization_required` | BuddyBoss's blanket wall |
+| `checkout-audience` | `rest_forbidden` | **past the wall**, refused by its own token check — healthy |
+
+`checkout-audience`, `patreon-standing` and `auth`/`gift-auth` each register a
+narrow exemption; **`sync-customer` does not**, and live's public-content list
+still holds only `looth/v1`, `looth-internal/v1` and a wc URL. Reading one 401 as
+proof of anything is the trap — read the CODE.
