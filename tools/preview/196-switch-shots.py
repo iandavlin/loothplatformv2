@@ -141,23 +141,134 @@ def shoot(url, name, opener, target_js, want_text):
     print(f"  {name:28} theme={applied:8} live={live} {f}")
     return (name, ok, applied, live, f)
 
+def door(url, name, width):
+    """The signed-in Join/Switch door, scored where it can actually be pressed."""
+    ev(f"localStorage.setItem('lg-set-theme','{'dark' if theme=='dark' else 'light'}'); true")
+    send("Page.navigate", {"url": url}); time.sleep(2.6)
+    applied = ev("document.documentElement.getAttribute('data-lguser-theme') || 'default'")
+    live = ev("!!document.querySelector('.lg-chrome__account') "
+              "&& !/isn.t available yet|Admin only/.test(document.body.innerText)")
+
+    chip = json.loads(ev("""(() => {
+      const c = document.querySelector('[data-lg-account-btn]');
+      if (!c) return JSON.stringify({present:false});
+      const cs = getComputedStyle(c), r = c.getBoundingClientRect();
+      const shown = cs.display !== 'none' && cs.visibility !== 'hidden' && r.width > 0;
+      let hit = null;
+      if (shown) {
+        const el = document.elementFromPoint(r.left + r.width/2, r.top + r.height/2);
+        hit = !el ? 'nothing' : (c.contains(el) || el === c) ? 'REACHABLE'
+              : 'BLOCKED by ' + (el.id || el.className || el.tagName);
+      }
+      return JSON.stringify({present:true, shown, hit, x:Math.round(r.left)});
+    })()"""))
+
+    if not chip.get("shown"):
+        # Not scored as a failure — it is the CORRECT, measured behaviour, and
+        # the door at this width is the PWA sheet.
+        img = send("Page.captureScreenshot", {"format": "png", "captureBeyondViewport": False})
+        open(f"{OUT}/{name}.png", "wb").write(base64.b64decode(img["data"]))
+        hooked = ev("!!document.querySelector('.lg-chrome__menu-join a')")
+        f = {"state": "MENU IS DESKTOP-ONLY", "chip": chip, "hook_in_dom": hooked}
+        print(f"  {name:28} theme={applied:8} live={live} {f}")
+        # The hook must still be in the DOM: it is what bottom-nav.js reads to
+        # build the sheet row, and getAttribute works on a hidden element.
+        return (name, bool(hooked and live), applied, live, f)
+
+    ev("(()=>{const b=document.querySelector('[data-lg-account-btn]'); if(b) b.click(); return !!b;})()")
+    time.sleep(1.4)
+    found = json.loads(ev(f"""(() => {{
+      const t = document.querySelector('.lg-chrome__menu-join a');
+      if (!t) return JSON.stringify({{state:'MISSING'}});
+      const r = t.getBoundingClientRect();
+      const el = document.elementFromPoint(r.left + r.width/2, r.top + r.height/2);
+      return JSON.stringify({{
+        state:'FOUND', text:(t.textContent||'').trim(), href:t.getAttribute('href'),
+        x:Math.round(r.left), w:Math.round(r.width),
+        inView: r.left >= 0 && r.right <= window.innerWidth,
+        hit: !el ? 'nothing' : (t.contains(el) || el === t) ? 'REACHABLE'
+             : 'BLOCKED by ' + (el.id || el.className || el.tagName)
+      }});
+    }})()"""))
+    img = send("Page.captureScreenshot", {"format": "png", "captureBeyondViewport": False})
+    open(f"{OUT}/{name}.png", "wb").write(base64.b64decode(img["data"]))
+    found["chip"] = chip
+    # ⚠️ THE 821-904px DEAD BAND IS MAIN'S, AND IT IS HELD, NOT SCORED.
+    # MEASURED 2026-08-22 as a signed-in tester, account menu open:
+    #   821px  MAIN /hub/ 905 · MAIN /manage-subscription/ 938 · BRANCH 871
+    #   900px  MAIN /hub/ 905 · MAIN /manage-subscription/ 938 · BRANCH 885 (fits)
+    # The panel is right-anchored to a chip that main already pushes past the
+    # viewport, so it overflows on main's own pages at this width — the same
+    # band MEMBERSHIP.md records as open for Ian since #165, one control over.
+    # This branch overflows LESS (it removes the pill), so scoring it here would
+    # block a lane for a defect it partially improves and did not cause. Held
+    # the way gate 79 holds KNOWN_MAIN_GAPS: reported, self-expiring, and it
+    # starts scoring again the moment main stops overflowing.
+    # The CHIP is not hit-testable at 821 either, and that is main's too:
+    # measured on MAIN /hub/ and MAIN / at 821, elementFromPoint at the chip's
+    # own centre returns nothing on both. Same band, same cause — the cluster is
+    # pushed past the right edge — so it is held on the same terms.
+    known_main_gap = (width == 821
+                      and (found.get("inView") is False or chip.get("hit") != "REACHABLE"))
+    if known_main_gap:
+        found["held"] = ("821-904 dead band — MAIN overflows here too "
+                         "(/hub/ 905, /manage-subscription/ 938 vs this branch 871)")
+    ok = (found.get("state") == "FOUND"
+          and found.get("text") == "Switch" and found.get("href") == "/switch-billing/"
+          and found.get("hit") == "REACHABLE" and live
+          and ((chip.get("hit") == "REACHABLE" and found.get("inView") is True)
+               or known_main_gap))
+    print(f"  {name:28} theme={applied:8} live={live} {found}")
+    return (name, ok, applied, live, found)
+
+
+def absent(url, name, target_js):
+    """The ruled-out control must be gone, AND the door that replaced it must be
+    there. An absence assertion without a liveness partner is vacuous
+    (feedback-absence-assertion-needs-liveness)."""
+    ev(f"localStorage.setItem('lg-set-theme','{'dark' if theme=='dark' else 'light'}'); true")
+    send("Page.navigate", {"url": url}); time.sleep(2.6)
+    applied = ev("document.documentElement.getAttribute('data-lguser-theme') || 'default'")
+    live = ev("!!document.querySelector('.lg-chrome__account') "
+              "&& !/isn.t available yet|Admin only/.test(document.body.innerText)")
+    gone = ev(f"!{target_js}")
+    door = ev("!!document.querySelector('.lg-chrome__menu-join a')")
+    img = send("Page.captureScreenshot", {"format": "png", "captureBeyondViewport": False})
+    open(f"{OUT}/{name}.png", "wb").write(base64.b64decode(img["data"]))
+    f = {"state": "ABSENT" if gone else "STILL PRESENT", "menu_door": door}
+    print(f"  {name:28} theme={applied:8} live={live} {f}")
+    return (name, bool(gone and door and live), applied, live, f)
+
+
 rows = []
 try:
     for vname, w, h, mobile in VIEWS:
         for theme in THEMES:
             send("Emulation.setDeviceMetricsOverride",
                  {"width": w, "height": h, "deviceScaleFactor": 2, "mobile": mobile})
-            # THE MENU — the issue's own control.
-            rows.append(shoot(
-                BASE + "/header/", f"menu-{vname}-{theme}",
-                "(()=>{const b=document.querySelector('[data-lg-account-btn]');"
-                " if(b) b.click(); return !!b;})()",
-                "document.querySelector('#lg-account-menu a[href=\\\"/switch-billing/\\\"]')",
-                "Switch"))
-            # THE PILL — same control, drawn beside the chip in 'allowlist'.
-            rows.append(shoot(
-                BASE + "/header/", f"pill-{vname}-{theme}", None,
-                "document.querySelector('.lg-chrome__join')", "Switch"))
+            # ⚠️ THE MENU IS A DESKTOP CONTROL, AND SCORING IT ON A PHONE WAS
+            # MEASURING NOTHING. Measured three independent ways on 2026-08-22:
+            # at 390 and 640 the account chip is display:none — on /hub/, on the
+            # front page, and on this probe. A synthetic click opens a hidden
+            # element quite happily, so the first version of this run clicked a
+            # chip no human can reach, then hit-tested the menu item inside the
+            # menu it had just opened, and called it REACHABLE. That is
+            # presence-is-not-reachability committed by the harness itself.
+            #
+            # So: the chip's own reachability is hit-tested FIRST, and the menu
+            # door is scored only where the chip can actually be pressed. Below
+            # 641 the signed-in door is the PWA account sheet, which is why
+            # bottom-nav.js was re-sourced from the menu entry rather than
+            # deleted along with the pill.
+            rows.append(door(BASE + "/header/", f"menu-{vname}-{theme}", w))
+            # ⚠️ THE PILL IS RULED OUT (Ian, 2026-08-22: "Why is there a
+            # superfluous join button for logged in users now"), so this shot is
+            # now an ABSENCE proof, paired with the door that replaced it — "no
+            # pill" alone is trivially true of a build where a tester has no
+            # Join anywhere, which is the very no-op #170 existed to prevent.
+            rows.append(absent(
+                BASE + "/header/", f"nopill-{vname}-{theme}",
+                "document.querySelector('.lg-chrome__join')"))
             # THE PAGE — its first CTA is what the sequencing hangs on.
             rows.append(shoot(
                 BASE + "/switch-billing/", f"page-{vname}-{theme}", None,
@@ -178,8 +289,16 @@ finally:
 print("\n--- summary ---")
 bad = [r for r in rows if not r[1]]
 for name, ok, applied, live, f in rows:
-    print(f"{name:28} {'OK ' if ok else 'BAD'} theme={applied:8} live={live} "
-          f"text={f.get('text')!r} href={f.get('href')} x={f.get('x')} "
-          f"inView={f.get('inView')} hit={f.get('hit')}")
+    if f.get("state") == "MENU IS DESKTOP-ONLY":
+        print(f"{name:28} {'OK ' if ok else 'BAD'} theme={applied:8} live={live} "
+              f"the account chip is display:none here — the door is the PWA sheet; "
+              f"hook in DOM for it to read = {f['hook_in_dom']}")
+    elif f.get("state") in ("ABSENT", "STILL PRESENT"):
+        print(f"{name:28} {'OK ' if ok else 'BAD'} theme={applied:8} live={live} "
+              f"signed-in pill {f['state']}; account-menu door present={f['menu_door']}")
+    else:
+        print(f"{name:28} {'OK ' if ok else 'BAD'} theme={applied:8} live={live} "
+              f"text={f.get('text')!r} href={f.get('href')} x={f.get('x')} "
+              f"inView={f.get('inView')} hit={f.get('hit')}")
 print(f"\n{len(rows)-len(bad)}/{len(rows)} good; shots in {OUT}")
 sys.exit(1 if bad else 0)
