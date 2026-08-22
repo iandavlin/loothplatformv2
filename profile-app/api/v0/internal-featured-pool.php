@@ -254,7 +254,23 @@ foreach ($rows as $r) {
         'completeness'  => Completeness::forUser($uid),
         // Information, never permission: the dash shows these, it does not
         // refuse on them.
-        'card_renderable' => $blockers === [],
+        //
+        // ⚠️ card_renderable IS NOW ALWAYS TRUE, and that is not a stub — it is
+        // this field still answering its own question honestly. Its contract
+        // (see the header) is "WHAT THE FRONT PAGE WILL ACTUALLY DO", and since
+        // 200-latest-pick the front page draws EVERY admin selection: the
+        // resolver's card-ready guard is gone, because Ian's click must not be
+        // discarded ("when I select a user they show up on the front page").
+        // Hardcoding the old `$blockers === []` here would make this field
+        // predict a refusal that no longer happens, and gate 39 §F3 exists
+        // precisely to catch the two drifting apart.
+        //
+        // $blockers is deliberately still computed and still published. It has
+        // stopped meaning "this card will not appear" and now means "this card
+        // will be THIN" — no photo, or nothing public to say — which is real
+        // information the dash turns into a note. Losing it would leave Ian
+        // choosing blind between a full card and a name-and-a-link.
+        'card_renderable' => true,
         'card_blockers'   => $blockers,
         // #107 consent state. `consent_informed` is null — not false — when the
         // flag is off or no cutover is set: the question is not being asked, and

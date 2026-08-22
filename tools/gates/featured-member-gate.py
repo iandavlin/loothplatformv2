@@ -421,9 +421,31 @@ def section_c_flag_off():
         # is asserted now — by brace-matching the flag block rather than by
         # pattern-matching one way of writing it — plus the stronger claim the
         # old regex never made: that there is no SECOND, ungated call site.
-        calls = [m.start() for m in re.finditer(r"lg_resolve_featured_member\s*\(", idx_src)
-                 if not idx_src[:m.start()].rstrip().endswith("function")]
-        blk = re.search(r"if\s*\(\s*\$lg_fm_on\s*\)\s*\{", idx_src)
+        # ⚠️ A MENTION IN A COMMENT IS NOT A CALL SITE. This scanned raw source,
+        # so a docblock naming the resolver — which any honest explanation of the
+        # flag has to do — was counted as a second, ungated call and reported as
+        # "a stale member_uuid could resolve a real card with the feature meant
+        # to be off". That is a FALSE RED on working code, and it is the same
+        # family as feedback-red-first-that-stays-green: an assertion matching a
+        # string that also lives in prose. It cost this lane a diagnosis on
+        # 2026-08-22. Comment lines are dropped before the scan; only whole-line
+        # comments are stripped, so a `//` inside a URL string cannot swallow
+        # real code after it.
+        # ⚠️ BLANKED TO THE SAME LENGTH, NOT REMOVED. The brace-matching below
+        # indexes into idx_src using an offset found in this scrubbed copy, so
+        # the two strings must stay character-for-character aligned. Deleting
+        # comment lines instead of blanking them silently shifts every later
+        # offset and the flag block is then brace-matched from the wrong place.
+        _scan_lines = []
+        for _ln in idx_src.split("\n"):
+            _t = _ln.lstrip()
+            _scan_lines.append(" " * len(_ln) if (_t.startswith("//") or _t.startswith("*")
+                                                  or _t.startswith("/*")) else _ln)
+        idx_scan = "\n".join(_scan_lines)
+        assert len(idx_scan) == len(idx_src), "the comment scrub changed the source length"
+        calls = [m.start() for m in re.finditer(r"lg_resolve_featured_member\s*\(", idx_scan)
+                 if not idx_scan[:m.start()].rstrip().endswith("function")]
+        blk = re.search(r"if\s*\(\s*\$lg_fm_on\s*\)\s*\{", idx_scan)
         if not blk:
             RED.append("[C3] index.php has no `if ($lg_fm_on) {` block — the real-member "
                        "resolution is not gated behind the flag at all")
@@ -609,6 +631,7 @@ if (!is_array($pool)) { echo "POOL_UNREADABLE\\n"; exit(0); }
 $total = count($pool);
 $eligible = $blockedEligible = $lowCompletion = $lowBlocked = 0;
 $renderable = $warned = $warnedWrong = $readyUnwarned = 0;
+$thin = $thinNoted = $thinSilent = $full = $fullNotedWrongly = $notePromisesHidden = 0;
 foreach ($pool as $m) {
     if (empty($m['eligible'])) continue;
     $eligible++;
@@ -619,8 +642,18 @@ foreach ($pool as $m) {
     }
     if (!array_key_exists('card_renderable', $m)) continue;
     $w = D::card_warning($m);
-    if ($m['card_renderable']) { $renderable++; if ($w !== null) $warnedWrong++; }
-    else                       { if ($w !== null) $warned++; else $readyUnwarned++; }
+    // ⚠️ CLASSIFIED BY card_blockers, NOT card_renderable (200-latest-pick).
+    // card_renderable is now TRUE for everyone, because the front page draws
+    // every selection — so bucketing on it put all 8 members in one bucket and
+    // reported every thin-card note as a "false warning about a card that
+    // renders fine". The note stopped meaning "this will not show" and started
+    // meaning "this will be thin"; the counters have to follow it.
+    $bl = is_array($m['card_blockers'] ?? null) ? $m['card_blockers'] : [];
+    if ($bl) { $thin++; if ($w !== null) $thinNoted++; else $thinSilent++; }
+    else     { $full++; if ($w !== null) $fullNotedWrongly++; }
+    // The note must never claim the band will be hidden — that sentence is the
+    // defect Ian reported, restated in the dash.
+    if ($w !== null && preg_match('/stay hidden|will not appear|won.t show/i', $w)) $notePromisesHidden++;
 }
 
 // Synthetic rows for the two states the live pool may not happen to contain.
@@ -632,10 +665,12 @@ echo "ELIGIBLE=$eligible\\n";
 echo "BLOCKED_ELIGIBLE=$blockedEligible\\n";
 echo "LOW_COMPLETION=$lowCompletion\\n";
 echo "LOW_BLOCKED=$lowBlocked\\n";
-echo "RENDERABLE=$renderable\\n";
-echo "NONRENDERABLE_WARNED=$warned\\n";
-echo "NONRENDERABLE_UNWARNED=$readyUnwarned\\n";
-echo "RENDERABLE_WARNED_WRONGLY=$warnedWrong\\n";
+echo "THIN=$thin\\n";
+echo "THIN_NOTED=$thinNoted\\n";
+echo "THIN_SILENT=$thinSilent\\n";
+echo "FULL=$full\\n";
+echo "FULL_NOTED_WRONGLY=$fullNotedWrongly\\n";
+echo "NOTE_PROMISES_HIDDEN=$notePromisesHidden\\n";
 echo "PRIVATE_REFUSED=" . (D::selection_block_reason($privateRow) !== null ? "1" : "0") . "\\n";
 echo "UNKNOWN_INVENTS_WARNING=" . (D::card_warning($oldPoolRow) !== null ? "1" : "0") . "\\n";
 """
@@ -731,18 +766,27 @@ def section_f_completion_never_blocks():
     else:
         OK.append("[F2] a Private profile is still refused — consent/privacy survived #107")
 
-    # F4 — a save that cannot render must be warned about, or the refusal has
-    # only become silent. Measured cost of getting this wrong: 4 members.
-    if g("NONRENDERABLE_UNWARNED") > 0:
-        RED.append(f"[F4] {g('NONRENDERABLE_UNWARNED')} member(s) cannot render a card and get NO "
-                   f'warning — the dash would answer "Saved and pushed" and leave the front '
-                   f"page blank, which is what featuring Rick Liftig actually did on 2026-08-20")
-    elif g("RENDERABLE_WARNED_WRONGLY") > 0:
-        RED.append(f"[F4] {g('RENDERABLE_WARNED_WRONGLY')} member(s) whose card renders fine are "
-                   f"warned about anyway — a false warning trains the admin to ignore the real one")
+    # F4 — RESTATED 2026-08-22 (200-latest-pick). It used to assert that a save
+    # which could not render was WARNED about, so that the old refusal did not
+    # merely become silent. There is no refusal left to warn about: every
+    # selection reaches the front page. What the dash still owes Ian is the
+    # SHAPE of the card he is about to publish — full, or a name and a link —
+    # so that is what is asserted, and it is asserted on card_blockers, which is
+    # the field that still carries that fact.
+    if g("NOTE_PROMISES_HIDDEN") > 0:
+        RED.append(f"[F4] {g('NOTE_PROMISES_HIDDEN')} dash note(s) still tell the admin the band "
+                   f'will "stay hidden" or "won\'t show" — the front page draws every selection '
+                   f"now, so that sentence is the disappearance Ian reported, restated in words")
+    elif g("THIN_SILENT") > 0:
+        RED.append(f"[F4] {g('THIN_SILENT')} member(s) would publish a THIN card — no photo, or "
+                   f"nothing public to say — and the dash says nothing about it, so Ian finds out "
+                   f"by looking at the front page")
+    elif g("FULL_NOTED_WRONGLY") > 0:
+        RED.append(f"[F4] {g('FULL_NOTED_WRONGLY')} member(s) whose card is complete get a note "
+                   f"anyway — a note that fires on a perfect card trains the admin to ignore it")
     else:
-        OK.append(f"[F4] card warnings track the resolver: {g('RENDERABLE')} renderable and unwarned, "
-                  f"{g('NONRENDERABLE_WARNED')} non-renderable and warned")
+        OK.append(f"[F4] the dash describes the card, never a refusal: {g('FULL')} full and "
+                  f"silent, {g('THIN')} thin and noted, and no note claims the band will hide")
 
     if g("UNKNOWN_INVENTS_WARNING") != 0:
         RED.append("[F4] a pool row with NO card_renderable key (an older endpoint mid-deploy) "
@@ -755,56 +799,67 @@ def section_f_completion_never_blocks():
 def section_f3_predictor_tracks_resolver():
     """The predictor copies a rule that lives in ANOTHER PROCESS. archive-poc
     cannot be called from profile-app, so the copy is deliberate — and this is
-    what stops it going stale silently. It asserts the RESOLVER'S GUARD still
-    tests the two fields the predictor reproduces; if that guard grows a third
-    condition, the dash starts telling the admin a card will render when it
-    will not, which is the exact failure #107's measurement caught."""
+    what stops it going stale silently.
+
+    ⚠️ RESTATED 2026-08-22 (200-latest-pick), AND THE RULE IT MIRRORS IS NOW THE
+    OPPOSITE ONE. This used to assert that the resolver still refused a card
+    with no avatar or no role, and that the pool's `card_renderable` reproduced
+    that refusal. Ian struck the refusal out: "Can we just make it so when I
+    select a user they show up on the front page again first." The resolver's
+    card-ready guard is gone, so an assertion that it is still there defends the
+    behaviour he reported as the bug.
+
+    What this section is FOR has not changed at all: the dash must not tell the
+    admin something the front page will not do. So it now asserts the same
+    agreement pointing the other way — the guard is gone from the resolver, AND
+    `card_renderable` no longer predicts a refusal. Either one alone is the
+    drift this section exists to catch: a resolver that still refuses while the
+    dash promises a band, or a dash still saying "won't show" while the band
+    shows."""
     idx = read(INDEX_PHP)
     pool_src = read(POOL_ENDPOINT_PHP)
     if idx is None or pool_src is None:
         DEAD.append("[F3] index.php or the pool endpoint is missing — cannot check predictor drift")
         return
-    # RESTATED for #200 (2026-08-22). Ian's override means the guard no longer
-    # applies to a PINNED pick — a member he places renders whether or not the
-    # card can resolve a role. What must not change is the CONSENTED path, which
-    # is the one the pool endpoint's card_renderable predicts for the dash.
-    #
-    # So this asserts BOTH ARMS: the guard still tests avatar and role, and it is
-    # still reached for a pick that is not pinned. A guard that had quietly
-    # become unconditional-off would leave the dash promising bands the front
-    # page never draws — the exact #107 failure this section was written for.
-    m = re.search(r"if \([^\n]*trim\(\(string\) \$u\['avatar_url'\]\) === ''[^\n]*\) return null;", idx)
-    if not m:
-        RED.append("[F3] lg_resolve_featured_member's card guard is no longer the known "
-                   "`avatar_url empty || role empty => return null` — the pool's card_renderable "
-                   "reproduces that rule and must be updated in the same commit, or the dash "
-                   "will promise a band the front page does not draw")
+
+    # ARM 1 — the resolver refuses nobody. Matched on the CODE, with comment
+    # lines blanked first: the removed guard is quoted verbatim in the docblock
+    # that explains why it went, and a raw scan reads that quotation as the
+    # living rule. (Same family as the §C3 false red the same day.)
+    idx_code = "\n".join(
+        (" " * len(ln)) if ln.lstrip().startswith(("//", "*", "/*")) else ln
+        for ln in idx.split("\n"))
+    guard = re.search(r"if \([^\n]*trim\(\(string\) \$u\['avatar_url'\]\) === ''[^\n]*\) return null;",
+                      idx_code)
+    if guard:
+        RED.append(f"[F3] the resolver still refuses a card with no avatar or no role "
+                   f"({guard.group(0)[:110]!r}) — Ian overruled that on 2026-08-22, and while it "
+                   f"stands his own pool selections keep vanishing into the fallback")
         return
-    guard = m.group(0)
-    if "$role === ''" not in guard:
-        RED.append(f"[F3] the resolver's guard changed shape ({guard[:120]}) — re-check "
-                   f"card_renderable in internal-featured-pool.php against it")
-        return
-    # The ONLY condition allowed to switch the guard off is the #200 pin. Anything
-    # else in front of it (a flag, an env read, a `true`) would disable the guard
-    # for the self-serve pool too, silently and for everybody.
-    head = guard[:guard.index("trim((string) $u['avatar_url'])")]
-    extra = head.replace("if (", "", 1).replace("!$pinned", "").replace("&&", "").replace("(", "").strip()
-    if extra:
-        RED.append(f"[F3] the card guard has grown a condition other than the #200 pin "
-                   f"({head.strip()!r}) — anything else there turns the guard off for CONSENTED "
-                   f"picks as well, and card_renderable would then be predicting a rule that no "
-                   f"longer runs")
-        return
-    if "!$pinned" in head:
-        OK.append("[F3] the card guard is bypassed for a pinned pick only — the consented path "
-                  "it predicts for the dash is untouched")
+    OK.append("[F3] the resolver's card-ready guard is gone — a selection is never refused for "
+              "want of a photo or a role")
+
+    # ARM 2 — and the dash's prediction agrees. card_renderable must no longer
+    # be computed from the blockers, or the dash goes on saying a pick will not
+    # show while it is showing.
     if "card_renderable" not in pool_src or "card_blockers" not in pool_src:
-        RED.append("[F3] the pool endpoint no longer reports card_renderable/card_blockers, but "
-                   "the resolver still refuses to draw a card without an avatar and a role — "
-                   "the dash has lost its only honest signal")
+        RED.append("[F3] the pool endpoint no longer reports card_renderable/card_blockers — the "
+                   "dash has lost the signal it uses to tell Ian whether the card will be a full "
+                   "one or just a name and a link")
         return
-    OK.append("[F3] the pool's card_renderable still mirrors the resolver's own avatar+role guard")
+    pred = re.search(r"'card_renderable'\s*=>\s*([^,\n]+)", pool_src)
+    if not pred:
+        RED.append("[F3] could not find how the pool computes card_renderable — it cannot be "
+                   "checked against the resolver, so the two are free to drift")
+    elif "blockers" in pred.group(1):
+        RED.append(f"[F3] the pool still predicts card_renderable from the blockers "
+                   f"({pred.group(1).strip()}) — the resolver refuses nobody now, so this "
+                   f"predicts a refusal that cannot happen and the dash warns about cards that "
+                   f"render perfectly well")
+    else:
+        OK.append(f"[F3] the pool's card_renderable agrees with the resolver — no refusal "
+                  f"predicted ({pred.group(1).strip()}), and card_blockers still carries the "
+                  f"thin-card detail the dash shows")
 
 
 # ── G. #107, Ian 8/20: the tick is consent — and ONLY where it says so ───────

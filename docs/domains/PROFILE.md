@@ -723,6 +723,141 @@ no-op control added for `defaults.php`, which these are the first legs to mutate
 
 ---
 
+## #200-latest-pick — a selection is never thrown away (8/22)
+
+Ian, 2026-08-22: *"Can we just make it so when I select a user they show up on
+the front page again first."*
+
+### ⚠️ THE BRIEF'S DIAGNOSIS WAS WRONG, AND MEASURING IT FIRST IS THE WHOLE STORY
+
+The lane was handed a cause: *a leftover PIN (Dan Erlewine) outranks his newer
+pool pick, so the latest admin action must win.* Measured before writing any
+code, and **both halves were false**:
+
+- **Dan Erlewine was never a pin.** He is the hand-placed **fallback**
+  (`featured_member_fallback`, `kind => 'member'`), which outranks nothing — it
+  simply appears whenever the real pick resolves to nothing. dev2's `config.json`
+  carries **no `pinned` key at all**.
+- **Latest-action-wins already held, in both directions.** Simulating
+  `_config.php`'s own `$clean + $existing` merge and rendering each step:
+  standing pin on Carl → Feature Ian Davlin → the page draws **Ian Davlin**;
+  then pin Carl → the page draws **Carl**. Both handlers already write
+  `member_uuid` **and** `pinned` explicitly on every save, which is the
+  discipline #200 introduced for exactly this reason.
+
+**The real cause was one line** — the card-ready guard in
+`lg_resolve_featured_member()`:
+
+    if (!$pinned && (trim($u['avatar_url']) === '' || $role === '')) return null;
+
+A **pool** selection was discarded whenever the member's resolved role came back
+empty, and the front page drew the fallback. From the dash it looks exactly like
+the click did nothing.
+
+**Reproduced on a real member Ian can genuinely click Feature on** — Carl
+Ioriatti: opted in, public, has a photo, and his `business_name` ("Ioriatti") is
+a tail of his display name, so the repeats-the-name fallback is correctly skipped
+and `$role` resolves to `''`:
+
+| | before | after |
+|---|---|---|
+| POOL pick (`pinned=false`) | **"This spot is open"** | Carl Ioriatti |
+| PIN (`pinned=true`) | Carl Ioriatti | Carl Ioriatti |
+
+Same member, same row, same minute. Only the pin made his own selection appear.
+
+**Had the brief been built as written, the precedence code would have been
+correct, changed nothing, and Ian's pick would still have vanished.**
+
+### Why removing the guard is safe — and it is not a new argument
+
+The guard existed for ONE reason: the template rendered avatar and role
+**unconditionally**, so an empty either shipped `<img src="">` and a blank line
+to the open web. **#200 fixed that at the template** (both behind `!empty()`,
+the way `where`/`bio` always were), and the guard's own docblock has said ever
+since that *"the guard is no longer what stands between us and a broken card"*.
+#200 acted on that for **pinned** picks only, because that was the scope of the
+ruling then. This is the same argument, finished.
+
+**What still refuses, deliberately:** the `SELECT`. A non-pinned pick must still
+be `featured_opt_in` and public, so a member who un-ticks or goes private **after**
+being chosen drops out and the band falls back. That is the member withdrawing
+their own consent, not the page discarding an admin's click. Nobody has ruled on
+it — reported, not silently overridden.
+
+### The two places that then told Ian a lie, and had to change in the same commit
+
+Removing a refusal is half a fix; the surfaces that **announced** the refusal are
+the other half, and they are in a different repo tree from the resolver:
+
+1. `internal-featured-pool.php` — `card_renderable` was `$blockers === []`. It
+   predicts *"what the front page will actually do"*, and the front page now
+   draws everything, so it is **`true`**. `card_blockers` is still computed and
+   still published: it has stopped meaning *"this will not appear"* and now means
+   *"this card will be THIN"*.
+2. `FeaturedMemberDash` — the notice read **"Featured — but the front-page band
+   will stay hidden, because X has no photo"**, and the pool table's Card column
+   read **"Won't show yet"**. Both were true of the old resolver and are false
+   now. **A dash that says a saved pick will not appear, while it is appearing,
+   is the same defect as the disappearance, wearing words.** They now describe
+   the card he will get ("Thin card — shows, but has no…").
+
+### A latent defect the gate found while being written
+
+Gate 94 §G4's first version invented its own clear payload — `{member_uuid: "",
+pinned: false}` — and went RED: the page still drew the **previous member's
+name**. That is not what the dash does (`handle_remove()` blanks `name` and
+`role` explicitly), but it was a real property of the page: `$clean + $existing`
+means **any** writer that blanks the uuid and forgets the name leaves a card
+describing someone no longer featured — and `config.json` on both boxes still
+carries leftover `bio`/`avatar`/`cta_*` from an old hand-placement whose name,
+bio and `cta_href` each described a **different member**.
+
+`index.php` now requires a **resolved** card (`$lg_fm_resolved`), so both shapes
+fall back. Both are gated: one proves the shipped button is right, the other
+proves the page does not depend on that button being careful.
+
+⚠️ **The obvious way to write that check is wrong and was caught before it
+shipped.** Testing `$lg_fm['member_uuid']` on the card looks equivalent and is
+not: **the resolver's returned array has no `member_uuid` key**, so that
+condition made EVERY real pick undrawable and would have replaced all of them
+with the fallback. Only reading what the resolver actually returns catches it.
+
+### Two gate lessons, both paid for in this lane
+
+- ⚠️ **A MENTION IN A COMMENT IS NOT A CALL SITE.** Gate 39 §C3 scanned raw
+  source for `lg_resolve_featured_member(`, so a docblock explaining the flag was
+  counted as a **second, ungated call** and reported as *"a stale member_uuid
+  could resolve a real card with the feature meant to be off"* — a **false red on
+  working code**. Same family as `feedback-red-first-that-stays-green`, inverted.
+  §C3 now blanks comment lines before scanning, **padded to the same length**,
+  because the brace-matching below it indexes into the original string and
+  deleting lines silently shifts every later offset. §F3 got the same treatment,
+  and needed it: the removed guard is quoted verbatim in the docblock that
+  explains why it went.
+- **A gate kept green by defending a struck-out behaviour is worse than no
+  gate.** §B3 asserted the refusal, §F3 asserted the pool mirrored it, §F4
+  asserted the warning tracked it. All three were **restated to the opposite
+  verdict on the same fixtures and the same code paths** — never deleted.
+
+### Where it is asserted now
+
+Gate 94 (**41 assertions**): §B3 an opted-in pool pick with no role renders ·
+**§G0** `_config.php` merges `$clean + $existing` so the incoming selection wins
+(the direction the render legs simulate; reversing it is a one-character edit
+nothing else in the gate would notice) · **§G1** Feature displaces a standing pin
+· **§G2** a pin displaces a standing pool pick · **§G3** exactly one band after a
+three-step sequence · **§G4** clearing falls back, tested with the dash's real
+payload *and* a careless partial write.
+
+Gate 39: §F3 both arms of the new agreement (the resolver refuses nobody, and the
+pool no longer predicts a refusal) · §F4 the dash describes the card and no note
+claims the band will hide.
+
+**No new gate number was minted** — 99 remains free.
+
+---
+
 ## #195 — the View-as switcher says Edit, not Me (8/22)
 
 Ian, verbatim: *"in the profile, I'd like the view as controls in the privacy
