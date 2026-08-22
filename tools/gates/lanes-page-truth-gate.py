@@ -1344,9 +1344,16 @@ def leg_decide(tmp):
     check("#202 no board message contains a backtick",
           "`" not in calls,
           "a backticked word is command-substituted away before msg sees it")
+    # ⚠ `or {}`, NOT `.get("answered", {})`. The key EXISTS with value null on
+    # an unanswered question, so the default never fires and the next `.get`
+    # raises AttributeError — the gate CRASHES instead of failing. Red-first
+    # caught it: a mutation that stopped the worker marking the store produced a
+    # traceback, which threw away every check after this line and made the
+    # mutation look like it reddened the wrong things. A gate that aborts must
+    # still report what it already measured (#191's lesson, met again here).
+    marked = json.loads((store / f"{live}.json").read_text()).get("answered") or {}
     check("#202 the store is marked answered, by the page",
-          json.loads((store / f"{live}.json").read_text())
-          .get("answered", {}).get("via") == "page")
+          marked.get("via") == "page", f"the store says {marked or 'nothing'}")
     check("#202 the answer is recorded where the watchdog looks",
           (home / ".keeper-decisions").exists()
           and live in (home / ".keeper-decisions").read_text())

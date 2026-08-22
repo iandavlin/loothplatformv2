@@ -154,7 +154,44 @@ That is exactly the back-compat behaviour designed and gated for — but it mean
 **the decide verb starts working only when keeper's clone pulls**, not when this
 merges. Worth saying out loud in the merge note.
 
-### 9. The red-first harness reported a GOOD assertion as broken — a latent SIGPIPE
+### 9. A mutation that only SOMETIMES reddens is worse than no mutation
+
+*"Remove `O_EXCL` from the claim"* reddened the race check in one run and left
+the gate green in the next. The cause is that **first-answer-wins has two
+guards and only one is the guarantee**: `answer()` short-circuits on an
+already-answered *body* before it ever reaches the claim. That fast path is an
+optimisation; the claim is the promise. Remove only the claim and the fast path
+still catches most racers — so the result depends on how the scheduler felt.
+
+A flaky mutation reports a healthy tree as broken on a bad night, which is the
+one thing a red-first must never do. Replaced with a **deterministic pair** that
+also says something the single mutation never could:
+
+| mutation | expected | measured |
+|---|---|---|
+| remove the fast path **alone** | **GREEN** | GREEN, 183 checks |
+| remove the fast path **and** `O_EXCL` | **RED** | *"8 of 8 believed they had answered it"* |
+
+The green half is the interesting one: it is a **positive proof that the claim
+is carrying the guarantee**, not the fast path.
+
+### 10. A gate check that CRASHES throws away every check after it
+
+The mutation *"the worker stops marking the store"* reddened the wrong things —
+and the reason was a bug in my own check:
+
+    json.loads(...).get("answered", {}).get("via")
+
+`answered` **exists with the value `null`** on an unanswered question, so the
+`{}` default never fires, `.get` is called on `None`, and the gate raises
+`AttributeError` mid-leg. Every check after that line never ran, so the mutation
+looked as though it reddened unrelated assertions. `or {}` instead of a default,
+and it now fails cleanly with *"the store says nothing"*.
+
+This is #191's lesson arriving in a new costume: **a gate that aborts must still
+report what it already measured.** Here it did not even know it had aborted.
+
+### 11. The red-first harness reported a GOOD assertion as broken — a latent SIGPIPE
 
 The one worth carrying furthest, because it is not about this feature at all.
 

@@ -1275,6 +1275,26 @@ assertion beside it is a green light for the broken state.**
    any box where the deploy step has not been run. A gate whose output moves with
    the box's live state reports somebody else's Tuesday.
 
+### ⚠️ Two rules for red-first mutations, both paid for here
+
+**1. A mutation that only SOMETIMES reddens is worse than no mutation.**
+*"Remove `O_EXCL` from the claim"* reddened in one run and stayed green in the
+next, because first-answer-wins has **two guards and only one is the
+guarantee**: `answer()` short-circuits on an already-answered body before it
+reaches the claim. That fast path is an optimisation; the claim is the promise.
+Remove only the claim and the fast path still catches most racers. Replaced by a
+deterministic **pair** — remove the fast path *alone* and the gate must stay
+**GREEN** (a positive proof the claim carries the guarantee); remove *both* and
+it must go **RED** (*"8 of 8 believed they had answered it"*).
+
+**2. A gate check that CRASHES throws away every check after it.**
+`json.loads(...).get("answered", {}).get("via")` looks safe and is not: the key
+**exists with the value `null`**, so the `{}` default never fires and `.get` is
+called on `None`. The gate raised `AttributeError` mid-leg, every later check
+silently never ran, and the mutation appeared to redden unrelated assertions.
+Use `or {}`. This is #191's *"a gate that aborts must print what it already
+measured"* arriving in a new costume — here it did not even know it had aborted.
+
 ### ⚠️ A HARNESS BUG THAT REPORTS GOOD ASSERTIONS AS BROKEN, AND GETS WORSE AS A GATE GROWS
 
 `tools/gates/lanes-page-truth-redfirst.sh` decided whether a mutation reddened

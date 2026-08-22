@@ -382,8 +382,36 @@ run red "the nonce stops binding the QUESTION (both files, still agreeing)" \
     webroot/lanes-decisions.php \
     "'decide:' . \$id . ':' . \$k . ':' . \$day" \
     "'decide:' . \$k . ':' . \$day"
-run red "first-answer-wins loses its atomic claim" \
+# ⚠ FIRST-ANSWER-WINS HAS TWO GUARDS, AND ONLY ONE OF THEM IS THE REAL ONE.
+# `answer()` short-circuits on an already-answered BODY before it reaches the
+# claim. That fast path is an optimisation; the CLAIM is the guarantee. Removing
+# O_EXCL alone is therefore NOT deterministically detectable — the fast path
+# catches most racers on its own, so the gate went red in one run and green in
+# the next. A mutation that only sometimes reddens is worse than none: it
+# reports a healthy tree as broken on a bad night.
+#
+# So the pair below is deterministic and says something the single mutation
+# never could:
+#   · remove the fast path ALONE  → still exactly one winner  (GREEN)
+#     which is a positive proof that the CLAIM is doing the work;
+#   · remove the fast path AND the claim's O_EXCL → many winners  (RED).
+run green "the fast path goes, and the CLAIM alone still holds the line" "" \
+    tools/decisions/lg-decide.py \
+    '    if q.get("answered"):
+        a = q["answered"]
+        raise Refused' \
+    '    if False:
+        a = q["answered"]
+        raise Refused'
+run red "first-answer-wins loses BOTH its fast path and its atomic claim" \
     "#202 eight simultaneous answerers produce EXACTLY ONE winner" tools/decisions/lg-decide.py \
+    '    if q.get("answered"):
+        a = q["answered"]
+        raise Refused' \
+    '    if False:
+        a = q["answered"]
+        raise Refused' \
+    tools/decisions/lg-decide.py \
     'os.O_CREAT | os.O_EXCL | os.O_WRONLY' \
     'os.O_CREAT | os.O_WRONLY'
 run red "the claim stops outranking a stale body, so a settled question is re-offered" \
