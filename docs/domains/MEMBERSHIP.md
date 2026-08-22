@@ -886,3 +886,13 @@ real people with staff among them.
 The looth roles decide WHAT A MEMBER SEES afterwards. Ian's 8/21 go-live ruling
 on the first axis: testers **really buy** — real checkout, real cards — because
 comping them leaves the money path, the receipts and the grant untested.
+
+## Live's billing app was NEVER migrated into the monorepo (found 8/22)
+`/srv/lg-stripe-billing` on live tracks the STANDALONE repo
+(`lg-stripe-billing.git`), last commit 2026-05-10 — while dev2's is a symlink
+into the serving checkout. So `lg-deploy` deploys NONE of the billing app on
+live, and everything Slim-side since May (checkout-audience fence #181,
+double-pay guard's app half #150, webhook receipts #192, catalogue importer)
+exists only on dev2. Cutover is its own go-live blocker issue; until it lands,
+any "deployed to live" claim about billing-side code is false by construction.
+Found by lane 194's plan measurement; confirmed via live-ro.
