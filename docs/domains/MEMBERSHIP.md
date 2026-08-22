@@ -991,3 +991,12 @@ double-pay guard's app half #150, webhook receipts #192, catalogue importer)
 exists only on dev2. Cutover is its own go-live blocker issue; until it lands,
 any "deployed to live" claim about billing-side code is false by construction.
 Found by lane 194's plan measurement; confirmed via live-ro.
+
+## The Patreon-linked email is shown on every double-pay/switch surface (Ian 8/22)
+Verbatim: *"its critical to add to any double pay or switch surface the email
+associated with their patreon account and that that is the email to use when
+adjusting thier membership."* Identity linkage is by email; rejoining under a
+different address is the #149 lost-membership class. Keeper's privacy rail:
+the Patreon email is revealed ONLY to the authenticated member on their own
+signed-in surface — never in an anonymous API refusal. Applied by #193 (guard
+surfaces) and #196 (switch page/menu).
