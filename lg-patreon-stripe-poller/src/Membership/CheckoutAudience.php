@@ -142,9 +142,26 @@ final class CheckoutAudience
      * copy of DoublePayGuard would reopen the whole hole. That guard passes a
      * checkout with no email, correctly: it asks "is this person ALREADY
      * paying elsewhere", and with nobody named there is no double payment to
-     * prevent. This class asks the opposite question — "is this person ON a
-     * list of WordPress user ids" — and an anonymous poster who names nobody
-     * is exactly the caller #181 exists to refuse. Gate 86 §B3 keeps it.
+     * prevent. This class asks the opposite question — "is this person ON the
+     * list" — and an anonymous poster who names nobody is exactly the caller
+     * #181 exists to refuse. Gate 86 §B3 keeps it, and #193 did not relax it:
+     * an address that is not on the list is refused whether or not it has an
+     * account, which is the whole of the fence.
+     *
+     * ⚠️ THE ADDRESS IS ASKED ABOUT FIRST, AND THE ORDER IS THE FEATURE (#193,
+     * Ian 2026-08-22: *"I thought the whitelist would have them generating a
+     * wp-user like a normal new member join."*). Until now this method resolved
+     * the address to a WP user and refused when there wasn't one — so a listed
+     * address with no account was refused BEFORE
+     * `UserProvisioner::findOrProvision` could create it, and every tester had
+     * to pre-exist. Asking the list about the ADDRESS costs nothing when no
+     * addresses are listed and is the only question that can be answered about
+     * somebody WordPress has never heard of.
+     *
+     * The id path below is untouched, so a member listed the old way behaves
+     * exactly as they did yesterday; and a listed address that HAS grown an
+     * account passes here and is then bridged to that account by the
+     * provisioner, which mints no duplicate.
      */
     public static function allowsEmail( ?string $email ): bool
     {
@@ -158,11 +175,18 @@ final class CheckoutAudience
             return false;
         }
 
+        // THE ADDRESS ITSELF, whether or not WordPress has ever heard of it.
+        // One store, one normalization, owned by StripeLifecycle — this class
+        // still names no option and still reads exactly one (gate 86 §D).
+        if ( StripeLifecycle::inCohortEmail( $email ) ) {
+            return true;
+        }
+
         $user = get_user_by( 'email', $email );
         if ( ! $user ) {
-            // No WordPress account ⇒ cannot be on a list of WordPress user
-            // ids. This is the anonymous purchase, refused by construction
-            // rather than by a rule someone has to remember to write.
+            // No account AND the address is not listed. This is the anonymous
+            // purchase, refused by construction rather than by a rule someone
+            // has to remember to write.
             return false;
         }
 

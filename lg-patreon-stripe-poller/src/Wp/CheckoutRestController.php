@@ -179,8 +179,27 @@ final class CheckoutRestController
                     "[%s] checkout-session REFUSED for wp #%d: already paying via Patreon (%s)\n",
                     gmdate( 'c' ), $uid, (string) $standing['reason'],
                 ) );
+                /* THE LINKED PATREON ADDRESS (Ian 2026-08-22): "its critical to
+                   add to any double pay or switch surface the email associated
+                   with their patreon account and that that is the email to use
+                   when adjusting thier membership."
+
+                   ⚠️ IT IS SAFE ON THIS DOOR AND NOT ON THE SLIM ONE, and the
+                   difference is who is asking. This route's permission_callback
+                   is authLoggedInUser: the caller IS the member, proven by a
+                   session and a nonce, and `$uid` comes from that session and
+                   never from the body — so the address can only ever be their
+                   own. `POST /billing/v1/checkout` takes an arbitrary email
+                   from an unauthenticated stranger, which is why it keeps the
+                   plain sentence and why the poller's REST route hands that app
+                   no address to add. Keeper's rail, 2026-08-22.
+
+                   Empty when there is no linked address; nothing is invented. */
+                $linked = \LGMS\Membership\PatreonStanding::linkedEmailSentence( $standing );
+
                 return new \WP_REST_Response( [
-                    'error'          => \LGMS\Membership\PatreonStanding::refusalMessage( $standing ),
+                    'error'          => \LGMS\Membership\PatreonStanding::refusalMessage( $standing )
+                                        . ( $linked !== '' ? ' ' . $linked : '' ),
                     'patreon_active' => true,
                     'manage_url'     => \LGMS\Membership\PatreonStanding::manageUrl(),
                 ], 409 );

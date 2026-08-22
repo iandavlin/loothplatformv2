@@ -753,6 +753,115 @@ is_( str_contains( php_function_body( $admin, 'renderAffiliatePage' ), 'renderAf
      'G12b and the standalone page reuses that same content — one definition, not two' );
 
 // ---------------------------------------------------------------------------
+section( '§I  THE TESTERS TAB TAKES AN ADDRESS (#193)' );
+// ---------------------------------------------------------------------------
+//
+// Ian, 2026-08-22: *"I thought the whitelist would have them generating a
+// wp-user like a normal new member join."* The decider is gated in 86 §J and
+// the store in gate 34 §7/§7b; what is asserted HERE is the surface — because
+// "Ian cannot use this without the command line" was a charter constraint, and
+// a dash that stores an address it then cannot show is the same silent failure
+// as one that cannot store it at all.
+//
+// Asserted by SOURCE, like §E: Admin.php is not loaded by this gate.
+
+foreach ( [ 'handleCohortAddEmail' => 'a', 'handleCohortRemoveEmail' => 'b' ] as $fn => $sfx ) {
+    $body = php_function_body( $admin, $fn );
+    is_( $body !== '', "I1$sfx $fn exists" );
+    is_( str_contains( $body, "current_user_can( 'manage_options' )" ), "I2$sfx $fn requires manage_options" );
+    is_( str_contains( $body, 'check_admin_referer' ), "I3$sfx $fn requires a nonce" );
+}
+
+is_( str_contains( $admin, "add_action( 'admin_post_lgms_cohort_add_email'" )
+     && str_contains( $admin, "add_action( 'admin_post_lgms_cohort_remove_email'" ),
+     'I4  both are actually registered — an unregistered handler is a dead button' );
+
+/* THE REMOVE NONCE IS PER-ENTRY, like the id remove beside it. A single shared
+   nonce would let one valid page grant a removal of any OTHER address. */
+$rmBody = php_function_body( $admin, 'handleCohortRemoveEmail' );
+is_( str_contains( $rmBody, "check_admin_referer( 'lgms_cohort_remove_email_' . \$email )" ),
+     'I5  the remove nonce is bound to the ADDRESS, not shared across the table' );
+
+/* THE LOOKUP OFFERS THE ADDRESS INSTEAD OF DEAD-ENDING. This branch WAS the
+   whole of Ian's problem: type a tester's email, be told no user matches, and
+   the only way forward is to make them an account — which is the step that made
+   the rehearsal untrue to the real journey. */
+$lookupBody = php_function_body( $admin, 'handleCohortLookup' );
+/* ⚠️ ASSERT THE BRANCH, NOT THE STRING. The first draft looked for
+   'lgms_cohort_confirm_email' anywhere in the body, and the red-first caught
+   it: neutering the guard to `if ( false )` leaves the string sitting there
+   unreachable, so the dead end came back with the gate none the wiser. Same
+   defect §K had, one gate over. */
+is_( preg_match( '/if\s*\(\s*\$email\s*!==\s*\x27\x27\s*\)\s*\{\s*self::cohortRedirect\(\s*\[\s*\x27lgms_cohort_confirm_email\x27/s', $lookupBody ) === 1,
+     'I6  a VALID address with no account is REACHABLY offered for listing, not refused' );
+is_( str_contains( $lookupBody, 'CohortAllowlist::normalizeEmail' ),
+     'I6b ...through the store\'s own normalizer, so the dash cannot offer what the reader would drop' );
+is_( str_contains( $lookupBody, 'lgms_cohort_err' ),
+     'I6c ...and a value that is NOT an address still refuses — no guessing' );
+
+/* AN ADDRESS THAT HAS GROWN AN ACCOUNT IS STORED AS THE MEMBER. Between the
+   lookup and the click the person may have signed up; two entries for one human
+   is a list that later disagrees with itself. */
+$addBody = php_function_body( $admin, 'handleCohortAddEmail' );
+is_( str_contains( $addBody, "get_user_by( 'email'" ),
+     'I7  add-by-address re-checks for an account AT WRITE TIME' );
+$posLookup = strpos( $addBody, "get_user_by( 'email'" );
+$posAdd    = strpos( $addBody, 'CohortAllowlist::addEmail' );
+is_( $posLookup !== false && $posAdd !== false && $posLookup < $posAdd,
+     'I7b ...BEFORE it stores the address, so the member wins when both are possible' );
+is_( str_contains( $addBody, 'CohortAllowlist::add(' ),
+     'I7c ...and it is the MEMBER that gets stored in that case' );
+
+/* THE TAB SHOWS BOTH KINDS. A stored address that never renders is a list Ian
+   cannot audit — and #190's whole lesson was a store that could not be read
+   back. */
+$tabBody = php_function_body( $admin, 'renderStripeCohortTab' );
+/* Again the LOOP, not the call: `foreach ( [] as $addr )` keeps every string
+   below it and renders nothing. Found by red-first M38. */
+is_( str_contains( $tabBody, 'CohortAllowlist::emails()' ),
+     'I8  the tab reads the addresses' );
+is_( preg_match( '/foreach\s*\(\s*\$emails\s+as\s+\$addr\s*\)/', $tabBody ) === 1,
+     'I8a ...and actually ITERATES them — a loop over [] keeps every string below it' );
+is_( str_contains( $tabBody, 'lgms_cohort_remove_email' ),
+     'I8b ...and each one gets its own Remove control' );
+is_( str_contains( $tabBody, 'no account yet' ),
+     'I8c ...and says which of them have not signed up yet' );
+is_( str_contains( $tabBody, 'signed up since' ),
+     'I8d ...and which HAVE, so Ian can see who turned up without leaving the tab' );
+
+/* THE COUNT. Counting ids alone here would print "0" over a working cohort.
+   ⚠️ THE FIRST DRAFT MATCHED THE EXPRESSION ANYWHERE IN THE TAB, so reverting
+   the heading stayed green on the CHIP's copy of the same expression — a
+   fixed-target assertion satisfied by a different occurrence. Both places are
+   now pinned to their own surrounding markup. Found by red-first M39. */
+is_( preg_match( '/Current cohort \(<\?php echo count\(\s*\$ids\s*\)\s*\+\s*count\(\s*\$emails\s*\)/', $tabBody ) === 1,
+     'I9  the cohort HEADING counts both halves — an addresses-only list never reads as empty' );
+is_( preg_match( '/in the test group: <\?php echo count\(\s*\$ids\s*\)\s*\+\s*count\(\s*\$emails\s*\)/', $tabBody ) === 1,
+     'I9b ...and so does the chip, which is the number read at a glance' );
+is_( preg_match( '/\$ids === \[\]\s*&&\s*\$emails === \[\]/', $tabBody ) === 1,
+     'I9c ...and "Empty" is only printed when BOTH halves are empty' );
+
+/* THE CLI LINE IS STILL COPY-PASTEABLE, and still describes the same option.
+   A stale CLI hint is a confidently-wrong artifact; this repo has a memory
+   about exactly that. */
+is_( str_contains( $tabBody, 'wp_json_encode' ),
+     'I10 the CLI equivalent emits real JSON, so a mixed list is copy-pasteable' );
+is_( str_contains( $tabBody, 'StripeLifecycle::ALLOWLIST_OPT' ),
+     'I10b ...and still names the ONE option, not a second store' );
+
+/* NO SECOND STORE ANYWHERE IN THE SURFACE. #193's first constraint. */
+$adminNoOpt = substr_count( $admin, 'lgms_stripe_lifecycle_allowlist' );
+is_( $adminNoOpt === 0,
+     'I11 Admin.php names no cohort option of its own — it goes through CohortAllowlist' );
+
+/* THE INVITE PANEL'S PREMISE CHANGED, AND ITS COPY HAD TO CHANGE WITH IT.
+   "The test group only takes people who already have an account" became false
+   the moment this shipped, and a confidently-wrong sentence on the very tab
+   that disproves it is how an operator concludes the feature is not there. */
+is_( ! str_contains( $tabBody, 'The test group only takes people who already have an account' ),
+     'I12 the invite panel no longer claims the list needs an existing account' );
+
+// ---------------------------------------------------------------------------
 section( '§C  COUPLING — reported, never asserted' );
 // ---------------------------------------------------------------------------
 

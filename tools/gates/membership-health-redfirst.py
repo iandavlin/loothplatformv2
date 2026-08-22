@@ -191,6 +191,20 @@ MUTATIONS = [
      "$cohort = (array) get_option( 'lgms_stripe_lifecycle_allowlist', [] );",
      "E7", "the panel grows a SECOND definition of the cohort, free to drift"),
 
+    # ---- #193: a cohort of ADDRESSES is not an empty cohort ---------------
+    ("M25b", HEALTH,
+     "        $n      = CohortAllowlist::count();",
+     "        $n      = count( $cohort );",
+     "E2b", "the panel counts only the member ids again, so a cohort holding "
+            "nothing but tester ADDRESSES is reported EMPTY — nobody at all can "
+            "buy — on the very day it starts working"),
+
+    ("M25c", HEALTH,
+     "        if ( $addresses > 0 ) {\n            $s .= ' + ' . $addresses . ' address(es)';\n        }",
+     "        if ( false ) {\n            $s .= ' + ' . $addresses . ' address(es)';\n        }",
+     "E2d", "the panel stops distinguishing an ADDRESS still waiting on its "
+            "tester from a MEMBER who has already joined"),
+
     # ---- F. can the two halves reach each other ---------------------------
     ("M26", HEALTH,
      "} elseif ( $syncHost !== '' && strcasecmp( $syncHost, $ourHost ) !== 0 ) {",

@@ -33,6 +33,16 @@ import tempfile
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 GATE = ROOT / "tools/gates/checkout-audience-gate.php"
 
+# ⚠️ TWO GATES, AND POINTING A MUTATION AT THE WRONG ONE IS A FALSE GREEN.
+# Gate 86 STUBS LGMS\StripeLifecycle on purpose (its own docblock says so: what
+# it measures is whether the checkout path ASKS, not whether the option
+# normalizer works). So a mutation to the real StripeLifecycle cannot move gate
+# 86 by even one assertion — the first #193 run produced six "blind spots" that
+# were nothing of the kind, they were mutations aimed at a class the gate does
+# not load. The real normalizer and the real read-side union belong to gate 34,
+# which drives them. Each mutation names the gate that can actually see it.
+GATE34 = ROOT / "lg-patreon-stripe-poller/deploy/remediation/test-soft-launch-allowlist.php"
+
 AUD = ROOT / "lg-patreon-stripe-poller/src/Membership/CheckoutAudience.php"
 REST = ROOT / "lg-patreon-stripe-poller/src/Wp/CheckoutAudienceRestController.php"
 PROV = ROOT / "lg-patreon-stripe-poller/src/Wp/UserProvisioner.php"
@@ -42,8 +52,12 @@ PROBE = ROOT / "lg-stripe-billing/src/Adapters/HttpCheckoutAudienceProbe.php"
 SLIM = ROOT / "lg-stripe-billing/src/Http/Controllers/CheckoutController.php"
 ENVS = ROOT / "lg-stripe-billing/src/Adapters/EnvSettingsStore.php"
 COMP = ROOT / "lg-patreon-stripe-poller/src/Membership/CompStanding.php"
+# #193 — the address half
+SL = ROOT / "lg-patreon-stripe-poller/src/StripeLifecycle.php"
+RESTCTL = ROOT / "lg-patreon-stripe-poller/src/Wp/RestController.php"
+COHORT = ROOT / "lg-patreon-stripe-poller/src/CohortAllowlist.php"
 
-TOUCHED = [AUD, REST, PROV, PLUG, GUARD, PROBE, SLIM, ENVS, COMP, GATE]
+TOUCHED = [AUD, REST, PROV, PLUG, GUARD, PROBE, SLIM, ENVS, COMP, SL, RESTCTL, COHORT, GATE]
 
 
 def sub(path, old, new, count=1):
@@ -122,8 +136,8 @@ MUTATIONS = {
     # "mutation" changed no decision. A mutation that expresses the actual wrong
     # decision is the only kind worth counting.
     "M5": ("an email with no WordPress account falls through to ALLOWED",
-           sub(AUD, "        if ( ! $user ) {\n            // No WordPress account",
-                    "        if ( ! $user ) {\n            return true;\n            // No WordPress account")),
+           sub(AUD, "        if ( ! $user ) {\n            // No account AND the address is not listed.",
+                    "        if ( ! $user ) {\n            return true;\n            // No account AND the address is not listed.")),
     "M6": ("allowsUser() gains an administrator bypass (keeper ruling (b) reversed)",
            sub(AUD, "        return $wpUserId > 0 && StripeLifecycle::inCohort( $wpUserId );",
                     "        return $wpUserId > 0 && ( StripeLifecycle::inCohort( $wpUserId )\n            || ( function_exists( 'current_user_can' ) && current_user_can( 'manage_options' ) ) );")),
@@ -186,6 +200,77 @@ MUTATIONS = {
                       "        return true;")),
     "M23": ("an unparseable date lapses the member instead of being ignored",
             sub(COMP, "            // An unparseable date is NOT an expiry.", "            return 0;\n            // An unparseable date is NOT an expiry.")),
+
+    # ── #193: THE LIST TAKES ADDRESSES ──────────────────────────────────────
+    # Every one of these expresses a wrong DECISION, not a wrong shape. The
+    # ones that matter most are M24 and M28: M24 is the whole feature reverting
+    # to #181's behaviour, and M28 is the write-side promotion this design was
+    # chosen over — it would pass "a listed address provisions" and fail only
+    # the removal proof, which is exactly why that proof exists.
+    "M24": ("allowsEmail() stops asking the list about the ADDRESS — #193 reverts to #181",
+            sub(AUD, "        if ( StripeLifecycle::inCohortEmail( $email ) ) {\n            return true;\n        }",
+                     "        if ( false ) {\n            return true;\n        }")),
+    "M25": ("the address check is moved BELOW the resolve-to-user refusal, where it can never run",
+            compose(
+                sub(AUD, "        if ( StripeLifecycle::inCohortEmail( $email ) ) {\n            return true;\n        }\n\n", ""),
+                sub(AUD, "        return self::allowsUser( (int) $user->ID );",
+                         "        if ( StripeLifecycle::inCohortEmail( $email ) ) {\n            return true;\n        }\n\n        return self::allowsUser( (int) $user->ID );"))),
+    "M26": ("allowlistEmails() stops validating — 'not-an-email' becomes a listed entry",
+            sub(SL, "            if ( $e === '' || ! self::looksLikeEmail( $e ) ) {",
+                    "            if ( $e === '' ) {"), GATE34),
+    "M27": ("allowlistEmails() stops lower-casing — a listed address stops matching how it is typed",
+            sub(SL, "            $e = strtolower( trim( $v ) );", "            $e = trim( $v );"), GATE34),
+    "M28": ("inCohort() loses the read-side union — a listed address pays and the GRANT never lands",
+            sub(SL, "        if ( $wpUserId <= 0 || self::allowlistEmails() === [] ) {\n            return false;\n        }",
+                    "        if ( true ) {\n            return false;\n        }"), GATE34),
+    "M29": ("inCohortEmail() matches on a PREFIX — newtester@example.com.evil.test gets in",
+            sub(SL, "        return isset( self::allowlistEmails()[ $email ] );",
+                    "        foreach ( array_keys( self::allowlistEmails() ) as $k ) {\n            if ( str_starts_with( $email, $k ) ) { return true; }\n        }\n        return false;"), GATE34),
+    "M30": ("inCohortEmail('') returns true — the anonymous hole, reopened one function over",
+            sub(SL, "        $email = strtolower( trim( (string) $email ) );\n        if ( $email === '' ) {\n            return false;\n        }",
+                    "        $email = strtolower( trim( (string) $email ) );\n        if ( $email === '' ) {\n            return true;\n        }"), GATE34),
+    "M31": ("inCohort() resolves the user even with NO addresses listed — the empty state stops being the off state",
+            sub(SL, "        if ( $wpUserId <= 0 || self::allowlistEmails() === [] ) {",
+                    "        if ( $wpUserId <= 0 || false ) {"), GATE34),
+    "M32": ("the provision refusal goes back to blaming the missing account",
+            sub(PROV, "'Stripe customer %d (%s — %s) is outside the soft-launch cohort: neither the '\n                . 'address nor any account it belongs to is on the list, and the checkout '",
+                      "'Stripe customer %d (%s — %s) is outside the soft-launch cohort, and the checkout '")),
+
+    # ── #193 / D3: the /auth exemption must stay SURGICAL ───────────────────
+    "M33": ("the /auth exemption is widened to the whole namespace (keeper condition 3)",
+            sub(RESTCTL, "        '/' . self::NAMESPACE . '/auth',\n        '/' . self::NAMESPACE . '/gift-auth',",
+                         "        '/' . self::NAMESPACE . '/auth',\n        '/' . self::NAMESPACE . '/gift-auth',\n        '/' . self::NAMESPACE . '/sync-customer',")),
+    "M34": ("the /auth exemption is removed — a listed tester still cannot make an account",
+            sub(RESTCTL, "        foreach ( self::AUTH_ROUTES as $route ) {", "        foreach ( [] as $route ) {")),
+    "M35": ("the exemption replaces another plugin's entries instead of appending",
+            sub(RESTCTL, "        if ( ! is_array( $endpoints ) ) {\n            return $endpoints;   // never replace another plugin's shape\n        }",
+                         "        if ( ! is_array( $endpoints ) ) {\n            return $endpoints;\n        }\n        $endpoints = [];")),
+    "M36": ("the /auth route loses its per-IP throttle (keeper condition 1)",
+            sub(RESTCTL, "            if ( $ipHits >= 20 ) {", "            if ( false ) {")),
+    "M37": ("the /auth route stops checking the password at all (keeper condition 1)",
+            sub(RESTCTL, "                if ( ! wp_check_password( $password, $existing->user_pass, $existing->ID ) ) {",
+                         "                if ( ! true ) {")),
+    "M38": ("Plugin.php stops registering the exemption — the filter becomes a comment",
+            sub(PLUG, "            [ Wp\\RestController::class, 'exemptAuthFromBuddyBossRestriction' ]",
+                      "            [ Wp\\RestController::class, 'exemptFromNothing' ]")),
+
+    # ── #193: the dash store's silent-loss trap, against gate 34 ────────────
+    # This is the mutation that models what the code ACTUALLY did before #193:
+    # write() rebuilt the option from the ids alone. It is here rather than in a
+    # comment because "adding one member deletes every tester address" fails
+    # silently, and a silent failure is exactly what a red-first run is for.
+    "M39": ("CohortAllowlist::write() drops the addresses — one member edit eats the whole tester list",
+            sub(COHORT, "        update_option( self::OPT, array_merge( $ids, $clean ), false );",
+                        "        update_option( self::OPT, $ids, false );"), GATE34),
+    "M40": ("addedMap() casts every key to int — every ADDRESS loses its date-added row",
+            sub(COHORT, "            $e = self::normalizeEmail( (string) $k );\n            if ( $e !== '' ) {\n                $out[ $e ] = $v;\n            }",
+                        "            $e = '';\n            if ( $e !== '' ) {\n                $out[ $e ] = $v;\n            }"), GATE34),
+    "M41": ("addEmail() stores the raw typed value — the reader then silently ignores what the dash shows",
+            sub(COHORT, "        $email = self::normalizeEmail( $email );\n        if ( $email === '' ) {\n            return false;\n        }\n        if ( in_array( $email, self::emails(), true ) ) {",
+                        "        if ( $email === '' ) {\n            return false;\n        }\n        if ( in_array( $email, self::emails(), true ) ) {"), GATE34),
+    "M42": ("removeEmail() stops normalizing — an address typed in caps cannot be removed",
+            sub(COHORT, "    public static function removeEmail( string $email ): bool\n    {\n        $email = self::normalizeEmail( $email );",
+                        "    public static function removeEmail( string $email ): bool\n    {\n        $email = trim( $email );"), GATE34),
 }
 
 NO_OPS = {
@@ -193,11 +278,16 @@ NO_OPS = {
            sub(AUD, "/** The switch, and the only one. */", "/** The one switch, and there is no second. */")),
     "N2": ("add a blank line to the guard",
            sub(GUARD, "final class CheckoutAudienceGuard\n{", "final class CheckoutAudienceGuard\n{\n")),
+    # #193 — the address half has its own no-op control, or a green run above
+    # proves nothing about whether §J is keying on prose rather than code.
+    "N3": ("reword a comment in StripeLifecycle's address reader",
+           sub(SL, "     * @return array<string, true> normalized set of allowed email addresses",
+                   "     * @return array<string, true> the normalized set of allowed addresses")),
 }
 
 
-def run_gate():
-    p = subprocess.run([sys.executable and "php", str(GATE)],
+def run_gate(which=None):
+    p = subprocess.run(["php", str(which or GATE)],
                        capture_output=True, text=True, timeout=300)
     return p.returncode, p.stdout
 
@@ -226,8 +316,13 @@ def main():
     try:
         code, out = run_gate()
         if code != 0:
-            print("CANNOT RUN: the gate is not green on unmutated code.")
+            print("CANNOT RUN: gate 86 is not green on unmutated code.")
             print(out[-2500:])
+            return 3
+        c34, o34 = run_gate(GATE34)
+        if c34 != 0:
+            print("CANNOT RUN: gate 34 is not green on unmutated code.")
+            print(o34[-2500:])
             return 3
         base_pass = out.strip().splitlines()[-3] if out.strip() else "?"
         print(f"baseline GREEN ({base_pass})\n")
@@ -237,7 +332,9 @@ def main():
             cases = {args.only: cases[args.only]}
 
         red = green = broken = 0
-        for mid, (desc, apply) in cases.items():
+        for mid, spec in cases.items():
+            desc, apply = spec[0], spec[1]
+            which = spec[2] if len(spec) > 2 else GATE
             expect_red = mid in MUTATIONS
             try:
                 apply()
@@ -254,7 +351,7 @@ def main():
                 broken += 1
                 continue
 
-            code, _ = run_gate()
+            code, _ = run_gate(which)
             restore()
 
             got_red = code != 0

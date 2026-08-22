@@ -107,7 +107,27 @@ namespace LGMS {
         public const TIER          = 'looth3';
         public static function flagOn(): bool { return (bool) ( $GLOBALS['OPTS']['lgms_stripe_lifecycle'] ?? false ); }
         public static function allowlist(): array { return $GLOBALS['COHORT']; }
-        public static function inCohort( int $id ): bool { return isset( $GLOBALS['COHORT'][ $id ] ); }
+        public static function allowlistEmails(): array { return $GLOBALS['COHORT_EMAILS']; }
+
+        /* THE ADDRESS HALF, stubbed to the SAME contract the real class
+           publishes (#193): trimmed, lower-cased, and '' widens nothing. The
+           real normalizer — and the read-side union inside inCohort() — belong
+           to gate 34's test-soft-launch-allowlist.php, which drives the actual
+           class; what THIS gate measures is whether the checkout path asks. */
+        public static function inCohortEmail( ?string $e ): bool {
+            $e = strtolower( trim( (string) $e ) );
+            $GLOBALS['EMAIL_ASKS'][] = $e;
+            return $e !== '' && isset( $GLOBALS['COHORT_EMAILS'][ $e ] );
+        }
+
+        /* Read-side union, same shape as the real one, so a listed ADDRESS that
+           has grown an account is recognised by every id-keyed fence too. */
+        public static function inCohort( int $id ): bool {
+            if ( isset( $GLOBALS['COHORT'][ $id ] ) ) { return true; }
+            if ( $id <= 0 || $GLOBALS['COHORT_EMAILS'] === [] ) { return false; }
+            $u = $GLOBALS['USERS'][ $id ] ?? null;
+            return $u && self::inCohortEmail( (string) $u->user_email );
+        }
     }
 
     class StripePrice {
@@ -205,6 +225,30 @@ function note( string $t ): void { echo "  ..   $t\n"; }
 function cannot( string $why ): void { echo "CANNOT RUN: $why\n"; exit( 3 ); }
 
 /** Source with comments stripped, so prose can never satisfy an assertion. */
+/**
+ * THE BODY OF ONE FUNCTION, BRACE-MATCHED — never a fixed-width window.
+ *
+ * #190 paid for this: a window read past one handler into its NEIGHBOUR, so
+ * deleting a guard stayed green on the guard next door. A `[^}]*` regex has the
+ * same defect one step earlier — it stops at the first `}` it meets, which in
+ * any function with an `if` is the `if`'s, not the function's.
+ */
+function fn_body( string $src, string $name ): string {
+    $at = strpos( $src, 'function ' . $name );
+    if ( $at === false ) { return ''; }
+    $open = strpos( $src, '{', $at );
+    if ( $open === false ) { return ''; }
+    $depth = 0;
+    for ( $i = $open, $n = strlen( $src ); $i < $n; $i++ ) {
+        if ( $src[ $i ] === '{' ) { $depth++; }
+        elseif ( $src[ $i ] === '}' ) {
+            $depth--;
+            if ( $depth === 0 ) { return substr( $src, $open + 1, $i - $open - 1 ); }
+        }
+    }
+    return '';
+}
+
 function bare( string $file ): string {
     if ( ! is_readable( $file ) ) { cannot( "unreadable: $file" ); }
     $t = token_get_all( (string) file_get_contents( $file ) );
@@ -223,6 +267,8 @@ const DAY_IN_SECONDS = 86400;
 $GLOBALS['OPTS']      = [];
 $GLOBALS['USERS']     = [];
 $GLOBALS['COHORT']    = [ 101 => true, 102 => true, 103 => true ];
+$GLOBALS['COHORT_EMAILS'] = [];   // #193 — module scope too, or the stub reads an undefined index
+$GLOBALS['EMAIL_ASKS']    = [];
 $GLOBALS['BRIDGE']    = [];
 $GLOBALS['SQL']       = [];
 $GLOBALS['LOG']       = [];
@@ -309,6 +355,8 @@ $FILES = [
     'arbiter'   => "$ROOT/lg-patreon-stripe-poller/src/Arbiter.php",
     'wpdoor'    => "$ROOT/lg-patreon-stripe-poller/src/Wp/CheckoutRestController.php",
     'plugin'    => "$ROOT/lg-patreon-stripe-poller/src/Plugin.php",
+    'restctl'   => "$ROOT/lg-patreon-stripe-poller/src/Wp/RestController.php",
+    'pstand'    => "$ROOT/lg-patreon-stripe-poller/src/Wp/PatreonStandingRestController.php",
     'guard'     => "$ROOT/lg-stripe-billing/src/Core/CheckoutAudienceGuard.php",
     'probeI'    => "$ROOT/lg-stripe-billing/src/Contracts/CheckoutAudienceProbe.php",
     'probe'     => "$ROOT/lg-stripe-billing/src/Adapters/HttpCheckoutAudienceProbe.php",
@@ -327,6 +375,8 @@ require_once $FILES['rest'];
 require_once $FILES['prov'];
 require_once $FILES['sync'];
 require_once $FILES['wpdoor'];
+require_once $FILES['restctl'];   // #193 §K — the /auth exemption lives here
+require_once $FILES['pstand'];    // #193 rider §K3c — the standing route's exemption
 require_once $FILES['probeI'];
 require_once $FILES['guard'];
 
@@ -360,6 +410,8 @@ function reset_world(): void {
     $GLOBALS['CURRENT']   = 0;
     $GLOBALS['SOURCES']   = [];
     $GLOBALS['USERMETA']  = [];
+    $GLOBALS['COHORT_EMAILS'] = [];   // #193 — no addresses listed is the DEFAULT world
+    $GLOBALS['EMAIL_ASKS']    = [];   // every address the decider was asked about
     $GLOBALS['USERS']     = [
         101 => new FakeUser( 101, 'tester1@example.com', [ 'looth1' ] ),               // in cohort
         102 => new FakeUser( 102, 'tester2@example.com', [ 'looth1' ] ),               // in cohort
@@ -1073,6 +1125,298 @@ if ( ! $up ) {
 
     if ( is_resource( $srv ) ) { proc_terminate( $srv ); proc_close( $srv ); $GLOBALS['CA_SRV'] = null; }
     @unlink( "$docroot/router.php" ); @rmdir( $docroot );
+}
+
+/* ═══ §J — THE LIST TAKES ADDRESSES (#193) ════════════════════════════════ *
+ *
+ * Ian, 2026-08-22: *"I thought the whitelist would have them generating a
+ * wp-user like a normal new member join. Is that not possible?"*
+ *
+ * ⚠️ THE ASSERTION THAT BITES IS J1, AND THE OBVIOUS ONE IS VACUOUS. "A listed
+ * MEMBER still buys" passes on the defect — it passed for the whole life of
+ * #181, because that path never changed. What could not happen before this
+ * issue is a listed ADDRESS WITH NO ACCOUNT reaching checkout at all, so that
+ * is the leg every mutation here is aimed at. (Same trap #148 recorded: an
+ * assertion that cannot distinguish the fixed state from the broken one is not
+ * an assertion.)
+ */
+section( '§J  the list takes ADDRESSES, not only existing accounts' );
+
+/* ── J1/J2: the two halves of the fence, for somebody WordPress has never
+      heard of. `stranger@example.com` is in $USERS nowhere. ── */
+reset_world();
+$GLOBALS['OPTS'][ CA::OPT ]   = 'allowlist';
+$GLOBALS['COHORT_EMAILS']     = [ 'newtester@example.com' => true ];
+is_( CA::allowsEmail( 'newtester@example.com' ) === true,
+     'J1  a LISTED ADDRESS WITH NO ACCOUNT may proceed — the whole of #193' );
+is_( get_user_by( 'email', 'newtester@example.com' ) === false,
+     'J1b ...and it really has no account, so J1 cannot be passing by the id path' );
+is_( CA::allowsEmail( 'stranger@example.com' ) === false,
+     'J2  an UNLISTED address with no account is still refused (#181 §B3 holds)' );
+
+/* ── J3: the line #181 was opened for. An anonymous poster naming nobody. ── */
+is_( CA::allowsEmail( null ) === false, 'J3  a checkout naming NOBODY is still refused' );
+is_( CA::allowsEmail( '' ) === false,   'J3b ...and so is an empty address' );
+is_( CA::allowsEmail( '   ' ) === false, 'J3c ...and so is whitespace' );
+
+/* ── J4: normalization. A listed address must not depend on how it is typed,
+      and a malformed entry must widen NOTHING. ── */
+is_( CA::allowsEmail( 'NewTester@Example.com' ) === true, 'J4  case-insensitive' );
+is_( CA::allowsEmail( '  newtester@example.com  ' ) === true, 'J4b trimmed' );
+is_( CA::allowsEmail( 'newtester@example.com.evil.test' ) === false,
+     'J4c a NEAR MISS is not a match — the compare is exact, not a prefix' );
+
+reset_world();
+$GLOBALS['OPTS'][ CA::OPT ] = 'allowlist';
+$GLOBALS['COHORT_EMAILS']   = [];        // the real class drops malformed entries
+is_( CA::allowsEmail( 'not-an-email' ) === false,
+     'J4d a malformed entry cannot admit anybody — an empty set admits nobody' );
+
+/* ── J5: a listed address that HAS an account behaves exactly as today —
+      admitted, and BRIDGED to the account rather than minting a second one.
+      (Keeper proof 3.) ── */
+reset_world();
+$GLOBALS['OPTS'][ CA::OPT ] = 'allowlist';
+$GLOBALS['COHORT_EMAILS']   = [ 'member@example.com' => true ];   // user 900, NOT in the id cohort
+is_( CA::allowsEmail( 'member@example.com' ) === true,
+     'J5  a listed ADDRESS whose account exists is admitted' );
+$uid = UserProvisioner::findOrProvision( 7700, 'member@example.com', 'A Member' );
+is_( $uid === 900,          'J5b ...and provisioning returns the EXISTING account' );
+is_( $GLOBALS['MINTED'] === [], 'J5c ...having minted NO duplicate user' );
+
+/* ── J6: the journey Ian asked for, end to end. A listed address, no account,
+      and the account is created BY the provisioning the payment triggers. ── */
+reset_world();
+$GLOBALS['OPTS'][ CA::OPT ] = 'allowlist';
+$GLOBALS['COHORT_EMAILS']   = [ 'newtester@example.com' => true ];
+$uid = UserProvisioner::findOrProvision( 7701, 'newtester@example.com', 'New Tester' );
+is_( $uid > 0,                     'J6  a listed address with NO account PROVISIONS (keeper proof 1)' );
+is_( count( $GLOBALS['MINTED'] ) === 1, 'J6b ...exactly one WordPress account was created' );
+is_( ( $GLOBALS['MINTED'][0]['user_email'] ?? '' ) === 'newtester@example.com',
+     'J6c ...for the address that was listed' );
+is_( ( $GLOBALS['MINTED'][0]['role'] ?? '' ) === 'looth1',
+     'J6d ...at the starter tier, exactly as a real new member (the Arbiter promotes)' );
+
+/* ── J7: THE REMOVAL PROOF, and the reason the union is READ-side. A session
+      minted while the address was listed must still fail to provision once it
+      is struck. A write-side promotion (id added when the account appears)
+      would pass J6 and FAIL here — this is the assertion that chose the
+      design. ── */
+reset_world();
+$GLOBALS['OPTS'][ CA::OPT ] = 'allowlist';
+$GLOBALS['COHORT_EMAILS']   = [];        // Ian removed the address after the session was minted
+$threw = false;
+try { UserProvisioner::findOrProvision( 7702, 'newtester@example.com', 'New Tester' ); }
+catch ( \RuntimeException $e ) { $threw = true; }
+is_( $threw,                        'J7  a session minted for a SINCE-REMOVED address cannot provision (#181 proof 3)' );
+is_( $GLOBALS['MINTED'] === [],     'J7b ...nothing minted' );
+is_( $GLOBALS['SQL'] === [] || ! in_array( 'INSERT', array_map( fn( $r ) => strtoupper( substr( trim( $r[0] ), 0, 6 ) ), $GLOBALS['SQL'] ), true ),
+     'J7c ...and no bridge row written' );
+
+/* ── J8: an ALREADY-BRIDGED member is untouched in every state. #181's
+      placement ruling, re-asserted with an address world in play. ── */
+reset_world();
+$GLOBALS['OPTS'][ CA::OPT ] = 'allowlist';
+$GLOBALS['COHORT_EMAILS']   = [];
+$GLOBALS['BRIDGE']          = [ 7703 => 900 ];
+is_( UserProvisioner::findOrProvision( 7703, 'member@example.com', 'A Member' ) === 900,
+     'J8  an already-bridged member still resolves — the fence stays BELOW that return' );
+
+/* ── J9: `off` and `on` are untouched by any of this. ── */
+foreach ( [ 'off', 'on' ] as $st ) {
+    reset_world();
+    $GLOBALS['OPTS'][ CA::OPT ] = $st;
+    $GLOBALS['COHORT_EMAILS']   = [];
+    is_( CA::allowsEmail( 'stranger@example.com' ) === true,
+         "J9  `$st` is unchanged — an address world does not alter the other two states" );
+}
+
+/* ── J10: THE EMPTY STATE IS THE OFF STATE (keeper ruling D2, 8/22). #193
+      ships with no flag; what stands in for one is that a list of plain ids
+      never consults the address half at all. Asserted, not argued — and
+      measured at the decider, so a refactor that "helpfully" always resolves
+      the address would turn this red. ── */
+reset_world();
+$GLOBALS['OPTS'][ CA::OPT ] = 'allowlist';
+$GLOBALS['COHORT_EMAILS']   = [];
+CA::allowsUser( 900 );
+CA::allowsUser( 101 );
+is_( $GLOBALS['EMAIL_ASKS'] === [],
+     'J10 with NO addresses listed the signed-in path never consults the address half' );
+
+reset_world();
+$GLOBALS['OPTS'][ CA::OPT ] = 'allowlist';
+$GLOBALS['COHORT_EMAILS']   = [ 'someone@example.com' => true ];
+CA::allowsUser( 900 );
+is_( $GLOBALS['EMAIL_ASKS'] !== [],
+     'J10b ...and with one listed it DOES — the liveness partner, or J10 is vacuous' );
+
+/* ── J11: allowsUser() is textually unchanged, and its widening is the ONE
+      predicate's, not a second rule of its own. ── */
+$audSrc2 = bare( $FILES['audience'] );
+is_( strpos( $audSrc2, 'StripeLifecycle::inCohortEmail' ) !== false,
+     'J11 the address question goes through StripeLifecycle, like the id question' );
+is_( substr_count( $audSrc2, 'lgms_stripe_lifecycle_allowlist' ) === 0,
+     'J11b the decision class STILL names no cohort option of its own (§D2 under #193)' );
+is_( substr_count( $audSrc2, 'get_option' ) === 1,
+     'J11c ...and still reads exactly ONE option (§D4 under #193)' );
+$allowsUserBody = fn_body( $audSrc2, 'allowsUser' );
+is_( $allowsUserBody !== '' && strpos( $allowsUserBody, 'StripeLifecycle::inCohort(' ) !== false,
+     'J11d allowsUser() still asks inCohort() — the signed-in path is unchanged' );
+is_( $allowsUserBody !== '' && strpos( $allowsUserBody, 'inCohortEmail' ) === false,
+     'J11e ...and does NOT grow a second rule of its own; its widening is the ONE predicate\'s' );
+is_( $allowsUserBody !== '' && strpos( $allowsUserBody, 'manage_options' ) === false,
+     'J11f ...and STILL has no admin bypass (ruling (b) survives #193)' );
+
+/* ── J12: the refusal notice tells the operator the RIGHT thing. "no
+      WordPress account" stopped being the reason the moment addresses could be
+      listed, and an alert naming the wrong cause sends somebody to make an
+      account that was never needed. ── */
+reset_world();
+$GLOBALS['OPTS'][ CA::OPT ] = 'allowlist';
+$GLOBALS['COHORT_EMAILS']   = [];
+try { UserProvisioner::findOrProvision( 7704, 'stranger@example.com', 'S' ); }
+catch ( \RuntimeException $e ) { $msg = $e->getMessage(); }
+is_( isset( $msg ) && stripos( $msg, 'neither the address nor any account' ) !== false,
+     'J12 the refusal says the ADDRESS is not listed, not merely that there is no account' );
+is_( isset( $msg ) && stripos( $msg, 'Testers' ) !== false,
+     'J12b ...and names the tab where the address can be listed on its own' );
+
+/* ═══ §K — THE PASSWORD DOOR ANSWERS FOR ITSELF (#193 / D3) ═══════════════ *
+ *
+ * Approved by keeper 2026-08-22 with three conditions. Measured on dev2 over
+ * loopback before the change:
+ *   POST /wp-json/lg-member-sync/v1/auth -> 401 bb_rest_authorization_required
+ *
+ * The exemption must be SURGICAL — condition 3 — because the other three
+ * shared-secret routes in this namespace are deliberately still restricted
+ * (#181 reported them and did not open them).
+ */
+section( '§K  the /auth exemption is surgical' );
+
+$restSrc = bare( $FILES['restctl'] );
+$exempt  = LGMS\Wp\RestController::exemptAuthFromBuddyBossRestriction( [] );
+
+is_( in_array( '/lg-member-sync/v1/auth', $exempt, true ),
+     'K1  /auth is exempted — the route that creates a listed tester\'s account' );
+is_( in_array( '/lg-member-sync/v1/gift-auth', $exempt, true ),
+     'K2  ...and its alias, which is the same handler and the gift redemption door' );
+
+/* ⚠️ THIS LIST SHRANK BY ONE ON 2026-08-22, AND IT WAS RULED, NOT DRIFT.
+   #181 reported four still-restricted shared-secret routes and opened none of
+   them. Ian then flipped `lgms_double_pay_block` ON on dev2, and
+   `/patreon-standing` — measured from 127.0.0.1 WITH the correct secret —
+   still answered 401 bb_rest_authorization_required. That guard is FAIL-OPEN by
+   design, so an unreachable probe answers UNKNOWN and waves EVERY checkout
+   through, including the listed tester who actively pays Patreon: the guard
+   reads as armed and refuses nobody. Keeper ruled the exemption on #193's rider,
+   under the same three conditions as /auth, and superseded #181's
+   one-route-only condition explicitly. `/sync-customer` and `/send-gift-codes`
+   stay shut ON PURPOSE — the five-minute Sync::all() sweep covers the first and
+   nothing is waiting on the second. If a future lane wants either opened, it
+   needs its own ruling; growing this exemption quietly is the thing these
+   assertions exist to prevent. */
+foreach ( [ '/lg-member-sync/v1/sync-customer',
+            '/lg-member-sync/v1/send-gift-codes' ] as $shut ) {
+    is_( ! in_array( $shut, $exempt, true ),
+         "K3  $shut is STILL NOT opened — deliberately shut, not forgotten" );
+}
+is_( count( $exempt ) === 2, 'K3b the auth filter still names exactly two, so a widening cannot hide among them' );
+
+/* THE STANDING ROUTE'S OWN EXEMPTION — a SEPARATE filter on the same hook, so
+   each controller owns its own route and neither can widen the other. */
+$psExempt = LGMS\Wp\PatreonStandingRestController::exemptFromBuddyBossRestriction( [] );
+is_( $psExempt === [ '/lg-member-sync/v1/patreon-standing' ],
+     'K3c  /patreon-standing is exempted, and it is the ONLY route that filter names' );
+is_( LGMS\Wp\PatreonStandingRestController::exemptFromBuddyBossRestriction( 'nope' ) === 'nope',
+     'K3d  ...a non-array filter value is handed back untouched' );
+is_( count( LGMS\Wp\PatreonStandingRestController::exemptFromBuddyBossRestriction( $psExempt ) ) === 1,
+     'K3e  ...and it is idempotent' );
+$psPre = [ '/buddyboss/v1/members' ];
+is_( LGMS\Wp\PatreonStandingRestController::exemptFromBuddyBossRestriction( $psPre )
+     === [ '/buddyboss/v1/members', '/lg-member-sync/v1/patreon-standing' ],
+     'K3f  ...and it appends rather than replacing another plugin\'s entries' );
+
+/* CONDITION 1 AGAIN: the standing route's OWN secret check is untouched. The
+   exemption changes WHICH check refuses an anonymous caller, never WHETHER one
+   does — and this route is a membership oracle, so an open one would tell
+   anybody whether a named address pays us. */
+$psSrc = bare( $FILES['pstand'] );
+$psAuth = fn_body( $psSrc, 'authSharedSecret' );
+is_( $psAuth !== '' && strpos( $psAuth, 'hash_equals(' ) !== false,
+     'K3g  the standing route still compares the secret with hash_equals' );
+is_( $psAuth !== '' && strpos( $psAuth, "return false;" ) !== false
+     && strpos( $psAuth, "\$expected === ''" ) !== false,
+     'K3h  ...and an UNCONFIGURED secret is still CLOSED, never open' );
+is_( strpos( bare( $FILES['plugin'] ), 'PatreonStandingRestController::class, \'exemptFromBuddyBossRestriction\'' ) !== false,
+     'K3i  Plugin.php registers it — an unwired filter is a comment' );
+is_( substr_count( bare( $FILES['plugin'] ), "'bb_exclude_endpoints_from_restriction'" ) === 3,
+     'K3j  ...as a THIRD filter beside #181\'s and /auth\'s, each owning its own route' );
+
+/* ⚠️ THE OFF STATE IS UNTOUCHED. The filter is unconditional while the ROUTE is
+   flag-gated, so with the flag off the route still does not exist and the probe
+   still gets a 404 -> UNKNOWN -> proceed. Naming a route that does not exist
+   changes nothing; asserting that is what stops somebody "tidying" the filter
+   into a flag check and creating a second switch. */
+is_( strpos( bare( $FILES['pstand'] ), 'function maybeRegister' ) !== false
+     && strpos( fn_body( $psSrc, 'maybeRegister' ), 'PatreonStanding::flagOn()' ) !== false,
+     'K3k  the ROUTE is still flag-gated — the flag is still the registration' );
+is_( strpos( fn_body( $psSrc, 'exemptFromBuddyBossRestriction' ), 'flagOn' ) === false,
+     'K3l  ...while the EXEMPTION is not, so there is no second place to read the flag wrong' );
+
+$pre = [ '/buddyboss/v1/members' ];
+is_( LGMS\Wp\RestController::exemptAuthFromBuddyBossRestriction( $pre ) === array_merge( $pre, [ '/lg-member-sync/v1/auth', '/lg-member-sync/v1/gift-auth' ] ),
+     'K4  another plugin\'s entries are preserved, never replaced' );
+is_( LGMS\Wp\RestController::exemptAuthFromBuddyBossRestriction( 'not-an-array' ) === 'not-an-array',
+     'K5  a non-array filter value is handed back untouched' );
+$twice = LGMS\Wp\RestController::exemptAuthFromBuddyBossRestriction(
+         LGMS\Wp\RestController::exemptAuthFromBuddyBossRestriction( [] ) );
+is_( count( $twice ) === 2, 'K6  idempotent — a double-registered filter does not duplicate' );
+
+/* CONDITION 1: the route's OWN hardening is untouched. The exemption removes a
+   blanket pre-emption; it must not remove a single one of this door's checks.
+
+   ⚠️ ASSERT THE COMPARISON, NOT THE KEY NAME. The first draft of this section
+   looked for the strings `lgms_ga_ip_` and `wp_check_password`, and the
+   red-first caught it: turning `if ( $ipHits >= 20 )` into `if ( false )`
+   leaves both strings sitting right there, so the throttle could be disabled
+   with the gate none the wiser. What follows names the DECISIONS. This gate
+   cannot execute giftAuth() — it would need most of WordPress — so a source
+   assertion is the honest ceiling here; it is at least aimed at the thing that
+   would actually break. */
+is_( strpos( $restSrc, "'permission_callback' => '__return_true'" ) !== false,
+     'K7  the route is still the public sign-in it was designed to be' );
+
+$authBody = fn_body( $restSrc, 'giftAuth' );
+is_( $authBody !== '', 'K8  giftAuth() is still there to assert about' );
+foreach ( [
+    '$ipHits >= 20'                => 'K8b the per-IP throttle still COMPARES (20/hour)',
+    '$emailHits >= 5'              => 'K8c the per-email throttle still COMPARES (5 fails/15min)',
+    'wp_check_password( $password' => 'K8d the password is still actually checked',
+    'strlen( $password ) < 8'      => 'K8e the 8-character minimum is still enforced',
+    'is_email( $email )'           => 'K8f the address is still validated',
+    "'rate_limited' => true"       => 'K8g a throttled caller is still told so',
+] as $needle => $label ) {
+    is_( strpos( $authBody, $needle ) !== false, $label );
+}
+is_( substr_count( $authBody, 'set_transient' ) >= 2,
+     'K8h both throttle counters are still WRITTEN — a read-only throttle never trips' );
+
+$plugSrc2 = bare( $FILES['plugin'] );
+is_( strpos( $plugSrc2, 'exemptAuthFromBuddyBossRestriction' ) !== false,
+     'K9  Plugin.php actually registers it — an unwired filter is a comment' );
+/* ⚠️ ONE FILTER PER CONTROLLER, EACH OWNING ITS OWN ROUTE — three of them now
+   (#181's /checkout-audience, #193's /auth pair, and the rider's
+   /patreon-standing). This assertion caught the rider's own change and that is
+   the point of it: the count is pinned so a new exemption has to be a decision
+   somebody writes down, never a route quietly appended to an existing list. */
+is_( substr_count( $plugSrc2, "'bb_exclude_endpoints_from_restriction'" ) === 3,
+     'K9b ...as its OWN filter, not by widening a neighbour\'s' );
+foreach ( [ 'CheckoutAudienceRestController::class,\'exemptFromBuddyBossRestriction\'',
+            'RestController::class,\'exemptAuthFromBuddyBossRestriction\'',
+            'PatreonStandingRestController::class,\'exemptFromBuddyBossRestriction\'' ] as $wired ) {
+    is_( strpos( str_replace( ' ', '', $plugSrc2 ), str_replace( ' ', '', $wired ) ) !== false,
+         'K9c each exemption is wired to the controller that OWNS that route — ' . explode( ':', $wired )[0] );
 }
 
 /* ═══ verdict ═════════════════════════════════════════════════════════════ */

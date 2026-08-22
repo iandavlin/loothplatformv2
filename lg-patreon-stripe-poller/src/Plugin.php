@@ -223,6 +223,25 @@ final class Plugin
         // 404 is what tells the probe to stay out of the way.
         add_action( 'rest_api_init', [ Wp\PatreonStandingRestController::class, 'maybeRegister' ] );
 
+        // ⚠️ THE GUARD WAS ON AND BLIND (#193 rider, ruled 2026-08-22). Ian
+        // flipped `lgms_double_pay_block` ON on dev2; measured immediately
+        // after, from 127.0.0.1 WITH the correct secret, this route still
+        // answered 401 bb_rest_authorization_required. The guard is fail-open by
+        // design — a hiccup must not stop a sale — so an unreachable probe
+        // answers UNKNOWN and waves EVERY checkout through, including the listed
+        // tester who actively pays Patreon. #181 reported this rather than
+        // opening it, correctly, while the flag was off everywhere; the flip is
+        // what turned a report into a live defect.
+        //
+        // Registered UNCONDITIONALLY even though the route above is not: naming
+        // a route that does not exist changes nothing (WordPress 404s it either
+        // way, so OFF is untouched), while a flag-conditional exemption would be
+        // a SECOND place the flag has to be read correctly. One switch.
+        add_filter(
+            'bb_exclude_endpoints_from_restriction',
+            [ Wp\PatreonStandingRestController::class, 'exemptFromBuddyBossRestriction' ]
+        );
+
         // WHO MAY BUY (#181, option `lgms_checkout_audience`, default
         // `allowlist`). ⚠️ REGISTERED UNCONDITIONALLY, unlike the two above:
         // this guard fails CLOSED, so "route missing" must not be mistakable
@@ -236,6 +255,23 @@ final class Plugin
         add_filter(
             'bb_exclude_endpoints_from_restriction',
             [ Wp\CheckoutAudienceRestController::class, 'exemptFromBuddyBossRestriction' ]
+        );
+
+        // THE PASSWORD DOOR, ANSWERING FOR ITSELF (#193). Same hook, same
+        // one-route-at-a-time discipline: this names `/auth` and its alias
+        // `/gift-auth` and nothing else, so `/sync-customer`,
+        // `/send-gift-codes` stays restricted exactly as #181 left it, and
+        // `/sync-customer` with it — the five-minute Sync::all() sweep covers
+        // the first and nothing is waiting on the second. `/patreon-standing`
+        // was opened on #193's rider once its flag went ON; see that
+        // controller. Without it a tester listed by ADDRESS reaches
+        // /lgjoin/, presses Continue and is told "Sign-in failed" — the route
+        // that creates their account answers 401 to anon. The route's own
+        // hardening is untouched; see RestController for what that is and for
+        // what #162 does and does NOT cover here.
+        add_filter(
+            'bb_exclude_endpoints_from_restriction',
+            [ Wp\RestController::class, 'exemptAuthFromBuddyBossRestriction' ]
         );
 
         // Front-end shortcodes (gift redemption etc.).

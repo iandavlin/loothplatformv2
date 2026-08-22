@@ -248,6 +248,21 @@ $asset_v = (string) (@filemtime(__DIR__ . '/lg-shortcodes.css') ?: '1');
             <div class="lg-join__patreon-block" role="status">
                 <h3>You are already a member through Patreon</h3>
                 <p><?php echo $h( lg_membership_patreon_refusal_message() ); ?></p>
+<?php       /* THE LINKED PATREON ADDRESS (Ian 2026-08-22): this is a SWITCH
+               surface — the member is here to move their billing — so it is
+               exactly where the address they must use belongs.
+
+               ⚠️ THE SIGNED-IN RAIL IS STRUCTURAL HERE, not a condition anyone
+               has to remember: this whole branch is reachable only when
+               $blockedByPatreon, and that is computed above from
+               `$isLoggedIn && $wpUserId > 0`. An anonymous visitor never enters
+               it, so the address cannot reach one. The Slim app's anonymous 403
+               is the other half of the same rail and keeps the plain sentence,
+               because the poller's REST route never hands it an address. */
+            $lgLinkedSentence = lg_membership_linked_email_sentence( $patreonStanding['patreon_email'] ?? null );
+            if ( $lgLinkedSentence !== '' ) : ?>
+                <p class="lg-join__patreon-block-linked"><?php echo $h( $lgLinkedSentence ); ?></p>
+<?php       endif; ?>
                 <p class="lg-join__patreon-block-actions">
                     <a class="lg-join__patreon-manage" href="<?php echo $h( lg_membership_patreon_manage_url() ); ?>" rel="noopener">Manage your pledge on Patreon</a>
                 </p>

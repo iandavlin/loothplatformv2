@@ -114,6 +114,128 @@ fwrite(STDERR, "ALLOWED");   // only reached when the gate RETURNS
     return str_contains($err, 'ALLOWED') ? 'ALLOWED' : 'REFUSED';
 }
 
+/* ---------------------------------------------------------------------- *
+ * #193 — THE SAME BEHAVIOURAL RUN, with the viewer's ADDRESS controllable.
+ *
+ * lg_membership_user_email() is function_exists-guarded like everything else in
+ * config.php, precisely so a caller can pre-empt it — which is what lets this
+ * run with no database, exactly as the reader stub above does. Pre-empting it
+ * is also what keeps the assertion honest: what is under test is the DECISION,
+ * not whether a SELECT works.
+ * ---------------------------------------------------------------------- */
+function scenarioEmail(string $MP, ?string $flag, ?string $listSerialized, array $ctx, string $viewerEmail): string
+{
+    $opts = [
+        'lgms_stripe_testgroup_pages'     => $flag,
+        'lgms_stripe_lifecycle_allowlist' => $listSerialized,
+    ];
+    $harness = '<?php
+declare(strict_types=1);
+$OPTS  = ' . var_export($opts, true) . ';
+$CTX   = ' . var_export($ctx, true) . ';
+$EMAIL = ' . var_export($viewerEmail, true) . ';
+
+function lg_membership_wp_option(string $name, ?string $default = null): ?string {
+    global $OPTS;
+    return array_key_exists($name, $OPTS) && $OPTS[$name] !== null ? $OPTS[$name] : $default;
+}
+// The viewer\'s own address, pre-empted: no DB, and the decision is what is measured.
+function lg_membership_user_email(int $wpUserId): string {
+    global $EMAIL;
+    $GLOBALS["EMAIL_LOOKUPS"][] = $wpUserId;
+    return $wpUserId > 0 ? $EMAIL : "";
+}
+function lg_shared_render_site_header(array $c = []): void {}
+function lg_shared_render_site_footer(array $c = []): void {}
+
+$GLOBALS["EMAIL_LOOKUPS"] = [];
+require ' . var_export($MP . '/config.php', true) . ';
+require ' . var_export($MP . '/web/_admin-gate.php', true) . ';
+
+ob_start();
+lg_membership_testgroup_gate_or_exit($CTX);
+ob_end_clean();
+fwrite(STDERR, "ALLOWED:" . count($GLOBALS["EMAIL_LOOKUPS"]));
+';
+    $tmp = tempnam(sys_get_temp_dir(), 'lgtge') . '.php';
+    file_put_contents($tmp, $harness);
+    $d = [1 => ['pipe','w'], 2 => ['pipe','w']];
+    $pr = proc_open(PHP_BINARY . ' ' . escapeshellarg($tmp), $d, $pipes);
+    if (!is_resource($pr)) { @unlink($tmp); cannot('could not spawn php'); }
+    stream_get_contents($pipes[1]); $err = stream_get_contents($pipes[2]);
+    foreach ($pipes as $pp) fclose($pp);
+    proc_close($pr); @unlink($tmp);
+    return str_contains($err, 'ALLOWED') ? 'ALLOWED' : 'REFUSED';
+}
+
+/* ---------------------------------------------------------------------- *
+ * #193 — THE ADDRESS READER, IN ISOLATION.
+ *
+ * Same reasoning as idsFor() below, and the red-first proved it the same way:
+ * "this viewer is refused" is a much weaker claim than "the list is empty".
+ * Dropping the filter_var() validation left every behavioural scenario green,
+ * because the invented entries simply were not addresses any test viewer
+ * carried. What the reader RESOLVES TO has to be asserted directly.
+ *
+ * @return string[] whatever lg_membership_stripe_test_group_emails() returns
+ * ---------------------------------------------------------------------- */
+function emailsFor(string $MP, ?string $listSerialized): array
+{
+    $harness = '<?php
+declare(strict_types=1);
+$OPTS = ' . var_export(['lgms_stripe_lifecycle_allowlist' => $listSerialized], true) . ';
+function lg_membership_wp_option(string $name, ?string $default = null): ?string {
+    global $OPTS;
+    return array_key_exists($name, $OPTS) && $OPTS[$name] !== null ? $OPTS[$name] : $default;
+}
+require ' . var_export($MP . '/config.php', true) . ';
+echo json_encode(array_values(lg_membership_stripe_test_group_emails()));
+';
+    $tmp = tempnam(sys_get_temp_dir(), 'lgeml') . '.php';
+    file_put_contents($tmp, $harness);
+    $out = shell_exec(PHP_BINARY . ' ' . escapeshellarg($tmp) . ' 2>/dev/null');
+    @unlink($tmp);
+    $v = json_decode((string) $out, true);
+    return is_array($v) ? $v : [];
+}
+
+/* ---------------------------------------------------------------------- *
+ * #193 — THE PREDICATE ITSELF, with an email stub that answers for ANY id.
+ *
+ * ⚠️ WITHOUT THIS THE ANON GUARD IS UNTESTABLE. The behavioural runs go through
+ * lg_membership_testgroup_gate_or_exit(), which refuses an unauthenticated ctx
+ * on its own `authenticated` clause — so deleting `if ($wpUserId <= 0) return
+ * false;` from the predicate stayed green for a reason that had nothing to do
+ * with the predicate. And scenarioEmail()'s own stub returns '' for id 0, which
+ * masks it a second time. This one answers with the listed address whatever id
+ * it is handed, so the guard is the ONLY thing that can refuse.
+ * ---------------------------------------------------------------------- */
+function inGroupFor(string $MP, ?string $flag, ?string $listSerialized, int $uid, string $anyEmail): bool
+{
+    $opts = [
+        'lgms_stripe_testgroup_pages'     => $flag,
+        'lgms_stripe_lifecycle_allowlist' => $listSerialized,
+    ];
+    $harness = '<?php
+declare(strict_types=1);
+$OPTS  = ' . var_export($opts, true) . ';
+$EMAIL = ' . var_export($anyEmail, true) . ';
+function lg_membership_wp_option(string $name, ?string $default = null): ?string {
+    global $OPTS;
+    return array_key_exists($name, $OPTS) && $OPTS[$name] !== null ? $OPTS[$name] : $default;
+}
+// Answers for EVERY id, id 0 included — so only the guard can refuse.
+function lg_membership_user_email(int $wpUserId): string { global $EMAIL; return $EMAIL; }
+require ' . var_export($MP . '/config.php', true) . ';
+echo lg_membership_in_stripe_test_group(' . $uid . ') ? "YES" : "NO";
+';
+    $tmp = tempnam(sys_get_temp_dir(), 'lgpred') . '.php';
+    file_put_contents($tmp, $harness);
+    $out = shell_exec(PHP_BINARY . ' ' . escapeshellarg($tmp) . ' 2>/dev/null');
+    @unlink($tmp);
+    return trim((string) $out) === 'YES';
+}
+
 /**
  * The READER, in isolation: what ids does this option actually resolve to?
  *
@@ -816,6 +938,82 @@ if ($hash === '') {
     }
 }
 
+/* ═══ #193 — THE DOOR ALSO KNOWS AN ADDRESS ══════════════════════════════ *
+ *
+ * Ian ruled the tester list takes plain email addresses. Without this leg a
+ * tester whose account was created BY the join is admitted to checkout and then
+ * refused the join page itself the moment they arrive on a browser without
+ * #180's unlock cookie — a second device, a cleared cookie jar, or simply
+ * /manage-subscription/ after they have paid. That is the "wired perfectly and
+ * lands nowhere" shape this repo has three memories about, and it would land in
+ * the middle of a real-money test.
+ */
+echo "\n#193 — the page door recognises a listed ADDRESS\n";
+
+$addrList   = serialize(['someone@example.test']);
+$mixedList  = serialize([9001, 'someone@example.test']);
+$idOnlyList = serialize([9001]);
+$viewer     = ['authenticated' => true, 'wp_user_id' => 4242];
+
+is_(scenarioEmail($MP, '1', $addrList, $viewer, 'someone@example.test') === 'ALLOWED',
+    '#193 a viewer whose ADDRESS is listed is admitted, though their id is not');
+is_(scenarioEmail($MP, '1', $addrList, $viewer, 'SOMEONE@Example.Test') === 'ALLOWED',
+    '#193 ...however their address is cased');
+is_(scenarioEmail($MP, '1', $addrList, $viewer, 'other@example.test') === 'REFUSED',
+    '#193 a viewer whose address is NOT listed is still refused');
+is_(scenarioEmail($MP, '1', $addrList, $viewer, '') === 'REFUSED',
+    '#193 a viewer whose address cannot be read is REFUSED — a DB failure must never admit');
+
+/* LOCK 1 STILL OUTRANKS IT. The flag off means the Test Group unlocks nothing,
+   addresses included — or #193 would have quietly become a fourth way in. */
+is_(scenarioEmail($MP, '0', $addrList, $viewer, 'someone@example.test') === 'REFUSED',
+    '#193 the pages flag OFF still refuses a listed address — lock 1 is unchanged');
+is_(scenarioEmail($MP, null, $addrList, $viewer, 'someone@example.test') === 'REFUSED',
+    '#193 ...and so does an ABSENT flag');
+
+/* ANON IS NEVER LISTED, and cannot become listed by carrying an address. */
+is_(scenarioEmail($MP, '1', $addrList, ['authenticated' => false, 'wp_user_id' => 0], 'someone@example.test') === 'REFUSED',
+    '#193 an unauthenticated viewer is refused even with a listed address');
+
+/* MIXED AND ID-ONLY LISTS. The id half is untouched by any of this. */
+is_(scenarioEmail($MP, '1', $mixedList, ['authenticated' => true, 'wp_user_id' => 9001], 'nobody@example.test') === 'ALLOWED',
+    '#193 a listed MEMBER is still admitted from a mixed list');
+is_(scenarioEmail($MP, '1', $idOnlyList, $viewer, 'someone@example.test') === 'REFUSED',
+    '#193 an id-only list admits nobody by address');
+
+/* THE READER ITSELF: address entries must not corrupt the id list, which is
+   what made adding them to this option safe in the first place. */
+is_(idsFor($MP, '1', $mixedList) === [9001],
+    '#193 the id reader is UNCHANGED by address entries — it has always dropped non-numerics');
+is_(idsFor($MP, '1', $addrList) === [],
+    '#193 an addresses-only list resolves to NO ids, exactly as before');
+
+/* THE ADDRESS READER, IN ISOLATION — what does it actually resolve to?
+   Found by red-first: without these, dropping filter_var() left every
+   behavioural scenario green. */
+is_(emailsFor($MP, serialize(['Someone@Example.Test', '  spaced@example.test  '])) === ['someone@example.test', 'spaced@example.test'],
+    '#193 the address reader trims and lower-cases');
+is_(emailsFor($MP, serialize(['not-an-email', 'also bad', '@nope', 'x@', ''])) === [],
+    '#193 ...and DROPS every malformed entry — a junk entry can never become a listed address');
+is_(emailsFor($MP, serialize([9001, '77', true, null, ['a']])) === [],
+    '#193 ...and ignores ids, digit-strings and non-strings entirely');
+is_(emailsFor($MP, serialize(['ok@example.test', 'not-an-email'])) === ['ok@example.test'],
+    '#193 ...keeping the good one beside the bad, rather than failing whole');
+is_(emailsFor($MP, 'not-serialized-at-all') === [] && emailsFor($MP, null) === [],
+    '#193 an absent or malformed OPTION resolves to no addresses — nobody');
+
+/* THE PREDICATE ITSELF. The behavioural runs cannot test the anon guard: the
+   gate refuses an unauthenticated ctx on its own `authenticated` clause, so
+   deleting the guard stays green for an unrelated reason. Found by red-first. */
+is_(inGroupFor($MP, '1', $addrList, 0, 'someone@example.test') === false,
+    '#193 the predicate refuses id 0 even when the address lookup WOULD answer with a listed one');
+is_(inGroupFor($MP, '1', $addrList, -5, 'someone@example.test') === false,
+    '#193 ...and a negative id');
+is_(inGroupFor($MP, '1', $addrList, 4242, 'someone@example.test') === true,
+    '#193 ...while a real id with that same address is admitted — or the two above are vacuous');
+is_(inGroupFor($MP, '0', $addrList, 4242, 'someone@example.test') === false,
+    '#193 ...and lock 1 still refuses it at the predicate, not only at the gate');
+
 echo "\n$pass passed, $fail failed\n";
 if ($fail > 0) {
     echo "RED — the Stripe Test Group page gate is not holding.\n";
@@ -854,6 +1052,38 @@ exit(0);
  *       -> 4 RED.
  *   M9  ids() accepts any truthy value instead of int/ctype_digit
  *       -> 1 RED. 0 and negative ids start matching.
+ *
+ * ─── #193 (2026-08-22): the door also knows an ADDRESS. Baseline 136/0.
+ *     6/6 caught, 1/1 no-op inert. Re-run:
+ *     python3 tools/gates/... — the harness for these lives in the lane's
+ *     scratchpad; the mutations are recorded here because the numbers are what
+ *     matter and they are measured, not predicted.
+ *
+ *   M7b remove the address leg from lg_membership_in_stripe_test_group()
+ *       -> 3 RED. A tester whose account was created by the join is refused
+ *          the join page on any browser without #180's unlock cookie.
+ *   M8c the compare stops normalizing (leans on the lookup to lower-case)
+ *       -> 1 RED. THIS ONE FOUND A REAL DEFECT rather than proving an
+ *          assertion: the first draft did exactly this, so the door was
+ *          correct only while that one helper stayed its only caller.
+ *   M9b an unreadable address ADMITS instead of refusing
+ *       -> 1 RED. A DB error must never open a door.
+ *   M10 lock 1 stops outranking the address leg
+ *       -> 8 RED. The pages flag OFF would let a listed address in, which
+ *          would make #193 a quiet fourth way in.
+ *   M11 the address reader drops its filter_var() validation
+ *       -> 3 RED — but ONLY after emailsFor() was added. It was a BLIND SPOT
+ *          first time round: every behavioural scenario stayed green because
+ *          the invented entries were not addresses any test viewer carried.
+ *          Same lesson idsFor() records above, one reader over.
+ *   M12 delete the `$wpUserId <= 0` anon guard
+ *       -> 2 RED — again only after inGroupFor() was added. The behavioural
+ *          runs CANNOT see this: the gate refuses an unauthenticated ctx on
+ *          its own `authenticated` clause, so the mutation stayed green for a
+ *          reason that had nothing to do with the predicate, and
+ *          scenarioEmail()'s stub returning '' for id 0 masked it a second
+ *          time. A guard that only a direct call can exercise needs a direct
+ *          call.
  *
  * TWO MUTATIONS FOUND HOLES IN THIS GATE RATHER THAN IN THE CODE, which is
  * the whole reason for running them, and both are worth remembering:

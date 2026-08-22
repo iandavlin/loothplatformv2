@@ -145,17 +145,33 @@ a stray active price is something a checkout can be pointed at.
 
 ## 5. The allowlist — the door (Ian)
 
-Testers must each have a WordPress account, then:
+**Testers no longer need a WordPress account first (#193).** List their email
+addresses and they join, pay, and get their account created by the join —
+which is the journey a real new member takes at go-live, and the reason Ian
+asked: *"I thought the whitelist would have them generating a wp-user like a
+normal new member join."*
+
+Easiest: **wp-admin → LG Member Sync → Testers**, type the address, confirm.
+An address that matches no account is offered for listing instead of refused.
+
+By hand — **ids and addresses go in the SAME array**:
 
     sudo -u looth-dev wp --path=/var/www/dev eval '
     $ids = [/* tester user ids */];
     update_option("lgms_stripe_lifecycle_allowlist", array_values(array_unique(array_map("intval", $ids))));
     echo count($ids) . " on the list\n";'
+    sudo -u looth-dev wp --path=/var/www/dev eval '
+    $list = [/* tester user ids */, /* "tester@example.com", ... */];
+    update_option("lgms_stripe_lifecycle_allowlist", array_values($list));
+    echo count($list) . " on the list\n";'
+
+⚠️ **Ian must be on it himself** — #181 has no admin bypass, deliberately, so
+that the person most likely to check can actually see the fence fail.
 
 **Why it is the only door:** checkout enforcement (#181) defaults to
-`allowlist` — absent config reads as enforcing — and **there is deliberately NO
-admin bypass**, so Ian must be on the list to buy. An email with no account is
-refused.
+`allowlist` — absent config reads as enforcing. **An address that is not on the
+list is refused whether or not it has an account**, and removing an address
+shuts every door for it immediately, including a checkout already started.
 
 ---
 
@@ -248,15 +264,32 @@ After the webhook creates the rows, confirm each live product's `ref`
 (`looth2`/`looth3`) on our side. **Stripe never sets this** — a price with no
 `ref` grants nothing and checkout refuses it.
 
-## F. The tester list  ▢
+## F. The tester list — **list their email addresses**  ▢
 
-Each tester needs a WordPress account. **Ian must be on it himself** — #181 has
-no admin bypass.
+**No tester needs a WordPress account first (#193).** Put their address on the
+list; the account is created by their join, exactly as it will be for a real
+new member. **Ian must be on it himself** — #181 has no admin bypass.
+
+wp-admin → LG Member Sync → **Testers** → type the address → confirm. Or by
+hand, ids and addresses in one array:
 
     sudo -u looth-dev wp --path=/var/www/dev eval '
     $ids = [/* tester user ids */];
     update_option("lgms_stripe_lifecycle_allowlist", array_values(array_unique(array_map("intval", $ids))));
     echo count($ids) . " on the list\n";'
+    sudo -u looth-dev wp --path=/var/www/dev eval '
+    $list = [/* tester user ids */, /* "tester@example.com", ... */];
+    update_option("lgms_stripe_lifecycle_allowlist", array_values($list));
+    echo count($list) . " on the list\n";'
+
+⚠️ **The account is made at SIGN-UP, by `/lgjoin/`'s own sign-in call — which
+#193 had to unblock.** BuddyBoss's blanket `bb-enable-private-rest-apis` was
+401ing `POST /wp-json/lg-member-sync/v1/auth` for anonymous visitors on both
+boxes, so a listed tester would type their address, press Continue and be told
+*"Sign-in failed"*. That route is now exempted (its own throttles, password
+check and validation untouched). **If a tester reports "Sign-in failed", check
+that first** — and note the same 401 was why a gift recipient with no account
+could not redeem one either.
 
 ## G. Open the door for them  ▢
 

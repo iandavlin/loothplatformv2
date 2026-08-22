@@ -7,9 +7,24 @@ by Ian** (keeper resolves names → WP user IDs). Build owner = **stripe seat**.
 The lifecycle core is merged flag-OFF (`0ffb32f`) and single-tier (`looth3`). This
 adds ONE gate so a live flag-flip touches only a named cohort, not the whole base.
 
+> ⚠️ **SUPERSEDED IN ONE RESPECT BY #193 (2026-08-22): THE LIST ALSO TAKES EMAIL
+> ADDRESSES.** Ian: *"I thought the whitelist would have them generating a
+> wp-user like a normal new member join."* Everything below is still true of the
+> **id** entries; the same option now also holds plain addresses, in the same
+> array, for people who have **no account yet** — they join, pay, and their
+> WordPress account is created by the join, which is the journey a real new
+> member takes at GA. `StripeLifecycle::allowlistEmails()` reads that half and
+> `inCohort()` unions the two, so there is still ONE predicate and ONE store.
+> Read-side, deliberately: a promoted id would outlive the address that earned
+> it and striking an address would stop closing the door. **With no addresses
+> listed, behaviour is identical to this spec** — the id check short-circuits
+> and the address half is never read. See `docs/domains/MEMBERSHIP.md`,
+> State (8/22, #193).
+
 ## The mechanism
 
-- **New option `lgms_stripe_lifecycle_allowlist`** — an array of **WP user IDs**.
+- **New option `lgms_stripe_lifecycle_allowlist`** — an array of **WP user IDs**
+  (and, since #193, **email addresses** — see the note above).
   Per-box (WP option), so dev2 and live hold their own lists.
 - **Gate location:** inside the lifecycle AFTER identity resolution (bridge →
   IdentityMatcher gives the WP user id) and BEFORE any membership mutation —

@@ -154,6 +154,15 @@ final class RestController
             'permission_callback' => [ self::class, 'authLoggedInUser' ],
         ] );
 
+        // ⚠️ PUBLIC IN ITS OWN REGISTRATION AND 401 ON THE WIRE UNTIL #193.
+        // Measured on dev2 2026-08-22, over loopback, anon:
+        //   POST /wp-json/lg-member-sync/v1/auth
+        //   -> 401 {"code":"bb_rest_authorization_required"}
+        // BuddyBoss's `bb_restricate_rest_api` pre-empts the REST stack before
+        // any route's own permission_callback whenever `bb-enable-private-rest-apis`
+        // is 1 — it is, on both boxes, and it is re-armed by every DB reload.
+        // See self::exemptAuthFromBuddyBossRestriction() below for why lifting
+        // exactly this is a repair and not a bypass.
         // Public auth endpoint. /auth is the canonical route; /gift-auth is
         // a backward-compat alias from when this only served the gift
         // redemption flow. Both routes hit the same handler — keep the alias
@@ -189,6 +198,77 @@ final class RestController
             'callback'            => [ self::class, 'payoutResolve' ],
             'permission_callback' => [ self::class, 'authAdmin' ],
         ] );
+    }
+
+    /** The two password routes, exactly as BuddyBoss's restriction filter sees them. */
+    public const AUTH_ROUTES = [
+        '/' . self::NAMESPACE . '/auth',
+        '/' . self::NAMESPACE . '/gift-auth',
+    ];
+
+    /**
+     * LET THE PASSWORD DOOR ANSWER FOR ITSELF (#193, approved by keeper
+     * 2026-08-22 with three conditions; same mechanism and same one-route
+     * discipline as CheckoutAudienceRestController's).
+     *
+     * WHY IT IS NEEDED HERE. #193 lets Ian list a tester's plain email address
+     * so they can walk the real new-member journey. In a browser that journey
+     * starts at `/lgjoin/`, whose JS calls THIS route to create the account
+     * before it ever reaches checkout (lgjoin.php, `CONFIG.authUrl`). While
+     * BuddyBoss 401s it, a listed tester types their address, presses Continue
+     * and is told *"Sign-in failed"* — the whitelist change lands correctly and
+     * the rehearsal is still impossible. The same 401 is why a gift recipient
+     * with no account cannot redeem one today either; that is the same repair,
+     * which is why the alias is named beside the canonical route.
+     *
+     * ⚠️ IT IS A REPAIR, NOT AN AUTH BYPASS, AND THE DISTINCTION IS EXACT.
+     * `bb_restricate_rest_api` is not this route's authentication — this route
+     * has none by design (`permission_callback => '__return_true'`), because it
+     * IS the sign-in. What it has instead is its own hardening, and #193
+     * changed NONE of it (keeper condition 1): a per-IP throttle of 20/hour, a
+     * per-email throttle of 5 failed attempts / 15 minutes, `is_email()`
+     * validation, an 8-character minimum, `wp_check_password()`, and a refusal
+     * that distinguishes a wrong password from an unknown account. Every one of
+     * those still runs; the only thing removed is a blanket pre-emption that
+     * was never a membership control.
+     *
+     * ⚠️ WHAT STANDS BEHIND IT NOW THAT DID NOT IN JUNE: #181's checkout
+     * audience. An account created here still cannot buy anything unless its
+     * address or its id is on the list, at all three mint doors AND at the
+     * provision fence. So the worst this opens is an unlisted stranger making a
+     * looth1 account — the starter tier, which grants no paid content.
+     *
+     * ⚠️ AND WHAT DOES NOT COVER IT — stated because assuming otherwise is the
+     * expensive mistake (keeper condition 2). #162's auto-ban ENFORCES at this
+     * exact route: `platform/nginx/lg-auto-ban-doors.conf.template` gives
+     * `/auth` and `/gift-auth` their own exact-match locations returning JSON to
+     * a listed address. But it does NOT DETECT here, and #162 says so in its own
+     * words: *"The stuffing detector has never watched it — it checks passwords
+     * with wp_check_password() and so fires no wp_login_failed hook."* Verified
+     * independently in this file: `giftAuth()` fires `wp_login` on success and
+     * never `wp_login_failed`. So a ban EARNED at wp-login.php is enforced here,
+     * and a stuffing run conducted only against this route earns none. Its two
+     * throttles are what stand here. **Neither box has #162 installed** — the
+     * flag defaults false and the nginx snippet exists on neither — so the
+     * enforcement half is absent today on both. Reported on #193, not silently
+     * assumed away; the one-line change that would close it (fire
+     * `wp_login_failed` from the wrong-password branch) is #162's design call,
+     * not this lane's.
+     *
+     * @param mixed $endpoints
+     * @return mixed
+     */
+    public static function exemptAuthFromBuddyBossRestriction( $endpoints )
+    {
+        if ( ! is_array( $endpoints ) ) {
+            return $endpoints;   // never replace another plugin's shape
+        }
+        foreach ( self::AUTH_ROUTES as $route ) {
+            if ( ! in_array( $route, $endpoints, true ) ) {
+                $endpoints[] = $route;
+            }
+        }
+        return $endpoints;
     }
 
     public static function authLoggedInUser(WP_REST_Request $req): bool

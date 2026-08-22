@@ -73,6 +73,7 @@ $GLOBALS['ROUTES']    = [];
 $GLOBALS['MINTED']    = [];
 $GLOBALS['NOTIFIED']  = [];
 $GLOBALS['TRANSIENTS'] = [];
+$GLOBALS['USERDATA_CALLS'] = [];   // #193 — the no-op spy
 
 function get_option( $n, $d = false ) {
     return array_key_exists( $n, $GLOBALS['OPTS'] ) ? $GLOBALS['OPTS'][ $n ] : $d;
@@ -90,6 +91,17 @@ function get_user_by( $field, $id ) {
         foreach ( $GLOBALS['FIX'] as $r ) { if ( $r['email'] === $id ) { return (object) [ 'ID' => $r['uid'], 'roles' => $r['roles'], 'user_email' => $r['email'] ]; } }
         return false;
     }
+    $r = $GLOBALS['FIX'][ (int) $id ] ?? null;
+    if ( ! $r ) { return false; }
+    return (object) [ 'ID' => $r['uid'], 'roles' => $r['roles'], 'user_email' => $r['email'] ];
+}
+/**
+ * #193 — the read-side union asks for the user behind an id. THE SPY IS THE
+ * POINT: with no addresses listed this must NEVER be called, which is what
+ * stands in for a flag on this issue (keeper ruling D2).
+ */
+function get_userdata( $id ) {
+    $GLOBALS['USERDATA_CALLS'][] = (int) $id;
     $r = $GLOBALS['FIX'][ (int) $id ] ?? null;
     if ( ! $r ) { return false; }
     return (object) [ 'ID' => $r['uid'], 'roles' => $r['roles'], 'user_email' => $r['email'] ];
@@ -435,9 +447,132 @@ $res = StripeLifecycle::ingest( $p, sign( $p ) );
 $note( $res['status'] === 503 && row_tier( 501, 'stripe' ) === 'ABSENT',
        'identity gate dark + member in cohort: still 503, still nothing — the interlock outranks the cohort' );
 
+// -------------------------------------- 7. the list also takes ADDRESSES (#193)
+//
+// Ian, 2026-08-22: "I thought the whitelist would have them generating a wp-user
+// like a normal new member join." THIS is where the real normalizer and the real
+// read-side union are driven — gate 86 stubs StripeLifecycle deliberately, so if
+// these assertions do not exist the class's own behaviour is untested.
+echo "\n[7] the SAME option also takes email addresses — real normalizer, real union\n";
+
+scenario();
+cohort( [ 501, 'Tester@Example.COM ', '  second@example.test', 'not-an-email', '', 42, '77', [ 'nope' ], null, true ] );
+
+$note( StripeLifecycle::allowlist() === [ 501 => true, 42 => true, 77 => true ],
+       'allowlist() is UNCHANGED by address entries — ids and digit-strings only',
+       var_export( StripeLifecycle::allowlist(), true ) );
+$note( StripeLifecycle::allowlistEmails() === [ 'tester@example.com' => true, 'second@example.test' => true ],
+       'allowlistEmails() trims, lower-cases, and drops everything that is not an address',
+       var_export( StripeLifecycle::allowlistEmails(), true ) );
+$note( StripeLifecycle::inCohortEmail( 'TESTER@EXAMPLE.COM' ) === true,
+       'inCohortEmail() is case-insensitive' );
+$note( StripeLifecycle::inCohortEmail( '  tester@example.com  ' ) === true, 'and trimmed' );
+$note( StripeLifecycle::inCohortEmail( 'not-an-email' ) === false
+       && StripeLifecycle::inCohortEmail( '' ) === false
+       && StripeLifecycle::inCohortEmail( null ) === false,
+       'a malformed, empty or absent address widens NOTHING' );
+$note( StripeLifecycle::inCohortEmail( 'tester@example.com.evil.test' ) === false,
+       'a near miss is not a match — the compare is exact' );
+
+// ── the read-side union, through inCohort(), with the REAL class ──
+scenario();
+$GLOBALS['FIX'][ 601 ] = [ 'uid' => 601, 'email' => 'listed@example.test', 'roles' => [ 'looth1' ] ];
+$GLOBALS['FIX'][ 602 ] = [ 'uid' => 602, 'email' => 'unlisted@example.test', 'roles' => [ 'looth1' ] ];
+cohort( [ 'LISTED@example.test' ] );
+$note( StripeLifecycle::inCohort( 601 ) === true,
+       'inCohort() recognises a member whose ADDRESS is listed — without this the grant never lands' );
+$note( StripeLifecycle::inCohort( 602 ) === false, 'and still refuses one whose address is not' );
+$note( StripeLifecycle::inCohort( 0 ) === false && StripeLifecycle::inCohort( -1 ) === false,
+       'a non-positive id is refused before anything is looked up' );
+
+// ── THE NO-OP PROOF (keeper ruling D2 — this replaces a flag) ──
+scenario();
+$GLOBALS['FIX'][ 601 ] = [ 'uid' => 601, 'email' => 'listed@example.test', 'roles' => [ 'looth1' ] ];
+cohort( [ 501, 502 ] );                       // plain ids: the world before #193
+$GLOBALS['USERDATA_CALLS'] = [];
+StripeLifecycle::inCohort( 501 );
+StripeLifecycle::inCohort( 601 );
+StripeLifecycle::inCohort( 999 );
+$note( $GLOBALS['USERDATA_CALLS'] === [],
+       'WITH NO ADDRESSES LISTED nothing resolves a user at all — the empty state IS the off state',
+       var_export( $GLOBALS['USERDATA_CALLS'], true ) );
+
+cohort( [ 501, 'listed@example.test' ] );      // the liveness partner
+$GLOBALS['USERDATA_CALLS'] = [];
+StripeLifecycle::inCohort( 601 );
+$note( $GLOBALS['USERDATA_CALLS'] === [ 601 ],
+       'and with ONE address listed it DOES resolve — or the assertion above is vacuous',
+       var_export( $GLOBALS['USERDATA_CALLS'], true ) );
+
+$GLOBALS['USERDATA_CALLS'] = [];
+StripeLifecycle::inCohort( 501 );
+$note( $GLOBALS['USERDATA_CALLS'] === [],
+       'a member already on the ID list short-circuits — no lookup on the hot path either' );
+
+// ── the whole point, end to end: a listed ADDRESS transitions ──
+scenario(); flag_on();
+$GLOBALS['FIX'][ 601 ] = [ 'uid' => 601, 'email' => 'newtester@example.test', 'roles' => [ 'looth1' ] ];
+$cid = seed_customer( 'newtester@example.test', 'cus_E' );
+bridge( $cid, 601 );
+confirm_with( [ 'sub_E' => sub_obj( 'sub_E', 'cus_E', 'active' ) ] );
+cohort( [ 'newtester@example.test' ] );        // listed by ADDRESS ONLY — no id anywhere
+$p   = evt( 'evt_addr1', 'customer.subscription.updated', sub_obj( 'sub_E', 'cus_E', 'active' ) );
+$res = StripeLifecycle::ingest( $p, sign( $p ) );
+$note( $res['status'] === 200 && row_tier( 601, 'stripe' ) === 'looth3',
+       'a member listed ONLY by address transitions through the real webhook — the grant lands',
+       'status=' . $res['status'] . ' tier=' . var_export( row_tier( 601, 'stripe' ), true ) );
+
+// ...and striking the address freezes them again, in the same instant
+scenario(); flag_on();
+$GLOBALS['FIX'][ 601 ] = [ 'uid' => 601, 'email' => 'newtester@example.test', 'roles' => [ 'looth1' ] ];
+$cid = seed_customer( 'newtester@example.test', 'cus_E' );
+bridge( $cid, 601 );
+confirm_with( [ 'sub_E' => sub_obj( 'sub_E', 'cus_E', 'active' ) ] );
+cohort( [] );
+$p   = evt( 'evt_addr2', 'customer.subscription.updated', sub_obj( 'sub_E', 'cus_E', 'active' ) );
+$res = StripeLifecycle::ingest( $p, sign( $p ) );
+$note( str_contains( (string) ( $res['body']['result'] ?? '' ), 'skipped' ) && row_tier( 601, 'stripe' ) === 'ABSENT',
+       'removing the address freezes them again — the fence is read fresh, never cached across a change' );
+
+// ── the dash writer: BOTH halves survive every edit (the silent-loss trap) ──
+echo "\n[7b] CohortAllowlist keeps BOTH halves — the write() that would have eaten every address\n";
+scenario();
+$GLOBALS['FIX'][ 601 ] = [ 'uid' => 601, 'email' => 'kept@example.test', 'roles' => [ 'looth1' ] ];
+
+$note( CohortAllowlist::addEmail( '  KEPT@example.test ' ) === true, 'addEmail() normalizes on the way in' );
+$note( get_option( StripeLifecycle::ALLOWLIST_OPT ) === [ 'kept@example.test' ],
+       'and stores the normalized form, so the reader cannot silently ignore it',
+       var_export( get_option( StripeLifecycle::ALLOWLIST_OPT ), true ) );
+$note( CohortAllowlist::addEmail( 'kept@example.test' ) === false, 're-adding an address is a no-op' );
+$note( CohortAllowlist::addEmail( 'not-an-email' ) === false
+       && CohortAllowlist::addEmail( '' ) === false
+       && get_option( StripeLifecycle::ALLOWLIST_OPT ) === [ 'kept@example.test' ],
+       'a malformed address is refused, never stored — the dash cannot show an entry that admits nobody' );
+
+CohortAllowlist::add( 501 );
+$note( get_option( StripeLifecycle::ALLOWLIST_OPT ) === [ 501, 'kept@example.test' ],
+       'ADDING A MEMBER DOES NOT EAT THE ADDRESSES — ints first, then addresses',
+       var_export( get_option( StripeLifecycle::ALLOWLIST_OPT ), true ) );
+CohortAllowlist::add( 502 );
+CohortAllowlist::remove( 501 );
+$note( get_option( StripeLifecycle::ALLOWLIST_OPT ) === [ 502, 'kept@example.test' ],
+       'and REMOVING one does not either — the trap that would have failed silently' );
+$note( CohortAllowlist::emails() === [ 'kept@example.test' ] && CohortAllowlist::ids() === [ 502 ],
+       'both halves read back through the SAME normalization the gate uses' );
+$note( CohortAllowlist::count() === 2, 'count() is everyone on the list, so nothing can report EMPTY on a full one' );
+$note( is_string( CohortAllowlist::addedAt( 'kept@example.test' ) ),
+       'date-added bookkeeping survives a STRING key — an int-only cast would have dropped it' );
+$note( is_string( CohortAllowlist::addedAt( 502 ) ), 'and still records ids' );
+
+$note( CohortAllowlist::removeEmail( 'KEPT@example.test' ) === true,
+       'removeEmail() matches however it is typed' );
+$note( get_option( StripeLifecycle::ALLOWLIST_OPT ) === [ 502 ], 'the address is gone, the member untouched' );
+$note( CohortAllowlist::removeEmail( 'kept@example.test' ) === false, 'removing an absent address reports false' );
+$note( CohortAllowlist::addedAt( 'kept@example.test' ) === null, 'and its bookkeeping is cleared' );
+
 printf( "\n%d passed, %d failed\n", $pass, $fail );
 if ( $fail ) { echo "RED\n"; exit( 1 ); }
-echo "GREEN — empty is closed, a skip is a journaled 200, the cohort alone discriminates, out-of-cohort is frozen both directions, the dash writes what the gate reads, and nothing arms by itself.\n";
+echo "GREEN — empty is closed, a skip is a journaled 200, the cohort alone discriminates, out-of-cohort is frozen both directions, the dash writes what the gate reads, addresses admit people who have no account yet, and nothing arms by itself.\n";
 exit( 0 );
 
 }

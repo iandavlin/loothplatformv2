@@ -274,6 +274,213 @@
 - **Owed:** Ian looks at the tab on dev2 after the merge. Live's catalogue is
   still empty, which is what makes this the tool he needs at the moment it is
   not.
+## State (8/22, #193 rider — the double-pay guard was ON and BLIND)
+
+- **WHAT HAPPENED:** Ian flipped `lgms_double_pay_block` ON on dev2 (#150's
+  pending flip). Measured immediately after, from 127.0.0.1, **with the correct
+  shared secret**: `POST /wp-json/lg-member-sync/v1/patreon-standing` still
+  answered **401 `bb_rest_authorization_required`**.
+- ⚠️ **THE GUARD'S BEST QUALITY IS WHAT MADE THAT FATAL, and this is the shape
+  worth remembering.** It is **fail-open by design** — a WordPress blip must
+  never stop a legitimate sale — so a route that cannot answer produces UNKNOWN,
+  and UNKNOWN waves **every** checkout through. The guard read as armed on the
+  dash and refused nobody, **including the listed tester who actively pays
+  Patreon: the exact person it exists to stop.** #181 measured this 401 and
+  REPORTED it rather than opening it, which was right while the flag was off
+  everywhere. **The flip is what turned a report into a live defect** — a
+  reported-not-fixed finding can become urgent without anybody touching the
+  code.
+- **EXEMPTED on keeper's ruling**, same three conditions as #193's `/auth`:
+  the route's own secret check untouched (it is a membership **oracle** — it
+  says whether a named address pays us — so an open one is worse than a closed
+  one); surgical, its own filter on its own controller; and **gate 86's
+  still-restricted list shrank DELIBERATELY** — `/sync-customer` and
+  `/send-gift-codes` stay shut, the sweep covers the first, nothing waits on the
+  second. **This supersedes #181's one-route-only condition**, and the gate says
+  so in its own comment so the change reads as decided rather than drifted.
+- ⚠️ **THE FILTER IS UNCONDITIONAL THOUGH THE ROUTE IS FLAG-GATED.** Naming a
+  route that does not exist changes nothing — WordPress 404s it either way, so
+  OFF is untouched (gate 75 §9d) — while a flag-conditional exemption would be a
+  SECOND place the flag has to be read correctly. Gate 86 §K3k/§K3l pin both
+  halves so a tidy-up cannot merge them.
+- **THREE FILTERS ON THAT HOOK NOW, ONE PER CONTROLLER**, and gate 86 §K9b pins
+  the count so a fourth must be a decision somebody writes down.
+- **Gate 75 §9** drives the **REAL adapter over REAL HTTP** against a real 401,
+  because §5 stubs the probe and **a stub always answers** — which is precisely
+  why the reachability half was invisible for that gate's whole life. 9a the 401
+  decodes to UNKNOWN; 9b UNKNOWN lets the buyer through (a silently disarmed
+  guard); **9c\* THE MIKELLE CASE — a paying patron is REFUSED end to end**;
+  9c4 a non-patron on the same reachable route still buys.
+
+## State (8/22, Ian's ruling — the linked Patreon email on every double-pay and switch surface)
+
+- **THE LAW (Ian 8/22, verbatim):** *"its critical to add to any double pay or
+  switch surface the email associated with their patreon account and that that
+  is the email to use when adjusting thier membership."*
+- **WHY IT MATTERS:** the linkage between the two rails is the EMAIL. A member
+  who cancels Patreon and rejoins here under a **different** address is the #149
+  lost-membership class — they pay again and land on a second account that knows
+  nothing about the first. Naming the address before they choose one prevents
+  it, and it costs a sentence.
+- ⚠️ **MEASURED ON LIVE BEFORE BUILDING, AND THE NUMBER IS ZERO.** Of **1,223**
+  active paying patrons, **1,223 carry a Patreon email and 0 differ** from their
+  WordPress address. So this changes nothing anybody can see today; its value is
+  entirely **preventive** — it names the address before a member picks a
+  different one, and it is already correct on the day one diverges. Do not quote
+  it as fixing a live divergence. *(The query needs the explicit cross-database
+  `COLLATE utf8mb4_unicode_ci`; without it MySQL raises ERROR 1267 — the trap
+  `report-dual-payers.sql` already records.)*
+- **KEEPER'S ONE RAIL: SIGNED-IN MEMBER, THEIR OWN SURFACE, ONLY.** An anonymous
+  caller's refusal never carries it — `POST /billing/v1/checkout` takes an
+  arbitrary email and answers a stranger, so including it there would turn the
+  double-pay guard into an **address-lookup service** for anyone who types a
+  member's WordPress email.
+- ⚠️ **AND THE RAIL IS STRUCTURAL, NOT REMEMBERED.** `patreon_email` is
+  deliberately **NOT returned by `PatreonStandingRestController`** — the only
+  channel the Slim billing app has into WordPress — so **the anonymous 403
+  cannot include it even by mistake, because the app never receives it.** Same
+  discipline #192 used for the health panel's secrets: a property of the data,
+  not a rule the renderer has to remember. Gate 75 §10g asserts the absence
+  **with a fixture that HOLDS an address**, since a fixture with none leaves
+  nothing for a broken build to leak.
+- **WHERE IT SHOWS:** `/manage-subscription/` (the dual-payer notice),
+  `/lgjoin/`'s blocked-by-Patreon block (a switch surface by definition — and
+  that branch is reachable only when `$isLoggedIn && $wpUserId > 0`, so the rail
+  holds structurally there too), and the WP `/me/checkout-session` 409. That
+  last one is safe because it is session-authenticated **and** takes the member
+  from `get_current_user_id()`, never the body — gate 75 §10i2/§10i3/§10i4
+  assert all three, because 10i is a leak if any of them stops being true.
+- **ONE SENTENCE, TWO APPS, WORD FOR WORD** (`PatreonStanding::
+  linkedEmailSentence()` and `lg_membership_linked_email_sentence()`), compared
+  by gate 75 §10k. **No linked address produces NOTHING** — never an invented or
+  guessed one, because the member would act on it.
+- **Gate 75 at 131**; red-first **17/17** + 1 no-op via the new
+  `tools/gates/double-pay-redfirst.py`.
+- ⚠️ **THREE OF MY OWN §10 ASSERTIONS WERE BLIND FIRST TIME, and the gate was
+  fixed, not the mutation:** a *"renders it"* check that looked for the function
+  NAME (satisfied by a call pinned to `false`); a selector regex whose `[^{}]*`
+  swallowed a `-DISABLED` suffix, so a **prefix match read as a hit**; and no
+  assertion at all that the standalone app SELECTs the address — its sentence
+  had nothing to say while every copy check passed.
+- **OBSERVED, NOT FIXED:** `.lg-join__patreon-block` — the whole
+  blocked-by-Patreon refusal block on `/lgjoin/` — **has no CSS rule anywhere in
+  the repo**. It renders as bare `h3` and `p`. Pre-existing from #150, and
+  Ian decides from pictures, so it is worth a look; not this lane's to restyle.
+
+## State (8/22, #193 — the tester list takes ADDRESSES, not only existing accounts)
+
+- **THE LAW THIS ADDS (Ian 8/22, verbatim):** *"Is this an accurate test? I
+  thought the whitelist would have them generating a wp-user like a normal new
+  member join. Is that not possible?"* It was not, and the miss was #181's — a
+  fence that could only recognise people who already existed.
+- ⚠️ **THE COLLISION, IN ONE LINE:** `UserProvisioner::findOrProvision` creates a
+  WP account from the checkout email — that IS the normal new-member journey —
+  but `CheckoutAudience::allowsEmail()` resolved the address to a WP user and
+  refused when there wasn't one. **So an address with no account was refused
+  BEFORE it could be provisioned**, every tester had to pre-exist, and the one
+  path a real stranger takes at GA was the one path the test could not exercise.
+- **ONE STORE, TWO FORMS.** `lgms_stripe_lifecycle_allowlist` now holds positive
+  ints and email strings in the same array. **Safe by construction, not by
+  care:** `StripeLifecycle::allowlist()` and the standalone app's
+  `lg_membership_stripe_test_group_ids()` have ALWAYS accepted only ints and
+  digit-strings, so an address entry was already inert to every reader that
+  predates this. New siblings `allowlistEmails()` / `inCohortEmail()`.
+- ⚠️ **THE UNION IS READ-SIDE, INSIDE `inCohort()`, AND THAT CHOICE IS THE WHOLE
+  DESIGN.** The tempting alternative is the shape `Invites::consumeForUser()`
+  already uses — when the account appears, promote its id onto the list. It
+  fails the one constraint #181 is built on: *a session minted for an address
+  LATER removed must still fail to provision*. A promoted id outlives the
+  address that earned it. Read-side, **striking an address shuts every door in
+  the same instant**, including a checkout already minted. Gate 86 §J7 is the
+  assertion that chose it.
+- ⚠️ **AND IT IS REQUIRED, NOT COSMETIC.** Without the union a listed address
+  would mint a session and provision an account, and then `Sync::customer`'s
+  fence — asking the very same predicate with the NEW user's id — would skip the
+  grant. **The tester ends with an account and no membership, and the rehearsal
+  reads as passed.** This is the failure mode to remember.
+- **NO FLAG, AND THE EMPTY STATE IS THE OFF STATE** (keeper ruling D2, 8/22).
+  With no addresses listed every path short-circuits on the id check and the
+  address half is never read — proven at the decider with a **call spy plus a
+  liveness partner** (gate 34, gate 86 §J10/§J10b), not argued. A separate flag
+  would have created a state where an address is listed and silently ignored:
+  the "wired perfectly, lands nowhere" shape this file already carries three
+  warnings about.
+- ⚠️ **`CohortAllowlist::write()` WOULD HAVE EATEN EVERY ADDRESS.** It rebuilt
+  the whole option from the id list with `array_map('intval')`, so the first
+  dash edit of any MEMBER would have deleted every tester address — no error, no
+  notice, and the testers who could no longer buy with no way to tell why.
+  Union-preserving now; red-first M39 models exactly that. `addedMap()`'s
+  `(int) $k > 0` had the same shape for the date column (M40).
+- **THE PAGE DOOR LEARNED IT TOO, and skipping that would have bitten mid-test.**
+  Without it a tester whose account was created by the join is admitted to
+  CHECKOUT and refused the JOIN PAGE the moment they arrive on a browser without
+  #180's unlock cookie — a second device, a cleared cookie jar, or simply
+  `/manage-subscription/` after they have paid. **Lock 1 still outranks it**
+  (`lgms_stripe_testgroup_pages` off refuses a listed address), anon still
+  cannot become listed by carrying an address, and **a viewer whose address
+  cannot be READ is refused** — a DB error must never admit.
+- ⚠️ **THE DASH RE-CHECKS FOR AN ACCOUNT AT WRITE TIME and stores the MEMBER when
+  one exists.** Between the lookup and the click the person may have signed up,
+  and two entries for one human is a list that later disagrees with itself. The
+  Testers tab shows which listed addresses have signed up and which have not.
+- **#193's DEPENDENCY ON #181's `/auth` FINDING — D3, approved by keeper 8/22
+  with three conditions.** Measured on dev2 over loopback BEFORE the change:
+  `POST /wp-json/lg-member-sync/v1/auth` → **401 `bb_rest_authorization_required`**.
+  That route is what creates the account for a logged-out visitor at `/lgjoin/`
+  (`lgjoin.php`, `CONFIG.authUrl`), so a listed tester would type their address,
+  press Continue and be told *"Sign-in failed"* — the whitelist landing
+  correctly and the rehearsal still impossible. Exempted through BuddyBoss's own
+  `bb_exclude_endpoints_from_restriction`, naming `/auth` and `/gift-auth` and
+  **nothing else**; `/sync-customer`, `/patreon-standing` and `/send-gift-codes`
+  stay shut exactly as #181 left them (gate 86 §K3). **The route's own hardening
+  is untouched** — per-IP 20/hour, per-email 5 fails/15min, `is_email()`, the
+  8-character minimum, `wp_check_password()` — and §K asserts each COMPARISON,
+  not the key names. **The same 401 is why a gift recipient with no account
+  could not redeem one**; that is repaired in the same breath.
+- ⚠️ **WHAT #162 DOES AND DOES NOT COVER ON THAT DOOR — confirmed from merged
+  code, not assumed (keeper condition 2), and it is HALF.** ENFORCEMENT: yes —
+  `platform/nginx/lg-auto-ban-doors.conf.template` gives `/auth` and
+  `/gift-auth` their own exact-match locations returning JSON to a listed
+  address. DETECTION: **no**, and #162 says so in its own words: *"The stuffing
+  detector has never watched it — it checks passwords with
+  `wp_check_password()` and so fires no `wp_login_failed` hook."* Verified
+  independently: `giftAuth()` fires `wp_login` on success and never
+  `wp_login_failed`. **So a ban EARNED at wp-login.php is enforced here, and a
+  stuffing run conducted only against this route earns none** — its two
+  throttles are what stand there. **And neither box has #162 installed**: the
+  flag defaults false and the nginx snippet exists on neither, so the
+  enforcement half is absent today on both. The one-line change that would close
+  detection (fire `wp_login_failed` from the wrong-password branch) is #162's
+  design call and was deliberately NOT made here.
+- **#193 BUILT** on `193-tester-emails`. Gates **86 §J+§K** (212 assertions
+  total; red-first **42/42** + 3 no-op controls), **34** (67, the real
+  normalizer and union), **90 §I** (119 total; red-first **43/43** + 3 no-ops),
+  **34b** (127 total). Neighbours re-run standalone and green: 34d, 75, 76, 91,
+  `test-identity-gate`, `test-checkout-session-metadata`.
+- ⚠️ **THREE GATE DEFECTS FOUND BY RED-FIRST, ALL THE SAME SHAPE — asserting that
+  a STRING is present rather than that a DECISION is made.** §K looked for
+  `lgms_ga_ip_` and `wp_check_password`, so `if ( $ipHits >= 20 )` → `if ( false )`
+  disabled the throttle with the gate green (keeper's condition 1 unguarded by
+  the section written to guard it). Gate 90 §I6 looked for
+  `lgms_cohort_confirm_email` anywhere in the handler, so neutering the branch
+  left the string sitting there unreachable. §I8 looked for
+  `CohortAllowlist::emails()`, so `foreach ( [] as $addr )` rendered nothing and
+  passed. **A fourth was a fixed-target satisfied by the wrong occurrence:** §I9
+  matched the count expression anywhere in the tab, so reverting the HEADING
+  stayed green on the CHIP's identical copy. All four now assert the branch,
+  the loop, or the pinned markup.
+- ⚠️ **AND SIX "BLIND SPOTS" THAT WERE NOTHING OF THE KIND — worth knowing before
+  the next lane repeats it.** Mutations to the real `StripeLifecycle` stayed
+  green against gate 86, which reads as six holes. Gate 86 **stubs** that class
+  on purpose (its docblock says what it measures is whether the checkout path
+  ASKS). The harness now targets **a gate per mutation**; the real class is
+  driven against gate 34. Pointing a mutation at the wrong gate is a false
+  green.
+- **Owed:** Ian looks at the Testers tab on dev2 after the merge and lists a real
+  address. ⚠️ **The dev2 serve runs `main`, so nothing in this lane can be
+  verified over HTTP until it is merged** — the `/auth` 401 above was measured
+  against main and is the state that will change on the pull. Live writes stay
+  his.
 
 ## State (8/22, #192 — the panel that answers the five questions nobody could)
 
