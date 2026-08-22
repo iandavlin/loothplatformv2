@@ -73,12 +73,26 @@ return [
     //   'invite'  a designed empty state that asks members to put themselves
     //             forward — the only surface that ever could, since 8 members
     //             of 1,934 have ticked the box
-    // Ian has both drawn side by side at /footer-mockups/200-featured-override/
-    // and picks; until he does, 'member' ships because it is the status quo and
-    // changes nothing he has not already seen for three months.
+    //
+    // ⚠️ RULED: 'invite'. Ian, 2026-08-22, shown both drawn side by side at
+    // /footer-mockups/200-featured-override/: "B is fine for featured. We
+    // haven't even announced it as a feature."
+    //
+    // WHAT THAT DECIDES, in case a later reader is tempted to flip it back:
+    // the 'member' shape is a real person's name, face and bio under a badge
+    // reading "Featured member". It is frozen text nobody maintains, so the
+    // longer it sits there the more confidently it tells every visitor that
+    // someone featured in June is featured today. The 'invite' shape says the
+    // true thing about the same state and is the ONLY surface on the site that
+    // can ask the other ~1,926 members to put themselves forward.
+    //
+    // The 'member' fields below are DELIBERATELY KEPT, not deleted. Gate 94 §A3
+    // draws BOTH shapes on every run, so the road back is a one-word change
+    // that is already known to render — and a shape nobody draws is a shape
+    // nobody notices has rotted.
     'featured_member_fallback' => [
         'enabled'   => true,
-        'kind'      => 'member',
+        'kind'      => 'invite',          // RULED by Ian 2026-08-22 — see above
         'name'      => 'Dan Erlewine',
         'role'      => 'Master Luthier & Repair Authority',
         'where'     => 'Athens, Ohio',
@@ -95,7 +109,20 @@ return [
             'role'      => 'Every week we put one member here',
             'bio'       => 'Fancy it? Tick “include me as a possible featured member” on your profile and you are in the running. Your photo, what you do, and a link to your bench.',
             'cta_label' => 'Put me forward',
-            'cta_href'  => '/u/',
+            // ⚠️ NOT '/u/', which is what the mock and the first build carried.
+            // The mock drew this button with href="#", so nobody ever clicked
+            // it; MEASURED on dev2, a bare /u/ with no slug is a real branded
+            // 404 (5,114 bytes of "not found" page), because u.php resolves a
+            // SLUG and there is no self-profile alias. Shipping that would have
+            // put a dead button on the front page for every visitor.
+            //
+            // /profile/edit is the one URL that means "me" for every audience:
+            // anon gets the sign-in interstitial with return=/profile/edit,
+            // a WP session with no looth_id mints one and comes straight back,
+            // and a signed-in member 302s to /u/<their-slug>, which IS the
+            // inline editor and is where the "include me as a possible featured
+            // member" tick actually lives (u.php, `$lg_fmOn && $isOwner`).
+            'cta_href'  => '/profile/edit',
         ],
     ],
 

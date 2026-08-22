@@ -994,11 +994,18 @@ $lg_fm = (defined('LG_FEATURED_MEMBER') && !empty(LG_FEATURED_MEMBER['enabled'])
 // (AND the flag is on), resolve the card from profile_app instead of the
 // hand-typed fields — "live, not frozen" (decision page §3's recommendation).
 //
-// FLAG OFF IS BYTE-IDENTICAL: member_uuid is ignored outright, so a stale
-// value left in config.json from a previous ON state cannot leak the
-// real-member path back on. The hand-typed band (Dan Erlewine, shipping since
-// June) is completely unaffected either way — this only intercepts the ONE
-// new case LG_FEATURED_MEMBER did not have before today.
+// ⚠️ "FLAG OFF IS BYTE-IDENTICAL" WAS TRUE UNTIL #200 AND IS NOT TRUE NOW.
+// What survives is the property that actually matters: FLAG OFF PUBLISHES NO
+// REAL MEMBER. member_uuid is ignored outright, so a stale value left in
+// config.json from a previous ON state cannot leak the real-member path back
+// on. What OFF renders instead is no longer nothing — the empty-pool law below
+// draws the fallback, because a hole in the page is the defect Ian reported.
+//
+// And the fallback is no longer the hand-typed Dan Erlewine card that shipped
+// from June. Ian ruled the 'invite' shape on 2026-08-22 ("B is fine for
+// featured"), so the no-pick state now says "This spot is open" and recruits.
+// The hand-placed fields are still carried in defaults.php and still drawn by
+// gate 94 §A3 — kept deliberately, not stranded.
 if ($lg_fm && !empty($lg_fm['member_uuid'])) {
     $lg_fm_cfg = @include __DIR__ . '/../../platform/config/featured-members.php';
     $lg_fm_on  = is_array($lg_fm_cfg) && !empty($lg_fm_cfg['enabled']);

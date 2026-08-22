@@ -16,8 +16,10 @@ WHAT THIS GATE IS FOR, and why gate 39 could not have caught any of it:
 SECTIONS
 
   A  THE EMPTY-POOL LAW. With no pick, the band is PRESENT — in all three flag
-     states, and for both fallback shapes Ian is choosing between. This is the
-     one Ian actually reported.
+     states, and for both fallback shapes. This is the one Ian actually
+     reported. A4/A5 were added when he ruled (2026-08-22, "B is fine for
+     featured"): the page must draw the shape he PICKED, and that shape's one
+     button must reach a real page — it shipped pointing at /u/, a 404.
   B  THE PIN, red-first as a PAIR. A member who fails the criteria renders when
      pinned and does NOT render when not — the second half is what proves the
      first is the pin doing the work and not the fallback wearing his name.
@@ -270,6 +272,92 @@ def section_a_empty_pool():
             else:
                 OK.append(f"[A3] the '{kind}' fallback shape produces a drawable card "
                           f"({card['name']!r})")
+
+    # ── A4: THE SHIPPED SHAPE IS THE ONE IAN RULED ──────────────────────────
+    # Ian, 2026-08-22, having seen both drawn side by side: "B is fine for
+    # featured. We haven't even announced it as a feature." B is 'invite'.
+    #
+    # ⚠️ WHY THIS IS ASSERTED ON THE RENDERED PAGE AND NOT ON defaults.php.
+    # Reading `kind => 'invite'` out of the file proves somebody typed it. It
+    # does not prove the page draws it — §A3's own history is the argument:
+    # breaking the invite branch made it fall through to a perfectly drawable
+    # 'member' card, and every source-level check stayed green. So this renders
+    # the real no-pick page and asks what the visitor is actually handed.
+    #
+    # This is NOT the hardcoded-state mistake that
+    # feedback-gate-reads-the-flag-not-a-hardcoded-state warns about. That rule
+    # is about FLAGS, which have several legitimate states and must not be
+    # pinned to one. `kind` is not a flag — it is a ruling, with one correct
+    # value until Ian gives another. Pinning it is the whole point: a later
+    # edit that quietly reverts the front page to a hand-placed person who was
+    # featured in June is exactly what this must catch.
+    html, err = render({"enabled": True}, {"LG_FEATURED_MEMBERS": "1"})
+    if not liveness(html):
+        DEAD.append(f"[A4] the front page did not render at all: {err or 'no page'}")
+    else:
+        b = band(html)
+        if b["empty_shape"] == 0:
+            RED.append(f"[A4] with nobody picked the band draws the HAND-PLACED shape "
+                       f"({b['name']!r}), not the invite Ian ruled on 2026-08-22 — the front "
+                       f"page is telling every visitor that someone featured in June is "
+                       f"featured today")
+        elif b["blank_img"]:
+            RED.append("[A4] the invite card ships an empty src=\"\" — it draws a glyph, not a "
+                       "face, and the template's !empty() guard is what makes that safe")
+        else:
+            OK.append(f"[A4] the no-pick band draws the ruled invite shape ({b['name']!r})")
+
+    # ── A5: THE INVITE CARD'S BUTTON GOES SOMEWHERE ─────────────────────────
+    # FOUND THE HONEST WAY, 2026-08-22, by clicking it. The mock drew this CTA
+    # with href="#" and the first build shipped '/u/', which is a real branded
+    # 404 (5,114 bytes) because u.php resolves a SLUG and there is no
+    # self-profile alias. A card whose only control dead-ends is worse than the
+    # hole it replaced: the hole was at least honest about having nothing.
+    #
+    # ⚠️ PAIRED WITH A KNOWN-BAD CONTROL, because an "it is reachable" probe
+    # that cannot tell reachable from unreachable passes on everything
+    # (feedback-absence-assertion-needs-liveness). '/u/' MUST come back bad
+    # here; if it does not, this whole section measured nothing and says so.
+    fb_href = ""
+    try:
+        out = subprocess.run(
+            ["php", "-r", "$d = include %r; echo (string)($d['featured_member_fallback']"
+                          "['invite']['cta_href'] ?? '');" % DEFAULTS_PHP],
+            capture_output=True, text=True, timeout=30)
+        fb_href = out.stdout.strip()
+    except Exception as e:
+        DEAD.append(f"[A5] could not read the invite cta_href: {e}")
+
+    def _status(path):
+        """Anon fetch over the loopback — the dev gate allows 127.0.0.1, so this
+        needs no token, and a token-gated fetch would measure the gate page."""
+        try:
+            r = subprocess.run(
+                ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
+                 "-H", "Host: dev2.loothgroup.com",
+                 "--resolve", "dev2.loothgroup.com:443:127.0.0.1", "-k",
+                 "--max-time", "20", "https://dev2.loothgroup.com" + path],
+                capture_output=True, text=True, timeout=30)
+            return r.stdout.strip()
+        except Exception:
+            return ""
+
+    control = _status("/u/")
+    if control != "404":
+        DEAD.append(f"[A5] the reachability probe is not working: the known-dead /u/ answered "
+                    f"{control or 'nothing'} instead of 404, so a green here would prove nothing")
+    elif not fb_href:
+        RED.append("[A5] the invite card has NO cta_href — the button renders and goes nowhere")
+    elif not fb_href.startswith("/"):
+        RED.append(f"[A5] the invite cta_href {fb_href!r} is not a same-site path")
+    else:
+        st = _status(fb_href)
+        if st in ("200", "301", "302"):
+            OK.append(f"[A5] the invite card's button reaches {fb_href} ({st}) — probe proven "
+                      f"by /u/ answering 404")
+        else:
+            RED.append(f"[A5] the invite card's button points at {fb_href}, which answers {st} — "
+                       f"a dead button on the front page for every visitor")
 
 
 # ── lifting a pure function out of index.php, gate 39 §G3's technique ────────

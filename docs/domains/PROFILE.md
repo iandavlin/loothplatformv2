@@ -609,15 +609,117 @@ as a dash, never as *"opted in"*.
   `sudo -u postgres psql profile_app -f tools/cut/featured-member-grants.sql`.
   Without it the band shows the fallback rather than a real member.
 - **Live needs the history migration** before its stints record how they happened.
-- **Ian has not yet chosen the empty-state design** (A: the standing hand-placed
-  card; B: a designed "this spot is open" invite). Both are implemented and both
-  are asserted by gate 94 §A3; `defaults.php` ships `kind => 'member'` because it
-  is the status quo. His choice is a one-line data change.
+- ~~**Ian has not yet chosen the empty-state design**~~ — **RULED B, 2026-08-22**:
+  *"B is fine for featured. We haven't even announced it as a feature."*
+  `defaults.php` ships `kind => 'invite'`, so the no-pick band now says *"This
+  spot is open"* and recruits. See the #200-B section below — applying it found a
+  defect the mock could not.
 - **`business_name` being a tail of the display name is why four of six live
   members cannot render.** The `str_ends_with` test is correct — it stops a card
   saying the same three words twice — but it means the fallback almost never
   fires for members whose business is in their display name. Nobody has been asked
   whether that is the right trade.
+
+---
+
+## #200-B — applying the ruled empty state, and the button nobody had pressed (8/22)
+
+Ian ruled **B** on 2026-08-22 having seen both drawn side by side. The change he
+ruled on is **one data key** — `featured_member_fallback.kind`, `'member'` →
+`'invite'` in `archive-poc/web/defaults.php`. The template and the CSS for that
+shape had already merged with #200, so there was no markup and no stylesheet
+change. Pictures of the result, on the real front page:
+<https://dev2.loothgroup.com/footer-mockups/200-featured-b/>
+
+### ⚠️ THE TRANSFERABLE ONE: A MOCK'S `href="#"` MEANS THE CONTROL IS UNTESTED
+
+Variant B has **exactly one control**. The mock drew it as
+`<a class="lg-fm__cta" href="#">Put me forward</a>`, so it looked complete and was
+never once clicked; the merged build carried `cta_href => '/u/'`.
+
+**MEASURED on dev2: a bare `/u/` with no slug is a real branded 404** — 5,114
+bytes of "not found" page — because `u.php` resolves a **slug** and this box has
+no self-profile alias. `/u/<real-slug>/` answers 200, which is why the value
+looked right to everyone who read it instead of fetching it.
+
+**A card whose only control dead-ends is worse than the hole it replaced**, which
+was at least honest about having nothing. And the empty-pool law means this card
+draws on **every** route to a missing band, to **both audiences** — so it would
+have been a dead button on the front page for every visitor.
+
+The fix is `'/profile/edit'`, the one URL that means "me" for every audience the
+band renders to:
+
+| viewer | what `/profile/edit` does |
+|---|---|
+| anon | login interstitial carrying `return=/profile/edit` (200, "Sign in to edit") |
+| WP session, no `looth_id` | invisible hop through `/looth-auth/issue`, comes back |
+| signed-in member | 302 to `/u/<their-slug>` — **which IS the inline editor**, and where the "include me as a possible featured member" tick lives (`u.php`, guarded by `$lg_fmOn && $isOwner`) |
+
+**The general rule: a mock proves the picture, never the plumbing.** Any control
+carried from a drawn mock into shipped code has never been exercised, whatever it
+looks like. Fetch its destination before believing the value.
+
+### The gate: assert the RENDER, not the file — and pair the reachability probe
+
+Gate 94 grew two sections, both red-first proven (harness now 23/23, with a third
+no-op control added for `defaults.php`, which these are the first legs to mutate):
+
+- **§A4 — the no-pick page draws the shape Ian ruled.** Asserted on the *rendered
+  page*, not on `defaults.php`. Reading `kind => 'invite'` out of the file proves
+  somebody typed it; §A3's own history is the argument that this is not enough —
+  breaking the invite branch made it fall through to a perfectly drawable
+  `'member'` card while every source-level check stayed green.
+  ⚠️ **This is NOT the hardcoded-state mistake** that
+  `feedback-gate-reads-the-flag-not-a-hardcoded-state` warns about. That rule is
+  about **flags**, which have several legitimate states and must not be pinned to
+  one. `kind` is a **ruling** with one correct value until Ian gives another, and
+  pinning it is the entire point: the `'member'` fields are deliberately still
+  carried, so one word puts a person who was featured in June back on the front
+  page while every other assertion stays green.
+- **§A5 — the invite card's button reaches a real page, PAIRED WITH A KNOWN-BAD
+  CONTROL.** `/u/` must come back 404 in the same probe; if it does not, the probe
+  cannot tell reachable from unreachable and its green proves nothing
+  (`feedback-absence-assertion-needs-liveness`). The fetch goes over the loopback,
+  which the dev gate allows, so it needs no token — a token-gated fetch would be
+  measuring the gate page.
+
+### Checked rather than assumed, and worth copying
+
+- **The invite-only CSS introduces three tokens** — `--lg-sage-3`,
+  `--lg-sage-tint`, `--lg-sage-d` — and all three carry dark values on **both**
+  dark paths (`html[data-lguser-theme="dark"]` and the `prefers-color-scheme`
+  media query). #189 found three tokens on this box with no dark value at all, and
+  a token with no dark value **silently stays light**. Check the tokens a new rule
+  introduces, not only the rule.
+- **The shots are renders, not drawings.** `tools/preview/200-featured-b-shots.py`
+  renders this branch's `index.php` twice, once per shape, and photographs the
+  band inside the real page — the serve is main, and main also has a real pick, so
+  a plain fetch of dev2's front page could never have drawn a fallback at all. It
+  asserts liveness, the light/dark delta (`rgb(255,255,255)` vs `rgb(30,33,36)`),
+  the shape's own name, no broken image, and that the shared chrome profile's
+  theme is unchanged on exit.
+- **Two defects in the lane's own picture page were caught only by LOOKING at
+  it** — unreadable squeezed desktop crops, and an orphaned fourth phone shot.
+  Neither was reachable by any assertion in the harness, which happily reported 8
+  images, none broken, no stray entities and no horizontal scroll. **Fourth time
+  on this surface.**
+
+### Reported by #200-B, not fixed
+
+- ⚠️ **On a box where the featured flag is OFF, the invite card sends members to a
+  page with no tick on it.** The band draws in all three flag states (the
+  empty-pool law), but `u.php` renders the opt-in block only when
+  `$lg_fmOn && $isOwner`. dev2 is ON via its `.local.php`, so the journey is whole
+  here; **live's tracked default is OFF**, so until Ian arms it there, "Put me
+  forward" would land a member on their own profile with nothing to tick. Not
+  fixed because the live flag posture is Ian's call and the flag is expected to go
+  on once he runs the grant — but it is a coherence trap for whoever flips either
+  switch, and the honest options are to gate the CTA on the flag or to arm the
+  flag in the same window as the band.
+- The `'member'` fallback fields are still carried and still drawn by gate 94 §A3.
+  Deliberate — a shape nobody draws is a shape nobody notices has rotted — but it
+  does mean the road back to A is one word, which is what §A4 now watches.
 
 ---
 

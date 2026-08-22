@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Featured member — the empty spot now asks people to join in</title>
+<style>
+/* ⚠️ OWN TOKEN NAMESPACE (--b2-*), never --lg-*. The docroot injects the theme
+   boot script into every page on this box, including this one, and it REPOINTS
+   the --lg-* tokens as inline style on <html>. A page that borrowed them would
+   invert. And the paint goes on a WRAPPER, never on body, because the injected
+   lg-boot-crit sets body{...!important}. */
+:root{
+  --b2-bg:#14161a; --b2-panel:#1b1e23; --b2-ink:#e9ebe6; --b2-mute:#a4aaa2;
+  --b2-line:#2b3038; --b2-accent:#b0c693; --b2-warm:#e8c27a;
+}
+.b2-wrap{
+  background:var(--b2-bg); color:var(--b2-ink); min-height:100vh;
+  font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  padding:26px 20px 90px; margin:0;
+}
+/* the injected app chrome lands ON this page — a fixed tabbar covers ~55px and
+   the install banner has previously landed on the very control being shown */
+#looth-tabbar,.lg-install-banner,#lg-install-banner{display:none!important}
+.b2-inner{max-width:1120px;margin:0 auto}
+h1{font-size:27px;line-height:1.25;margin:0 0 6px;font-weight:700}
+.b2-sub{color:var(--b2-mute);margin:0 0 26px;max-width:70ch}
+h2{font-size:20px;margin:34px 0 4px;font-weight:700}
+.b2-note{color:var(--b2-mute);margin:0 0 16px;max-width:74ch}
+.b2-card{background:var(--b2-panel);border:1px solid var(--b2-line);border-radius:12px;padding:16px;margin:0 0 16px}
+.b2-grid{display:grid;grid-template-columns:1fr;gap:14px}
+.b2-lbl{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--b2-mute);margin:0 0 8px}
+.b2-lbl b{color:var(--b2-warm)}
+.b2-lbl i{color:var(--b2-accent);font-style:normal}
+img{max-width:100%;height:auto;display:block;border-radius:8px;border:1px solid var(--b2-line)}
+.b2-phones{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.b2-phones figure{margin:0}
+figcaption{font-size:13px;color:var(--b2-mute);margin-top:7px}
+.b2-doors{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 0}
+.b2-doors a{display:inline-block;background:var(--b2-accent);color:#14251a;text-decoration:none;
+  font-weight:700;padding:10px 16px;border-radius:999px;font-size:14px}
+.b2-doors a.ghost{background:transparent;color:var(--b2-accent);border:1px solid var(--b2-accent)}
+.b2-flag{border-left:3px solid var(--b2-warm);padding:12px 14px;background:#221d13;border-radius:0 8px 8px 0;margin:16px 0}
+ul{margin:8px 0 0;padding-left:20px;color:var(--b2-mute)}li{margin:5px 0}
+strong.on{color:var(--b2-ink)}
+</style>
+</head>
+<body>
+<div class="b2-wrap"><div class="b2-inner">
+
+  <h1>The empty featured spot now asks people to join in</h1>
+  <p class="b2-sub">You picked this one: <b>&ldquo;B is fine for featured. We haven&rsquo;t even announced
+     it as a feature.&rdquo;</b> Here it is on the real front page &mdash; not a drawing. Every picture below
+     is the actual page, rendered from the new code, in both colour schemes, on desktop and on a phone.</p>
+
+  <h2>Desktop</h2>
+  <p class="b2-note">Top of each pair is what was there before: a real person&rsquo;s card, frozen since June, still
+     saying &ldquo;featured member&rdquo; about someone featured three months ago. Below it is the new one.</p>
+  <div class="b2-grid">
+    <div class="b2-card">
+      <p class="b2-lbl">Before &mdash; <b>light</b> &middot; desktop</p>
+      <img src="band-before-1440-light.png" alt="The old card: Dan Erlewine, light">
+    </div>
+    <div class="b2-card">
+      <p class="b2-lbl">Now &mdash; <b>light</b> &middot; desktop</p>
+      <img src="band-after-1440-light.png" alt="The new card: This spot is open, light">
+    </div>
+    <div class="b2-card">
+      <p class="b2-lbl">Before &mdash; <i>dark</i> &middot; desktop</p>
+      <img src="band-before-1440-dark.png" alt="The old card, dark">
+    </div>
+    <div class="b2-card">
+      <p class="b2-lbl">Now &mdash; <i>dark</i> &middot; desktop</p>
+      <img src="band-after-1440-dark.png" alt="The new card, dark">
+    </div>
+  </div>
+
+  <h2>Phone</h2>
+  <p class="b2-note">Same two cards at phone width, both colour schemes.</p>
+  <div class="b2-card">
+    <div class="b2-phones">
+      <figure><img src="band-before-390-light.png" alt="Old card on a phone, light"><figcaption>Before &mdash; light</figcaption></figure>
+      <figure><img src="band-after-390-light.png" alt="New card on a phone, light"><figcaption>Now &mdash; light</figcaption></figure>
+      <figure><img src="band-before-390-dark.png" alt="Old card on a phone, dark"><figcaption>Before &mdash; dark</figcaption></figure>
+      <figure><img src="band-after-390-dark.png" alt="New card on a phone, dark"><figcaption>Now &mdash; dark</figcaption></figure>
+    </div>
+  </div>
+
+  <h2>See the whole page</h2>
+  <p class="b2-note">These are the complete front pages the pictures were taken from, so you can scroll
+     the band in place rather than trust a crop. Your own colour scheme applies.</p>
+  <div class="b2-doors">
+    <a href="after.html">The front page, with the new card</a>
+    <a class="ghost" href="before.html">The front page, with the old one</a>
+  </div>
+
+  <div class="b2-flag">
+    <p style="margin:0 0 6px"><strong class="on">One thing I found by clicking it, and fixed.</strong></p>
+    <p style="margin:0;color:var(--b2-mute)">The drawing had the <b>Put me forward</b> button going nowhere &mdash;
+       in a mock a button never has to work, so nobody had pressed it. On the real page it was pointing at an
+       address that gives a &ldquo;not found&rdquo; page. It now takes you to your own profile, which is where the
+       tick box lives. Signed out, it asks you to sign in first and then brings you straight back. A dead button
+       on the front page would have been worse than the empty space it replaced.</p>
+  </div>
+
+  <h2>What the card does now</h2>
+  <ul>
+    <li>When nobody is picked, the front page says <strong class="on">This spot is open</strong> and invites members to put themselves forward &mdash; instead of leaving a hole, or re-running someone from June.</li>
+    <li>The button goes to the member&rsquo;s own profile, where <strong class="on">&ldquo;include me as a possible featured member&rdquo;</strong> is ticked.</li>
+    <li>The old hand-placed card has <strong class="on">not been thrown away</strong>. It is still there and still tested, so going back to it is a one-word change if you ever want it.</li>
+    <li>Nothing about your picks changed. When you have picked somebody, they show, exactly as before.</li>
+  </ul>
+
+</div></div>
+</body>
+</html>
