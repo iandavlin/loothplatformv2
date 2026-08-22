@@ -92,6 +92,33 @@ final class GateCta
                 if (!empty($first['ext']))  $parts[] = (string) $first['ext'];
                 if (!empty($first['size'])) $parts[] = (string) $first['size'];
                 if ($parts) $rowMeta = ' — ' . implode(', ', $parts);
+            } elseif (($blockHint['type'] ?? '') === 'download') {
+                /* The `download` BLOCK's shape, which is not the callout's.
+                   Everything above reads `items[0]` — the prose-callout row this
+                   card was originally written against. A download block carries
+                   file_id / label / title instead, so without this arm the card
+                   fell back to the generic "Members-only content" headline on
+                   the very block Ian asked us to route the file through.
+
+                   ⚠️ LABEL, EXTENSION AND SIZE ONLY — never the URL. This card is
+                   what a NON-MEMBER sees; naming the file is the teaser, handing
+                   over its address is the leak the gate exists to prevent. */
+                $rowLabel = isset($blockHint['label']) ? trim((string) $blockHint['label']) : '';
+                $fileId   = (int) ($blockHint['file_id'] ?? 0);
+                if ($fileId > 0 && isset($ctx['media_resolver'])) {
+                    $media = ($ctx['media_resolver'])($fileId);
+                    if ($rowLabel === '') {
+                        $rowLabel = trim((string) ($media['title'] ?? ''));
+                        if ($rowLabel === '') $rowLabel = (string) ($media['filename'] ?? '');
+                    }
+                    $parts    = [];
+                    $filename = (string) ($media['filename'] ?? '');
+                    if ($filename !== '' && ($dot = strrpos($filename, '.')) !== false) {
+                        $parts[] = strtoupper(substr($filename, $dot + 1));
+                    }
+                    if (!empty($media['filesize_human'])) $parts[] = (string) $media['filesize_human'];
+                    if ($parts) $rowMeta = ' — ' . implode(', ', $parts);
+                }
             }
             if ($rowLabel === '') $rowLabel = (string) ($s['headline'] ?? 'Members-only download');
             $eyebrow  = Renderer::text((string) ($s['eyebrow_download'] ?? 'Members-only download'));
