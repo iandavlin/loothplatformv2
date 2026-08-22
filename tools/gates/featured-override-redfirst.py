@@ -23,6 +23,11 @@ import os, subprocess, sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 GATE = os.path.join(REPO, "tools", "gates", "featured-override-gate.py")
+# Gate 39 owns the dash's own words (its §F4 probe executes FeaturedMemberDash),
+# so a leg about what the dash TELLS Ian has to be checked against that gate or
+# it silently passes: the tag it expects would never appear in gate 94's output.
+# A leg may name its own gate as a 7th tuple element; the default stays 94.
+GATE39 = os.path.join(REPO, "tools", "gates", "featured-member-gate.py")
 
 IDX  = os.path.join(REPO, "archive-poc", "web", "index.php")
 FLAG = os.path.join(REPO, "platform", "config", "featured-members.php")
@@ -30,10 +35,11 @@ DASH = os.path.join(REPO, "lg-layout-v2", "src", "FeaturedMemberDash.php")
 POOL = os.path.join(REPO, "profile-app", "api", "v0", "internal-featured-pool.php")
 UPHP = os.path.join(REPO, "profile-app", "web", "u.php")
 DEFS = os.path.join(REPO, "archive-poc", "web", "defaults.php")
+CFG  = os.path.join(REPO, "archive-poc", "api", "v0", "_config.php")
 
 
-def run_gate():
-    p = subprocess.run([sys.executable, GATE], capture_output=True, text=True, timeout=1200)
+def run_gate(gate=None):
+    p = subprocess.run([sys.executable, gate or GATE], capture_output=True, text=True, timeout=1200)
     reds = [l.strip() for l in p.stdout.splitlines() if l.strip().startswith("RED")]
     dead = [l.strip() for l in p.stdout.splitlines() if l.strip().startswith("DEAD")]
     return p.returncode, reds, dead, p.stdout
@@ -57,13 +63,17 @@ MUTATIONS = [
      "        . ($pinned ? '' : ' AND featured_opt_in = true AND profile_visibility = \\'public\\'')",
      "        . ' AND featured_opt_in = true'", "[B1", True),
 
-    # Retargeted after the first run: this originally expected §B2, whose fixture
-    # is not opted in and is refused a row by the WHERE clause long before the
-    # guard runs — so deleting the guard changed nothing it could see. §B3 exists
-    # because of this leg.
-    ("the card-ready guard stops applying to anyone", IDX,
-     "    if (!$pinned && (trim((string) $u['avatar_url']) === '' || $role === '')) return null;",
-     "    if (false) return null;", "[B3", True),
+    # ⚠️ RETIRED 2026-08-22 (200-latest-pick), AND THE HARNESS CAUGHT IT ITSELF.
+    # This leg mutated the card-ready guard — "if (!$pinned && (avatar === '' ||
+    # $role === '')) return null;" — to prove §B3 noticed it going away. Ian has
+    # since had the guard REMOVED ("when I select a user they show up on the
+    # front page again first"), so the text is no longer in index.php and the
+    # leg reported itself as BROKEN LEG: "the text it mutates is not in
+    # index.php". That is the harness working: a stale leg is a finding about
+    # the harness, not a silent pass.
+    # Replaced, not dropped: the leg below puts the guard BACK and requires §B3
+    # to redden, which tests the same section against the behaviour that is now
+    # correct.
 
     # ⚠️ THE OLD LEG HERE ASSERTED A FENCE IAN STRUCK OUT on 2026-08-22 ("if
     # pinned, show what the band shows for anyone else"). It is replaced, not
@@ -140,6 +150,43 @@ MUTATIONS = [
     ("the invite card's button points back at the 404", DEFS,
      "'cta_href'  => '/profile/edit',", "'cta_href'  => '/u/',", "[A5", True),
 
+    # ── 200-latest-pick, Ian 2026-08-22 ─────────────────────────────────────
+    # "Can we just make it so when I select a user they show up on the front
+    # page again first."
+    #
+    # The guard put back is the whole defect: an opted-in pool pick whose role
+    # resolves empty vanishes into the fallback, and the click looks like it did
+    # nothing. §B3 asserted the OPPOSITE of this until today, which is why the
+    # leg is here rather than trusted.
+    ("the card-ready guard is put back, so a pool pick vanishes again", IDX,
+     "    // WHAT STILL REFUSES, deliberately, and it is not us refusing Ian: the",
+     "    if (!$pinned && (trim((string) $u['avatar_url']) === '' || $role === '')) return null;\n"
+     "    // WHAT STILL REFUSES, deliberately, and it is not us refusing Ian: the",
+     "[B3", True),
+
+    # The REAL way latest-action-wins breaks, and it is one character in another
+    # file: reverse the merge and the STANDING pick's keys win, so Ian's newest
+    # click changes nothing. §G's render legs simulate this merge, so nothing
+    # else in the gate would notice.
+    ("the config merge is reversed, so the standing pick outranks the new one", CFG,
+     "$clean = $clean + (is_array($existing['featured_member'] ?? null) ? $existing['featured_member'] : []);",
+     "$clean = (is_array($existing['featured_member'] ?? null) ? $existing['featured_member'] : []) + $clean;",
+     "[G0", True),
+
+    # A cleared pick must not leave the last member on the page. Dropping the
+    # resolved-card requirement lets a config map that never reached the
+    # resolver be published as a member card.
+    ("a cleared pick may publish the last member's stale name", IDX,
+     "$lg_fm_drawable = $lg_fm_resolved\n    && is_array($lg_fm)",
+     "$lg_fm_drawable = (true)\n    && is_array($lg_fm)",
+     "[G4", True),
+
+    # The dash must not go on telling Ian a pick will not show while it shows.
+    ("the dash promises the band will stay hidden again", DASH,
+     "'Featured — they go on the front page now. Their card will be a thin one, because '",
+     "'Featured — but the front-page band will stay hidden, because '",
+     "[F4", True, GATE39),
+
     # ── NO-OP CONTROLS ──────────────────────────────────────────────────────
     ("NO-OP: a comment is reworded", IDX,
      "// ── THE EMPTY-POOL LAW (#200, Ian 2026-08-22) ─",
@@ -168,7 +215,9 @@ def main():
 
     passed = failed = 0
     try:
-        for label, path, find, repl, tag, expect_red in MUTATIONS:
+        for mut in MUTATIONS:
+            label, path, find, repl, tag, expect_red = mut[:6]
+            gate = mut[6] if len(mut) > 6 else None
             src = originals[path]
             if find not in src:
                 print(f"  BROKEN LEG  {label}: the text it mutates is not in {os.path.basename(path)} "
@@ -178,7 +227,7 @@ def main():
             with open(path, "w", encoding="utf-8") as f:
                 f.write(src.replace(find, repl, 1))
             try:
-                rc, reds, dead, out = run_gate()
+                rc, reds, dead, out = run_gate(gate)
             finally:
                 with open(path, "w", encoding="utf-8") as f:
                     f.write(src)

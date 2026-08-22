@@ -453,16 +453,27 @@ def section_b_pin_overrides_criteria():
                   f"{plain_band['name']!r}) — so B1's pass is the pin doing the work")
 
 
-    # B3 — THE OTHER HALF OF THE OVERRIDE: the guard must STILL refuse an
-    # unpinnable consented pick. Ian overruled the criteria for members HE
-    # places, not for the self-serve pool, and gate 39 §F3 keeps the dash's
-    # prediction tied to this same guard — if it stops applying, the dash starts
-    # promising bands the front page never draws.
+    # B3 — RESTATED 2026-08-22 (200-latest-pick), AND ITS SENSE IS NOW INVERTED.
     #
-    # ⚠️ ADDED AFTER RED-FIRST MISSED IT. Deleting the guard outright left every
-    # section green, because §B2's fixture is not opted in and is refused a row
-    # by the WHERE clause before the guard is ever reached. A control that cannot
-    # reach the code it controls is not a control.
+    # It used to assert that the card-ready guard STILL refused an unrenderable
+    # CONSENTED pick — "Ian overruled the criteria for members he places, not
+    # for the self-serve pool". He has now overruled it for the pool too: "Can
+    # we just make it so when I select a user they show up on the front page
+    # again first." So the old assertion defended exactly the behaviour he
+    # reported as the bug, and a gate kept green by defending a struck-out
+    # behaviour is worse than no gate.
+    #
+    # RESTATED RATHER THAN DELETED, and pointed at the property that replaced
+    # it: an opted-in member whose card resolves NO ROLE must now RENDER when
+    # selected from the pool. That is the same fixture and the same code path,
+    # asserting the opposite verdict — which is what keeps the section honest
+    # rather than merely quiet.
+    #
+    # ⚠️ THE ORIGINAL NOTE STILL MATTERS AND IS KEPT: §B2's fixture is NOT
+    # opted in, so the WHERE clause refuses it a row long before the guard is
+    # reached. That is why §B2 stayed green through this change and why it is
+    # still a valid control — it measures the SELECT, not the guard. This
+    # section is the only one that reaches the guard at all.
     fx3 = pick(
         """SELECT u.uuid, u.display_name FROM users u
             WHERE u.profile_visibility = 'public' AND u.featured_opt_in
@@ -479,14 +490,14 @@ def section_b_pin_overrides_criteria():
                              {"LG_FEATURED_MEMBERS": "1", "LG_FEATURED_CONSENT": "0"})
         if not liveness(html3):
             DEAD.append(f"[B3] the front page did not render: {err3 or 'no page'}")
-        elif band(html3)["name"] == fx3[1]:
-            RED.append(f"[B3] {fx3[1]!r} is a CONSENTED pick whose card resolves no role, and the "
-                       f"front page drew them anyway — the card-ready guard has stopped applying "
-                       f"to the self-serve pool, which Ian did not overrule, and the dash's "
-                       f"card_renderable prediction (gate 39 §F3) is now lying to the admin")
+        elif band(html3)["name"] != fx3[1]:
+            RED.append(f"[B3] {fx3[1]!r} was selected from the POOL and the front page drew "
+                       f"{band(html3)['name']!r} instead — an admin's selection is being thrown "
+                       f"away, which is the whole of what Ian reported: \"when I select a user "
+                       f"they show up on the front page again first\"")
         else:
-            OK.append("[B3] the card-ready guard still refuses an unrenderable CONSENTED pick — "
-                      "the override reaches pinned picks only")
+            OK.append(f"[B3] an opted-in pool pick whose card resolves NO ROLE still renders "
+                      f"({fx3[1]!r}) — nothing refuses a pick")
 
 
     # B4 — THE RULING'S HEADLINE, RENDERED. Ian, 2026-08-22: "If I select a user
@@ -598,6 +609,181 @@ def section_c_pin_never_republishes():
 
 
 # ── D. THE THREE FLAG READERS AGREE ──────────────────────────────────────────
+def section_g_latest_action_wins():
+    """§G — THE LATEST ADMIN ACTION WINS, IN BOTH DIRECTIONS (200-latest-pick).
+
+    Ian: "when I select a user they show up on the front page again first."
+    Half of that is §B3 (a selection is never discarded). This is the other
+    half: when TWO selections exist over time, the most recent one is what the
+    front page draws — clicking Feature in the pool displaces a standing pin,
+    and pinning displaces a standing pool pick. One active selection, ever.
+
+    ⚠️ THIS GATES BEHAVIOUR THAT ALREADY HELD; IT DID NOT HAVE TO BE BUILT.
+    Measured before any code was written: both dash handlers already write
+    member_uuid AND `pinned` explicitly on every save, which is the discipline
+    #200 introduced for exactly this reason. Saying so plainly matters — the
+    brief this lane was given assumed a leftover PIN was outranking a newer pool
+    pick, and it was not: the card everyone was looking at was the hand-placed
+    FALLBACK, which outranks nothing and merely appears whenever the real pick
+    resolves to nothing. The precedence was never broken; the resolver was
+    throwing the pick away. Gated anyway, because "it happens to be true today"
+    and "it cannot silently stop being true" are different states.
+
+    ⚠️ AND IT MUST SIMULATE THE REAL MERGE, NOT A REPLACEMENT. _config.php does
+    `$clean + $existing['featured_member']`, and PHP's `+` keeps the LEFT
+    operand's keys and fills the rest from the right — so a key a handler omits
+    PERSISTS from the previous pick. Overwriting the config wholesale here would
+    test a write path that does not exist and would go green on the very bug
+    this section is for: a stale `pinned: true` surviving a Feature click.
+    """
+    def merge(clean, existing):
+        m = dict(clean)
+        for k, v in existing.items():
+            m.setdefault(k, v)
+        return m
+
+    # G0 — THE SIMULATION ABOVE MUST MATCH THE REAL MERGE, or every leg below is
+    # measuring a write path that does not exist. _config.php does
+    # `$clean + $existing['featured_member']`: PHP's `+` keeps the LEFT
+    # operand's keys, so the INCOMING payload wins and anything it omits falls
+    # through to the previous pick. Reversed — `$existing + $clean` — the
+    # STANDING pick would win every key and Ian's newest click would change
+    # nothing, which is exactly the complaint this lane was opened for. That is
+    # a one-character edit in another file, and nothing else in this gate reads
+    # it, so it is asserted here in the section that depends on it.
+    cfg_src = read(os.path.join(REPO, "archive-poc", "api", "v0", "_config.php"))
+    if cfg_src is None:
+        DEAD.append("[G0] _config.php is missing — the merge direction the legs below simulate "
+                    "cannot be checked")
+    elif re.search(r"\$clean\s*=\s*\$clean\s*\+\s*\(is_array\(\$existing\['featured_member'\]", cfg_src):
+        OK.append("[G0] _config.php merges featured_member as `$clean + $existing` — the incoming "
+                  "selection wins, which is what the legs below simulate")
+    elif re.search(r"\$clean\s*=\s*\(?is_array\(\$existing\['featured_member'\].*\+\s*\$clean", cfg_src, re.S):
+        RED.append("[G0] _config.php merges featured_member the WRONG WAY ROUND — the standing "
+                   "pick's keys would win over the incoming one, so Ian's newest click would "
+                   "change nothing on the front page")
+    else:
+        RED.append("[G0] could not find the featured_member merge in _config.php in either "
+                   "direction — the precedence the legs below assert rests on it, and an "
+                   "unrecognised merge is not a verified one")
+
+    # handler payloads, keyed to the real ones in FeaturedMemberDash.
+    def feature_payload(uuid, name):      # handle_feature()
+        return {"enabled": True, "member_uuid": uuid, "name": name, "role": "",
+                "consent_ack": False, "pinned": False, "chosen_by": "gate94"}
+
+    def pin_payload(uuid, name):          # handle_pin()
+        return {"enabled": True, "member_uuid": uuid, "name": name, "role": "",
+                "consent_ack": True, "pinned": True, "chosen_by": "gate94"}
+
+    # Two DISTINCT members that both render, so "which one is on the page" is a
+    # real question. Chosen by query — dev2 and live disagree about opt-in, and
+    # a hardcoded uuid would pass here and be wrong about the other box.
+    rc, out, err = psql(
+        """SELECT uuid, display_name FROM users
+            WHERE profile_visibility = 'public' AND featured_opt_in
+              AND coalesce(avatar_url,'') <> ''
+            ORDER BY id LIMIT 2""")
+    rows = [l.split("|") for l in out.splitlines() if l.strip()]
+    if rc != 0 or len(rows) < 2:
+        DEAD.append("[G] this box does not have two distinct renderable opted-in members, so "
+                    "'which of two picks wins' cannot be asked here — not run rather than "
+                    "quietly passed")
+        return
+    (uuid_a, name_a), (uuid_b, name_b) = (rows[0][0], rows[0][1]), (rows[1][0], rows[1][1])
+    env = {"LG_FEATURED_MEMBERS": "1"}
+
+    # G1 — a standing PIN, then Feature from the pool. The pool pick must win.
+    standing_pin = merge(pin_payload(uuid_a, name_a), {})
+    html, err = render(standing_pin, env)
+    if not liveness(html):
+        DEAD.append(f"[G1] the front page did not render: {err or 'no page'}")
+        return
+    if band(html)["name"] != name_a:
+        DEAD.append(f"[G1] the standing pin does not even render ({band(html)['name']!r}) — the "
+                    f"precedence question cannot be asked from here")
+        return
+
+    after_feature = merge(feature_payload(uuid_b, name_b), standing_pin)
+    html, err = render(after_feature, env)
+    if not liveness(html):
+        DEAD.append(f"[G1] the front page did not render after the Feature click: {err}")
+    elif after_feature.get("pinned") is not False:
+        RED.append(f"[G1] after a Feature click the merged config still carries "
+                   f"pinned={after_feature.get('pinned')!r} — an omitted key persists through "
+                   f"PHP's `+`, so Feature must write pinned=false EXPLICITLY")
+    elif band(html)["name"] != name_b:
+        RED.append(f"[G1] a standing pin on {name_a!r} outranks a NEWER pool pick of {name_b!r} — "
+                   f"the front page still draws {band(html)['name']!r}, so Ian's most recent "
+                   f"click is not what he sees")
+    else:
+        OK.append(f"[G1] Feature displaces a standing pin — the pool pick {name_b!r} wins")
+
+    # G2 — the other direction: a standing POOL pick, then a Pin.
+    standing_pool = merge(feature_payload(uuid_b, name_b), {})
+    after_pin = merge(pin_payload(uuid_a, name_a), standing_pool)
+    html, err = render(after_pin, env)
+    if not liveness(html):
+        DEAD.append(f"[G2] the front page did not render after the Pin click: {err}")
+    elif after_pin.get("pinned") is not True:
+        RED.append("[G2] after a Pin click the merged config does not carry pinned=true")
+    elif band(html)["name"] != name_a:
+        RED.append(f"[G2] a standing pool pick of {name_b!r} outranks a NEWER pin of {name_a!r} — "
+                   f"the front page still draws {band(html)['name']!r}")
+    else:
+        OK.append(f"[G2] a pin displaces a standing pool pick — the pin {name_a!r} wins")
+
+    # G3 — ONE ACTIVE SELECTION. Whatever the sequence, exactly one band, and it
+    # names the last member chosen. A page with two bands would satisfy both
+    # legs above and still be wrong.
+    b = band(html)
+    if b["present"] != 1:
+        RED.append(f"[G3] after two selections the page carries {b['present']} featured bands — "
+                   f"'one active selection at a time' is not holding")
+    else:
+        OK.append("[G3] exactly one band after a pin-then-feature-then-pin sequence")
+
+    # G4 — CLEARING still falls back, so the band never goes empty. Ian's
+    # empty-pool law has to survive the precedence change.
+    #
+    # ⚠️ TESTED TWICE, AND THE SECOND ONE FOUND SOMETHING. The first version of
+    # this leg invented its own clear payload — {member_uuid: "", pinned: false}
+    # — and went RED: the page still drew the previous member's NAME. That was
+    # not the dash's behaviour (handle_remove blanks name and role explicitly,
+    # so the real Clear was always safe) but it was a real property of the page:
+    # `$clean + $existing` means any writer that blanks the uuid and forgets the
+    # name leaves a card describing someone no longer featured, and config.json
+    # on both boxes still carries leftover bio/avatar/cta_* from an old
+    # hand-placement. index.php now requires a RESOLVED card, so both shapes
+    # fall back. Both are kept: the first proves the shipped button is right,
+    # the second proves the page does not depend on that button being careful.
+    clears = [
+        # exactly what FeaturedMemberDash::handle_remove() posts
+        ("the dash's own Clear",
+         {"enabled": True, "member_uuid": "", "name": "", "role": "",
+          "consent_ack": False, "pinned": False}),
+        # a careless writer: uuid blanked, member fields left behind
+        ("a partial write that blanks only the uuid",
+         {"enabled": True, "member_uuid": "", "pinned": False}),
+    ]
+    for label, payload in clears:
+        cleared = merge(payload, after_pin)
+        html, err = render(cleared, env)
+        if not liveness(html):
+            DEAD.append(f"[G4] the front page did not render after {label}: {err}")
+            continue
+        b = band(html)
+        if b["present"] == 0 or not b["name"].strip():
+            RED.append(f"[G4] after {label} there is NO band (or a nameless one) — clearing must "
+                       f"fall back to the standing card, never to a hole")
+        elif b["name"] in (name_a, name_b):
+            RED.append(f"[G4] after {label} the page still draws {b['name']!r} — a member who is "
+                       f"no longer featured is still on the front page")
+        else:
+            OK.append(f"[G4] {label} falls back to the standing card ({b['name']!r}) — the band "
+                      f"never goes empty and never keeps a stale name")
+
+
 def section_d_readers_agree():
     """Three applications read this flag at three different directory depths and
     each carries its own copy of the resolution. The copies are deliberate (no
@@ -1063,7 +1249,8 @@ def main():
     load_fixtures()
     try:
         for sec in (section_a_empty_pool, section_b_pin_overrides_criteria,
-                    section_c_pin_never_republishes, section_d_readers_agree,
+                    section_c_pin_never_republishes, section_g_latest_action_wins,
+                    section_d_readers_agree,
                     section_e_tracked_default, section_f_dash_is_honest,
                     section_f5_dash_renders):
             try:

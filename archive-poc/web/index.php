@@ -988,6 +988,10 @@ require __DIR__ . '/_chrome.php'; ?>
 // Featured-member band shows BOTH audiences (Ian 6/12) — it follows whichever
 // welcome promo the viewer got (member What's-New / public Classic Landing).
 $lg_fm = (defined('LG_FEATURED_MEMBER') && !empty(LG_FEATURED_MEMBER['enabled'])) ? LG_FEATURED_MEMBER : null;
+// TRUE only where the resolver above actually returned a card. See the
+// note above $lg_fm_drawable: a config map that never reached the resolver has
+// been checked against nothing, and must not be published as a member card.
+$lg_fm_resolved = false;
 // Real-member resolution (featured-members lane, backlog 18; design rulings
 // 8/14 — docs/IAN-RULINGS-2026-08-14.md item 6). LG_FEATURED_MEMBER carries a
 // member_uuid once an admin has selected someone in the dash; when it does
@@ -1053,6 +1057,7 @@ if ($lg_fm && !empty($lg_fm['member_uuid'])) {
                 !empty($lg_fm['consent_ack']),
                 $lg_fm_pinned
             );
+            $lg_fm_resolved = is_array($lg_fm);
         } catch (\Throwable $e) {
             // ⚠️ THIS CATCH IS NOT HYPOTHETICAL AND IT COST A FRONT PAGE.
             // The resolver reads profile_app under COLUMN-SCOPED grants. When
@@ -1106,7 +1111,35 @@ if ($lg_fm && !empty($lg_fm['member_uuid'])) {
 // band exists; the first version of that assertion checked presence alone and
 // went green on a blank card. So the test below is "is there anything to draw",
 // not "is $lg_fm null".
-$lg_fm_drawable = is_array($lg_fm) && trim((string) ($lg_fm['name'] ?? '')) !== '';
+// ⚠️ A CLEARED PICK MUST NOT LEAVE THE LAST MEMBER'S NAME ON THE PAGE.
+// $lg_fm_resolved is set true ONLY where the resolver actually returned a card
+// above. That distinction is the whole point: a featured_member map carrying no
+// member_uuid never reaches the resolver, so nothing in it has been checked
+// against profile_app this request — it is simply whatever was last written to
+// config.json. _config.php merges with `$clean + $existing`, and PHP's `+`
+// keeps the left operand's keys and fills the rest from the right, so ANY
+// writer that blanks the uuid without also blanking name/role/bio/avatar leaves
+// a card describing a member who is no longer featured. The dash's own Clear
+// does blank them (handle_remove writes name and role explicitly) — but that is
+// one writer remembering, not a property of the page, and config.json on BOTH
+// boxes still carries leftover bio/avatar/cta_* from an old hand-placement
+// whose name, bio and cta_href each described a DIFFERENT member.
+//
+// ⚠️ TESTED FOR `member_uuid` ON $lg_fm FIRST AND THAT WAS WRONG — the resolver's
+// returned card has no member_uuid key at all, so that condition made EVERY real
+// pick undrawable and replaced all of them with the fallback. Caught before it
+// left the worktree, by reading what the resolver actually returns. The flag
+// below asks "did the resolver answer", which is the question that was meant.
+//
+// Requiring a resolved card is coherent with #200's design rather than a new
+// rule: the hand-placed card moved OUT of config.json into
+// featured_member_fallback in defaults.php precisely so a config write could
+// never clobber it, so a uuid-less featured_member is no longer a card, it is a
+// leftover. Measured before shipping: the SERVED config on dev2 and on live both
+// carry a uuid, so no box loses a card to this. (/srv/archive-poc/config.json has
+// none and names "Chip Tait" — the known decoy that nothing serves.)
+$lg_fm_drawable = $lg_fm_resolved
+    && is_array($lg_fm) && trim((string) ($lg_fm['name'] ?? '')) !== '';
 if (!$lg_fm_drawable && (defined('LG_FEATURED_MEMBER') && !empty(LG_FEATURED_MEMBER['enabled']))) {
     $lg_fm = lg_fm_fallback_card(LG_FEATURED_MEMBER_FALLBACK);
 }
@@ -1448,21 +1481,46 @@ function lg_resolve_featured_member(string $uuid, bool $isMember, bool $consentA
     // Location is deliberately NOT required here — it is optional and already
     // hides itself; most real cards will have none (see docs/FEATURED-MEMBERS-PLAN.md
     // §3b, the measured "ordinary case"), and that is a fine card, not a broken one.
-    // ⚠️ THE CARD-READY GUARD, AND THE ONE PLACE #200 CHANGES ITS ANSWER.
-    // For a CONSENTED pick this is unchanged and must be: the pool endpoint
-    // reproduces this exact rule to predict "will the front page draw?" for the
-    // dash, and gate 39 §F3 fails if the two drift.
+    // ⚠️ THE CARD-READY GUARD IS GONE, AND THAT IS THE HEART OF THIS CHANGE.
     //
-    // For a PINNED pick it does not apply. The guard exists because the template
-    // used to render avatar and role UNCONDITIONALLY, so an empty either shipped
-    // an <img src=""> and a blank line to the open web. That is now fixed at the
-    // template (both are behind !empty(), the way where/bio already were), so
-    // the guard is no longer what stands between us and a broken card — and
-    // returning null here for a pinned member is the exact behaviour Ian
-    // overruled. MEASURED: it is what removes his own current pick, whose
-    // header is members-only, whose one-liner is empty, and whose business_name
-    // is a tail of his display name, so $role resolves to ''.
-    if (!$pinned && (trim((string) $u['avatar_url']) === '' || $role === '')) return null;
+    // Ian, 2026-08-22: "Can we just make it so when I select a user they show up
+    // on the front page again first." He was describing THIS LINE, which read:
+    //
+    //     if (!$pinned && (trim($u['avatar_url']) === '' || $role === '')) return null;
+    //
+    // so an admin's POOL selection was silently discarded whenever the member's
+    // resolved role came back empty, and the front page drew the FALLBACK
+    // instead. From the dash it looks like the click did nothing at all.
+    //
+    // MEASURED before removing it, on a real member Ian can genuinely click
+    // Feature on — Carl Ioriatti: opted in, public, has a photo, and whose
+    // business_name ("Ioriatti") is a tail of his display name, so the
+    // repeats-the-name fallback is correctly skipped and $role resolves to ''.
+    //   POOL pick (pinned=false) -> the band drew "This spot is open"
+    //   PIN       (pinned=true)  -> the band drew "Carl Ioriatti"
+    // Same member, same row, same minute. Only the pin made his own selection
+    // appear.
+    //
+    // ⚠️ WHY THIS IS SAFE, AND WHY IT IS NOT A NEW ARGUMENT. The guard existed
+    // for ONE reason: the template rendered avatar and role UNCONDITIONALLY, so
+    // an empty either shipped an <img src=""> and a blank line to the open web.
+    // #200 fixed that AT THE TEMPLATE — both are behind !empty() now, the way
+    // where/bio always were — and this docblock has said ever since that "the
+    // guard is no longer what stands between us and a broken card". #200 acted
+    // on that for PINNED picks only, because that was the scope of the ruling
+    // then. This is the same argument, finished.
+    //
+    // WHAT STILL REFUSES, deliberately, and it is not us refusing Ian: the
+    // SELECT above. A non-pinned pick must still be featured_opt_in and public,
+    // so a member who un-ticks or goes private AFTER being chosen drops out and
+    // the band falls back. That is the member withdrawing their own consent,
+    // which is a different act from the front page discarding an admin's click.
+    // Nobody has ruled on it, so it is reported rather than silently overridden.
+    //
+    // The consent fence is untouched: whether a members-only one-liner may be
+    // republished is decided in lg_fm_card_role() and keys on $pinned, not on
+    // this guard. Removing this line publishes nothing that was not already
+    // publishable — it only stops throwing the selection away.
     // A pinned pick with NEITHER a photo nor anything public to say would still
     // be a card with only a name on it. That is thin, but it is a deliberate
     // thin card rather than a hole, and it is what "regardless of the criteria"

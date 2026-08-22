@@ -216,26 +216,41 @@ final class FeaturedMemberDash
         'what_you_do_members_only' => 'their one-liner made public (it is members-only)',
     ];
 
-    /* ── WILL THE FRONT PAGE ACTUALLY SHOW THIS PICK? ─────────────────────
-       Information, never permission — a member with a warning is still
-       selectable, which is the whole point of #107. This reads the pool's
-       card_renderable/card_blockers, which reproduce the resolver's own guard
-       (lg_resolve_featured_member); it deliberately does NOT read card_ready,
-       which answers a different question and gets this wrong in both
-       directions — it demands a location the card does not need, and cannot
-       see the header visibility the card's role depends on. On dev2 2026-08-20
-       that gap was 4 members wide: card_ready true, no band.
+    /* ── WHAT WILL THE FRONT PAGE SHOW FOR THIS PICK? ─────────────────────
+       Information, never permission — and since 200-latest-pick it is no longer
+       even a warning, because there is nothing left to warn about.
 
-       An ABSENT card_renderable key is not `false`. It means the pool endpoint
-       is older than this dash (a half-finished deploy), and the honest answer
-       to "what will the front page do" is then "unknown" — so say nothing
-       rather than warn about a card that may be perfectly fine. */
+       ⚠️ THIS METHOD USED TO TELL IAN A LIE, and it is the lie he reported.
+       It returned:
+
+           "Featured — but the front-page band will stay hidden, because <name>
+            has no photo. The selection is saved and the band appears the moment
+            that changes."
+
+       That sentence was true of the old resolver, which threw a pool selection
+       away whenever the member's role resolved empty. Ian, 2026-08-22: "Can we
+       just make it so when I select a user they show up on the front page again
+       first." The resolver now draws EVERY selection, so "the band will stay
+       hidden" describes nothing that can happen any more — and a dash that says
+       a saved pick will not appear, while it is appearing, is the same defect
+       as the disappearance itself, wearing words.
+
+       What survives is the genuinely useful half: a member with no photo or
+       nothing public to say gets a THIN card — their name and a link — and Ian
+       should know that before he picks them, not after. So this now describes
+       the card he will get. It never says hidden, and it never refuses.
+
+       An ABSENT card_renderable key still means the pool endpoint is older than
+       this dash (a half-finished deploy), and the honest answer to "what will
+       the front page do" is then "unknown" — so say nothing rather than
+       describe a card we cannot predict. */
     public static function card_warning(array $member): ?string
     {
         if (!array_key_exists('card_renderable', $member)) return null;
-        if (!empty($member['card_renderable'])) return null;
 
         $blockers = is_array($member['card_blockers'] ?? null) ? $member['card_blockers'] : [];
+        if (!$blockers) return null;   // a full card — nothing to say
+
         $parts = [];
         foreach ($blockers as $b) {
             $parts[] = self::CARD_BLOCKER_LABELS[$b] ?? $b;
@@ -244,8 +259,8 @@ final class FeaturedMemberDash
         if ($name === '') $name = 'This member';
         $why = $parts ? implode(', and ', $parts) : 'has no photo or no one-line “what you do”';
 
-        return 'Featured — but the front-page band will stay hidden, because ' . $name . ' '
-             . $why . '. The selection is saved and the band appears the moment that changes.';
+        return 'Featured — they go on the front page now. Their card will be a thin one, because '
+             . $name . ' ' . $why . '. It still shows their name and a link to their profile.';
     }
 
     /* ── DID THEY KNOW THIS WOULD HAPPEN? (#107, Ian 2026-08-20) ──────────
@@ -345,22 +360,31 @@ final class FeaturedMemberDash
         // a refusal. The card_ready check that stood here is gone — see
         // selection_block_reason(), which is now the whole of the rule.
         //
-        // WHAT REPLACED IT, AND WHY IT IS NOT THE SAME CHECK. The front-page
-        // resolver keeps a guard of its own (lg_resolve_featured_member: no
-        // avatar or no role => return null, no band), and it must, because the
-        // card's template renders both unconditionally. Dropping the refusal
-        // without saying anything would have turned a legible "no" into a
-        // silent one: "Saved and pushed to archive-poc" followed by an empty
-        // front page. MEASURED, not feared — 2026-08-20 on dev2, featuring
-        // Rick Liftig (whom this dash called "Ready", enabled button and all)
-        // through this very handler took the band off the front page entirely,
-        // 74,456 bytes to 72,838, zero lg-fm__ markers.
+        // ⚠️ AND SINCE 200-latest-pick THE RESOLVER HAS NO WALL EITHER.
+        // This comment used to say the front-page resolver "keeps a guard of
+        // its own (no avatar or no role => return null, no band), and it must,
+        // because the card's template renders both unconditionally". Both
+        // halves are now out of date: #200 put the template's avatar and role
+        // behind !empty(), and 200-latest-pick removed the guard, because Ian
+        // asked for the plain thing — "when I select a user they show up on the
+        // front page again first".
         //
-        // So the selection still goes through — always — and the admin is TOLD
-        // what the front page will do with it. card_renderable is the pool's
-        // report of the resolver's own verdict, which card_ready cannot stand
-        // in for (it tests location, which the card does not need, and cannot
-        // see header visibility, which the card's role does).
+        // The history is kept because it is the reason this handler is shaped
+        // the way it is. MEASURED 2026-08-20 on dev2: featuring Rick Liftig
+        // (whom this dash called "Ready", enabled button and all) through this
+        // very handler took the band off the front page entirely, 74,456 bytes
+        // to 72,838, zero lg-fm__ markers. That silent removal is exactly what
+        // Ian later reported, and it is now impossible — MEASURED again
+        // 2026-08-22: Carl Ioriatti, opted in and public with an empty resolved
+        // role, drew "This spot is open" as a pool pick before the change and
+        // "Carl Ioriatti" after it.
+        //
+        // So the selection goes through — always — and the admin is told what
+        // the front page will do with it: not whether it will appear, which is
+        // now never in doubt, but whether the card will be a FULL one or their
+        // name and a link. card_renderable remains the pool's report of the
+        // resolver's verdict and is true for everyone; card_blockers is what
+        // carries the shape.
         $warn = self::card_warning($member);
 
         // #107: featuring an old-copy ticker whose glance is members-only is
@@ -689,13 +713,21 @@ final class FeaturedMemberDash
                     // LABELLED, not disabled — Ian's call to make, with the
                     // consequence stated at the point he makes it.
                     if ($cardWarn !== null) {
+                        // ⚠️ THIS COLUMN USED TO READ "Won't show yet". It was
+                        // true of the old resolver and is false now — every
+                        // selection reaches the front page since
+                        // 200-latest-pick. A column telling Ian a pick will not
+                        // show, beside a button that puts it on the front page,
+                        // is the disappearance defect restated in words. What
+                        // is still worth saying is the SHAPE of the card he
+                        // will get, so that is what it says.
                         $missing = array_map(
                             static fn($b) => self::CARD_BLOCKER_SHORT[$b] ?? $b,
                             is_array($p['card_blockers'] ?? null) ? $p['card_blockers'] : []
                         );
-                        echo '<td style="color:#8a6d1f"><strong>Won’t show yet</strong><br>'
-                           . '<span style="font-size:11.5px">needs '
-                           . esc_html($missing ? implode(' and ', $missing) : 'a photo or a one-line “what you do”')
+                        echo '<td style="color:#8a6d1f"><strong>Thin card</strong><br>'
+                           . '<span style="font-size:11.5px">shows, but has no '
+                           . esc_html($missing ? implode(' and no ', $missing) : 'photo or one-line “what you do”')
                            . '</span></td>';
                     } elseif ($consWarn !== null) {
                         // The card WILL render — this is not a defect column
