@@ -271,6 +271,159 @@ final class RestController
         return $endpoints;
     }
 
+    /** The post-checkout sync ping, exactly as BuddyBoss's restriction filter sees it. */
+    public const SYNC_CUSTOMER_ROUTE = '/' . self::NAMESPACE . '/sync-customer';
+
+    /** The gift-delivery mailer, same. */
+    public const GIFT_CODES_ROUTE = '/' . self::NAMESPACE . '/send-gift-codes';
+
+    /** The single-recipient gift mailer behind Send / Resend / Reassign, same. */
+    public const GIFT_RECIPIENT_ROUTE = '/' . self::NAMESPACE . '/send-gift-recipient';
+
+    /**
+     * EVERY route in this controller whose permission_callback is self::auth()
+     * — the shared-secret door the billing app knocks on, and therefore the
+     * complete set of routes that BuddyBoss's blanket REST restriction can
+     * make unreachable to a caller holding the correct secret.
+     *
+     * ⚠️ IT IS HERE SO THE ANSWER STOPS BEING A GREP. #181 said "four routes",
+     * #193 said "these two stay shut", #203's issue said "the last two" — and
+     * only the last of those was checked against the file. The health panel
+     * reads this constant and subtracts what the exemption filters actually
+     * return, so the operator sees which shared-secret routes are still behind
+     * the 401 without anybody keeping a sentence up to date. Gate 86 §K11
+     * asserts this list against register() itself, so adding a secret route and
+     * forgetting this line is a RED and not a quietly wrong panel.
+     */
+    public const SECRET_ROUTES = [
+        '/' . self::NAMESPACE . '/run-now',
+        self::SYNC_CUSTOMER_ROUTE,
+        self::GIFT_CODES_ROUTE,
+        self::GIFT_RECIPIENT_ROUTE,
+    ];
+
+    /**
+     * THE DEAD SERVER-TO-SERVER ROUTES (#203, keeper 2026-08-22).
+     *
+     * #181 measured four shared-secret routes in this namespace answering
+     *   401 {"code":"bb_rest_authorization_required"}
+     * to their own secret-bearing callers, and opened exactly one
+     * (`/checkout-audience`). #193 opened `/auth`/`/gift-auth`, and its rider
+     * opened `/patreon-standing` once Ian flipped that guard ON. These two are
+     * what #181 named and deliberately did not open, and their reasons for
+     * staying shut have both expired:
+     *
+     *   `/sync-customer` — the billing app's post-checkout ping. #181's line was
+     *     "the five-minute Sync::all() sweep covers it", which is true of the
+     *     GRANT and not of the PERSON: a tester who has just paid with a real
+     *     card watches their account stay unchanged for up to five minutes.
+     *     Ian's go-live ruling is that testers really buy, with real cards, so
+     *     that wait is now part of the rehearsal rather than a machine detail.
+     *
+     *   `/send-gift-codes` — gift delivery after purchase. #181's line was
+     *     "nothing is waiting on it"; a purchasable product is waiting on it.
+     *     `WpGiftMailer::post()` is best-effort by design (errors logged, never
+     *     raised), so a 401 here is a gift that is paid for and never arrives,
+     *     with nothing member-visible to say so.
+     *
+     * ⚠️ THREE FILTERS, NOT ONE, AND NOT APPENDED TO `AUTH_ROUTES`. Each names
+     * exactly one route, so no exemption can grow by a route being tacked onto
+     * a neighbour's list — the discipline #181 set, #193 kept, and gate 86
+     * pins by COUNTING the filters (three before this, six after). A single
+     * combined filter would be smaller and would make the next widening
+     * invisible, which is the whole thing being guarded against.
+     *
+     * ⚠️ IT IS A REPAIR, NOT A BYPASS, and here the distinction is easier than
+     * it was for `/auth`: both routes carry `permission_callback => auth()`,
+     * which requires a CONFIGURED shared secret and compares it with
+     * `hash_equals`. That check is untouched. A caller without the secret is
+     * refused exactly as it was refused before; the only change is that the
+     * refusal now comes from this plugin (`rest_forbidden`) instead of from a
+     * blanket pre-emption that could not tell the billing app apart from an
+     * anonymous stranger — which is the entire defect.
+     *
+     *   `/send-gift-recipient` — THE ISSUE SAID TWO AND THE FILE SAID THREE.
+     *     #203 was written naming `/sync-customer` and `/send-gift-codes`;
+     *     enumerating this controller instead of trusting that count found a
+     *     third route behind the same wall, behind the same `auth()`, in the
+     *     same flow as the second. Slim's `WpGiftMailer::sendOneRecipient()`
+     *     calls it for the Send / Resend / Reassign buttons on the buyer's My
+     *     Gifts dashboard — so opening `/send-gift-codes` alone would have
+     *     made a gift arrive when it is bought and still vanish when it is
+     *     resent, with the button reporting success both times. Keeper ruled
+     *     it in on 2026-08-22 and widened the issue rather than letting the
+     *     count stand.
+     *
+     * ⚠️ `/run-now` IS THE ONE THAT STAYS SHUT, and it is a decision, not an
+     * oversight. It answers that same 401 to the same correct secret. Nothing
+     * but a person calls it, the five-minute cron does its job, and what it
+     * exposes is a whole Tick — so it is the one place where "the sweep covers
+     * it" is still the true sentence. `self::SECRET_ROUTES` minus what the
+     * filters return is what the health panel shows an operator, so this stays
+     * visible instead of becoming folklore.
+     *
+     * @param mixed $endpoints
+     * @return mixed
+     */
+    public static function exemptSyncCustomerFromBuddyBossRestriction( $endpoints )
+    {
+        return self::appendExemption( $endpoints, self::SYNC_CUSTOMER_ROUTE );
+    }
+
+    /**
+     * Let `/send-gift-codes` past BuddyBoss's blanket REST restriction, so its
+     * own shared-secret check is what decides. See
+     * self::exemptSyncCustomerFromBuddyBossRestriction() for the measurement,
+     * the ruling, and why these are two filters rather than one.
+     *
+     * @param mixed $endpoints
+     * @return mixed
+     */
+    public static function exemptGiftCodesFromBuddyBossRestriction( $endpoints )
+    {
+        return self::appendExemption( $endpoints, self::GIFT_CODES_ROUTE );
+    }
+
+    /**
+     * Let `/send-gift-recipient` past BuddyBoss's blanket REST restriction, so
+     * its own shared-secret check is what decides. This is the route behind the
+     * Send / Resend / Reassign buttons on the buyer's My Gifts dashboard; see
+     * self::exemptSyncCustomerFromBuddyBossRestriction() for the measurement,
+     * the ruling, and why these are three filters rather than one.
+     *
+     * @param mixed $endpoints
+     * @return mixed
+     */
+    public static function exemptGiftRecipientFromBuddyBossRestriction( $endpoints )
+    {
+        return self::appendExemption( $endpoints, self::GIFT_RECIPIENT_ROUTE );
+    }
+
+    /**
+     * Add ONE route to the exclusion list, without disturbing what is already
+     * there. Shared by the two filters above so they cannot drift apart in the
+     * three ways that matter: a non-array value is handed back untouched
+     * (never replace another plugin's shape), an existing entry is appended to
+     * rather than overwritten, and a double-registered filter does not
+     * duplicate. It takes ONE route and cannot take a list — the widening this
+     * whole arrangement exists to prevent has to be a new filter somebody
+     * writes down.
+     *
+     * @param mixed  $endpoints
+     * @param string $route
+     * @return mixed
+     */
+    private static function appendExemption( $endpoints, string $route )
+    {
+        if ( ! is_array( $endpoints ) ) {
+            return $endpoints;   // never replace another plugin's shape
+        }
+        if ( ! in_array( $route, $endpoints, true ) ) {
+            $endpoints[] = $route;
+        }
+        return $endpoints;
+    }
+
     public static function authLoggedInUser(WP_REST_Request $req): bool
     {
         if ( ! is_user_logged_in() ) {

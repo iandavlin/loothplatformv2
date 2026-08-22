@@ -748,9 +748,19 @@ final class Health
             $bbPrivate ? 'ON — it 401s our routes unless they are exempted' : 'off',
             $bbPrivate ? 'warn' : 'ok'
         );
+        /* ⚠️ COUNT THE FILTERS, DO NOT NAME ONE. This line said
+           "checkout-audience is exempted" from #181 until #203, by which time
+           #193 and its rider had added three more and the panel was quietly a
+           lane behind — the operator reading it would have concluded the other
+           routes were shut when two of them were open. `has_filter()` answers
+           yes/no; the roll-call below is what the filters themselves say, so it
+           cannot drift from them. */
+        $open = self::exemptedRoutes();
         $lines[] = self::line(
-            'Our exemption filter registered',
-            $exempted ? 'yes — checkout-audience is exempted' : 'NO',
+            'Our exemption filters registered',
+            $exempted
+                ? count( $open ) . ' route(s) exempted: ' . implode( ', ', $open )
+                : 'NO',
             $exempted ? 'ok' : 'fail'
         );
         if ( $bbPrivate && ! $exempted ) {
@@ -758,11 +768,22 @@ final class Health
             $issues[] = 'BuddyBoss is restricting the REST API and nothing exempts our routes';
         }
         if ( $bbPrivate ) {
-            $lines[] = self::line(
-                'Routes still behind that 401',
-                'sync-customer, patreon-standing, gift-mail — reported, not opened (#181)',
-                'warn'
-            );
+            /* The shared-secret routes this plugin registers that are NOT in
+               the roll-call above — so an operator can tell "deliberately
+               shut" from "nobody has looked at this since #181". After #203
+               that is /run-now alone: ops-only, cron-covered, and what it
+               exposes is a whole Tick. Subtracted rather than listed, so a
+               route added tomorrow shows up here on its own. */
+            /* Asked of RestController, never transcribed — see SECRET_ROUTES
+               there for why the list lives beside the routes it describes. */
+            $shut = array_values( array_diff( \LGMS\Wp\RestController::SECRET_ROUTES, $open ) );
+            if ( $shut !== [] ) {
+                $lines[] = self::line(
+                    'Shared-secret routes still behind that 401',
+                    implode( ', ', $shut ) . ' — shut on purpose (#203)',
+                    'warn'
+                );
+            }
         }
 
         // --- the live probe -------------------------------------------------
@@ -1085,6 +1106,38 @@ final class Health
             'live'  => 'LIVE mode — real money',
             default => 'not set, or not a recognisable Stripe key',
         };
+    }
+
+    /**
+     * WHICH OF OUR ROUTES THE EXEMPTION FILTERS ACTUALLY NAME — asked of the
+     * filters, never transcribed from them.
+     *
+     * ⚠️ THE LINE THIS REPLACED SAID "checkout-audience is exempted" AND WAS
+     * TWO LANES OUT OF DATE. #193 and its rider added three more exemptions and
+     * nobody came back to this sentence, so the panel whose one job is telling
+     * an operator the truth about the channel was confidently naming one route
+     * out of four. Running the hook is the fix: `has_filter()` can only say
+     * yes/no, and a hand-kept list is a second place to be wrong.
+     *
+     * Scoped to our own namespace on purpose — BuddyBoss and anything else on
+     * this hook are not this panel's business, and their entries would bury
+     * ours.
+     *
+     * @return list<string>
+     */
+    private static function exemptedRoutes(): array
+    {
+        $all = apply_filters( 'bb_exclude_endpoints_from_restriction', [] );
+        if ( ! is_array( $all ) ) {
+            return [];
+        }
+        $ours = [];
+        foreach ( $all as $route ) {
+            if ( is_string( $route ) && strpos( $route, '/lg-member-sync/' ) === 0 ) {
+                $ours[ $route ] = true;
+            }
+        }
+        return array_keys( $ours );
     }
 
     /** WordPress-ish truthiness for an option that may be '1', 1, true or 'yes'. */
