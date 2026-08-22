@@ -750,7 +750,7 @@ is_( str_contains( $html, '$11.00' ) && str_contains( $html, '/ month' )
      && str_contains( $html, '$120.00' ) && str_contains( $html, '/ year' ),
      'G3 prices are shown with their intervals, in money a person can read' );
 is_( str_contains( $html, '1 archived price' ),
-     'G4 archived prices are counted, not drawn — dev2\'s LITE carries eleven and only two can be reached' );
+     'G4 archived prices are counted, not drawn — dev2\'s LITE carries TEN and only three can be reached' );
 
 /* ⚠️ RED IS THE ACTIVE ONES ONLY, matching Health exactly. An archived product
    with no tier is not a problem, and painting it red would train people to

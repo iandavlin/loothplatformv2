@@ -290,11 +290,11 @@ final class ProductsPanel
     /**
      * Active prices first and plainly; archived ones behind a count.
      *
-     * ⚠️ THE COUNT IS NOT TIDINESS. dev2's Looth LITE carries ELEVEN price
-     * rows, nine of them archived, and drawing all of them would bury the two
-     * that a member can actually reach. This is the same class of defect as the
-     * four-button join card (#148 state notes), where a page listed every
-     * active price and showed two monthly prices at once.
+     * ⚠️ THE COUNT IS NOT TIDINESS. Measured on dev2 2026-08-22: Looth LITE
+     * carries TEN price rows, SEVEN of them archived, and drawing all of them
+     * would bury the three a member can actually reach. This is the same class
+     * of defect as the four-button join card (#148 state notes), where a page
+     * listed every active price and showed two monthly prices at once.
      *
      * @param array<int,array<string,mixed>> $prices
      */

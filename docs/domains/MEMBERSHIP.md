@@ -180,6 +180,101 @@
   `PatreonStanding` without either being added to its require list. Revived:
   20 assertions, including the *"body chooses NOTHING"* section.
 
+## State (8/22, #194 — a product's tier stops being a SQL statement)
+
+- **WHAT THIS ADDS:** a **Products** tab on the LG Member Sync dash (third, after
+  Health — the default tab is still Settings, so every bookmark and every #190
+  redirect lands where it did). It lists every product the webhook has synced —
+  name, Stripe id, active/archived, `region_tag`, and its prices with their
+  intervals — and **sets each product's tier and region**. Ian, 8/22: *"Do we
+  have a spot in the dash where we register the stripe products. Like
+  looth-lite regional A ?"* Measured answer at the time: no.
+- ⚠️ **THE WRITER LIVES IN THE POLLER, AND THE OBVIOUS HOME IS THE WRONG ONE.**
+  `lg-stripe-billing` owns this table and already has `PdoProductRepository`, so
+  that is where a shared writer belongs — until you measure the boxes. **On dev2
+  `/srv/lg-stripe-billing` is a symlink into the serving checkout; on LIVE it is
+  a REAL DIRECTORY with its OWN `.git`**, and #192's
+  `src/Core/WebhookReceipts.php` **is not there at all**. That app is deployed on
+  a different schedule from the monorepo and is behind it. WordPress requiring
+  code out of that path would refuse to write **on live** — the exact box, and
+  the exact night, this tab exists for. `Membership\ProductCatalog` therefore
+  sits beside `Db::pdo()`, which is how `Health`, `StripePrice` and
+  `Repos\ProductRepo` already reach this database. (Keeper is filing the
+  billing-app deploy drift separately; it is bigger than this issue.)
+- ⚠️ **`StripePrice::assertTier()` IS NOT REUSABLE HERE, and reusing it would
+  have made the tab useless on the one box that needs it.** It validates against
+  the tiers **already present in the catalogue**, so on a box where nothing is
+  mapped yet it throws *"the catalogue has not been imported"* — and this tab
+  could never make the FIRST mapping. That box is live, and that moment is
+  go-live. Validation is against **WP roles** instead, which
+  `docs/TIER-TAXONOMY.md` names the system of record, narrowed by a **SELLABLE**
+  list. **Two independent locks**, and the distinction is real: removing the
+  sellable list still leaves `looth9` refused by the role check, which is how
+  red-first M8 was re-targeted rather than the gate weakened.
+- **looth1 AND looth4 ARE REFUSED THOUGH BOTH ARE REAL ROLES.** looth1 is the
+  unpaid resting tier every account falls back to and looth4 is the permanent
+  comp bypass the Arbiter short-circuits on. Neither is something a card payment
+  may buy, so neither is offered and both are refused if posted.
+- ⚠️ **REGION IS IN THE SAME CONTROL, AND THAT WAS A RULING, NOT A PREFERENCE.**
+  `products.region_tag` is written by **nothing** but the hand-run SQL the import
+  script prints — `ProductSyncHandler::handleProductEvent` does not pass it — so
+  a tier-only tab would still have sent Ian to a SQL prompt to finish
+  *"looth-lite regional A"*, **his own example**. Keeper ruled it in, 8/22.
+  It also makes the dash's column set **exactly** the import script's
+  (`ref`, `kind`, `region_tag`), which is what "one definition" means here.
+- **THE AUDIT LINE SHARES THE WRITE'S TRANSACTION, deliberately the opposite of
+  `WebhookReceipts`.** There, every `Throwable` is swallowed because bookkeeping
+  must never turn a delivered webhook into a three-day Stripe retry. Here the
+  change IS the point: a money-adjacent mapping nobody can account for is worse
+  than no mapping, so **a receipt that cannot be written rolls the mapping
+  back**. `audit_log`, not `admin_action_log` — the latter has
+  `customer_id NOT NULL` with an FK to `customers`, and a product has no
+  customer. One line per **CHANGE**, never per press of Save.
+- **STRIPE CANNOT UNDO IT, VERIFIED NOT TRUSTED.** `upsertProduct`'s
+  `ON DUPLICATE KEY UPDATE` names only `name` and `active`; the handler passes
+  `ref` as null and it is used on first INSERT only. The tab **says so on
+  screen**, because otherwise people go looking in the Stripe dashboard for a
+  setting that lives here.
+- **#194 BUILT** on `194-products-tab`, gate **93** (63 assertions; red-first
+  **41/41** — 39 mutations each reddening its own named assertion, 2 no-op
+  controls proven inert). **Dash-only, so no flag**, matching #190, #148, #183
+  and #192.
+- ⚠️ **THE RED-FIRST FOUND THREE HOLES IN THE GATE ITSELF**, each a shape worth
+  recognising: **(1)** the `kind` assertion ran against a row **already seeded**
+  as `membership`, so it passed whether or not the UPDATE wrote that column —
+  #148's vacuous green, one section over; **(2)** *"a refusal writes no audit
+  line"* stayed GREEN against a validator that silently fell back to the DEFAULT
+  tier, because the fixture already held that tier and the fallback was a
+  **no-op** — the fixture now starts on the other tier; **(3)** two mutations
+  were **BROKEN rather than WRONG** (a parse error and an `execute()` arity
+  mismatch) and killed the run at **exit 255 with no FAIL line** — this plugin's
+  test files have died that way three times, so the gate now installs an
+  exception handler that reports a fatal **as a finding**.
+
+### Verified on dev2 against the real catalogue (2026-08-22)
+
+- The panel renders dev2's **11 products** (6 active) through the real code and
+  real MySQL: prices with intervals, region chips, archived rows dimmed.
+  **The tab and Health both say 0 unmapped active**, on the real box.
+- The real write was exercised end to end **against MySQL, which SQLite cannot
+  prove**: an archived, unmapped product was mapped to looth2/regional_b, the
+  repeat press was correctly a no-op, `looth4` was refused, and it was restored
+  to its exact original state. **Two `audit_log` rows** with real from→to — the
+  **first rows either box has ever held** — and `subject_type='product'`, so
+  Health's webhook question still counts **zero**, as gate 93 §C4 requires.
+- **PICTURE for Ian:** `/mockups/lanes/194-products-tab.html` — the real screen,
+  really rendered, with the Save buttons made inert.
+- ⚠️ **Noticed, deliberately not changed:** a product created in Stripe that is
+  NOT a membership arrives as `kind='membership'` anyway (the webhook hardcodes
+  it), so it would sit red forever with no way to say "this is not a
+  membership". **Unreachable today** — nothing creates one — and out of scope
+  here; it is the next thing this tab will want. Also visible now for the first
+  time: dev2 carries **active one-time prices** on both LITE ($66) and PRO
+  ($145), which nothing in the join flow offers.
+- **Owed:** Ian looks at the tab on dev2 after the merge. Live's catalogue is
+  still empty, which is what makes this the tool he needs at the moment it is
+  not.
+
 ## State (8/22, #192 — the panel that answers the five questions nobody could)
 
 - **WHAT THIS ADDS:** a **Health** tab on the LG Member Sync dash (second, after

@@ -286,7 +286,7 @@ MUTATIONS = [
         if ( false ) {
             printf(
                 '<li class="lgms-p-more">%d archived price%s</li>',""",
-     "G4", "eleven price rows are drawn in full, burying the two a member can reach"),
+     "G4", "ten price rows are drawn in full, burying the three a member can reach"),
 
     ("M35", PANEL,
      "                $rowClass = $p['unmapped'] ? 'is-unmapped' : ( $p['active'] ? '' : 'is-archived' );",
