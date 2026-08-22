@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>#200 — the featured band never renders as nothing (mock)</title>
+<link rel="stylesheet" href="_mock.css">
+</head>
+<body id="lgfm200">
+<div class="wrap">
+
+  <div class="mockhead">
+    <h1>Featured members &mdash; your picks stay up, and the band is never empty</h1>
+    <p>You said: <b>&ldquo;The changes made to featured member has removed members from the front page.
+       The override I wanted would still have them on the frontpage even if they didn&rsquo;t meet the
+       criteria.&rdquo;</b> You were right, and it is worse than one thing going wrong &mdash; there are two,
+       and the stopgap I was handed for you could never have worked. Everything below is measured on
+       live, not guessed.</p>
+  </div>
+
+  <div class="note">
+    <b>The stopgap is withdrawn.</b> Turning the flag off would not have brought the band back.
+    Nothing on the box actually reads the override file it was supposed to go in, and even if it did,
+    the code takes the band <i>down</i> when the flag is off and a member is selected &mdash; measured:
+    flag on renders one band, flag off renders none. So there was never a switch to flip.
+    The repair is the two halves below.
+  </div>
+
+  <h2 class="sec">Half one &mdash; one command from you, and it is not the feature&rsquo;s fault</h2>
+  <p class="secsub">The front page reads member details out of the profiles database under a
+     narrow permission list. One column was added to that list in the code on 20 August and the
+     matching permission was <b>never granted on live</b>. Without it the database refuses the read,
+     the page quietly gives up, and <b>the band disappears for everyone, no matter who you pick.</b>
+     This one command fixes that half &mdash; it is a live write, so it is yours:</p>
+  <div class="note note--ok" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px">
+    sudo -u postgres psql profile_app -f tools/cut/featured-member-grants.sql
+  </div>
+
+  <h2 class="sec">Half two &mdash; and this is the part you actually described</h2>
+  <p class="secsub">Even with that command run, <b>your current pick still would not appear.</b>
+     Here is every member on live who has ticked the featured box, and what the front page does with
+     each one today. Your pick is the highlighted row.</p>
+
+  <table class="tbl">
+    <thead><tr><th>Member</th><th>Their one-liner</th><th>Fallback</th><th>Front page today</th></tr></thead>
+    <tbody>
+      <tr><td>John Greenwald Epiphany Guitars, LLC</td><td>written, but members-only</td><td>business name repeats their own name</td><td class="no">nothing</td></tr>
+      <tr class="mine"><td><b>Jonathan Scott Chisels &amp; Picks</b> &mdash; on now</td><td>none written</td><td>business name repeats their own name</td><td class="no">nothing</td></tr>
+      <tr><td>Bryan Parris</td><td>written, but members-only</td><td>Parris Guitars</td><td class="yes">shows</td></tr>
+      <tr><td>BodyShopGuitar</td><td>written, but members-only</td><td>none</td><td class="no">nothing</td></tr>
+      <tr><td>ERIC OTTAVIANO MINOR FRET SJ</td><td>none written</td><td>business name repeats their own name</td><td class="no">nothing</td></tr>
+      <tr><td>Ian Davlin</td><td>public</td><td>The Looth Group</td><td class="yes">shows</td></tr>
+    </tbody>
+  </table>
+  <p class="secsub" style="margin-top:10px"><b>Two of six.</b> The card refuses to draw unless it has a
+     line of text under the name, and for four of these members there is nothing it is allowed to print
+     &mdash; either they wrote nothing, or they wrote it and kept it members-only. That is the criteria
+     removing your picks, exactly as you said.</p>
+
+  <h2 class="sec">What a pinned pick looks like &mdash; your man, on the front page</h2>
+  <p class="secsub">Pinning drops the tick requirement and the &ldquo;must have a line of text&rdquo;
+     requirement. It prints only what their profile already shows the public, so nothing private
+     leaks: photo, name, and a link. No line of text is better than no card.</p>
+
+  <div class="themes">
+    <div class="pane pane--light">
+      <p class="pane__lbl">Light</p>
+      <div class="rowabove">welcome video</div>
+      <section class="row row--featured-member">
+        <div class="lg-fm">
+          <span class="lg-fm__badge">Featured member</span>
+          <span class="lg-fm__avi"><img src="avatar-js.webp" alt="" width="104" height="104"></span>
+          <div class="lg-fm__body">
+            <h2 class="lg-fm__name">Jonathan Scott Chisels &amp; Picks</h2>
+          </div>
+          <div class="lg-fm__act"><a class="lg-fm__cta" href="#">See Jonathan&rsquo;s profile</a></div>
+        </div>
+      </section>
+      <div class="rowbelow">latest posts</div>
+    </div>
+    <div class="pane pane--dark">
+      <p class="pane__lbl">Dark</p>
+      <div class="rowabove">welcome video</div>
+      <section class="row row--featured-member">
+        <div class="lg-fm">
+          <span class="lg-fm__badge">Featured member</span>
+          <span class="lg-fm__avi"><img src="avatar-js.webp" alt="" width="104" height="104"></span>
+          <div class="lg-fm__body">
+            <h2 class="lg-fm__name">Jonathan Scott Chisels &amp; Picks</h2>
+          </div>
+          <div class="lg-fm__act"><a class="lg-fm__cta" href="#">See Jonathan&rsquo;s profile</a></div>
+        </div>
+      </section>
+      <div class="rowbelow">latest posts</div>
+    </div>
+  </div>
+
+  <h2 class="sec">And when nobody is picked at all &mdash; two ways, pick one</h2>
+  <p class="secsub">Today an empty pick leaves a hole: the band is simply gone and the page closes up
+     over it, which is what you saw. From now on it always draws something. Which something is your call.</p>
+
+  <h2 class="sec" style="margin-top:26px">A &mdash; the old hand-placed card<span class="reco reco--no">the safe one</span></h2>
+  <p class="secsub">What was on the front page from June until this month. It is a real person and it
+     looks right &mdash; but it is frozen text nobody maintains, and it says
+     &ldquo;featured member&rdquo; about someone who was featured three months ago.</p>
+
+  <div class="themes">
+    <div class="pane pane--light">
+      <p class="pane__lbl">Light</p>
+      <section class="row row--featured-member">
+        <div class="lg-fm">
+          <span class="lg-fm__badge">Featured member</span>
+          <span class="lg-fm__avi"><img src="avatar-de.jpg" alt="" width="104" height="104"></span>
+          <div class="lg-fm__body">
+            <h2 class="lg-fm__name">Dan Erlewine</h2>
+            <div class="lg-fm__role">Master Luthier &amp; Repair Authority</div>
+            <div class="lg-fm__where">Athens, Ohio</div>
+            <p class="lg-fm__bio">Sixty years on the bench. Author of the Guitar Player Repair Guide - now sharing the craft, hands-on, with the Looth Group.</p>
+          </div>
+          <div class="lg-fm__act"><a class="lg-fm__cta" href="#">See Dan&rsquo;s videos</a></div>
+        </div>
+      </section>
+    </div>
+    <div class="pane pane--dark">
+      <p class="pane__lbl">Dark</p>
+      <section class="row row--featured-member">
+        <div class="lg-fm">
+          <span class="lg-fm__badge">Featured member</span>
+          <span class="lg-fm__avi"><img src="avatar-de.jpg" alt="" width="104" height="104"></span>
+          <div class="lg-fm__body">
+            <h2 class="lg-fm__name">Dan Erlewine</h2>
+            <div class="lg-fm__role">Master Luthier &amp; Repair Authority</div>
+            <div class="lg-fm__where">Athens, Ohio</div>
+            <p class="lg-fm__bio">Sixty years on the bench. Author of the Guitar Player Repair Guide - now sharing the craft, hands-on, with the Looth Group.</p>
+          </div>
+          <div class="lg-fm__act"><a class="lg-fm__cta" href="#">See Dan&rsquo;s videos</a></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <h2 class="sec" style="margin-top:30px">B &mdash; an honest empty state that recruits<span class="reco">my recommendation</span></h2>
+  <p class="secsub">Same card shell, same weight in the page, but it tells the truth about the week and
+     asks for the next one. Only eight members on the whole site have ticked the box; this is the only
+     surface that could ever ask the other nineteen hundred.</p>
+
+  <div class="themes">
+    <div class="pane pane--light">
+      <p class="pane__lbl">Light</p>
+      <section class="row row--featured-member">
+        <div class="lg-fm lg-fm--empty">
+          <span class="lg-fm__badge">Featured member</span>
+          <span class="lg-fm__avi" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="color:var(--lg-sage-d)">
+              <path d="M12 3l2.4 5.2 5.6.7-4.1 3.9 1.1 5.6L12 15.7 6.9 18.4 8 12.8 3.9 8.9l5.6-.7z"/></svg>
+          </span>
+          <div class="lg-fm__body">
+            <h2 class="lg-fm__name">This spot is open</h2>
+            <div class="lg-fm__role">Every week we put one member here</div>
+            <p class="lg-fm__bio">Fancy it? Tick &ldquo;include me as a possible featured member&rdquo; on your
+               profile and you are in the running. Your photo, what you do, and a link to your bench.</p>
+          </div>
+          <div class="lg-fm__act"><a class="lg-fm__cta" href="#">Put me forward</a></div>
+        </div>
+      </section>
+    </div>
+    <div class="pane pane--dark">
+      <p class="pane__lbl">Dark</p>
+      <section class="row row--featured-member">
+        <div class="lg-fm lg-fm--empty">
+          <span class="lg-fm__badge">Featured member</span>
+          <span class="lg-fm__avi" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="color:var(--lg-sage-d)">
+              <path d="M12 3l2.4 5.2 5.6.7-4.1 3.9 1.1 5.6L12 15.7 6.9 18.4 8 12.8 3.9 8.9l5.6-.7z"/></svg>
+          </span>
+          <div class="lg-fm__body">
+            <h2 class="lg-fm__name">This spot is open</h2>
+            <div class="lg-fm__role">Every week we put one member here</div>
+            <p class="lg-fm__bio">Fancy it? Tick &ldquo;include me as a possible featured member&rdquo; on your
+               profile and you are in the running. Your photo, what you do, and a link to your bench.</p>
+          </div>
+          <div class="lg-fm__act"><a class="lg-fm__cta" href="#">Put me forward</a></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <h2 class="sec" style="margin-top:30px">For comparison &mdash; what live does right now</h2>
+  <p class="secsub">Not a design. This is the hole: the band is absent and the rows close up over it.</p>
+  <div class="themes">
+    <div class="pane pane--light">
+      <p class="pane__lbl">Light</p>
+      <div class="rowabove">welcome video</div>
+      <div class="hole">nothing renders here &mdash; the band is gone</div>
+      <div class="rowbelow">latest posts</div>
+    </div>
+    <div class="pane pane--dark">
+      <p class="pane__lbl">Dark</p>
+      <div class="rowabove">welcome video</div>
+      <div class="hole">nothing renders here &mdash; the band is gone</div>
+      <div class="rowbelow">latest posts</div>
+    </div>
+  </div>
+
+  <h2 class="sec" style="margin-top:34px">One thing I need a yes or no on</h2>
+  <p class="secsub">Pinning skips every criterion except one: a member who has set their <b>whole profile
+     to Private</b>. That is not a completeness bar, it is them saying &ldquo;I am not public&rdquo;, and
+     pinning them would put their face on the open web pointing at a page the public cannot open.
+     It is exactly <b>one member</b> on each box today. My recommendation is to keep that one refusal
+     and show it in the dash as &ldquo;cannot be pinned &mdash; their profile is Private&rdquo;.
+     Say the word and I will let it through too.</p>
+
+</div>
+</body>
+</html>

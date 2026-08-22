@@ -1,0 +1,147 @@
+/* #200 mock — the featured band's empty state, and a pinned pick.
+   ⚠️ TOKENS ARE PINNED ON THE MOCK'S OWN PANES, never on <html>.
+   Two reasons, both paid for on this box: the docroot injects app-settings.js
+   into mocks and dark REWRITES the --lg-* tokens as inline style on <html>
+   (so a real-CSS mock inverts), and stamping data-lguser-theme persists on the
+   SHARED chrome profile and takes every other lane's browser dark.
+   So each pane below carries a complete token set and depends on nothing. */
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+body#lgfm200 {
+  background: #f2f1ec !important;
+  color: #26281f !important;
+  font: 400 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  /* the injected PWA tabbar eats ~55px at the bottom of a mock */
+  padding-bottom: 90px;
+}
+
+.wrap { max-width: 1500px; margin: 0 auto; padding: 26px 22px 0; }
+
+.mockhead h1 { font: 700 25px/1.2 Georgia, serif; margin: 0 0 8px; color: #1a1d1a; }
+.mockhead p  { margin: 0 0 14px; max-width: 76ch; color: #3d4038; }
+.mockhead b  { color: #1a1d1a; }
+
+.note {
+  border-left: 4px solid #c66845; background: #fff; border-radius: 0 8px 8px 0;
+  padding: 13px 16px; margin: 0 0 22px; max-width: 96ch;
+}
+.note--ok { border-left-color: #6b7751; }
+
+h2.sec  { font: 700 18px/1.2 Georgia, serif; margin: 34px 0 3px; color: #1a1d1a; }
+p.secsub{ margin: 0 0 14px; color: #5a5e54; max-width: 88ch; }
+
+.reco {
+  display: inline-block; background: #6b7751; color: #fff; border-radius: 999px;
+  font: 700 10.5px/1 -apple-system, system-ui, sans-serif; letter-spacing: .1em;
+  text-transform: uppercase; padding: 6px 11px; margin-left: 8px; vertical-align: 3px;
+}
+.reco--no { background: #8a8d84; }
+
+/* ── the two theme panes ───────────────────────────────────────────────── */
+.themes { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 1100px) { .themes { grid-template-columns: 1fr; } }
+
+.pane { border-radius: 12px; padding: 20px 20px 24px; border: 1px solid #ddd9cd; }
+.pane__lbl {
+  font: 700 10.5px/1 -apple-system, system-ui, sans-serif; letter-spacing: .12em;
+  text-transform: uppercase; margin: 0 0 14px; opacity: .62;
+}
+
+/* LIGHT pane — the front page's own light values, verbatim from archive.css
+   :root + body.view-discover, so this is the real palette and not an approximation. */
+.pane--light {
+  --lg-sage: #8a9670; --lg-sage-d: #6b7751; --lg-sage-tint: #f0f2e9; --lg-sage-3: #dde3cd;
+  --lg-line: #ebe9e2; --lg-card-bg: #ffffff; --lg-charcoal: #1a1d1a; --lg-ink: #323532;
+  --lg-mute: #6b6f6b; --lg-amber: #ecb351; --lg-rust: #c66845;
+  --fp-img-ph: #d4ccb8; --fp-cta-ink: #fff; --fp-cta-hover-bg: #3a4a3a;
+  --fp-pill-bg: #fff; --fp-pill-line: #d8d2c2;
+  --lg-font-serif: "DM Serif Display", Georgia, serif;
+  --lg-font-sans: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  background: #f3efe6; color: var(--lg-charcoal);
+}
+/* DARK pane — html[data-lguser-theme="dark"] body.view-discover, verbatim. */
+.pane--dark {
+  --lg-sage: #9cb37d; --lg-sage-d: #b0c693; --lg-sage-tint: #243024; --lg-sage-3: #2f3d2c;
+  --lg-line: #2c312d; --lg-card-bg: #1e2124; --lg-charcoal: #f2f4ee; --lg-ink: #e5e7e1;
+  --lg-mute: #a6ac9f; --lg-amber: #ecb351; --lg-rust: #d57a55;
+  --fp-img-ph: #262b30; --fp-cta-ink: #15171a; --fp-cta-hover-bg: #c3d6a8;
+  --fp-pill-bg: #243024; --fp-pill-line: #2c312d;
+  --lg-font-serif: "DM Serif Display", Georgia, serif;
+  --lg-font-sans: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  background: #15171a; color: var(--lg-charcoal); border-color: #2c312d;
+}
+
+/* ── the real band CSS, copied verbatim from archive-poc/web/archive.css
+   (body.view-discover .lg-fm*), rescoped to .pane so the mock cannot drift
+   from the shipped rules by accident. ─────────────────────────────────── */
+.pane .row--featured-member { margin: 0 0 18px; }
+.pane .lg-fm {
+  position: relative; display: grid; grid-template-columns: auto minmax(0,1fr) auto;
+  gap: 22px; align-items: center;
+  background: var(--lg-card-bg); border: 1px solid var(--lg-line);
+  border-left: 5px solid var(--lg-sage-d); border-radius: 14px; padding: 22px 26px;
+}
+.pane .lg-fm__badge {
+  position: absolute; top: 14px; right: 18px;
+  font: 700 10px/1 var(--lg-font-sans); letter-spacing: .12em; text-transform: uppercase;
+  color: var(--lg-amber);
+}
+.pane .lg-fm__avi {
+  width: 104px; height: 104px; border-radius: 50%; overflow: hidden; display: block;
+  border: 3px solid var(--lg-card-bg); box-shadow: 0 0 0 1px var(--lg-line);
+  background: var(--fp-img-ph); flex: 0 0 auto;
+}
+.pane .lg-fm__avi img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pane .lg-fm__name { margin: 0 0 2px; font: 400 26px/1.12 var(--lg-font-serif); color: var(--lg-charcoal); }
+.pane .lg-fm__role { font: 600 13px/1.3 var(--lg-font-sans); color: var(--lg-sage-d); }
+.pane .lg-fm__where{ font: 500 12px/1.3 var(--lg-font-sans); color: var(--lg-mute); margin-top: 1px; }
+.pane .lg-fm__bio  { margin: 9px 0 0; font: 400 14px/1.55 var(--lg-font-sans); color: var(--lg-ink); max-width: 600px; }
+.pane .lg-fm__cta {
+  display: inline-block; background: var(--lg-sage-d); color: var(--fp-cta-ink);
+  font: 700 13px/1 var(--lg-font-sans); border-radius: 999px; padding: 11px 18px;
+  text-decoration: none; white-space: nowrap;
+}
+@media (max-width: 820px) {
+  .pane .lg-fm { grid-template-columns: auto minmax(0,1fr); }
+  .pane .lg-fm__act { grid-column: 1 / -1; }
+}
+@media (max-width: 560px) {
+  .pane .lg-fm { grid-template-columns: 1fr; text-align: center; }
+  .pane .lg-fm__avi { margin: 0 auto; }
+}
+
+/* ── option B: the designed empty state. Same shell as the real card so it
+   sits in the page at the same weight — no new visual language. ───────── */
+.pane .lg-fm--empty { grid-template-columns: auto minmax(0,1fr) auto; }
+.pane .lg-fm--empty .lg-fm__avi {
+  display: grid; place-items: center; border-style: dashed; border-width: 2px;
+  border-color: var(--lg-sage-3); background: var(--lg-sage-tint); box-shadow: none;
+}
+.pane .lg-fm--empty .lg-fm__avi svg { width: 46px; height: 46px; opacity: .8; }
+.pane .lg-fm--empty .lg-fm__name { font-size: 23px; }
+
+/* ── "what live shows today" — the hole ───────────────────────────────── */
+.pane .hole {
+  border: 2px dashed var(--fp-pill-line); border-radius: 14px;
+  padding: 26px; text-align: center; color: var(--lg-mute);
+  font: 500 13px/1.4 var(--lg-font-sans);
+}
+.pane .rowabove, .pane .rowbelow {
+  border-radius: 10px; background: var(--lg-sage-tint); border: 1px solid var(--lg-line);
+  color: var(--lg-mute); font: 600 11px/1 var(--lg-font-sans);
+  letter-spacing: .1em; text-transform: uppercase; padding: 15px; text-align: center;
+  margin: 0 0 18px;
+}
+.pane .rowbelow { margin: 18px 0 0; }
+
+/* ── the rejection table ──────────────────────────────────────────────── */
+table.tbl { border-collapse: collapse; width: 100%; max-width: 1000px; background: #fff;
+            border: 1px solid #ddd9cd; border-radius: 8px; overflow: hidden; font-size: 13.5px; }
+table.tbl th, table.tbl td { text-align: left; padding: 9px 12px; border-bottom: 1px solid #eae7dd; }
+table.tbl th { background: #f7f5ef; font-weight: 700; color: #1a1d1a; }
+table.tbl tr:last-child td { border-bottom: 0; }
+td.no  { color: #a4402a; font-weight: 700; }
+td.yes { color: #3f6b3a; font-weight: 700; }
+tr.mine td { background: #fdf6e7; }

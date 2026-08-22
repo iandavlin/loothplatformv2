@@ -117,16 +117,19 @@ first."*
 from `users` in `profile_app`. There is no hand-typed string path; the card is
 still resolved live on every request.
 
-**The one criterion I recommend keeping — and this is the plan's one open
-decision.** `profile_visibility = 'private'` is not a completeness bar, it is the
+**The one criterion kept — RULED by keeper 2026-08-22, my recommendation
+upheld:** *"a pinned pick does NOT bypass `profile_visibility` private. That is
+the member's own switch and it outranks admin pinning under the consent-A
+principle; the dash listing them as cannot-be-pinned is the legible refusal."*
+Ian can overrule with a word and has been told so. The reasoning, kept because
+it is the reasoning that will be re-litigated: `profile_visibility = 'private'` is not a completeness bar, it is the
 member's own switch saying "I am not public". Pinning such a member would put
 their name and photo on the open web and link to a profile the public cannot
 open. On both boxes this is **1 member**, so keeping it costs nothing today.
 The dash will list Private members in the search marked *"cannot be pinned —
 their profile is Private"* rather than hiding them, so the refusal is legible.
-**Say the word and I will make it bypassable too** (with a loud dash warning);
-I would rather ask than silently interpret "regardless of the criteria" as
-"including the one criterion the member set themselves".
+Interpreting "regardless of the criteria" as "including the one criterion the
+member set themselves" would have been the silent reading; this is the loud one.
 
 ### The pieces
 1. **`internal-featured-pool.php`** grows `GET ?q=<text>` returning a second list,
@@ -217,11 +220,13 @@ intent:
 
 ## 4. Gates
 
-**Gate number minted from MAIN: 94.** `run-all.sh` on main tops out at 93 (and
-already carries **two** blocks numbered 93 — `switch-menu` and `products-tab`,
-a pre-existing collision I am not fixing here, only reporting). Every live
-worktree was diffed against main for `run-all.sh`: only `emoji-picker-build`
-touches it, and it is an old branch still on the "/19" numbering, so 94 is free.
+**Gate number minted from MAIN: 94.** `run-all.sh` on main topped out at 93 and
+carried **two** blocks numbered 93 — reported to keeper, who has since
+renumbered `switch-menu` to 95 on main and given the ledger header an explicit
+next-free counter (96) bumped at assignment, so numbers no longer race merges.
+**94 stands.** Every live worktree was also diffed against main for
+`run-all.sh`: only `emoji-picker-build` touches it, and it is an old branch
+still on the "/19" numbering.
 
 `tools/gates/featured-override-gate.py`, **red-first**, run individually (#175):
 
@@ -285,8 +290,29 @@ doing real work.
 
 ## 6. What I will report but not fix
 
-- The two `GATE 93` blocks already on main.
+- ~~The two `GATE 93` blocks already on main~~ — reported, and keeper fixed it
+  on main the same hour (`switch-menu` → 95).
 - `featured-consent.local.php` on dev2 has been inert since 8/20 — the reader
   this lane adds is what makes it real, which means **placing it becomes a
   behaviour change on dev2** and needs Ian's eyes before it counts as "on".
 - `/srv/archive-poc/config.json` is a live decoy on both boxes.
+
+
+---
+
+## 7. The pictures — published for Ian, 2026-08-22
+
+    https://dev2.loothgroup.com/footer-mockups/200-featured-override/
+
+Behind the dev gate. Carries the measured rejection table, what his own pinned
+pick looks like, and the two empty-state options drawn side by side in **both
+themes**, shot at **1440 and 390** (`tools/preview/200-featured-shots.py`).
+
+The mock pins the complete `--lg-*` / `--fp-*` token set on its own panes and
+copies the shipped `.lg-fm` rules verbatim, so it cannot invert under the
+injected `app-settings.js` and cannot poison the shared chrome profile. The
+shot run **asserts the delta** — the light pane's card must compute a different
+background from the dark pane's, else it is one theme photographed twice —
+paired with a liveness read, and it verifies the shared profile's theme is
+unchanged when it exits. Measured: light `rgb(255,255,255)` vs dark
+`rgb(30,33,36)`, no horizontal scroll at 390, every CTA inside the viewport.
