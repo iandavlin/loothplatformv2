@@ -926,7 +926,7 @@ html[data-lguser-theme="dark"] .lg-fm-meter__next b{color:var(--lg-charcoal)}
           <span class="lg-viewas__seg">
             <a href="<?= looth_h($viewLink('public')) ?>" <?= $role==='public'?'aria-current="true"':'' ?>>Public</a>
             <a href="<?= looth_h($viewLink('member')) ?>" <?= $role==='member'?'aria-current="true"':'' ?>>Member</a>
-            <a href="<?= looth_h($viewLink('me')) ?>"     <?= $role==='me'?'aria-current="true"':'' ?>>Me</a>
+            <a href="<?= looth_h($viewLink('me')) ?>"     <?= $role==='me'?'aria-current="true"':'' ?>>Edit</a>
           </span>
           <?php /* Sections opener moved OUT of this privacy panel — Ian 2026-07-28,
                    option A. This panel is privacy ONLY now: View-as, Profile
