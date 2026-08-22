@@ -243,7 +243,65 @@ MUTATIONS = [
      "        self::renderAffiliatePage();",
      "G12", "the tab renders the standalone PAGE, nesting a second wrap and a "
             "second h1 inside render()'s own"),
+
+    # ── §I — the Testers tab takes an ADDRESS (#193) ────────────────────────
+    # Ian, 8/22: "I thought the whitelist would have them generating a wp-user
+    # like a normal new member join." The DECIDER is red-firsted against gate 86
+    # and the STORE against gate 34; these are aimed at the surface, because
+    # "Ian cannot use this without the command line" was a charter constraint.
+
+    ("M34", ADMIN,
+     "            if ( $email !== \'\' ) {\n                self::cohortRedirect( [ \'lgms_cohort_confirm_email\' => rawurlencode( $email ) ] );\n            }",
+     "            if ( false ) {\n                self::cohortRedirect( [ \'lgms_cohort_confirm_email\' => rawurlencode( $email ) ] );\n            }",
+     "I6", "the lookup dead-ends on an address with no account again — Ian types "
+           "a tester's email and is told to go and make them an account first, "
+           "which is the whole of what #193 was opened to remove"),
+
+    ("M35", ADMIN,
+     "        add_action( \'admin_post_lgms_cohort_add_email\',    [ self::class, \'handleCohortAddEmail\' ] );",
+     "        // add_action for add_email deliberately dropped",
+     "I4", "the add-an-address handler is never registered — the confirm button "
+           "posts into nothing and the address is silently not stored"),
+
+    ("M36", ADMIN,
+     "        check_admin_referer( \'lgms_cohort_remove_email_\' . $email );",
+     "        check_admin_referer( \'lgms_cohort_remove_email\' );",
+     "I5", "the remove nonce stops being bound to the address, so one valid page "
+           "grants removal of any OTHER tester"),
+
+    ("M37", ADMIN,
+     "        if ( ( $existing = get_user_by( \'email\', $email ) ) instanceof \\WP_User ) {\n            if ( CohortAllowlist::add( (int) $existing->ID ) ) {",
+     "        if ( false ) {\n            if ( CohortAllowlist::add( (int) $existing->ID ) ) {",
+     "I7", "add-by-address stops re-checking for an account at write time, so a "
+           "tester who signed up between the lookup and the click gets a second "
+           "entry and the list can later disagree with itself"),
+
+    ("M38", ADMIN,
+     "            <?php foreach ( $emails as $addr ) :",
+     "            <?php foreach ( [] as $addr ) :",
+     "I8a", "the tab stops rendering the addresses — they are stored and invisible, "
+            "which is #190's unreadable-store defect wearing a different hat"),
+
+    ("M39", ADMIN,
+     "<h3>Current cohort (<?php echo count( $ids ) + count( $emails ); ?>)</h3>",
+     "<h3>Current cohort (<?php echo count( $ids ); ?>)</h3>",
+     "I9", "the count goes back to the ids alone, so an addresses-only cohort "
+           "reads as empty on the very tab that holds it"),
+
+    ("M40", ADMIN,
+     "            The test group only takes people who already have an account. This mints a",
+     "            The test group only takes people who already have an account. This mints a",
+     "I12", "PLACEHOLDER — replaced below"),
 ]
+
+# M40 is written as a real reinstatement of the old, now-false sentence.
+MUTATIONS[-1] = (
+    "M40", ADMIN,
+    "            <strong>Usually you do not need this any more.</strong> Since #193 the list below",
+    "            The test group only takes people who already have an account. Since #193 the list below",
+    "I12", "the invite panel reinstates its old claim that the list needs an "
+           "existing account — a confidently-wrong sentence on the very tab that "
+           "disproves it, which is how an operator concludes the feature is absent")
 
 NOOPS = [
     ("N1", STORE,
@@ -254,6 +312,12 @@ NOOPS = [
      "     * THE TESTER LINK PANEL (#190) — the half of \"who can get in\" that had no",
      "     * The tester link panel (#190) — the half of \"who can get in\" that had no",
      "a comment reword in the panel"),
+    # #193 — §I needs its own control, or a green run says nothing about whether
+    # those assertions are keying on Admin.php's prose rather than its code.
+    ("N3", ADMIN,
+     "     * ADD AN ADDRESS (#193). Ian, 2026-08-22:",
+     "     * Add an address (#193). Ian, 2026-08-22:",
+     "a comment reword in the add-an-address handler"),
 ]
 
 

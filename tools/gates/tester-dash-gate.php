@@ -787,8 +787,13 @@ is_( str_contains( $rmBody, "check_admin_referer( 'lgms_cohort_remove_email_' . 
    the only way forward is to make them an account — which is the step that made
    the rehearsal untrue to the real journey. */
 $lookupBody = php_function_body( $admin, 'handleCohortLookup' );
-is_( str_contains( $lookupBody, 'lgms_cohort_confirm_email' ),
-     'I6  an unmatched but VALID address is offered for listing, not refused' );
+/* ⚠️ ASSERT THE BRANCH, NOT THE STRING. The first draft looked for
+   'lgms_cohort_confirm_email' anywhere in the body, and the red-first caught
+   it: neutering the guard to `if ( false )` leaves the string sitting there
+   unreachable, so the dead end came back with the gate none the wiser. Same
+   defect §K had, one gate over. */
+is_( preg_match( '/if\s*\(\s*\$email\s*!==\s*\x27\x27\s*\)\s*\{\s*self::cohortRedirect\(\s*\[\s*\x27lgms_cohort_confirm_email\x27/s', $lookupBody ) === 1,
+     'I6  a VALID address with no account is REACHABLY offered for listing, not refused' );
 is_( str_contains( $lookupBody, 'CohortAllowlist::normalizeEmail' ),
      'I6b ...through the store\'s own normalizer, so the dash cannot offer what the reader would drop' );
 is_( str_contains( $lookupBody, 'lgms_cohort_err' ),
@@ -811,8 +816,12 @@ is_( str_contains( $addBody, 'CohortAllowlist::add(' ),
    cannot audit — and #190's whole lesson was a store that could not be read
    back. */
 $tabBody = php_function_body( $admin, 'renderStripeCohortTab' );
+/* Again the LOOP, not the call: `foreach ( [] as $addr )` keeps every string
+   below it and renders nothing. Found by red-first M38. */
 is_( str_contains( $tabBody, 'CohortAllowlist::emails()' ),
      'I8  the tab reads the addresses' );
+is_( preg_match( '/foreach\s*\(\s*\$emails\s+as\s+\$addr\s*\)/', $tabBody ) === 1,
+     'I8a ...and actually ITERATES them — a loop over [] keeps every string below it' );
 is_( str_contains( $tabBody, 'lgms_cohort_remove_email' ),
      'I8b ...and each one gets its own Remove control' );
 is_( str_contains( $tabBody, 'no account yet' ),
@@ -820,9 +829,17 @@ is_( str_contains( $tabBody, 'no account yet' ),
 is_( str_contains( $tabBody, 'signed up since' ),
      'I8d ...and which HAVE, so Ian can see who turned up without leaving the tab' );
 
-/* THE COUNT. Counting ids alone here would print "0" over a working cohort. */
-is_( preg_match( '/count\(\s*\$ids\s*\)\s*\+\s*count\(\s*\$emails\s*\)/', $tabBody ) === 1,
-     'I9  the cohort count is BOTH halves — an addresses-only list never reads as empty' );
+/* THE COUNT. Counting ids alone here would print "0" over a working cohort.
+   ⚠️ THE FIRST DRAFT MATCHED THE EXPRESSION ANYWHERE IN THE TAB, so reverting
+   the heading stayed green on the CHIP's copy of the same expression — a
+   fixed-target assertion satisfied by a different occurrence. Both places are
+   now pinned to their own surrounding markup. Found by red-first M39. */
+is_( preg_match( '/Current cohort \(<\?php echo count\(\s*\$ids\s*\)\s*\+\s*count\(\s*\$emails\s*\)/', $tabBody ) === 1,
+     'I9  the cohort HEADING counts both halves — an addresses-only list never reads as empty' );
+is_( preg_match( '/in the test group: <\?php echo count\(\s*\$ids\s*\)\s*\+\s*count\(\s*\$emails\s*\)/', $tabBody ) === 1,
+     'I9b ...and so does the chip, which is the number read at a glance' );
+is_( preg_match( '/\$ids === \[\]\s*&&\s*\$emails === \[\]/', $tabBody ) === 1,
+     'I9c ...and "Empty" is only printed when BOTH halves are empty' );
 
 /* THE CLI LINE IS STILL COPY-PASTEABLE, and still describes the same option.
    A stale CLI hint is a confidently-wrong artifact; this repo has a memory

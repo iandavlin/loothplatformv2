@@ -168,6 +168,74 @@ fwrite(STDERR, "ALLOWED:" . count($GLOBALS["EMAIL_LOOKUPS"]));
     return str_contains($err, 'ALLOWED') ? 'ALLOWED' : 'REFUSED';
 }
 
+/* ---------------------------------------------------------------------- *
+ * #193 — THE ADDRESS READER, IN ISOLATION.
+ *
+ * Same reasoning as idsFor() below, and the red-first proved it the same way:
+ * "this viewer is refused" is a much weaker claim than "the list is empty".
+ * Dropping the filter_var() validation left every behavioural scenario green,
+ * because the invented entries simply were not addresses any test viewer
+ * carried. What the reader RESOLVES TO has to be asserted directly.
+ *
+ * @return string[] whatever lg_membership_stripe_test_group_emails() returns
+ * ---------------------------------------------------------------------- */
+function emailsFor(string $MP, ?string $listSerialized): array
+{
+    $harness = '<?php
+declare(strict_types=1);
+$OPTS = ' . var_export(['lgms_stripe_lifecycle_allowlist' => $listSerialized], true) . ';
+function lg_membership_wp_option(string $name, ?string $default = null): ?string {
+    global $OPTS;
+    return array_key_exists($name, $OPTS) && $OPTS[$name] !== null ? $OPTS[$name] : $default;
+}
+require ' . var_export($MP . '/config.php', true) . ';
+echo json_encode(array_values(lg_membership_stripe_test_group_emails()));
+';
+    $tmp = tempnam(sys_get_temp_dir(), 'lgeml') . '.php';
+    file_put_contents($tmp, $harness);
+    $out = shell_exec(PHP_BINARY . ' ' . escapeshellarg($tmp) . ' 2>/dev/null');
+    @unlink($tmp);
+    $v = json_decode((string) $out, true);
+    return is_array($v) ? $v : [];
+}
+
+/* ---------------------------------------------------------------------- *
+ * #193 — THE PREDICATE ITSELF, with an email stub that answers for ANY id.
+ *
+ * ⚠️ WITHOUT THIS THE ANON GUARD IS UNTESTABLE. The behavioural runs go through
+ * lg_membership_testgroup_gate_or_exit(), which refuses an unauthenticated ctx
+ * on its own `authenticated` clause — so deleting `if ($wpUserId <= 0) return
+ * false;` from the predicate stayed green for a reason that had nothing to do
+ * with the predicate. And scenarioEmail()'s own stub returns '' for id 0, which
+ * masks it a second time. This one answers with the listed address whatever id
+ * it is handed, so the guard is the ONLY thing that can refuse.
+ * ---------------------------------------------------------------------- */
+function inGroupFor(string $MP, ?string $flag, ?string $listSerialized, int $uid, string $anyEmail): bool
+{
+    $opts = [
+        'lgms_stripe_testgroup_pages'     => $flag,
+        'lgms_stripe_lifecycle_allowlist' => $listSerialized,
+    ];
+    $harness = '<?php
+declare(strict_types=1);
+$OPTS  = ' . var_export($opts, true) . ';
+$EMAIL = ' . var_export($anyEmail, true) . ';
+function lg_membership_wp_option(string $name, ?string $default = null): ?string {
+    global $OPTS;
+    return array_key_exists($name, $OPTS) && $OPTS[$name] !== null ? $OPTS[$name] : $default;
+}
+// Answers for EVERY id, id 0 included — so only the guard can refuse.
+function lg_membership_user_email(int $wpUserId): string { global $EMAIL; return $EMAIL; }
+require ' . var_export($MP . '/config.php', true) . ';
+echo lg_membership_in_stripe_test_group(' . $uid . ') ? "YES" : "NO";
+';
+    $tmp = tempnam(sys_get_temp_dir(), 'lgpred') . '.php';
+    file_put_contents($tmp, $harness);
+    $out = shell_exec(PHP_BINARY . ' ' . escapeshellarg($tmp) . ' 2>/dev/null');
+    @unlink($tmp);
+    return trim((string) $out) === 'YES';
+}
+
 /**
  * The READER, in isolation: what ids does this option actually resolve to?
  *
@@ -920,6 +988,32 @@ is_(idsFor($MP, '1', $mixedList) === [9001],
 is_(idsFor($MP, '1', $addrList) === [],
     '#193 an addresses-only list resolves to NO ids, exactly as before');
 
+/* THE ADDRESS READER, IN ISOLATION — what does it actually resolve to?
+   Found by red-first: without these, dropping filter_var() left every
+   behavioural scenario green. */
+is_(emailsFor($MP, serialize(['Someone@Example.Test', '  spaced@example.test  '])) === ['someone@example.test', 'spaced@example.test'],
+    '#193 the address reader trims and lower-cases');
+is_(emailsFor($MP, serialize(['not-an-email', 'also bad', '@nope', 'x@', ''])) === [],
+    '#193 ...and DROPS every malformed entry — a junk entry can never become a listed address');
+is_(emailsFor($MP, serialize([9001, '77', true, null, ['a']])) === [],
+    '#193 ...and ignores ids, digit-strings and non-strings entirely');
+is_(emailsFor($MP, serialize(['ok@example.test', 'not-an-email'])) === ['ok@example.test'],
+    '#193 ...keeping the good one beside the bad, rather than failing whole');
+is_(emailsFor($MP, 'not-serialized-at-all') === [] && emailsFor($MP, null) === [],
+    '#193 an absent or malformed OPTION resolves to no addresses — nobody');
+
+/* THE PREDICATE ITSELF. The behavioural runs cannot test the anon guard: the
+   gate refuses an unauthenticated ctx on its own `authenticated` clause, so
+   deleting the guard stays green for an unrelated reason. Found by red-first. */
+is_(inGroupFor($MP, '1', $addrList, 0, 'someone@example.test') === false,
+    '#193 the predicate refuses id 0 even when the address lookup WOULD answer with a listed one');
+is_(inGroupFor($MP, '1', $addrList, -5, 'someone@example.test') === false,
+    '#193 ...and a negative id');
+is_(inGroupFor($MP, '1', $addrList, 4242, 'someone@example.test') === true,
+    '#193 ...while a real id with that same address is admitted — or the two above are vacuous');
+is_(inGroupFor($MP, '0', $addrList, 4242, 'someone@example.test') === false,
+    '#193 ...and lock 1 still refuses it at the predicate, not only at the gate');
+
 echo "\n$pass passed, $fail failed\n";
 if ($fail > 0) {
     echo "RED — the Stripe Test Group page gate is not holding.\n";
@@ -958,6 +1052,38 @@ exit(0);
  *       -> 4 RED.
  *   M9  ids() accepts any truthy value instead of int/ctype_digit
  *       -> 1 RED. 0 and negative ids start matching.
+ *
+ * ─── #193 (2026-08-22): the door also knows an ADDRESS. Baseline 136/0.
+ *     6/6 caught, 1/1 no-op inert. Re-run:
+ *     python3 tools/gates/... — the harness for these lives in the lane's
+ *     scratchpad; the mutations are recorded here because the numbers are what
+ *     matter and they are measured, not predicted.
+ *
+ *   M7b remove the address leg from lg_membership_in_stripe_test_group()
+ *       -> 3 RED. A tester whose account was created by the join is refused
+ *          the join page on any browser without #180's unlock cookie.
+ *   M8c the compare stops normalizing (leans on the lookup to lower-case)
+ *       -> 1 RED. THIS ONE FOUND A REAL DEFECT rather than proving an
+ *          assertion: the first draft did exactly this, so the door was
+ *          correct only while that one helper stayed its only caller.
+ *   M9b an unreadable address ADMITS instead of refusing
+ *       -> 1 RED. A DB error must never open a door.
+ *   M10 lock 1 stops outranking the address leg
+ *       -> 8 RED. The pages flag OFF would let a listed address in, which
+ *          would make #193 a quiet fourth way in.
+ *   M11 the address reader drops its filter_var() validation
+ *       -> 3 RED — but ONLY after emailsFor() was added. It was a BLIND SPOT
+ *          first time round: every behavioural scenario stayed green because
+ *          the invented entries were not addresses any test viewer carried.
+ *          Same lesson idsFor() records above, one reader over.
+ *   M12 delete the `$wpUserId <= 0` anon guard
+ *       -> 2 RED — again only after inGroupFor() was added. The behavioural
+ *          runs CANNOT see this: the gate refuses an unauthenticated ctx on
+ *          its own `authenticated` clause, so the mutation stayed green for a
+ *          reason that had nothing to do with the predicate, and
+ *          scenarioEmail()'s stub returning '' for id 0 masked it a second
+ *          time. A guard that only a direct call can exercise needs a direct
+ *          call.
  *
  * TWO MUTATIONS FOUND HOLES IN THIS GATE RATHER THAN IN THE CODE, which is
  * the whole reason for running them, and both are worth remembering:
