@@ -1,5 +1,7 @@
 # Web-craft standard (Ian 6/12: "figure out how this gets fixed permanently")
 
+**GATE NUMBERS — next free: 98.** Keeper assigns from THIS line and bumps it in the same commit; never from scanning rows (that race made two 93s and two 94s on 8/22).
+
 The disease this kills: basics (image sizing, eager scripts, cache headers)
 were re-discovered and re-fixed surface by surface — ~13 rounds on images
 alone — because each session's lesson died with its context and "verified"
