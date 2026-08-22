@@ -283,13 +283,34 @@ def leg_a():
        "stop meaning nobody",
        stripped[:160])
 
-    # A3 — the header must not move the AUTHED pill. #170's byte-identity proofs
-    # of the signed-in header all depend on this staying true.
-    m = re.search(r"\$join_pill_authed\s*=\s*(.+?);", hdr, re.S)
-    ok(m is not None and "join_unlocked" not in m.group(1),
-       "§A3 the unlock must not reach $join_pill_authed — the authed header is "
-       "byte-proven by #170 and this feature is for anonymous browsers",
-       (m.group(1)[:120] if m else "not found"))
+    # A3 — THE UNLOCK MUST NOT REACH ANY SIGNED-IN CONTROL.
+    #
+    # ⚠️ IT USED TO NAME $join_pill_authed, WHICH NO LONGER EXISTS. #196 (Ian,
+    # 2026-08-22: "Why is there a superfluous join button for logged in users
+    # now") ruled the signed-in Join pill out entirely; the signed-in door is the
+    # account-menu entry. The CLAIM is unchanged and now broader — this feature
+    # is for anonymous browsers and must not touch a signed-in render at all —
+    # so it is restated against what exists rather than deleted with the control
+    # it happened to name (a gate that stops watching the moment its subject
+    # moves is not a gate).
+    #
+    # $join_unlocked may appear exactly twice: where it is assigned, and inside
+    # the anon $join_stripe computation. Anywhere else is a signed-in leak.
+    uses = re.findall(r"\$join_unlocked", hdr)
+    ok(len(uses) == 2,
+       "§A3 $join_unlocked is assigned once and consumed once, in the ANON "
+       "destination only",
+       f"{len(uses)} occurrences")
+    mj = re.search(r"\$tester_join_(?:label|href)\s*=\s*([^;]*);", hdr)
+    ok(mj is not None and "join_unlocked" not in mj.group(1),
+       "§A3b the unlock must not reach the signed-in account-menu door — that "
+       "control is the cohort's, and a cookie is not cohort membership",
+       (mj.group(1)[:120] if mj else "the signed-in door was not found at all"))
+    ms = re.search(r"\$join_stripe\s*=\s*(.+?);", hdr, re.S)
+    ok(ms is not None and "join_unlocked" in ms.group(1),
+       "§A3c LIVENESS: the unlock DOES still reach the anonymous destination — "
+       "'it touches no signed-in control' is trivially true of a dead feature",
+       (ms.group(1)[:120] if ms else "not found"))
 
     # A4 — THE ADMISSION IS IN THE ONE GATE BOTH DOORS DELEGATE TO, and it is
     # LAST, so it only ever widens.
@@ -442,6 +463,32 @@ def leg_b7(tmp):
        "the microcache change — otherwise OFF is proven for a tree that will "
        "never ship")
 
+    # ⚠️ THE TESTER VIEWER IS ANCHORED TO THIS TREE, NOT TO origin/main, AND THE
+    # DISTINCTION IS THE WHOLE POINT OF THE LEG.
+    #
+    # The claim here is THIS FEATURE'S BLAST RADIUS — "the unlock, switched off,
+    # moves nothing" — and anchoring that to a historical file quietly turns it
+    # into "the signed-in header may never change again". It already cost this
+    # repo once: #173 clamped the account chip and reddened eleven of gate 79's
+    # legs on a diff that touched nothing either gate was about, which is why
+    # gate 79 anchors its authed viewers to its own no-config render and says so
+    # in a comment beside them.
+    #
+    # It happened AGAIN here, on #196: Ian ruled the signed-in Join pill out
+    # (2026-08-22, "Why is there a superfluous join button for logged in users
+    # now"), the tester render legitimately changed, and six of these went red
+    # about a feature #196 does not touch. So the tester's baseline is now this
+    # tree with the unlock ABSENT — which still fails the instant the unlock
+    # leaks into a signed-in render, the thing actually worth failing on.
+    #
+    # THE ANON VIEWER KEEPS ITS origin/main ANCHOR, deliberately: that one is
+    # #180's own cacheability claim, and main is genuinely the right reference
+    # for it. It is also the leg the red-first mutations fire at.
+    def baseline(state, mode):
+        return (render(main_tree, state, mode, TOKEN) if mode == "anon"
+                else render(build_tree(f"{tmp}/base-{mode}", "WORKTREE",
+                                       CFG_SHAPES["absent"]), state, mode, TOKEN))
+
     for shape_name in ("absent", "disabled"):
         branch = build_tree(f"{tmp}/id-{shape_name}", "WORKTREE",
                             CFG_SHAPES[shape_name])
@@ -450,11 +497,12 @@ def leg_b7(tmp):
                 # A valid cookie is presented every time. If OFF ever leaks, it
                 # leaks here.
                 a = render(branch, state, mode, TOKEN)
-                b = render(main_tree, state, mode, TOKEN)
+                b = baseline(state, mode)
                 alive(a, f"identity {shape_name}/{state}/{mode}", mode)
                 ok(a == b,
-                   f"§B7 OFF must be BYTE-IDENTICAL to origin/main "
-                   f"(config={shape_name}, state={state}, viewer={mode})",
+                   f"§B7 OFF must be BYTE-IDENTICAL to the baseline "
+                   f"({'origin/main' if mode == 'anon' else 'this tree, unlock absent'}; "
+                   f"config={shape_name}, state={state}, viewer={mode})",
                    f"{len(a)}B vs {len(b)}B")
 
     # B8 — ARMED, with a valid cookie: EXACTLY ONE cell may differ. This is the
@@ -464,7 +512,7 @@ def leg_b7(tmp):
     for state in ("off", "allowlist", "on"):
         for mode in ("anon", "authed", "tester"):
             a = render(branch, state, mode, TOKEN)
-            b = render(main_tree, state, mode, TOKEN)
+            b = baseline(state, mode)
             alive(a, f"armed {state}/{mode}", mode)
             if a != b:
                 differing.append(f"{state}/{mode}")

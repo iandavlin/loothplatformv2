@@ -142,10 +142,28 @@ def m03():   # the cookie is not consulted; everyone anonymous gets /lgjoin/
     patch(HEADER, "($stripe_tester || $join_unlocked)", "(true)")
 
 
-def m04():   # the unlock reaches the AUTHED pill it must never touch
+def m04():   # the unlock reaches a SIGNED-IN control it must never touch
+    # ⚠️ RETARGETED BY #196. This used to widen $join_pill_authed, and that
+    # variable no longer exists: Ian ruled the signed-in Join pill out on
+    # 2026-08-22 ("Why is there a superfluous join button for logged in users
+    # now"), and the signed-in door is the account-menu entry. patch() would
+    # have raised "mutation target not found" — loud, but only because the
+    # python harness checks; the shell one next door had five legs silently
+    # no-oping for the same reason. The CLAIM is unchanged: a cookie is not
+    # cohort membership, and this feature is for anonymous browsers.
+    #
+    # ⚠️ IT MOVES THE USE, IT DOES NOT ADD ONE, and that is what makes it aim at
+    # §A3b rather than at §A3. Adding a third occurrence trips §A3's count first
+    # — measured: the first version of this mutation reddened §A3 and the leg was
+    # recorded as MISSED for naming §A3b. Pointing the unlock at the signed-in
+    # door INSTEAD of at the anon destination keeps the count at two and is also
+    # the more realistic defect: a plausible edit wires it to the wrong control.
     patch(HEADER,
-          "$join_pill_authed = ($join_state === 'allowlist' && $stripe_tester);",
-          "$join_pill_authed = ($join_state === 'allowlist' && ($stripe_tester || $join_unlocked));")
+          "|| ($join_state === 'allowlist' && ($stripe_tester || $join_unlocked));",
+          "|| ($join_state === 'allowlist' && $stripe_tester);")
+    patch(HEADER,
+          "$patreon_paying = ($caps['patreon_paying'] ?? false) === true;",
+          "$patreon_paying = $join_unlocked;")
 
 
 def m05():   # armed check dropped: a disabled config still honours a cookie
@@ -290,7 +308,7 @@ MUTATIONS = [
     ("M01 unlock escapes the allowlist arm ('off' stops meaning nobody)", "§A2b", m01),
     ("M02 unlock dropped entirely (the grant)", "§B3", m02),
     ("M03 cookie not consulted — everyone gets /lgjoin/", "§B1", m03),
-    ("M04 unlock reaches the AUTHED pill", "§A3", m04),
+    ("M04 unlock reaches a SIGNED-IN control (#196: the menu door)", "§A3b", m04),
     ("M05 armed check dropped — a disabled config still honours a cookie", "§B6", m05),
     ("M06 == instead of hash_equals", "§A7", m06),
     ("M07 cookie loses HttpOnly", "§A6", m07),

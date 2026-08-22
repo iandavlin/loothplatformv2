@@ -928,50 +928,51 @@
     // (Destination links removed from the You sheet — the Nav tray is the sole
     // mobile menu now; no duplicate menus. Ian 2026-06-24.)
 
-    // #170 — THE ONE EXCEPTION TO THE LINE ABOVE, and it is not a duplicate.
+    // #170, AMENDED BY #196 (Ian, 2026-08-22) — THE ONE EXCEPTION TO THE LINE
+    // ABOVE, and it is not a duplicate: it is the account MENU, drawn where the
+    // account menu cannot be reached.
     //
-    // In the header-join-stripe 'allowlist' state the header draws a Join pill
-    // for a signed-in Stripe soft-launch tester. At ≤640 on the hub the entire
-    // header aside is display:none!important (bb-mirror/web/forums.css) — the
-    // account menu with it — and the Nav tray carries no account entries, so
-    // without this row a tester on a phone has NO door to /lgjoin/ at all. That
-    // is the presence-is-not-reachability trap, and it has already cost this
-    // repo three findings; the pill would be in the DOM the whole time.
+    // ⚠️ IT USED TO MIRROR THE HEADER PILL, AND THE PILL IS GONE. Ian ruled the
+    // signed-in Join pill out — "Why is there a superfluous join button for
+    // logged in users now" — so lg-shared/site-header.php no longer draws
+    // .lg-chrome__join for anybody who is signed in. Left mirroring the pill,
+    // this row would simply have stopped existing, and that is NOT a tidy-up:
+    // MEASURED on /hub/ AND the front page as a real signed-in tester, at 390
+    // and 640 the account chip is invisible and #lg-account-menu is
+    // display:none. Below 641 the menu is in the DOM the whole time and is not
+    // a door at all, so removing both would leave a signed-in tester with no
+    // join or switch door on a phone at any surface — presence-is-not-
+    // reachability, which has already cost this repo three findings.
     //
-    // Read from the header rather than from a flag, exactly as buildAnonSheet
-    // reads its own Join: this row therefore EXISTS only when the header drew
-    // the pill (allowlist + tester) and points wherever the header points, so
-    // the two copies of this control cannot disagree and this file needs no
-    // knowledge of the cohort. Same href-derived tab rule as both other copies
-    // — an internal page must never open a new tab, which would eject a member
-    // from the installed PWA (display:standalone) to buy a membership in a
-    // browser.
+    // So it mirrors the MENU ENTRY now, through the .lg-chrome__menu-join hook
+    // — the same shape as .lg-chrome__menu-signin two hundred lines up. The row
+    // therefore exists exactly when the header drew that entry (a signed-in
+    // member of the Stripe cohort), points wherever it points, and reads
+    // whatever it reads. This file needs no knowledge of the cohort, of the
+    // flag, or of Patreon.
     //
-    // #196 — THE LABEL IS READ FROM THE HEADER TOO, not written down here.
+    // BOTH THE HREF AND THE LABEL come from the same element, because since
+    // #196 the word itself varies: a member Patreon is already charging gets
+    // "Switch" -> /switch-billing/ instead of "Join" -> /lgjoin/, since
+    // offering them our checkout is offering them a second charge for the
+    // membership they already have. Mirroring the href and hardcoding the word
+    // would produce a row that says Join and goes to the switch page.
     //
-    // The header now draws "Switch" -> /switch-billing/ instead of "Join" ->
-    // /lgjoin/ for a tester Patreon is already charging, because offering them
-    // our checkout is offering them a second charge for a membership they have.
-    // This row mirrored the HREF and hardcoded the WORD, so it would have read
-    // "Join" while pointing at the switch page — a control that lies about
-    // where it goes, on the one copy a phone gets. Reading both from the same
-    // element is what makes the two copies unable to disagree; a comparison
-    // against a flag, or a second Patreon lookup here, could drift.
-    //
-    // Falls back to 'Join' when the pill carries no text, so a header that
-    // somehow renders an empty anchor still produces a labelled row rather than
-    // an invisible one.
-    var testerJoinEl   = document.querySelector('.lg-chrome__join');
-    var testerJoinHref = (testerJoinEl && testerJoinEl.getAttribute('href')) || null;
-    if (testerJoinHref) {
-      var testerJoinLabel = ((testerJoinEl.textContent || '').trim()) || 'Join';
+    // Same href-derived tab rule as every other copy — an internal page must
+    // never open a new tab, which would eject a member from the installed PWA
+    // (display:standalone) to buy a membership in a browser they cannot come
+    // back through.
+    var menuJoinEl   = document.querySelector('.lg-chrome__menu-join a');
+    var menuJoinHref = (menuJoinEl && menuJoinEl.getAttribute('href')) || null;
+    if (menuJoinHref) {
+      var menuJoinLabel = ((menuJoinEl.textContent || '').trim()) || 'Join';
       var joinRow2 = document.createElement('a');
       joinRow2.className = 'lt-sheet__row lt-sheet__row--join';
       joinRow2.style.cssText = 'display:flex;align-items:center;gap:10px';
-      joinRow2.href = testerJoinHref;
-      if (/^https?:\/\//i.test(testerJoinHref)) { joinRow2.target = '_blank'; joinRow2.rel = 'noopener'; }
+      joinRow2.href = menuJoinHref;
+      if (/^https?:\/\//i.test(menuJoinHref)) { joinRow2.target = '_blank'; joinRow2.rel = 'noopener'; }
       joinRow2.innerHTML = '<svg class="lt-row-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg><span></span>';
-      joinRow2.querySelector('span').textContent = testerJoinLabel;
+      joinRow2.querySelector('span').textContent = menuJoinLabel;
       sheet.appendChild(joinRow2);
     }
 
