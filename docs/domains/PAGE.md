@@ -1006,3 +1006,113 @@ The general shape, and it applies to anything on this box that reads a flag:
 `.local.php` include, not for the `.local.php`. Gate 94 §D now executes all three
 of that flag's readers against the same inputs and fails if they disagree, which
 is the only form of this check that cannot rot.
+
+---
+
+## #202 — the todo page proposal, and the FIRST `page` issue in nine that really is one
+
+After #171, #179, #185, #186, #189, #187, #191, #199/#198 and #200 each spent a
+paragraph explaining that their `page` label meant something else, **#202 is a
+genuine lanes-page issue** — `/lanes/`, `build_todo`, the card, the fold. That
+is worth recording alongside the other nine when Ian rules on the label: the
+label is not useless, it is *ambiguous*, and #200 already flagged why (this repo
+has a `/lanes/` status page and a member-facing front page, and `page` reads
+naturally as either).
+
+**This was a DESIGN seat: pictures and a plan, zero build.** Nothing in
+`tools/lanes-page.py`, `lanes.json`, `lanes-status.sh` or the timer changed.
+Proposal: `handoffs/plans/202-todo-proposal-PROPOSAL.md`.
+Pictures: <https://dev2.loothgroup.com/footer-mockups/202-todo-proposal/>
+
+### ⚠️ THE FINDING: THE LIST SELECTS ON A HAND-APPLIED LABEL, SO IT FROZE SILENTLY
+
+Ian, 8/22: *"To do still isn't quite useful yet."* Measured before drawing
+anything — the live page fetched through the gate, then the same three sources
+read back through **`lanes-page.py`'s own record parser, imported from the
+file**, so the figures are what the real renderer emits and not a re-implementation:
+
+| | |
+|---|---|
+| bullets on his list | **11**, every one of them made his on **19–20 August** |
+| of those, with a door | **3** — the other **8** render *"no test link yet"* |
+| items owed to him that **do not appear at all** | **10** |
+| of those ten, that **already have a `TEST-URL` written** | **6** |
+
+**The page shows the 8 items that have no button and hides the 6 that do.**
+
+`build_todo` selects on the **`merged` / `built` label**, which is a human step
+in keeper's merge ritual. The lanes themselves write the truth into their park
+reason as they park — *"merged; no-modal uploader live on dev2, awaiting Ian's
+look at the picture page"* — and **the page already loads every one of those
+reasons. It quotes them (#159's verbatim rule) and never asks them anything.**
+When the label step slipped after 8/20, ten items went silent.
+
+⚠️ **This is this file's oldest law failing in the exact direction it exists to
+prevent.** *Quiet-when-healthy* is only safe while silence can ONLY mean healthy.
+A selector that depends on someone remembering a label makes silence also mean
+"nobody labelled it", and the two render identically. **Any future selector on
+this page must be derived from something a lane writes in the ordinary course of
+its work** — which is precisely the argument #172 already made for `TEST-URL`
+records, now proven a second time and more expensively.
+
+⚠️ **And the corollary for keeper: closing an issue removes the item even when
+the work still needs him.** #129 is CLOSED while `129-composer-redesign` is still
+parked *"awaiting Ian phone check + live flip"*.
+
+### Three smaller measured findings, none fixed by this seat
+
+1. **There is no ranking.** The list is in descending **issue-number** order.
+   The five longest-waiting items (#81 #84 #87 #88 #104, **3.7 days**) sit at the
+   *bottom*, the freshest at the top. `build_todo`'s families 3+4 share one loop
+   over `allopen`, so with no question/plan items today the whole list is a
+   single number-ordered run.
+2. **The deploy strip prints raw SHAs** — `main 19b43dd dev2 19b43dd live
+   2163c08 ← differs` — against Ian's own standing format law, which this file
+   records as reaching *every word the page shows him*.
+3. **The page has no light theme at all.** `body{background:#14161a}` is
+   hardcoded; `prefers-color-scheme`, `data-theme` and `--lg-` each appear
+   **zero times** in its CSS. A viewer in daylight gets the dark page whatever
+   the phone is set to.
+
+### The proposed data rule, and the one decision inside it that is Ian's
+
+An item belongs on his list when **a merged branch is parked with a reason still
+owed to him** — derived from `lanes --json`, which the page already loads. No new
+store, no new endpoint.
+
+⚠️ **A park reason is prose, and the classifier is a heuristic.** Telling
+*"awaiting Ian's look"* from *"Ian confirmed the token link works"* is a text
+judgement, and the first pass got it wrong — it read three past-tense mentions
+(#173, #174, #180) as pending work, over-counting by 3. The tightened rule keys
+on forward-looking phrasing only and is correct on today's 31 parked branches,
+but it will mis-read a sentence eventually. Recommended to Ian: lanes write an
+explicit **`NEEDS-IAN:`** record exactly like `TEST-URL`, with the heuristic
+underneath as the fallback so nothing goes dark while the convention spreads.
+
+### For whoever builds it
+
+The largest gain per minute of work is **not code** — it is writing the missing
+`TEST-URL`/`ACTION` records for the 8 doorless items. Gate 77 would be
+**extended, not renumbered**: its truth rules all still hold, and the new
+assertions are about the ranking being derived and about *"I could not look"*
+surviving the new data source. **Ask keeper for any gate number** — main tells
+you what has LANDED, never what is SPOKEN FOR, and that race has now bitten four
+times in five days.
+
+### And a note about mocks on this box that keeps being re-paid
+
+`tools/proposals/202-todo/build.py` + `shots.py` carry it in full. The short
+version: dev2's **server-level `sub_filter` injects the theme boot script and
+`/pwa.js` into every `text/html` response**, including mocks — so a mock must own
+its own token namespace (never `--lg-*`), must paint a **wrapper, not `body`**
+(the injected `lg-boot-crit` sets `body{…!important}`), must neutralise the
+injected tabbar, and must take its theme from a **query parameter, never
+`localStorage`**, which is shared across every lane's browser. Shots are gated on
+liveness + a light/dark delta before they count, because a locked-out browser
+photographs a styled 403 identically in both themes at every width.
+
+**Two defects in this lane's own work were caught only by LOOKING at the
+rendered pictures** — an HTML entity printed as literal text in the masthead, and
+a thumbnail grid wrecked by 4,900px-tall phone captures. Neither was reachable by
+any assertion in the harness. **That is now the fourth time on this page that
+only the picture has caught the defect** (#172 found three the same way).

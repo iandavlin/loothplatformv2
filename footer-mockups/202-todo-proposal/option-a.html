@@ -1,0 +1,133 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Option A — What needs you</title><style>
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0}
+
+.page{
+  --m-bg:#f5f3ed; --m-card:#fff; --m-ink:#191c20; --m-soft:#6a7079;
+  --m-line:#e3e0d7; --m-line2:#d5d1c5; --m-accent:#5f7d33; --m-accent-ink:#fff;
+  --m-chip:#eeece4; --m-shadow:0 1px 2px rgba(0,0,0,.06),0 4px 14px rgba(0,0,0,.05);
+  --m-hero:#fffdf7;
+  background:var(--m-bg); color:var(--m-ink);
+  font:15px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  min-height:100vh; padding:20px 16px 80px;
+  -webkit-font-smoothing:antialiased;
+}
+.page[data-t="dark"]{
+  --m-bg:#14161a; --m-card:#1b1f26; --m-ink:#e8e6df; --m-soft:#9aa3ad;
+  --m-line:#2a2f38; --m-line2:#343b45; --m-accent:#9db668; --m-accent-ink:#14161a;
+  --m-chip:#252b33; --m-shadow:none; --m-hero:#1e232b;
+}
+.wrap{max-width:820px;margin:0 auto}
+
+/* ---- trap 3: the injected app chrome is not part of this mockup ---- */
+#looth-tabbar,nav#looth-tabbar,.lg-install-banner,#lg-install-banner,
+.pwa-install,#looth-bottom-nav{display:none!important}
+
+/* ---------------- masthead ---------------- */
+.mast{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:4px}
+.mast h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em}
+.mast .when{color:var(--m-soft);font-size:12.5px;margin-left:auto}
+.tt{color:var(--m-soft);font-size:12.5px;text-decoration:none;border:1px solid var(--m-line2);
+    border-radius:20px;padding:2px 11px;white-space:nowrap}
+.tt:hover{color:var(--m-ink)}
+
+/* ---------------- the loud layer — never inside a fold ---------------- */
+.loud{border-radius:10px;padding:10px 13px;margin:14px 0;font-size:14px;
+      background:#fdf0e8;border:1px solid #e4b49a;color:#8a3c1c}
+.page[data-t="dark"] .loud{background:#3a2420;border-color:#7a4438;color:#f0c3ac}
+.calm{color:var(--m-soft);font-size:13px;margin:14px 0}
+
+/* ---------------- section headers ---------------- */
+.bandh{display:flex;align-items:center;gap:9px;margin:26px 0 10px;font-size:12.5px;
+       text-transform:uppercase;letter-spacing:.07em;font-weight:700;color:var(--m-soft)}
+.bandh .dot{width:9px;height:9px;border-radius:50%;flex:none}
+.bandh .ct{margin-left:auto;font-weight:600;letter-spacing:0;text-transform:none;font-size:12.5px}
+
+/* ---------------- the hero card ---------------- */
+.hero{background:var(--m-hero);border:1px solid var(--m-line2);border-left:4px solid #b4402f;
+      border-radius:12px;padding:16px 17px;box-shadow:var(--m-shadow);margin-bottom:6px}
+.hero .kicker{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;
+      letter-spacing:.07em;text-transform:uppercase;color:#b4402f;margin-bottom:9px}
+.page[data-t="dark"] .hero .kicker{color:#e0715c}
+.hero .act{font-size:20px;line-height:1.3;font-weight:650;letter-spacing:-.01em;margin:0 0 10px}
+.hero .rank{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;
+      border-radius:50%;background:#b4402f;color:#fff;font-size:11.5px;font-weight:700;flex:none}
+
+/* ---------------- a compact row ---------------- */
+.row{background:var(--m-card);border:1px solid var(--m-line);border-radius:10px;
+     padding:11px 13px;margin-bottom:7px;box-shadow:var(--m-shadow)}
+.row.b1{border-left:3px solid #b4402f}
+.row.b2{border-left:3px solid #b8860b}
+.row.b3{border-left:3px solid #5f7d33}
+.row .top{display:flex;gap:10px;align-items:baseline}
+.row .act{font-weight:600;font-size:15px;flex:1;min-width:0;line-height:1.35}
+.rk{color:var(--m-soft);font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums;flex:none}
+.wait{color:var(--m-soft);font-size:12.5px;white-space:nowrap;flex:none;font-variant-numeric:tabular-nums}
+
+.behind{color:var(--m-soft);font-size:13px;margin-top:5px}
+.behind b{color:var(--m-ink);font-weight:600}
+.lane{color:var(--m-soft);font-size:12.5px;margin-top:4px;font-style:italic}
+
+/* ---------------- controls ---------------- */
+.acts{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:10px}
+.door{background:var(--m-accent);color:var(--m-accent-ink);border:0;border-radius:7px;
+      padding:6px 13px;font-size:13.5px;font-weight:700;text-decoration:none;
+      display:inline-block;white-space:nowrap}
+.hero .door{padding:9px 17px;font-size:15px}
+.nodoor{color:var(--m-soft);font-size:12.5px;font-style:italic}
+.say{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}
+.say .lbl{color:var(--m-soft);font-size:12.5px}
+.chip{background:var(--m-chip);border:1px solid var(--m-line2);border-radius:20px;
+      padding:3px 11px;font-size:12.5px;font-weight:600;color:var(--m-ink);white-space:nowrap;cursor:pointer}
+.ghost{background:transparent;border:1px solid var(--m-line2);border-radius:7px;
+       padding:5px 11px;font-size:12.5px;color:var(--m-soft);cursor:pointer;white-space:nowrap}
+.confirm{background:transparent;border:1px solid var(--m-accent);color:var(--m-accent);
+      border-radius:7px;padding:5px 12px;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.hero .confirm{padding:8px 15px;font-size:13.5px}
+.fine{color:var(--m-soft);font-size:11.5px;margin-left:auto;white-space:nowrap}
+.fine a{color:var(--m-soft)}
+.hr{border-top:1px solid var(--m-line);margin:10px 0 0;padding-top:9px}
+.newbadge{background:#5f7d33;color:#fff;border-radius:4px;font-size:10px;font-weight:700;
+      padding:1px 5px;letter-spacing:.04em;vertical-align:2px}
+.page[data-t="dark"] .newbadge{background:#9db668;color:#14161a}
+
+/* the #178 confirm button, shown mid-flight */
+.row.done{opacity:.62}
+.row.done .act{text-decoration:line-through;text-decoration-thickness:1px}
+.doneline{color:var(--m-soft);font-size:12.5px;margin-top:5px}
+
+/* ---------------- the fold ---------------- */
+.quiet{color:var(--m-soft);font-size:13px;margin:16px 0 0;padding:9px 12px;
+       border:1px dashed var(--m-line2);border-radius:8px}
+details.shop{margin-top:22px;border-top:1px solid var(--m-line);padding-top:6px}
+details.shop>summary{cursor:pointer;list-style:none;color:var(--m-soft);font-size:13px;padding:8px 2px}
+details.shop>summary::-webkit-details-marker{display:none}
+details.shop>summary::before{content:"\25B8 ";display:inline-block;transition:transform .12s}
+details.shop[open]>summary::before{transform:rotate(90deg)}
+.shopbody{color:var(--m-soft);font-size:13px;padding:2px 2px 10px;line-height:1.7}
+
+@media (max-width:560px){
+  .page{padding:16px 12px 80px}
+  .mast h1{font-size:19px}
+  .mast .when{margin-left:0;width:100%}
+  .hero .act{font-size:18px}
+  .row{padding:10px 11px;margin-bottom:6px}
+  .row .top{flex-wrap:wrap;gap:7px}
+  .wait{width:100%;order:3;margin-top:-2px}
+  /* 21 items is a long scroll on a phone. The SECONDARY controls go — the
+     copy button and the issue fine print, both of which have a home on the
+     desktop view — and nothing that carries a decision does. */
+  .row .opt2,.row .fine{display:none}
+  .acts{gap:6px;margin-top:8px}
+}
+</style></head><body><div class="page" data-t="light"><div class="wrap"><div class="mast"><h1>What needs you</h1><a class="tt" id="tt" href="?theme=dark">&#9790; dark</a><span class="when">generated 2026-08-22 17:00 &middot; redraws every 5 minutes</span></div><div class="loud"><b>Live is behind.</b> 30 changes have landed on dev2 that live has not taken yet.</div><div class="bandh"><span class="dot" style="background:#b4402f"></span>Next up</div><div class="hero"><div class="kicker"><span class="rank">1</span>Nothing else moves until you say<span style="margin-left:auto;font-weight:600;letter-spacing:0;text-transform:none;color:var(--m-soft)">waiting 1 hour</span></div><p class="act">Pick your window for the live billing swap</p><div class="behind"><b>Behind it:</b> live checkout still runs the old separate app</div><div class="lane">the lane said: &ldquo;script+runbook merged; window is Ian&#x27;s, keeper verifies each step&rdquo;</div><div class="acts"><span class="nodoor">no test link yet &mdash; ask keeper for one</span><span class="say"><span class="lbl">say</span><button class="chip">&ldquo;GO on 197&rdquo;</button><button class="chip">&ldquo;hold 197&rdquo;</button></span><button class="ghost">Copy for keeper</button></div><div class="acts hr"><button class="confirm">&#10003; Landed as expected</button><span class="fine"><a href="#">#197 on GitHub &#8599;</a></span></div></div><div class="bandh"><span class="dot" style="background:#b4402f"></span>Nothing else moves until you say<span class="ct">2</span></div><div class="row b1"><div class="top"><span class="rk">2</span><span class="act"><span class="newbadge">NEW</span> Look at the Comp Timers screen and name a cutover date</span><span class="wait">waiting 21 hours</span></div><div class="behind"><b>Behind it:</b> comp expiry stays unenforced on live until the date is set</div><div class="acts"><span class="nodoor">no test link yet &mdash; ask keeper for one</span><span class="say"><span class="lbl">say</span><button class="chip">&ldquo;GO on 183&rdquo;</button><button class="chip">&ldquo;hold 183&rdquo;</button></span><button class="ghost opt2">Copy</button><button class="confirm">&#10003; Landed</button><span class="fine"><a href="#">#183 &#8599;</a></span></div></div><div class="row b1"><div class="top"><span class="rk">3</span><span class="act"><span class="newbadge">NEW</span> Deploy the licence fix to live, and correct three posts</span><span class="wait">waiting 6 hours</span></div><div class="behind"><b>Behind it:</b> 3 published posts on live still show the contradictory terms</div><div class="acts"><a class="door" href="/preview/191-licence-modal/compose/?type=loothprint" target="_blank" rel="noopener">Open it &#8599;</a><span class="say"><span class="lbl">say</span><button class="chip">&ldquo;GO on 191&rdquo;</button><button class="chip">&ldquo;hold 191&rdquo;</button></span><button class="ghost opt2">Copy</button><button class="confirm">&#10003; Landed</button><span class="fine"><a href="#">#191 &#8599;</a></span></div></div><div class="bandh"><span class="dot" style="background:#b8860b"></span>One word and members see it<span class="ct">9</span></div><div class="row b2"><div class="top"><span class="rk">4</span><span class="act">Say GO to switch on mail containment</span><span class="wait">waiting 3.7 days</span></div><div class="behind"><b>Behind it:</b> a latent security gap stays open</div><div class="acts"><span class="nodoor">no test link yet &mdash; ask keeper for one</span><span class="say"><span class="lbl">say</span><button class="chip">&ldquo;GO on 104&rdquo;</button><button class="chip">&ldquo;hold 104&rdquo;</button></span><button class="ghost opt2">Copy</button><button class="confirm">&#10003; Landed</button><span class="fine"><a href="#">#104 &#8599;</a></span></div></div><div class="row b2"><div class="top"><span class="rk">5</span><span class="act">Say GO to hide the “+” from logged-out phones</span><span class="wait">waiting 3.7 days</span></div><div class="behind"><b>Behind it:</b> logged-out visitors still see a post button that cannot work</div><div class="acts"><span class="nodoor">no test link yet &mdash; ask keeper for one</span><span class="say"><span class="lbl">say</span><button class="chip">&ldquo;GO on 88&rdquo;</button><button class="chip">&ldquo;hold 88&rdquo;</button></span><button class="ghost opt2">Copy</button><button class="confirm">&#10003; Landed</button><span class="fine"><a href="#">#88 &#8599;</a></span></div></div><div class="row b2"><div class="top"><span class="rk">6</span><span class="act">Say GO to stop the bell emptying your recap</span><span class="wait">waiting 3.7 days</span></div><div class="behind"><b>Behind it:</b> members lose their recap on every bell tap</div><div class="acts"><span class="nodoor">no test link yet &mdash; ask keeper for one</span><span class="say"><span class="lbl">say</span><button class="chip">&ldquo;GO on 87&rdquo;</button><button class="chip">&ldquo;hold 87&rdquo;</button></span><button class="ghost opt2">Copy</button><button class="confirm">&#10003; Landed</button><span class="fine"><a href="#">#87 &#8599;</a></span></div></div><div class="row b2"><div class="top"><span class="rk">7</span><span class="act">Say GO to switch on the phone Back button</span><span class="wait">waiting 3.7 days</span></div><div class="behind"><b>Behind it:</b> phone readers still have no way back to the hub</div><div class="acts"><span class="nodoor">no test link yet &mdash; ask keeper for one</span><span class="say"><span class="lbl">say</span><button class="chip">&ldquo;GO on 84&rdquo;</button><button class="chip">&ldquo;hold 84&rdquo;</button></span><button class="ghost opt2">Copy</button><button class="confirm">&#10003; Landed</button><span class="fine"><a href="#">#84 &#8599;</a></span></div></div><div class="row b2"><div class="top"><span class="rk">8</span><span class="act">Say GO to switch the sitemap on</span><span class="wait">waiting 3.7 days</span></div><div class="behind"><b>Behind it:</b> search engines still cannot see the site map</div><div class="acts"><span class="nodoor">no test link yet &mdash; ask keeper for one</span><span class="say"><span class="lbl">say</span><button class="chip">&ldquo;GO on 81&rdquo;</button><button class="chip">&ldquo;hold 81&rdquo;</button></span><button class="ghost opt2">Copy</button><button class="confirm">&#10003; Landed</button><span class="fine"><a href="#">#81 &#8599;</a></span></div></div><div class="row b2"><div class="top"><span class="rk">9</span><span class="act"><span class="newbadge">NEW</span> Open a Loothprint you wrote and tap Edit — then say GO on the paywall toggle</span><span class="wait">waiting 1 day</span></div><div class="behind"><b>Behind it:</b> authors still cannot paywall their own print</div><div class="acts"><a class="door" href="/loothprint/fret-sander-v2/" target="_blank" rel="noopener">Open it &#8599;</a><span class="say"><span class="lbl">say</span><button class="chip">&ldquo;GO on 179&rdquo;</button><button class="chip">&ldquo;hold 179&rdquo;</button></span><button class="ghost opt2">Copy</button><button class="confirm">&#10003; Landed</button><span class="fine"><a href="#">#179 &#8599;</a></span></div></div><div class="row b2"><div class="top"><span class="rk">10</span><span class="act"><span class="newbadge">NEW</span> Say GO on the 39-file stray sweep</span><span class="wait">waiting 21 hours</span></div><div class="behind"><b>Behind it:</b> 39 stray upload files stay on the box</div><div class="acts"><a class="door" href="/compose/?type=loothprint" target="_blank" rel="noopener">Open it &#8599;</a><span class="say"><span class="lbl">say</span><button class="chip">&ldquo;GO on 186&rdquo;</button><button class="chip">&ldquo;hold 186&rdquo;</button></span><button class="ghost opt2">Copy</button><button class="confirm">&#10003; Landed</button><span class="fine"><a href="#">#186 &#8599;</a></span></div></div><div class="row b2"><div class="top"><span class="rk">11</span><span class="act"><span class="newbadge">NEW</span> Look at the 12 gating shots, then say GO to switch it on</span><span class="wait">waiting since just now</span></div><div class="behind"><b>Behind it:</b> logged-out visitors still get the wrong card on a print</div><div class="acts"><a class="door" href="/preview/199-loothprint-gating/loothprint/lane199-after/" target="_blank" rel="noopener">Open it &#8599;</a><span class="say"><span class="lbl">say</span><button class="chip">&ldquo;GO on 199&rdquo;</button><button class="chip">&ldquo;hold 199&rdquo;</button></span><button class="ghost opt2">Copy</button><button class="confirm">&#10003; Landed</button><span class="fine"><a href="#">#199 &#8599;</a></span></div></div><div class="row b2"><div class="top"><span class="rk">12</span><span class="act"><span class="newbadge">NEW</span> Say GO on the featured-member consent switch</span><span class="wait">waiting since just now</span></div><div class="behind"><b>Behind it:</b> the consent switch is held OFF on dev2 waiting for you</div><div class="acts"><span class="nodoor">no test link yet &mdash; ask keeper for one</span><span class="say"><span class="lbl">say</span><button class="chip">&ldquo;GO on 200&rdquo;</button><button class="chip">&ldquo;hold 200&rdquo;</button></span><button class="ghost opt2">Copy</button><button class="confirm">&#10003; Landed</button><span class="fine"><a href="#">#200 &#8599;</a></span></div></div><div class="bandh"><span class="dot" style="background:#5f7d33"></span>Just needs your eyes<span class="ct">9</span></div><div class="row b3"><div class="top"><span class="rk">13</span><span class="act">Write a loothprint from the site and send it for review</span><span class="wait">waiting 2.9 days</span></div><div class="acts"><a class="door" href="/compose/?type=loothprint" target="_blank" rel="noopener">Open it &#8599;</a><span class="say"><span class="lbl">say</span><button class="chip">&ldquo;93 good&rdquo;</button><button class="chip">&ldquo;93 not right&rdquo;</button></span><button class="ghost opt2">Copy</button><button class="confirm">&#10003; Landed</button><span class="fine"><a href="#">#93 &#8599;</a></span></div></div><div class="row b3"><div class="top"><span class="rk">14</span><span class="act">Check a Patreon member cannot be charged twice at checkout</span><span class="wait">waiting 2.6 days</span></div><div class="lane">the lane said: &ldquo;merged to main as 0496a73, flag lgms_double_pay_block OFF, awaiting Ian&#x27;s phone check + flip decision&rdquo;</div><div class="acts"><span class="nodoor">no test link yet &mdash; ask keeper for one</span><span class="say"><span class="lbl">say</span><button class="chip">&ldquo;150 good&rdquo;</button><button class="chip">&ldquo;150 not right&rdquo;</button></span><button class="ghost opt2">Copy</button><button class="confirm">&#10003; Landed</button><span class="fine"><a href="#">#150 &#8599;</a></span></div></div><div class="row b3"><div class="top"><span class="rk">15</span><span class="act">Check a dual holder keeps membership after cancelling Stripe</span><span class="wait">waiting 2.6 days</span></div><div class="acts"><span class="nodoor">no test link yet &mdash; ask keeper for one</span><span class="say"><span class="lbl">say</span><button class="chip">&ldquo;149 good&rdquo;</button><button class="chip">&ldquo;149 not right&rdquo;</button></span><button class="ghost opt2">Copy</button><button class="confirm">&#10003; Landed</button><span class="fine"><a href="#">#149 &#8599;</a></span></div></div><div class="row b3"><div class="top"><span class="rk">16</span><span class="act">Pick a featured member from the dash</span><span class="wait">waiting 2.6 days</span></div><div class="lane">the lane said: &ldquo;merged to main as 0db578a — completion wall down, consent decision pending Ian&rdquo;</div><div class="acts"><a class="door" href="/wp-admin/admin.php?page=lg-featured-member" target="_blank" rel="noopener">Open it &#8599;</a><span class="say"><span class="lbl">say</span><button class="chip">&ldquo;107 good&rdquo;</button><button class="chip">&ldquo;107 not right&rdquo;</button></span><button class="ghost opt2">Copy</button><button class="confirm">&#10003; Landed</button><span class="fine"><a href="#">#107 &#8599;</a></span></div></div><div class="row b3 done"><div class="top"><span class="rk">17</span><span class="act">Look at the join page — three tiers, and check the prices</span><span class="wait">waiting 2.2 days</span></div><div class="doneline">&#10003; you said this landed &mdash; keeper is closing it out</div></div><div class="row b3"><div class="top"><span class="rk">18</span><span class="act">Check the header Join button signed out and signed in</span><span class="wait">waiting 2 days</span></div><div class="lane">the lane said: &ldquo;merged as 4873b1e, three-state header live, dev2 stays ON for anon — live&#x27;s allowlist state is go-live business&rdquo;</div><div class="acts"><span class="nodoor">no test link yet &mdash; ask keeper for one</span><span class="say"><span class="lbl">say</span><button class="chip">&ldquo;170 good&rdquo;</button><button class="chip">&ldquo;170 not right&rdquo;</button></span><button class="ghost opt2">Copy</button><button class="confirm">&#10003; Landed</button><span class="fine"><a href="#">#170 &#8599;</a></span></div></div><div class="row b3"><div class="top"><span class="rk">19</span><span class="act"><span class="newbadge">NEW</span> Look at the form&#x27;s new uploader — four pictures, then try it</span><span class="wait">waiting 19 hours</span></div><div class="lane">the lane said: &ldquo;merged; no-modal uploader live on dev2, awaiting Ian&#x27;s look at the picture page&rdquo;</div><div class="acts"><a class="door" href="/footer-mockups/189-uploader/" target="_blank" rel="noopener">Open it &#8599;</a><span class="say"><span class="lbl">say</span><button class="chip">&ldquo;189 good&rdquo;</button><button class="chip">&ldquo;189 not right&rdquo;</button></span><button class="ghost opt2">Copy</button><button class="confirm">&#10003; Landed</button><span class="fine"><a href="#">#189 &#8599;</a></span></div></div><div class="row b3"><div class="top"><span class="rk">20</span><span class="act"><span class="newbadge">NEW</span> Look at a Loothprint page — same photos, under half the download</span><span class="wait">waiting 18 hours</span></div><div class="lane">the lane said: &ldquo;merged; 83% off the hero, 46-73% off every article shape; 4 dev2-only broken photos await a data copy&rdquo;</div><div class="acts"><a class="door" href="/preview/187-loothprint-images/loothprint/fret-sander-v2/" target="_blank" rel="noopener">Open it &#8599;</a><span class="say"><span class="lbl">say</span><button class="chip">&ldquo;187 good&rdquo;</button><button class="chip">&ldquo;187 not right&rdquo;</button></span><button class="ghost opt2">Copy</button><button class="confirm">&#10003; Landed</button><span class="fine"><a href="#">#187 &#8599;</a></span></div></div><div class="row b3"><div class="top"><span class="rk">21</span><span class="act"><span class="newbadge">NEW</span> Set a product&#x27;s tier and region on the new Products tab</span><span class="wait">waiting 4 hours</span></div><div class="lane">the lane said: &ldquo;merged; tab live on dev2&#x27;s membership dash awaiting Ian&#x27;s click&rdquo;</div><div class="acts"><span class="nodoor">no test link yet &mdash; ask keeper for one</span><span class="say"><span class="lbl">say</span><button class="chip">&ldquo;194 good&rdquo;</button><button class="chip">&ldquo;194 not right&rdquo;</button></span><button class="ghost opt2">Copy</button><button class="confirm">&#10003; Landed</button><span class="fine"><a href="#">#194 &#8599;</a></span></div></div><div class="quiet">landed, nothing for you to do: #138 Approve should start work by itself</div><details class="shop"><summary>The workshop &mdash; 2 agents working &middot; 3 seats &middot; 31 parked branches &middot; 20 merges this week</summary><div class="shopbody">Agents, seats, old desks, parked branches, cleanup and the 7-day shipped strip all live in here. Nothing in this drawer ever waits on you &mdash; if something starts to, it leaves the drawer and joins the list above.</div></details></div></div><script>
+(function(){try{
+  var t=new URLSearchParams(location.search).get('theme');
+  if(t!=='dark'&&t!=='light'){t=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';}
+  document.querySelector('.page').setAttribute('data-t',t);
+  var o=document.getElementById('tt'); if(o){
+    var u=new URL(location.href); u.searchParams.set('theme',t==='dark'?'light':'dark');
+    o.href=u.pathname+u.search; o.textContent=(t==='dark'?'\u2600 light':'\u263e dark');
+  }
+}catch(e){}})();
+</script></body></html>
