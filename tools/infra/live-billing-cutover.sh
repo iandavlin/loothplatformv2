@@ -85,6 +85,22 @@ PUBLIC_HOST="loothgroup.com"
 SENTENCE_503="We could not verify access to checkout just now."
 SENTENCE_403="Memberships are not open for sale yet."
 
+# ⚠️ BOTH SENTENCES STOP AT THE FIRST FULL STOP, DELIBERATELY. The source strings
+# are PHP concatenations spanning two lines, and the 403 one contains an em-dash
+# that comes back from the API JSON-escaped as \u2014 — measured on dev2
+# 2026-08-22. Matching the whole sentence with grep -F would fail on a HEALTHY
+# box. Matching the first clause cannot.
+#
+# THE PROBE PRICE ID IS DELIBERATELY NOT REAL. It is well-formed, so it passes the
+# "price_id is required" check at CheckoutController:94 and reaches the audience
+# guard at :124 — but it maps to nothing, so it can never mint a Stripe checkout
+# session, on either tree, in any audience state. A probe carrying a REAL price id
+# would mint one on any box where the guard is off or absent, which is exactly the
+# #181 hole this cutover is delivering the fix for. A verify battery must not walk
+# through the hole it is verifying.
+PROBE_PRICE="price_LANE197VERIFYNOTREAL"
+PROBE_EMAIL="lane197-verify@example.invalid"
+
 RC=0
 say()  { printf '%s\n' "$*"; }
 ok()   { printf '  \033[32mPASS\033[0m  %s\n' "$*"; }
@@ -267,7 +283,7 @@ verify() {
                                             || bad "V1 $OLD resolves to '$target', expected $NEW"
 
     # V2-V4 — it serves.
-    local r c
+    local r c b
     for p in /billing/health /billing/v1/products /billing/v1/config; do
         r="$(probe GET "$p")"; c="$(code_of "$r")"
         [ "$c" = "200" ] && ok "V2-4 $p -> 200" || bad "V2-4 $p -> $c (expected 200)"
@@ -275,34 +291,52 @@ verify() {
     r="$(probe GET /billing/v1/products)"
     [ -n "$(body_of "$r")" ] && ok "V3 products body is non-empty" || bad "V3 products body is EMPTY"
 
-    # V5 — the guard. THE POINT OF THIS CHECK IS THE SENTENCE, NOT THE REFUSAL.
+    # V5 — the guard, and the proof that the NEW BYTES are running.
     #
-    # Before the swap this same request answers 400 "price_id is required",
-    # because the old tree validates the body before anything else and has no
-    # audience guard at all. So a 503/403 here is also the proof that the NEW
-    # bytes are running — i.e. that the FPM reload took. A 400 means the swap
-    # or the reload did not happen, whatever readlink says.
-    r="$(probe POST /billing/v1/checkout '{"email":"lane197-verify@example.invalid"}')"
-    c="$(code_of "$r")"; local b; b="$(body_of "$r")"
-    case "$c" in
-        503)
-            if printf '%s' "$b" | grep -qF "$SENTENCE_503"; then
-                ok "V5 checkout -> 503 with the UNKNOWN sentence (EXPECTED TODAY: lgms_shared_secret is unset)"
-                note "V5 follow-up: set lgms_shared_secret WP-side to match .env, then this becomes 403."
-            else
-                bad "V5 checkout -> 503 but NOT the UNKNOWN sentence: $b"
-            fi ;;
-        403)
-            if printf '%s' "$b" | grep -qF "$SENTENCE_403"; then
-                ok "V5 checkout -> 403 with the #181 tester sentence (the guard is fully wired)"
-            else
-                bad "V5 checkout -> 403 but NOT the #181 sentence: $b"
-            fi ;;
-        400)
-            bad "V5 checkout -> 400 ($b). The OLD tree is still answering — the swap or the FPM reload did not take." ;;
-        *)
-            bad "V5 checkout -> $c, expected 503 (today) or 403 (once armed): $b" ;;
-    esac
+    # ⚠️ THE PRICE ID MATTERS. CheckoutController checks "price_id is required" at
+    # :94 and only reaches the audience guard at :124, so a probe with NO price id
+    # returns 400 on BOTH trees and proves nothing whatsoever. (An earlier draft of
+    # this battery made exactly that mistake and would have false-RED'd a healthy
+    # swap.) The probe therefore carries a well-formed but unmapped price id.
+    #
+    # THE DISCRIMINATOR IS THE `audience` KEY, not the status code. Only the new
+    # tree emits it, and it emits it in BOTH refusal states — so this one check
+    # proves the swap took AND that opcache/realpath picked it up, without
+    # depending on how the audience happens to be configured. Measured both sides
+    # 2026-08-22:
+    #   old tree (live)  -> 400 "Price ... is not mapped to a membership tier."  NO audience key
+    #   new tree (dev2)  -> 403 {"...","audience":"allowlist"}
+    #
+    # Skipped unless V1 passed: on the pre-swap tree there is no guard at all, and
+    # a battery should not be poking the checkout door of an app it just proved is
+    # the wrong one.
+    if [ "$target" != "$(readlink -f "$NEW")" ]; then
+        note "V5 SKIPPED — $OLD is not the monorepo app yet (see V1). Nothing to assert about the guard."
+    else
+    r="$(probe POST /billing/v1/checkout "{\"price_id\":\"$PROBE_PRICE\",\"email\":\"$PROBE_EMAIL\"}")"
+    c="$(code_of "$r")"; b="$(body_of "$r")"
+    if ! printf '%s' "$b" | grep -qF '"audience"'; then
+        bad "V5 checkout -> $c with NO audience key. The OLD tree is still answering — the swap or the FPM reload did not take. ($b)"
+    else
+        case "$c" in
+            503)
+                if printf '%s' "$b" | grep -qF "$SENTENCE_503"; then
+                    ok "V5 checkout -> 503 with the UNKNOWN sentence (EXPECTED TODAY: lgms_shared_secret is unset)"
+                    note "V5 follow-up: set lgms_shared_secret WP-side to match .env, then this becomes 403."
+                else
+                    bad "V5 checkout -> 503 but NOT the UNKNOWN sentence: $b"
+                fi ;;
+            403)
+                if printf '%s' "$b" | grep -qF "$SENTENCE_403"; then
+                    ok "V5 checkout -> 403 with the #181 tester sentence (the guard is fully wired)"
+                else
+                    bad "V5 checkout -> 403 but NOT the #181 sentence: $b"
+                fi ;;
+            *)
+                bad "V5 checkout -> $c, expected 503 (today) or 403 (once armed): $b" ;;
+        esac
+    fi
+    fi
 
     # V6 — the webhook door Stripe's signature test knocks on.
     r="$(probe POST /billing/v1/webhook '{}')"; c="$(code_of "$r")"; b="$(body_of "$r")"

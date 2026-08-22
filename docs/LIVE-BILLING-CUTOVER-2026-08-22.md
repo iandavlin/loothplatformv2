@@ -120,14 +120,33 @@ sudo /home/ubuntu/loothplatformv2-clean/tools/infra/live-billing-cutover.sh --ve
 |---|---|---|
 | V1 | `/srv/lg-stripe-billing` resolves | the monorepo app |
 | V2-4 | `/billing/health`, `/v1/products`, `/v1/config` | 200, products body non-empty |
-| V5 | anon `POST /v1/checkout` | **503 + the UNKNOWN sentence** (today) or **403 + the #181 sentence** (once armed) |
+| V5 | `POST /v1/checkout` with an unmapped price id | an `"audience"` key must be present, plus **503 + the UNKNOWN sentence** (today) or **403 + the #181 sentence** (once armed). Skipped if V1 failed |
 | V6 | unsigned `POST /v1/webhook` | **400 invalid-signature** — the door Stripe's signature test knocks on |
 | V8 | `logs/` writable by www-data | liveness — without it V2–V6 pass on a box that cannot log |
 
-> **V5 is also the opcache proof.** Before the swap that same request answers
-> `400 price_id is required` (the old tree validates the body first and has no
-> guard). So a **400 at V5 means the swap or the reload did not take**, whatever
-> `readlink` says. Measured both sides on live 2026-08-22.
+> **V5 is also the opcache proof — via the `audience` KEY, not the status code.**
+> Only the new tree emits `"audience"` in a checkout response, and it emits it in
+> **both** refusal states, so one check proves the swap took AND that opcache
+> picked it up regardless of how the audience is configured. Measured both sides
+> 2026-08-22 with the same probe:
+>
+> | tree | answer |
+> |---|---|
+> | old (live today) | `400 "Price … is not mapped to a membership tier."` — **no `audience` key** |
+> | new (dev2) | `403 {…,"audience":"allowlist"}` |
+>
+> ⚠️ **The probe's price id is deliberately not real.** It is well-formed, so it
+> gets past the `price_id is required` check at `CheckoutController:94` and reaches
+> the guard at `:124` — but it maps to nothing, so it **cannot mint a Stripe
+> checkout session** on either tree in any audience state. A probe carrying a real
+> price id would mint one wherever the guard is off or absent, which is precisely
+> the #181 hole this cutover exists to close. The battery must not walk through the
+> hole it is verifying.
+>
+> ⚠️ **A probe with NO price id proves nothing** — the price check runs *before*
+> the guard, so it returns 400 on both trees. An earlier draft of this battery made
+> that mistake and would have false-RED'd a healthy swap; it was caught by probing
+> dev2's live copy of the new tree rather than by re-reading the code.
 
 ### Rollback — one `mv` back
 ```bash
@@ -175,3 +194,20 @@ LG_BC_ROOT=/tmp/fixture sudo -E tools/infra/live-billing-cutover.sh --check
 With `LG_BC_ROOT` unset every path is byte-for-byte the production path. The full
 state machine (check → apply → refuse re-run → rollback → check) and every
 preflight refusal were exercised against a fixture on 2026-08-22.
+
+## One limitation of the battery, stated
+
+The **403** branch and the **old-tree** branch were both captured from real
+responses (dev2 and live, 2026-08-22). The **503** branch was not: producing a
+real 503 needs a box where the audience is enforcing *and* `lgms_shared_secret`
+is unset, which is live-after-the-swap and nowhere else. Its sentence is asserted
+against the constant in `CheckoutAudienceGuard::UNKNOWN_MESSAGE`, verified
+byte-for-byte against that source, and the decision logic was exercised against a
+body built from it — but the first genuine 503 will be seen on live. If V5 reports
+a 503 whose sentence does not match, suspect the assertion before suspecting the
+swap, and read the body printed in the FAIL line.
+
+Both asserted sentences deliberately stop at the first full stop: the source
+strings are two-line PHP concatenations, and the 403 one contains an em-dash that
+the API returns JSON-escaped as `\u2014`. Matching the full sentence with
+`grep -F` would fail on a healthy box.
