@@ -361,6 +361,10 @@ rather than an assertion quietly deleted because it went red.
     docs/domains/PROFILE.md                       the real knowledge
     docs/domains/PAGE.md                          the `page`-label footnote (8th in 8 days)
     handoffs/plans/200-featured-override-PLAN.md  this file
+    footer-mockups/200-featured-override/         the pictures (added after the list was
+                                                  first written -- flagged rather than
+                                                  slipped in, per LANE-RULES)
+    tools/preview/200-featured-shots.py           the shot run for those pictures (same)
 
 **No overlap with any live lane**: no other worktree touches any of these files
 (checked by diffing all nine worktrees against main).
