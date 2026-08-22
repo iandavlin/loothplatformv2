@@ -2491,6 +2491,68 @@ echo "=== GATE 96: a Loothprint gates its FILE, in download words, once ==="
 # findings, not CANNOT RUN. The probe degrades to flag=false on a tree with no
 # such flag precisely so main answers as the OFF build it is instead of fataling.
 run "loothprint-gating" python3 "$(dirname "$0")/loothprint-gating-gate.py"
+echo "=== GATE 94: Ian's picks stay on the front page, and the band is never a hole ==="
+# #200. Ian, 2026-08-22: "The changes made to featured member has removed members
+# from the front page. The override I wanted would still have them on the
+# frontpage even if they didn't meet the criteria."
+#
+# MEASURED on live before anything was built, and the issue's own stated cause
+# turned out to be half of it. TWO causes, either one sufficient:
+#   1. tools/cut/featured-member-grants.sql had never been APPLIED to live, so
+#      the resolver raised "permission denied for table users", the caller's
+#      try/catch swallowed it, and the band vanished for EVERY visitor and EVERY
+#      pick however perfect. §E now measures that grant instead of trusting the
+#      warning comment that already existed and was already right.
+#   2. Even with the grant, live's pick resolves role '' and the card-ready guard
+#      returns null. Only 2 of live's 6 opted-in members render at all.
+#
+# WHY GATE 39 COULD NOT HAVE CAUGHT ANY OF IT: its §C proves the flag is a no-op
+# by GREPPING THE SOURCE. It never rendered the page with a member_uuid in
+# config.json and the flag off -- the exact pairing live was in -- so it read
+# "byte-identical OFF" as true while OFF removed the band entirely. Every section
+# here RENDERS the branch, or EXECUTES a lifted pure function, against the real
+# profile_app. It renders THIS worktree, not /srv/archive-poc, which is a symlink
+# into the serving checkout and would mean measuring main.
+#
+# Fixtures are CHOSEN BY QUERY, never hardcoded: dev2 and live disagree about the
+# opt-in state of the very member the issue is about.
+#
+# ⚠️ IAN OVERRULED PART OF THIS LANE MID-BUILD, 2026-08-22, and the gate was
+# RE-AIMED rather than patched around: "If I select a user for featured member I
+# want them shown. Regardless of the status of their profile. Please strip the
+# saftey feature. I want to know what it is in the dash." So §F3 flipped from
+# asserting that a Private profile is REFUSED to asserting that it is offered,
+# labelled and counted; §B4 asserts a pinned private member actually renders; and
+# §C stopped asserting a consent fence on pins and now asserts the invariant that
+# survived it — the consent FLAG is the switch, and #107's acknowledgement door is
+# the only way through. A gate kept green by defending a struck-out behaviour is
+# worse than no gate.
+#
+# RED-FIRST: 18 mutations + 2 no-op controls, 20/20 --
+# tools/gates/featured-override-redfirst.py. FIVE of its legs found defects in
+# THIS gate rather than in the code, and one more was found by disbelief:
+#   1. §A1 counted that a band EXISTED, not that it said anything -- and a
+#      cleared pick really did render a card with an empty <h2>. A real defect,
+#      found because the assertion prints what it measured.
+#   2. §A3 asked for a fallback shape and never checked which shape came back, so
+#      disabling the invite branch fell through to 'member' and passed.
+#   3. the card-ready guard could be deleted outright with everything green,
+#      because no fixture reached it on the consented path. §B3 exists for that.
+#   4. §E compared a Postgres boolean::text ('true') against psql's 't' and
+#      reported dev2, which HAS the grant, as missing it -- a false RED that
+#      would have blocked every lane the moment the flag is ruled back on. The
+#      suite was 14/14 when that was found; the surprise in the wording is what
+#      found it.
+#   5. the status-filter assertion GREPPED THE SOURCE for "pinst" and stayed
+#      green when the filter was removed, because the string also lives in the
+#      chip loop the mutation had not touched -- the "assertion matches a string
+#      that also lives elsewhere" family, five instances deep in this repo now.
+#      The fix was not a cleverer grep: §F5 RENDERS the admin page under real
+#      WordPress with the BRANCH's class (lazy PSR-4 autoloader + wp --require,
+#      ReflectionClass asserting which file actually loaded, pool payload stubbed
+#      through pre_http_request because the dash's loopback URLs route into the
+#      serving checkout and would measure main).
+run "featured-override" python3 "$(dirname "$0")/featured-override-gate.py"
 echo
 
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi

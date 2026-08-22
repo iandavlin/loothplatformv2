@@ -428,3 +428,193 @@ purpose. Before #173 the menu carried **no name at all**.
   mutation demonstrates. What frees real room is hiding the wordmark earlier,
   collapsing the nav below 820, or shortening those two labels; all three are
   Ian's calls and belong with the 821–885px finding, decided once for both.
+
+
+---
+
+## #200 — the override, the empty band, and the two things that actually broke live (8/22)
+
+Ian, verbatim: *"The changes made to featured member has removed members from the
+front page. The override I wanted would still have them on the frontpage even if
+they didn't meet the criteria."*
+
+### ⚠️ THE ISSUE'S STATED CAUSE WAS HALF THE STORY, AND MEASURING FIRST IS THE POINT
+
+The card said "no member passes the eligibility criteria". Measured on live the
+same hour, there were **two causes, either one sufficient on its own**:
+
+1. **`tools/cut/featured-member-grants.sql` had never been APPLIED to live.**
+   `has_column_privilege('archive-poc','users','featured_opt_in_at','SELECT')`
+   was **false**, and `profile_sections` likewise. The resolver selects that
+   column, Postgres raises `permission denied for table users`, the call site's
+   `try/catch` swallows it, and the band disappears **for every visitor and for
+   every pick, however perfect**. This file and `featured-consent.php` both warn
+   about it in capitals. The warning was right; nobody had run the file.
+2. **Even with the grant, the pick does not resolve.** Live's selected member has
+   a members-only header, an empty `at_a_glance`, and a `business_name` that is a
+   tail of their display name, so `role` resolves to `''` and the card-ready
+   guard returns null.
+
+**Measured across live's whole opted-in pool — 6 opted in and public, 2 render:**
+
+| member | header | one-liner | business_name | renders |
+|---|---|---|---|---|
+| John Greenwald Epiphany Guitars, LLC | members | yes | tail of name | **no** |
+| Jonathan Scott Chisels & Picks ← was live | members | no | tail of name | **no** |
+| Bryan Parris | members | yes | Parris Guitars | yes |
+| BodyShopGuitar | members | yes | (none) | **no** |
+| ERIC OTTAVIANO MINOR FRET SJ | public | no | tail of name | **no** |
+| Ian Davlin | public | yes | The Looth Group | yes |
+
+### ⚠️ THE STOPGAP COULD NEVER HAVE WORKED, TWICE OVER — AND THIS IS THE GENERAL LESSON
+
+Keeper handed Ian *"place a `featured-members.local.php` on live to turn it off"*.
+
+- **Nothing read that file.** All three readers — `archive-poc/web/index.php`,
+  `profile-app/web/u.php`, `profile-app/api/v0/me-featured.php` — took the
+  tracked config plus `getenv`/`$_SERVER` and nothing in between. **A flag whose
+  documented override is not wired is worse than a flag with no override, because
+  the register says it has one.**
+- **And even wired, flag-OFF was not the old band.** With a `member_uuid` in
+  `config.json`, the off branch set `$lg_fm = null` outright. Measured by CLI
+  render: **flag ON → 1 band, flag OFF → 0 bands.** "OFF is byte-identical" had
+  only ever been proven against a config *without* a uuid; gate 39 §C greps
+  source and had never rendered that pairing.
+
+**The same class was already live one flag over:** dev2's
+`featured-consent.local.php`, placed 2026-08-20 saying `enabled => true`, was read
+by nothing — the box was believed to be running the consent rule ON and was
+running it OFF for two days. Both flags now resolve **tracked → `.local.php` →
+env/`$_SERVER`**, and gate 94 §D executes all three readers and fails if they
+disagree.
+
+### The override, and exactly what it does and does not bypass
+
+| criterion | consented pick | **pinned pick** |
+|---|---|---|
+| `featured_opt_in` (the tick) | required | **bypassed** |
+| `profile_visibility = 'public'` | required | **bypassed** |
+| avatar present | required (else no band) | bypassed — the line is omitted |
+| resolved `role` non-empty | required (else no band) | bypassed — the line is omitted |
+| a members-only `at_a_glance` republished | per consent-A | **per consent-A, same as anyone** |
+
+⚠️ **THE PIN IS ABSOLUTE, AND THAT IS IAN'S OVERRULE OF KEEPER, 8/22:** *"If I
+select a user for featured member I want them shown. Regardless of the status of
+their profile. Please strip the saftey feature. I want to know what it is in the
+dash. I want a link to check out their profile. Open in new tab. I don't want to
+dissapear the band."* Keeper had earlier upheld a privacy carve-out (with an
+explicit "Ian can overrule" note); this is the overrule, and the fence was
+stripped rather than narrowed.
+
+**What was measured before the fence came out**, because the question worth
+asking was what a pin could newly expose beyond a name, a photo and a link — a
+members-only About or one-liner belonging to somebody whose whole profile is
+private. **Live has ZERO members who are not public; dev2 has exactly one, a test
+fixture with neither.** The exposure is not small, it is nil on both boxes, so no
+carve-out was kept and none is hiding behind a comment. ⚠️ **One forward-looking
+fact, recorded rather than fenced:** if a member ever goes Private while their
+About section is marked public, a pinned card would publish that About.
+
+**The one-liner follows the same rule as for anybody else.** Ian: *"if pinned,
+show what the band shows for anyone else."* So `$pinned` is deliberately **not**
+consulted in `lg_fm_card_role()`. A pinned member reaches `$mayRepublish` through
+the same two doors as everyone, and #107's own wording opens the second for them
+— *"until they re-confirm OR Ian features them knowingly"* — so the dash records
+`consent_ack` on a pin and this is #107 being **exercised**, not routed around.
+The `informed` door stays shut for a pin by construction: no tick, so
+`featured_opt_in_at` is null. **Today it changes nothing on either box** — the
+featured-consent flag is OFF, so `$mayRepublish` is false for everybody.
+
+**The dash informs; it never blocks.** Status (`consented` / `never asked` /
+`private profile`) is a **winnowing filter with counts**, not a label — Ian: *"The
+privacy status was more for a stat for winnowing selections in the dash I
+thought."* The buckets are mutually exclusive and computed by the **same SQL
+expression** that produces the counts, so a filter's number and its rows cannot
+disagree; the counts cover the whole match set, not the 25 rows shown. Every row
+carries a `target="_blank" rel="noopener"` link to the member's profile, and
+every row has a button.
+
+**And pinning never writes `users.featured_opt_in`.** Gate 39 §D keeps
+`me-featured.php` off the admin-impersonation allowlist so an admin cannot tick a
+member's consent; pinning must not become the door that rule closes. Gate 94 §F1
+asserts it directly.
+
+### The empty-pool law — and the defect the gate found in it
+
+Ian: *"with zero eligible members and zero picks, the band must render the old
+hand-placed content or a designed fallback — never nothing."*
+
+- `featured_member_fallback` is a **new TOP-LEVEL key in `defaults.php`**, not a
+  sub-key. `config.json`'s overlay replaces `featured_member` **wholesale** and
+  the webhook's `$allowed_keys` does not carry the fallback, so no dash write and
+  no stale config can clobber it. That is not tidiness: live's `featured_member`
+  had already drifted into a card whose **name, bio and cta_href each described a
+  different member**, and falling back to it would have published a card
+  describing nobody.
+- **"Remove from front page" stopped meaning "hide the band".** It used to post
+  `enabled => false` — the very hole the law forbids, one click away from a button
+  that reads like "remove this member". It now clears the pick and blanks the
+  uuid; wanting no band at all is a separate, labelled button.
+- ⚠️ **"NO BAND" AND "A BAND WITH NOTHING IN IT" ARE THE SAME DEFECT.** `$lg_fm`
+  is a config map, so `{enabled: true}` with no `member_uuid` — exactly what the
+  new Clear writes — is **truthy**, skipped the resolver, and rendered a card with
+  an empty `<h2>`. Caught by gate 94 §A1 **only because it prints the name**; the
+  first version counted that a band existed and went green on a blank card. The
+  test is now "is there anything to draw", not "is `$lg_fm` null".
+- **A missing grant now degrades to a visible fallback rather than a hole.** Still
+  wrong, but no longer invisible — and gate 39 §G2 says why.
+
+### The card template, and a byte-identity claim that was wrong until it was measured
+
+The resolver's null-return guard existed because the template rendered avatar and
+role **unconditionally**, so an empty either shipped `<img src="">` and a blank
+line. #200 guards them instead, which is what makes the pin safe.
+
+⚠️ **The conditionals sit at COLUMN 0, and that is load-bearing.** PHP eats the one
+newline after a closing `?>`, so a tag at column 0 contributes nothing while the
+guarded line keeps its indentation. Written indented first, and diffing the two
+renders showed the whole card's whitespace move; at column 0 the card region is
+**byte-identical** to main for any card that has both fields. The claim was made
+before it was measured, and measuring made it false — then true.
+
+### Where the pin lives
+
+`config.json`'s `featured_member.pinned`, written on **every** save, `false`
+included: `_config.php` merges with `$clean + $existing` and PHP's `+` keeps the
+left operand's keys, so **an omitted key persists** and a stale `true` would
+silently reclassify a consented member as one an admin placed. Same discipline
+and same reason as `consent_ack`.
+
+`discovery.featured_history` grew a `pinned` column
+(`tools/migrations/200-featured-history-pinned.sql`, applied on dev2, live is
+Ian's), because after this ruling that table can no longer be read as a list of
+members who consented — and that is exactly what someone auditing consent would
+read it as. **Both the writer and the reader probe `information_schema` first**:
+an INSERT naming a missing column dies inside a catch and would silently stop
+recording stints, and a SELECT naming one would 500 the read so the dash says
+*"No one has been featured yet"* about a table full of rows. An absent key renders
+as a dash, never as *"opted in"*.
+
+### Still open — reported, not fixed
+
+- **The band always draws the pinned member.** Ian: *"I don't want to dissapear
+  the band. Same band. Vis if I select the member."* With the fences stripped, the
+  only way a pick fails to resolve is the member's row not existing at all, and
+  that lands on the empty-pool fallback rather than on nothing. Gate 94 §B4
+  renders a pinned non-public member and asserts the card shows **them**, not the
+  fallback — a fallback there would be the disappearance he is describing wearing
+  a different card.
+
+- **Live needs the grant**, and it is Ian's to run:
+  `sudo -u postgres psql profile_app -f tools/cut/featured-member-grants.sql`.
+  Without it the band shows the fallback rather than a real member.
+- **Live needs the history migration** before its stints record how they happened.
+- **Ian has not yet chosen the empty-state design** (A: the standing hand-placed
+  card; B: a designed "this spot is open" invite). Both are implemented and both
+  are asserted by gate 94 §A3; `defaults.php` ships `kind => 'member'` because it
+  is the status quo. His choice is a one-line data change.
+- **`business_name` being a tail of the display name is why four of six live
+  members cannot render.** The `str_ends_with` test is correct — it stops a card
+  saying the same three words twice — but it means the fallback almost never
+  fires for members whose business is in their display name. Nobody has been asked
+  whether that is the right trade.

@@ -963,3 +963,46 @@ keeper now owns; ask for a number rather than deriving one.
 - The vendored-engine duplication itself. Nine files edited in pairs this lane;
   #187's image work landed in only one of them, and the download-block fallback in
   only the other. It generates this defect class on a schedule.
+
+---
+
+## ⚠️ #200 wears the `page` label and is NOT a lanes-page issue — the EIGHTH in eight days
+
+After #171 (Patreon/join dark mode → MEMBERSHIP.md), #179 (the Loothprint
+bundle), #185 (the compose write-up editor), #186 (compose uploads), #189 (the
+form's own uploader), #187 (article image delivery) and #191 (the compose licence
+control). **#200 is the front page's featured-member band** — admin-pinned picks,
+the flag default, and the rule that the band never renders as absent. Nothing in
+it touches `/lanes/`, `tools/lanes-page.py`, `lanes.json` or the timer. Recorded
+here rather than silently relabelled, because the domain rule says a
+domain-labelled issue updates its domain file in the same commit — so this line
+IS that update. **Its knowledge lives in PROFILE.md**, where the next person
+touching the featured band will look.
+
+**Eight in eight days, six different lanes.** Every one has spent a paragraph
+explaining what the label does not mean. A ninth footnote is not the answer;
+this needs Ian's ruling.
+
+⚠️ **And "the page" is now genuinely ambiguous, which is probably the root of it.**
+This repo has a `/lanes/` status page and a member-facing **front page**, and
+`page` reads naturally as either. #200 is the first of the eight where the label
+is not merely wrong but *defensible* — it really is about a page. That is worth
+saying out loud when the ruling is made: the fix may be renaming the label rather
+than re-applying it.
+
+### The one thing a lanes-page reader should actually take from #200
+
+**A flag's `.local.php` override can be documented, believed, and not exist.**
+The lanes page's own posture — quiet when healthy, loud when broken — depends on
+switches behaving the way the register says they do. #200 found that
+`featured-members` had **no `.local.php` reader at all** on any of its three
+consumers, so the documented per-box override was inert; and that
+`featured-consent.local.php` had been sitting in dev2's serving checkout since
+2026-08-20 saying `enabled => true` with nothing reading it, so the box was
+believed ON and was OFF for two days.
+
+The general shape, and it applies to anything on this box that reads a flag:
+**the existence of the file is not evidence the file is read.** Grep for the
+`.local.php` include, not for the `.local.php`. Gate 94 §D now executes all three
+of that flag's readers against the same inputs and fails if they disagree, which
+is the only form of this check that cannot rot.

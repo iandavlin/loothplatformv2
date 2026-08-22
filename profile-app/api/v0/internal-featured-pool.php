@@ -125,6 +125,26 @@ if (!Whoami::verifyInternalAuth()) profile_app_json(401, ['error' => 'bad_secret
    path for real too rather than trusting the dot count. */
 $fmConsentCfg = @include __DIR__ . '/../../../platform/config/featured-consent.php';
 $fmConsentOn  = is_array($fmConsentCfg) && !empty($fmConsentCfg['enabled']);
+/* PER-BOX OVERRIDE, gitignored (#200, 2026-08-22). This layer did not exist and
+   the file DID: dev2's serving checkout has carried featured-consent.local.php
+   saying enabled => true since 2026-08-20 with nothing reading it, so the box
+   was believed to be running the consent rule ON while running it OFF.
+   MERGED PER KEY, unlike u.php's boolean-only read, because this endpoint reads
+   BOTH: `enabled` decides whether the question is asked at all, and
+   `informed_copy_since` decides which ticks count as informed. Overriding one
+   without the other is the "flag reads as working, does nothing" pairing gate
+   39 §G1 exists to catch — an ON with a null cutover means nobody is informed,
+   so both keys must be able to travel together in the same override file. */
+$fmConsentLoc = @include __DIR__ . '/../../../platform/config/featured-consent.local.php';
+if (is_array($fmConsentLoc)) {
+    if (array_key_exists('enabled', $fmConsentLoc)) {
+        $fmConsentOn = ($fmConsentLoc['enabled'] === true);
+    }
+    if (array_key_exists('informed_copy_since', $fmConsentLoc)) {
+        if (!is_array($fmConsentCfg)) $fmConsentCfg = [];
+        $fmConsentCfg['informed_copy_since'] = $fmConsentLoc['informed_copy_since'];
+    }
+}
 foreach ([getenv('LG_FEATURED_CONSENT'), $_SERVER['LG_FEATURED_CONSENT'] ?? false] as $o) {
     if ($o !== false && $o !== '') $fmConsentOn = ($o === '1' || $o === 'true');
 }
@@ -245,4 +265,166 @@ foreach ($rows as $r) {
     ];
 }
 
-profile_app_json(200, ['pool' => $pool]);
+/* ── #200: CANDIDATES — the members Ian can PIN ──────────────────────────────
+ *
+ * Ian, 2026-08-22: "The override I wanted would still have them on the frontpage
+ * even if they didn't meet the criteria." The pool above is the self-serve list
+ * and is unchanged; this is the ADDITIVE half — every real member, searchable,
+ * so an admin can place someone who has not ticked the box.
+ *
+ * ⚠️ ONLY ON REQUEST, and only with a query. 1,934 public members live on this
+ * box; returning them unasked would make every dash page load carry a
+ * Completeness computation per member for a list nobody is reading. Absent `q`,
+ * this key is absent from the payload entirely — which an older dash also reads
+ * correctly as "this endpoint does not offer candidates", the same absent-key
+ * discipline card_renderable uses.
+ *
+ * `eligible` MEANS THE SAME THING HERE AS ABOVE, and that is the point: privacy,
+ * and nothing else. A member whose profile is Private is RETURNED, marked
+ * ineligible, so the dash can say "cannot be pinned — their profile is Private"
+ * instead of leaving Ian to wonder why a name he searched for is not there. That
+ * refusal is keeper's ruling of 2026-08-22 upholding this lane's recommendation:
+ * a pinned pick does not bypass a member's own profile_visibility, because that
+ * is their switch rather than one of the platform's bars.
+ *
+ * NO card_renderable HERE, DELIBERATELY. That field predicts the resolver's
+ * avatar+role guard — and for a pinned pick the resolver does not apply that
+ * guard at all, so reporting it would be a confidently wrong answer to "will
+ * this show?" (it always will). What the admin needs instead is what the card
+ * will actually SAY, so the fields it can be built from travel plainly:
+ * `has_photo` and `public_role`, the latter computed with the pinned rule — the
+ * glance only when the header block is public, never on a consent the member
+ * has not given.
+ */
+$candidates = null;
+$candidateCounts = null;
+$q = trim((string) ($_GET['q'] ?? ''));
+/* ── STATUS IS A WINNOWING AID, NOT A GATE (Ian, 2026-08-22) ─────────────────
+ * "The privacy status was more for a stat for winnowing selections in the dash
+ * I thought." So it filters the list he is reading; it refuses nothing. The
+ * three buckets are mutually exclusive and sum to the whole match set, which is
+ * what makes the counts beside them trustworthy as a narrowing tool:
+ *
+ *   consented  public profile, ticked the box      — the self-serve pool
+ *   never      public profile, never ticked        — the ordinary pin case
+ *   private    profile_visibility is not public    — pinnable like anyone else
+ *
+ * `private` wins over the other two when a member is somehow both, because that
+ * is the fact he is winnowing ON. An unknown value falls back to 'all' rather
+ * than to an empty list: a filter that silently matches nothing reads as "there
+ * is nobody", which is the one thing this endpoint must never say by accident.
+ */
+$statusFilter = (string) ($_GET['status'] ?? 'all');
+if (!in_array($statusFilter, ['all', 'consented', 'never', 'private'], true)) $statusFilter = 'all';
+if ($q !== '') {
+    // ILIKE over the three fields an admin would type. Bounded at 25: a search
+    // is for finding a person you have in mind, and a longer list is a worse
+    // answer, not a more complete one.
+    //
+    // ⚠️ AND AN EXACT UUID MATCH, which is not a convenience — it is load
+    // bearing. FeaturedMemberDash::handle_pin() re-resolves the member by uuid
+    // before writing, so that the display name snapshotted into
+    // featured_history and the privacy refusal both come from this endpoint
+    // rather than from the submitted form. Without this clause that lookup
+    // finds nobody every time and every pin fails with "could not be looked
+    // up" — caught by reading the two files together, before either ran.
+    $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $q) . '%';
+    // The bucket expression lives in ONE string used by both the count query and
+    // the list query, so the number beside a filter and the rows behind it can
+    // never disagree — a count that does not match its own list is worse than no
+    // count, because it is the thing being trusted to narrow.
+    $bucket = "CASE WHEN u.profile_visibility <> 'public' THEN 'private'
+                    WHEN u.featured_opt_in THEN 'consented'
+                    ELSE 'never' END";
+    $match = "(u.display_name ILIKE :q OR u.slug ILIKE :q OR u.business_name ILIKE :q
+               OR u.uuid::text = :exact)";
+
+    // Counts for the WHOLE match set, before the 25 cap — the cap is a display
+    // limit and must not be mistaken for "this is how many there are".
+    $ccs = $pg->prepare("SELECT $bucket AS b, count(*) AS n FROM users u WHERE $match GROUP BY 1");
+    $ccs->execute([':q' => $like, ':exact' => $q]);
+    $candidateCounts = ['all' => 0, 'consented' => 0, 'never' => 0, 'private' => 0];
+    foreach ($ccs->fetchAll() as $cr) {
+        $candidateCounts[$cr['b']] = (int) $cr['n'];
+        $candidateCounts['all'] += (int) $cr['n'];
+    }
+
+    $where = $match . ($statusFilter === 'all' ? '' : " AND $bucket = :st");
+    $cst = $pg->prepare(
+        "SELECT u.id, u.uuid, u.slug, u.display_name, u.avatar_url, u.at_a_glance,
+                u.business_name, u.location_city, u.location_region,
+                u.profile_visibility, u.featured_opt_in,
+                $bucket AS status_bucket,
+                coalesce((SELECT ps.visibility FROM profile_sections ps
+                           WHERE ps.user_id = u.id AND ps.key = 'header'), 'members')
+                  AS header_visibility
+           FROM users u
+          WHERE $where
+          ORDER BY (u.uuid::text = :exact) DESC, (u.display_name ILIKE :q) DESC, u.display_name ASC
+          LIMIT 25"
+    );
+    $params = [':q' => $like, ':exact' => $q];
+    if ($statusFilter !== 'all') $params[':st'] = $statusFilter;
+    $cst->execute($params);
+
+    $candidates = [];
+    foreach ($cst->fetchAll() as $r) {
+        // The PINNED role rule, which is the resolver's rule with the consent
+        // routes closed: a member who never ticked has given no consent for
+        // their members-only one-liner to be republished, so it is used ONLY
+        // when their header block is already public. Mirrors
+        // lg_fm_card_role($..., $pinned = true) in archive-poc/web/index.php —
+        // a copy across two processes, kept honest by gate 94 §C the same way
+        // gate 39 §F3 keeps card_renderable honest.
+        $glanceRaw = trim((string) $r['at_a_glance']);
+        // Ian, 2026-08-22: "if pinned, show what the band shows for anyone
+        // else." So this follows the consent flag exactly as the resolver does,
+        // with the ack door open — the dash records consent_ack on a pin,
+        // because #107's own wording is "until they re-confirm OR Ian features
+        // them knowingly" and pinning is the second clause. Today the flag is
+        // OFF on both boxes, so this is the header-public branch for everyone.
+        $mayRepublishPinned = $fmConsentOn && $glanceRaw !== '';
+        $role = ($r['header_visibility'] === 'public' || $mayRepublishPinned) ? $glanceRaw : '';
+        if ($role === '') {
+            $biz = Completeness::deEscape($r['business_name']);
+            if ($biz !== '' && !str_ends_with((string) $r['display_name'], $biz)) $role = $biz;
+        }
+        $candidates[] = [
+            'uuid'         => $r['uuid'],
+            'slug'         => $r['slug'],
+            'display_name' => $r['display_name'],
+            'avatar_url'   => $r['avatar_url'],
+            'location'     => trim(implode(', ', array_filter([$r['location_city'], $r['location_region']]))),
+            // ⚠️ `eligible` IS REPORTED, AND IT NO LONGER REFUSES ANYTHING.
+            // Ian, 2026-08-22: "Please strip the saftey feature. I want to know
+            // what it is in the dash." An earlier cut of this lane used this to
+            // block a pin on a Private profile; that fence is gone, and the
+            // field survives only as one of the FACTS he winnows on. Anything
+            // reading it as permission is reading it wrong.
+            'eligible'     => $r['profile_visibility'] === 'public',
+            'opted_in'     => (bool) $r['featured_opt_in'],
+            // The winnowing bucket, computed by the same SQL expression that
+            // produced the counts, so a filter's number and its rows agree.
+            'status'       => (string) $r['status_bucket'],
+            // "I want a link to check out their profile. Open in new tab." The
+            // dash sets target=_blank; the endpoint just says where.
+            'profile_url'  => '/u/' . rawurlencode((string) $r['slug']),
+            // A fact he may want, and the only thing pinning could publish that
+            // the member withheld: their one-liner exists but is members-only.
+            // Measured 2026-08-22 — nobody on either box is in the state where
+            // this matters (live has zero non-public members), so it is shown,
+            // not fenced.
+            'glance_members_only' => $glanceRaw !== '' && $r['header_visibility'] !== 'public',
+            'has_photo'    => trim((string) $r['avatar_url']) !== '',
+            // What the pinned card's second line will actually say — '' means
+            // the card draws with no role line at all, which is allowed for a
+            // pinned pick and is worth showing before the click, not after.
+            'public_role'  => $role,
+        ];
+    }
+}
+
+profile_app_json(200, $candidates === null
+    ? ['pool' => $pool]
+    : ['pool' => $pool, 'candidates' => $candidates,
+       'candidate_counts' => $candidateCounts, 'status' => $statusFilter]);

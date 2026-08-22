@@ -13,7 +13,8 @@
  *     "cta_member":   [{ "label":..., "url":..., "style":..., "icon"?:..., "action"?:..., "attr"?:... }, ...],
  *     "cta_public":   [...],
  *     "rows":         [{ "id":..., "type":..., "query": {...} }, ...],
- *     "featured_member": { "enabled":..., "name":..., "role":..., ... },   // flat map
+ *     "featured_member": { "enabled":..., "name":..., "role":..., "pinned":..., ... },
+ *                                                                          // flat map
  *     "member_greeting": { "body":... }                                    // flat map
  *   }
  *
@@ -227,10 +228,46 @@ if (in_array('featured_member', $allowed_keys, true) && array_key_exists('featur
                 if ($nextOn) {
                     $name = (string) ($merged['featured_member']['name'] ?? '');
                     $by   = $merged['featured_member']['chosen_by'] ?? null;
-                    $ins  = $hpdo->prepare(
-                        'INSERT INTO discovery.featured_history (member_uuid, display_name, chosen_by) VALUES (:u, :n, :b)'
-                    );
-                    $ins->execute([':u' => $nextUuid, ':n' => $name, ':b' => $by]);
+                    // #200 — WAS THIS STINT CONSENTED OR PINNED? Without it this
+                    // table reads as a list of members who agreed to be
+                    // featured, and after Ian's override ruling that is no
+                    // longer what it is. Every row predating the column was a
+                    // consented pick, so its `false` default is accurate
+                    // history rather than a convenient guess.
+                    //
+                    // ⚠️ COLUMN-PROBED, NOT ASSUMED. tools/migrations/
+                    // 200-featured-history-pinned.sql has not run on live yet
+                    // and cannot from here (live writes are Ian's). This whole
+                    // block is wrapped in a catch by design, so an INSERT
+                    // naming a missing column would not error visibly — it
+                    // would just silently stop recording stints on live
+                    // altogether. Same probe shape as u.php's featured_opt_in
+                    // check, and it costs one cached query per save.
+                    $hasPinned = false;
+                    try {
+                        $chk = $hpdo->query(
+                            "SELECT 1 FROM information_schema.columns
+                              WHERE table_schema = 'discovery'
+                                AND table_name = 'featured_history'
+                                AND column_name = 'pinned' LIMIT 1"
+                        );
+                        $hasPinned = (bool) ($chk && $chk->fetchColumn());
+                    } catch (Throwable $e) {
+                        $hasPinned = false;
+                    }
+                    if ($hasPinned) {
+                        $ins = $hpdo->prepare(
+                            'INSERT INTO discovery.featured_history (member_uuid, display_name, chosen_by, pinned)
+                             VALUES (:u, :n, :b, :p)'
+                        );
+                        $ins->execute([':u' => $nextUuid, ':n' => $name, ':b' => $by,
+                                       ':p' => !empty($merged['featured_member']['pinned'])]);
+                    } else {
+                        $ins = $hpdo->prepare(
+                            'INSERT INTO discovery.featured_history (member_uuid, display_name, chosen_by) VALUES (:u, :n, :b)'
+                        );
+                        $ins->execute([':u' => $nextUuid, ':n' => $name, ':b' => $by]);
+                    }
                 }
             }
         } catch (Throwable $e) {

@@ -9,7 +9,7 @@
  * one file's own history-tracking block), not a new one. No separate secret
  * file for one more read of the same data domain.
  *
- * GET → { history: [ { member_uuid, display_name, started_at, ended_at,
+ * GET → { history: [ { member_uuid, display_name, started_at, ended_at, pinned?,
  *                       chosen_by }, ... ] }   newest-first, capped at 30 —
  *   the dash mock (dash.html) shows a handful of recent stints, not a full
  *   archive; a member-facing "my history" surface would be a different,
@@ -49,8 +49,31 @@ try {
         echo json_encode(['history' => []]);
         exit;
     }
+    // #200 — `pinned` tells a stint the member ASKED for from one an admin
+    // placed. Selected only when the column exists, because
+    // tools/migrations/200-featured-history-pinned.sql has not run on live and
+    // naming a missing column here would 500 the whole history read rather than
+    // degrade — the dash would then show "No one has been featured yet", which
+    // is a confident lie about a table full of rows.
+    //
+    // The key is then ABSENT from the payload on an unmigrated box, and the dash
+    // renders a dash rather than "opted in": "I do not know how this member got
+    // here" and "they consented" must not look alike, and this is the column
+    // someone auditing consent would read.
+    $hasPinned = false;
+    try {
+        $chk = $pdo->query(
+            "SELECT 1 FROM information_schema.columns
+              WHERE table_schema = 'discovery' AND table_name = 'featured_history'
+                AND column_name = 'pinned' LIMIT 1"
+        );
+        $hasPinned = (bool) ($chk && $chk->fetchColumn());
+    } catch (Throwable $e) {
+        $hasPinned = false;
+    }
     $rows = $pdo->query(
-        'SELECT member_uuid, display_name, started_at, ended_at, chosen_by
+        'SELECT member_uuid, display_name, started_at, ended_at, chosen_by'
+        . ($hasPinned ? ', pinned' : '') . '
            FROM discovery.featured_history
           ORDER BY started_at DESC LIMIT 30'
     )->fetchAll(PDO::FETCH_ASSOC);

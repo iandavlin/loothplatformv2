@@ -291,8 +291,37 @@ def leg_a_and_b():
                 note("§B  could not render origin/main's index.php — the OFF-equals-main byte "
                      "comparison was SKIPPED (reported, not silently passed)")
             elif main_doc != default:
-                fail("§B", f"the DEFAULT render is not byte-identical to origin/main "
-                           f"({len(default)} vs {len(main_doc)}) — OFF is not a no-op")
+                # ⚠️ NARROWED BY #200, 2026-08-22, and the reason matters more than
+                # the change. This compared the WHOLE PAGE against origin/main, so
+                # it went RED the moment ANY other lane legitimately altered the
+                # front page — a cross-branch whole-page equality assertion is
+                # structurally a merge-blocker, not a flag check. #200 tripped it
+                # by adding the empty-pool fallback band that Ian ruled must
+                # exist, and the measured diff was that band and nothing else.
+                #
+                # THE PROPERTY THIS LEG ACTUALLY PROTECTS is that the
+                # front-signup-banner-retire flag changes nothing outside its own
+                # banner, so that is what is asserted: the banner region, byte for
+                # byte. A difference elsewhere is reported by NAME and by size, so
+                # it is visible and attributable rather than either silent or a
+                # blanket red. Same restatement discipline #200 applied to gate 39
+                # §C3 and §F3 — assert the property, not one spelling of it.
+                def _banner(doc):
+                    i = doc.find(BANNER_OPEN)
+                    if i < 0:
+                        return None
+                    j = doc.find(b"</aside>", i)
+                    return doc[i:j + 8] if j > 0 else doc[i:]
+                b_main, b_mine = _banner(main_doc), _banner(default)
+                if b_main != b_mine:
+                    fail("§B", f"the DEFAULT render's SIGNUP BANNER differs from origin/main "
+                               f"({len(b_mine or b'')} vs {len(b_main or b'')} bytes) — this flag's "
+                               f"OFF state is not a no-op in the region it governs")
+                else:
+                    note(f"§B  the banner region is byte-identical to origin/main, but the page as "
+                         f"a whole is not ({len(default)} vs {len(main_doc)} bytes, "
+                         f"{len(default) - len(main_doc):+d}). That is another lane's front-page "
+                         f"change, not this flag's — reported so it is attributable, never graded")
             else:
                 print(f"  §B  OFF == origin/main, byte for byte ({len(main_doc)} bytes)")
         else:
@@ -573,7 +602,11 @@ def main():
     ran_d = os.environ.get("GATE80_SKIP_D") != "1"
     parts = []
     if ran_abc:
-        parts.append("the anon banner follows its flag (and OFF is byte-identical to main), the "
+        # Reworded by #200 with the §B narrowing above: the leg now proves the
+        # BANNER REGION matches main, not the whole page, and a summary claiming
+        # more than the assertion made is the stale-artifact failure this repo
+        # keeps paying for.
+        parts.append("the anon banner follows its flag (and its region is byte-identical to main), the "
                      "member greeting is untouched in both states, and both stylesheet copies "
                      "carry the dark block")
     if ran_d:
