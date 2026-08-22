@@ -164,6 +164,40 @@ def shoot(url, name):
                              "height": c["h"], "scale": 2}})
         open(f"{OUT}/{name}-panel.png", "wb").write(base64.b64decode(crop["data"]))
 
+        # ⚠️ THE ADJACENCY IS THE THING IAN IS RULING ON, so it gets its own
+        # frame rather than being something he has to notice in a full page.
+        # Renaming 'Me' to 'Edit' puts a SECOND Edit on each surface:
+        #   /p/  the row's own "Edit profile" chip — EVERY practice owner
+        #   /u/  the header's .lg-chrome__edit pill (aria-label "WP Admin",
+        #        href /wp-admin/) — manage_options only, so ADMINS, Ian included
+        # One crop from the top of the page through the bottom of the panel
+        # holds both in a single picture. Keeper, 8/22: hiding the collision
+        # would be worse than the collision.
+        both = ev("""(() => {
+          const box = document.querySelector('.lg-viewas');
+          const other = document.querySelector('.lg-chrome__edit, .lg-viewas__edit');
+          if (!box) return null;
+          const b = box.getBoundingClientRect();
+          const o = other ? other.getBoundingClientRect() : null;
+          const top = o ? Math.min(b.top, o.top) : b.top;
+          const bot = o ? Math.max(b.bottom, o.bottom) : b.bottom;
+          return JSON.stringify({
+            y: Math.max(0, Math.round(top + window.scrollY) - 14),
+            h: Math.round(bot - top) + 28,
+            other: other ? (other.textContent||'').trim() : null,
+            otherCls: other ? other.className : null
+          });
+        })()""")
+        if both:
+            b = json.loads(both)
+            shot = send("Page.captureScreenshot", {"format": "png", "captureBeyondViewport": True,
+                        "clip": {"x": 0, "y": b["y"],
+                                 "width": max(1, f["clip"]["w"] + f["clip"]["x"] + 40),
+                                 "height": b["h"], "scale": 2}})
+            open(f"{OUT}/{name}-BOTH-EDITS.png", "wb").write(base64.b64decode(shot["data"]))
+            f["other_edit"] = b.get("other")
+            f["other_edit_cls"] = b.get("otherCls")
+
     ok = (f.get("state") == "FOUND"
           and f.get("texts") == WANT
           and all(want in got for want, got in zip(WANT_HREFS, f.get("hrefs", [])))

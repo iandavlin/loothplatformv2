@@ -68,6 +68,13 @@ import urllib.request
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 BASE = os.environ.get("LG_VIEWAS_BASE", "https://dev2.loothgroup.com").rstrip("/")
 
+# Does BASE serve THIS worktree, or the shared serving checkout? A lane preview
+# points fastcgi straight at the branch's own files, so what it renders is this
+# tree and a disagreement with §A is a real finding. The bare serve renders
+# whatever ~/loothplatformv2-clean has pulled, which lags main after every merge
+# — see the deploy-gap branch in §B for why that distinction is load-bearing.
+SERVES_THIS_TREE = "/preview/" in BASE
+
 OK, RED, DEAD, NOTE = [], [], [], []
 
 
@@ -97,13 +104,30 @@ POSITIONS = [
     ("me",     "Edit",   "me"),      # <- the position #195 renamed
 ]
 
+# ⚠️ THE SELECTORS TOLERATE EXTRA ATTRIBUTES ON PURPOSE. The first version
+# demanded the opening tag verbatim, so adding one space inside it — a no-op
+# control mutation in the red-first — made the gate announce that the View-as
+# switcher had vanished. A gate that reddens on whitespace is not measuring the
+# thing it names, and its findings stop being believed.
+SEG_SPAN = r'<span class="lg-viewas__seg"[^>]*>(.*?)</span>'
+
+# ⚠️ EVERY SHAPE, NOT ANY SHAPE. These were an any() first, and the red-first
+# caught it immediately: rewriting viewLink('me') to viewLink('edit') left
+# $role==='me' on the same anchor, so §A said the value was intact while the
+# link had already moved. Two mutations (m04/m05) were saved only by §B, which
+# needs a live surface — meaning the half of the gate that is supposed to be
+# honest with no server was blind to the exact failure it exists for. A third
+# (m06, data-role) got through entirely.
 SOURCES = [
-    # file, the element that wraps the seg, how a position's value appears
-    ("profile-app/web/u.php",       r'<span class="lg-viewas__seg">(.*?)</span>',
+    # file, the element wrapping the seg, the shapes EVERY position must carry, why
+    ("profile-app/web/u.php", SEG_SPAN,
+     ["viewLink('{v}')", "$role==='{v}'"],
      "reachable — /u/<slug>?view=me, the privacy panel Ian named"),
-    ("profile-app/web/p.php",       r'<span class="lg-viewas__seg">(.*?)</span>',
+    ("profile-app/web/p.php", SEG_SPAN,
+     ["viewLink('{v}')", "$role==='{v}'"],
      "reachable — /p/<slug>?view=me, the practice page"),
-    ("profile-app/web/_render.php", r'<div class="seg" id="role">(.*?)</div>',
+    ("profile-app/web/_render.php", r'<div class="seg" id="role"[^>]*>(.*?)</div>',
+     ['data-role="{v}"', "$role==='{v}'"],
      "UNREACHABLE — /profile/edit; source-only, see the module docstring"),
 ]
 
@@ -127,16 +151,11 @@ def _unmask(s, parts):
     return re.sub(r"\x01(\d+)\x01", lambda m: parts[int(m.group(1))], s)
 
 
-def _value_shapes(value):
-    """Every way a position's VALUE is written across the three templates."""
-    return [f"viewLink('{value}')", f"$role==='{value}'", f'data-role="{value}"']
-
-
 def section_a_source():
     """Per position, in every switcher: the LABEL is the new word and the VALUE
     is untouched — parsed inside the seg element, never grepped file-wide."""
     sec = "A source"
-    for rel, wrap, why in SOURCES:
+    for rel, wrap, shape_tpl, why in SOURCES:
         path = os.path.join(REPO, rel)
         try:
             src = open(path, encoding="utf-8").read()
@@ -165,16 +184,26 @@ def section_a_source():
         # a fixed order scored every one of its labels against the wrong
         # position and reported three findings about a correct file.
         for key, want_text, want_value in POSITIONS:
-            shapes = _value_shapes(want_value)
+            shapes = [t.format(v=want_value) for t in shape_tpl]
+            # Locate the position by ANY of its shapes, then demand ALL of them.
+            # Locating on any is what lets the gate still find — and name — a
+            # position whose value has been half-rewritten.
             hits = [(a, t) for a, t in els if any(s in a for s in shapes)]
             if len(hits) != 1:
-                red(sec, f"{rel}: {len(hits)} of 3 positions carry the value {want_value!r}, "
-                         f"expected exactly 1. Every consumer keys on this string "
+                red(sec, f"{rel}: {len(hits)} of 3 positions carry the value {want_value!r} in "
+                         f"any form, expected exactly 1. Every consumer keys on this string "
                          f"(?view=, $role===, data-role, BOOT.role); moving it takes edit mode "
                          f"down. #195 changed the LABEL only.")
                 continue
             attrs, text = hits[0]
-            ok(sec, f"{rel}: the {key} position still carries the value {want_value!r}")
+            missing = [s for s in shapes if s not in attrs]
+            if missing:
+                red(sec, f"{rel}: the {key} position is missing {missing} — it carries the value "
+                         f"{want_value!r} in some places and not others, which is how half a "
+                         f"rename ships. Present: {attrs.strip()!r}. #195 changed the LABEL only.")
+            else:
+                ok(sec, f"{rel}: the {key} position carries the value {want_value!r} in all "
+                        f"{len(shapes)} places it is written")
             if text == want_text:
                 ok(sec, f"{rel}: the {want_value!r} position reads {want_text!r}  ({why})")
             else:
@@ -318,7 +347,7 @@ def _is_owner_shell(html):
 
 
 def _seg_from_html(html):
-    m = re.search(r'<span class="lg-viewas__seg">(.*?)</span>', _markup(html), re.S)
+    m = re.search(SEG_SPAN, _markup(html), re.S)
     if not m:
         return None
     return re.findall(r'<a\b([^>]*)>(.*?)</a>', m.group(1), re.S)
@@ -348,6 +377,13 @@ def section_b_rendered(ctx):
 
     for surface, url, why, who, uid in targets:
         if surface == "/p/" and p_owner and p_owner != u_slug:
+            # The slug comes from our own users.slug and the /u/ route only
+            # matches [\w-], but the query is built by interpolation, so refuse
+            # anything outside that shape rather than rely on the column.
+            if not re.fullmatch(r"[\w\-]+", p_owner or ""):
+                dead(sec, f"{surface}: practice owner slug {p_owner!r} is not [\\w-] — refusing "
+                          f"to interpolate it into SQL")
+                continue
             rc, out, _ = _psql("SELECT b.wp_user_id FROM users u "
                                "JOIN wp_user_bridge b ON b.user_id = u.id "
                                f"WHERE u.slug = '{p_owner}' LIMIT 1")
@@ -402,6 +438,21 @@ def section_b_rendered(ctx):
             href = (re.search(r'href="([^"]*)"', attrs) or [None, ""])[1]
             if text == want_text:
                 ok(sec, f"{surface}: {key} position RENDERS {want_text!r}")
+            elif not SERVES_THIS_TREE:
+                # ⚠️ A DEPLOY GAP IS NOT A DEFECT, AND SCORING IT AS ONE BLOCKS
+                # EVERY LANE. The shared serve renders whatever ~/loothplatformv2-
+                # clean has PULLED, which lags main by design after any merge. If
+                # this gate went RED because dev2 had not pulled yet, every lane
+                # running run-all.sh would be stopped by a label. So on the shared
+                # serve a text disagreement is NO VERDICT and says which side is
+                # behind; on a lane preview — which serves this worktree directly
+                # — the same disagreement is a real finding. The href, aria-current
+                # and behaviour legs below score on BOTH, because they read the
+                # same before and after #195 and so cannot be a deploy gap.
+                dead(sec, f"{surface}: the serve renders {text!r} where this tree's source says "
+                          f"{want_text!r}. That is a DEPLOY GAP (dev2 behind this branch), not a "
+                          f"finding — §A already scored the source. Bring up a lane preview and "
+                          f"set LG_VIEWAS_BASE to score the rendered label for real.")
             else:
                 red(sec, f"{surface}: {key} position renders {text!r}, expected {want_text!r}")
             if f"view={want_value}" in href:
@@ -414,6 +465,9 @@ def section_b_rendered(ctx):
                for a, t in els if 'aria-current="true"' in a]
         if cur == ["Edit"]:
             ok(sec, f"{surface}: ?view=me marks exactly the Edit position as current")
+        elif cur == ["Me"] and not SERVES_THIS_TREE:
+            dead(sec, f"{surface}: the serve marks 'Me' as current — the same DEPLOY GAP as "
+                      f"above, not a second finding.")
         else:
             red(sec, f"{surface}: ?view=me marks {cur!r} as current, expected ['Edit'] — the URL "
                      f"and the highlighted position disagree.")
@@ -511,6 +565,17 @@ def main():
         print(f"viewas-label-gate: NO VERDICT ({len(DEAD)} check(s) could not run)")
         return 2
     if DEAD:
+        # ⚠️ SAY WHICH HALF WENT UNSCORED. A gate that prints "GREEN" while four
+        # of its legs quietly could not run is the shape that lets a deploy gap
+        # pass for a verified serve. Exit stays 0 — a stale checkout must never
+        # block every lane (trap-gate-exit-code-3-blocks-every-lane) — but the
+        # summary names it, so nobody reads this as "the serve was checked".
+        gap = [d for d in DEAD if "DEPLOY GAP" in d]
+        if gap:
+            print(f"viewas-label-gate: GREEN ON SOURCE — the RENDERED half was NOT scored: the "
+                  f"serve at {BASE} is behind this tree. §A verified the templates; §B's label "
+                  f"legs did not run. Pull the serving checkout, or point LG_VIEWAS_BASE at a "
+                  f"lane preview, then re-run before calling this surface verified.")
         print(f"viewas-label-gate: GREEN — {len(OK)} assertions ({len(DEAD)} could not run)")
         return 0
     print(f"viewas-label-gate: GREEN — {len(OK)} assertions")

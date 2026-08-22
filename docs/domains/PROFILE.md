@@ -618,3 +618,105 @@ as a dash, never as *"opted in"*.
   saying the same three words twice — but it means the fallback almost never
   fires for members whose business is in their display name. Nobody has been asked
   whether that is the right trade.
+
+---
+
+## #195 — the View-as switcher says Edit, not Me (8/22)
+
+Ian, verbatim: *"in the profile, I'd like the view as controls in the privacy
+area to read edit instead of me."*
+
+The other two positions name an AUDIENCE. **Me** looked like a third audience and
+was not one: it is the member's own working view, the one where things can be
+changed — which is what the panel's own hint already said, *"This IS your
+editor."* `view=me` **is** edit mode (`$editing = ($isOwner && $role === 'me') ||
+$adminEditing`, `u.php:127`; the same on `p.php:50`). **Edit** names what the
+position does.
+
+### ⚠️ THE LABEL MOVED AND THE VALUE DID NOT, AND THAT IS THE WHOLE RISK
+
+Every consumer on this platform keys on the **value** `me`; **nothing anywhere
+reads the visible text**:
+
+| | where |
+|---|---|
+| `?view=me` | the URL each position links to (`$viewLink`, `u.php:135`) |
+| `$role === 'me'` | the edit-mode predicate, and the `aria-current` highlight |
+| `data-role="me"` | the SSR editor's button |
+| `BOOT.role \|\| 'me'` | `edit.js:13` |
+| `.lg-shell--owner` + `.lg-pmp` | `privacy-sheet.js`'s surface gate — markup, not a label |
+
+Verified before the change: no gate, no test, no CSS selector and no stored
+preference reads the label. `grep` of `tools/gates/` for `view=me`, `lg-viewas`
+and `"View as"` returned **nothing** — the surface had no gate at all. That is
+why the rename was safe, and **gate 97 asserts the pair per position** (text is
+the new label AND the href/value still says `me`) so it stays safe. Asserting
+only the text would go green on the one change that costs members their editor:
+someone "tidying" `?view=me` to `?view=edit` to match the new word.
+
+### THREE SWITCHERS EXIST. TWO ARE REACHABLE, AND THE THIRD IS NOT
+
+| file:line | surface | reachable |
+|---|---|---|
+| `profile-app/web/u.php:929` | `/u/<slug>?view=me` — the privacy panel Ian named | yes |
+| `profile-app/web/p.php:293` | `/p/<slug>?view=me` — the practice page | yes |
+| `profile-app/web/_render.php:166` | `/profile/edit` — the SSR editor topbar | **no** |
+
+**Why the third is dead, measured rather than inferred:** `edit.php:44` 302s any
+member with a slug straight to `/u/<slug>`, and `looth_render_editor()` has
+exactly one caller. The only slug-less rows are **ids 1, 1702 and 1703 — on dev2
+AND on live — and all three are unclaimed**, so they hit the claim interstitial
+first. Zero members, both boxes. Keeper's ruling: change the string anyway
+(dead surfaces revive), build no render proof for it.
+
+**`/p/` changed too**, on keeper's Q1 ruling: it is the same switcher over the
+same values, and a practice owner moves between the two surfaces. One position
+must not wear two names.
+
+### ⚠️ THE RENAME PUTS A SECOND "Edit" ON THE SAME STRIP — REPORTED, NOT FIXED
+
+Measured, and the two are not the same scale:
+
+| surface | the other Edit | who sees it |
+|---|---|---|
+| `/p/` | `.lg-viewas__edit` — a white chip reading **"Edit profile"**, `href=/u/<slug>?view=me`, in that very row | **every practice owner** — 3 on live, 3 on dev2 |
+| `/u/` | `.lg-chrome__edit` — the header pill reading **"Edit"**, `aria-label="WP Admin"`, `href=/wp-admin/`, gated on `manage_options` | **admins only** — 5 on live, Ian among them |
+
+Keeper ruled option (a): change both, touch neither neighbour, and put the
+adjacency in front of Ian as a picture rather than deciding for him. Renaming
+`/p/`'s chip (e.g. to "Your member profile") is his call, asked with the shots.
+
+### Shipped UNFLAGGED, deliberately
+
+One word of visible text: no value, no behaviour, no new state. A flag would be
+more code than the change and would merge a no-op. Precedent: #166, and 789b480
+before it. The spend went into gate 97 instead, on a surface that had none.
+
+### Traps this leaves behind
+
+- **Gate 97 audits whatever `LG_VIEWAS_BASE` points at, and the default is the
+  bare serve, which is MAIN.** `/u/` and `/p/` are symlinked out of the serving
+  checkout. A lane runs `tools/preview/lane-preview.sh up <lane>` and sets
+  `LG_VIEWAS_BASE=https://dev2.loothgroup.com/preview/<lane>`;
+  `platform/nginx/lane-preview-195-edit-label.conf` is the worked example, and
+  its `&$args` is load-bearing — without it every preview URL renders the
+  default view and the three positions cannot be told apart.
+- **`/p/` ASKED COLD RENDERS THE NON-OWNER PAGE** (52KB vs 104KB), because only
+  `/u/` performs the invisible `looth_id` mint hop through `/looth-auth/issue`.
+  A harness that fetches `/p/` first gets a page carrying the seg's *stylesheet*
+  and none of its markup — which reads exactly like "the switcher is gone", and
+  did. Warm on `/u/` first.
+- ⚠️ **EVERY CLASS NAME IN THIS FEATURE IS ALSO A CSS RULE IN THE SAME RESPONSE.**
+  `"lg-shell--owner" in html` is TRUE of a page whose body is plain
+  `class="lg-shell"` — it appears five times as a stylesheet rule on `/u/`. As a
+  liveness check it passes on a signed-out render; as a behaviour check it
+  reported that `?view=member` renders edit chrome, a confident finding about a
+  healthy page. Strip `<style>`/`<script>` and read the class off the ELEMENT.
+- **`privacy-sheet.js:350-351` hides `.lg-viewas__vis` and `.lg-viewas__disc`.
+  Neither class exists in any PHP** — only its `.lg-pmp` rule does anything. And
+  `data-lg-privacy` measured **null** on dev2 `/u/` at 390 and 1440, so that
+  sheet is not running there at all. Untouched by #195; filed here because the
+  next person to work this panel will assume it is live.
+- **`docs/CRAFT-STANDARD.md` carries TWO rows pointing at `switch-menu-gate.py`**
+  — 93 and 95 — left by keeper's 93→95 renumbering. Minting from the table's max
+  is still safe; reading it as an inventory is not.

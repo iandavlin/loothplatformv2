@@ -2555,6 +2555,44 @@ echo "=== GATE 94: Ian's picks stay on the front page, and the band is never a h
 run "featured-override" python3 "$(dirname "$0")/featured-override-gate.py"
 echo
 
+echo "=== GATE 97: the View-as switcher says Edit, and the VALUE still says me ==="
+# #195. Ian, 2026-08-22: "in the profile, I'd like the view as controls in the
+# privacy area to read edit instead of me."
+#
+# ⚠️ IT ASSERTS A PAIR PER POSITION, AND THE PAIR IS THE WHOLE GATE. The text is
+# the new label AND the href/value still carries the old one. Asserting only the
+# text goes green on the change that actually costs members their editor —
+# someone "tidying" ?view=me to ?view=edit so the URL matches the new word. Every
+# consumer on this platform keys on the VALUE 'me' (?view=, $role===, data-role,
+# BOOT.role) and NOTHING anywhere reads the visible text; the label was safe to
+# move for exactly that reason, and stays safe only while that stays true.
+#
+# ⚠️ /u/ AND /p/ ARE SYMLINKED OUT OF THE SERVING CHECKOUT, so a bare run measures
+# MAIN. §A always reads the worktree, so the source half is honest either way, and
+# both notes below print WHICH base §B/§C measured — a green can never quietly be
+# a green about main. A lane runs:
+#     tools/preview/lane-preview.sh up <lane>
+#     LG_VIEWAS_BASE=https://dev2.loothgroup.com/preview/<lane> python3 ...
+#
+# THREE OF ITS OWN LEGS WERE DEFECTIVE FIRST, all in families this repo has paid
+# for: "lg-shell--owner" in html was the LIVENESS check and that string is a CSS
+# rule five times over in the same response (so it was true of a signed-out page,
+# and it manufactured a finding that ?view=member renders edit chrome); attributes
+# were parsed with <a(.*?)> which stops at the '>' inside ?>; and positions were
+# matched by DOM ORDER, which _render.php reverses. Style/script are stripped, PHP
+# tags are masked, positions are matched by VALUE.
+#
+# And one about the surface: /p/ asked cold renders the NON-owner page (52KB vs
+# 104KB) because only /u/ performs the looth_id mint hop. The gate warms on /u/
+# first, or the seg's own stylesheet answers for its markup.
+#
+# RED-FIRST: 13 mutations + 2 no-op controls, tools/gates/viewas-label-redfirst.py.
+# One control puts the OLD label in a PHP comment in the file under test and must
+# stay GREEN — that is the assert-a-string-that-also-lives-in-prose trap, and it
+# proves §A parses the seg element rather than grepping the file.
+run "viewas-label" python3 "$(dirname "$0")/viewas-label-gate.py"
+echo
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"
