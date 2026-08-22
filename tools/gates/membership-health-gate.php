@@ -587,6 +587,35 @@ $c = chk( $d, 'audience' );
 is_( $c['status'] === 'warn' && stripos( words( $c ), 'EMPTY' ) !== false,
      'E2 `allowlist` with an EMPTY cohort says nobody at all can buy' );
 
+/* #193 — A COHORT OF ADDRESSES IS NOT AN EMPTY COHORT.
+   Ian 8/22 ruled the list takes plain email addresses for testers who have no
+   account yet. Counting only the ids here would print "the audience is
+   `allowlist` and the cohort is EMPTY, so nobody at all can buy" over a cohort
+   that is working — the panel crying wolf on its own deployment day, which is
+   the exact failure #192 spent a rewrite removing. */
+$d = scenario( healthy_env(), [ 'lgms_stripe_lifecycle_allowlist' => [ 'tester@example.com', 'second@example.com' ] ] );
+$c = chk( $d, 'audience' );
+is_( $c['status'] === 'ok',
+     'E2b a cohort of ADDRESSES ONLY is healthy — it admits people, so it is not empty' );
+is_( stripos( words( $c ), 'EMPTY' ) === false,
+     'E2c ...and is never described as EMPTY' );
+is_( stripos( words( $c ), 'address' ) !== false,
+     'E2d ...and the panel says they are ADDRESSES, which is a different situation '
+   . 'from a member who has already joined' );
+
+$d = scenario( healthy_env(), [ 'lgms_stripe_lifecycle_allowlist' => [ 854, 1887, 'tester@example.com' ] ] );
+$c = chk( $d, 'audience' );
+is_( $c['status'] === 'ok' && stripos( words( $c ), '2 member(s)' ) !== false
+     && stripos( words( $c ), '1 address(es)' ) !== false,
+     'E2e a MIXED cohort counts both halves separately, so neither hides the other' );
+
+/* THE LIVENESS PARTNER: E2 above must still fire on a genuinely empty list, or
+   E2b has simply broken the empty check rather than taught it to count. */
+$d = scenario( healthy_env(), [ 'lgms_stripe_lifecycle_allowlist' => [ 'not-an-email', '' ] ] );
+$c = chk( $d, 'audience' );
+is_( $c['status'] === 'warn' && stripos( words( $c ), 'EMPTY' ) !== false,
+     'E2f a list of MALFORMED entries is still EMPTY — a junk entry admits nobody and is counted as nobody' );
+
 /* #165 and #170's shape: a switch on, and the door it needs shut. */
 $d = scenario( healthy_env(), [ 'lgms_stripe_testgroup_pages' => '0', 'lgms_stripe_pages_live' => '0' ] );
 $c = chk( $d, 'audience' );

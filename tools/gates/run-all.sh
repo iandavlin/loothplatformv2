@@ -1992,10 +1992,37 @@ echo "=== GATE 86: the soft-launch cohort is REAL in the checkout path (#181) ==
 # with no Stripe customer and asserts the role survives, with a liveness leg
 # proving the same sweep DOES demote a non-comp member.
 #
-# RED-FIRST: 20 mutations, 2 no-op controls, all caught -- see
-# tools/gates/checkout-audience-redfirst.py. Two were found by that run and
-# fixed: B8c could not see the guard's two sentences being made identical, and
-# one "mutation" changed no decision at all.
+# ⚠️ #193 EXTENDED THIS GATE, AND THE LIST NOW HOLDS EMAIL ADDRESSES TOO.
+# Ian 8/22: "I thought the whitelist would have them generating a wp-user like a
+# normal new member join." #181's fence resolved an address to a WP user and
+# refused when there wasn't one, so a listed address with NO ACCOUNT was refused
+# before it could be provisioned -- every tester had to pre-exist, and the one
+# path a stranger takes at GA was the one path the test could not run.
+#
+# §J is the address half. The assertion that BITES is J1 (a listed address with
+# no account may proceed); "a listed member still buys" passed for the whole life
+# of #181 and cannot tell the fixed state from the broken one. J7 is the
+# assertion that CHOSE the design -- a session minted for a since-removed address
+# still fails to provision, which a write-side id promotion would have failed.
+# J10 is the empty-state-is-the-off-state proof that stands in for a flag here.
+#
+# §K is the /auth exemption (D3, keeper-approved 8/22 with three conditions).
+# BuddyBoss was 401ing the route that CREATES a logged-out visitor's account, so
+# a listed tester pressed Continue and was told "Sign-in failed". Exempted
+# surgically -- two routes, never the namespace -- with the door's own throttles,
+# password check and validation asserted by COMPARISON, not by key name.
+#
+# ⚠️ THIS GATE STUBS StripeLifecycle ON PURPOSE, so a mutation to the real class
+# cannot move it. The real normalizer and the real read-side union belong to
+# test-soft-launch-allowlist.php (gate 34), and the red-first harness targets a
+# gate PER MUTATION for exactly that reason -- six "blind spots" in the first
+# #193 run were mutations aimed at a class this gate does not load.
+#
+# RED-FIRST: 42 mutations, 3 no-op controls, all caught -- see
+# tools/gates/checkout-audience-redfirst.py. Four were found by those runs and
+# fixed: B8c could not see the guard's two sentences being made identical; one
+# "mutation" changed no decision at all; and §K asserted that throttle KEY NAMES
+# were present, so disabling the per-IP throttle outright stayed green.
 run "checkout-audience" php "$(dirname "$0")/checkout-audience-gate.php"
 echo
 
@@ -2220,7 +2247,21 @@ echo "=== GATE 90: the tester link is recoverable, and rotating kills the old on
 # checks for delegation as well as for literal markup, because red-first M33
 # made the tab call the standalone page and the markup arrived that way.
 #
-# RED-FIRST: 33 mutations + 2 no-op controls, 35/35 -- tools/gates/tester-dash-redfirst.py.
+# ⚠️ #193 ADDED §I: THE TESTERS TAB TAKES AN ADDRESS. Ian 8/22 ruled the list
+# accepts plain email addresses so a tester with no account can walk the real
+# new-member journey; "Ian cannot use this without the command line" was the
+# charter constraint, which is why the SURFACE is gated here while the decider
+# is gated in 86 §J and the store in gate 34.
+#
+# THREE OF §I's OWN ASSERTIONS WERE BLIND FIRST TIME, all the same shape as the
+# ones above and all found by red-first: I6 looked for a redirect KEY anywhere in
+# the handler, so neutering the branch left the string unreachable and green; I8
+# looked for the emails() CALL, so a loop over [] rendered nothing and passed;
+# and I9 matched the count expression ANYWHERE in the tab, so reverting the
+# heading stayed green on the chip's identical copy -- a fixed target satisfied
+# by the wrong occurrence. Assert the branch, the loop, and pinned markup.
+#
+# RED-FIRST: 40 mutations + 3 no-op controls, 43/43 -- tools/gates/tester-dash-redfirst.py.
 run "tester-dash" php "$(dirname "$0")/tester-dash-gate.php"
 echo
 
