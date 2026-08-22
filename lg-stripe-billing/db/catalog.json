@@ -24,15 +24,8 @@
           "key": "lite_yearly_sub",
           "type": "recurring",
           "interval": "year",
-          "unit_amount_cents": 6000,
+          "unit_amount_cents": 5500,
           "currency": "usd"
-        },
-        {
-          "key": "lite_yearly_once",
-          "type": "one_time",
-          "unit_amount_cents": 6600,
-          "currency": "usd",
-          "grants_duration_days": 365
         }
       ]
     },
@@ -98,15 +91,8 @@
           "key": "pro_yearly_sub",
           "type": "recurring",
           "interval": "year",
-          "unit_amount_cents": 13200,
+          "unit_amount_cents": 12000,
           "currency": "usd"
-        },
-        {
-          "key": "pro_yearly_once",
-          "type": "one_time",
-          "unit_amount_cents": 14500,
-          "currency": "usd",
-          "grants_duration_days": 365
         }
       ]
     },
