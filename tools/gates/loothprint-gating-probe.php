@@ -1,6 +1,6 @@
 <?php
 /**
- * loothprint-gating-probe.php — the WordPress half of GATE 94.
+ * loothprint-gating-probe.php — the WordPress half of GATE 96.
  *
  * Driven by tools/gates/loothprint-gating-gate.py, never run by hand. Three
  * modes, chosen by LG199_MODE:
@@ -89,7 +89,7 @@ if ($MODE === 'setup') {
     $pid = wp_insert_post([
         'post_type'    => 'loothprint',
         'post_status'  => 'publish',
-        'post_title'   => "GATE 94 probe $TAG",
+        'post_title'   => "GATE 96 probe $TAG",
         'post_name'    => "gate94-probe-$TAG",
         'post_author'  => 1,
         /* The anchor is deliberate: scrubGatedAnchors used to strip it whenever

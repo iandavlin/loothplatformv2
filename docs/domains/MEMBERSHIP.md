@@ -1341,7 +1341,7 @@ download wears the **existing `download` block's** face and copy, never the vide
 gate's; and **one** member-facing sentence appears **once**.
 
 Behind `LG_V2_LOOTHPRINT_GATING` / `lg-layout-v2/config/loothprint-gating.php`,
-defaulted OFF. Gate 94.
+defaulted OFF. Gate 96.
 
 ### Why this is a membership fact and not a layout one
 

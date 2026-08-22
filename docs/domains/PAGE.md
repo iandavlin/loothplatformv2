@@ -819,7 +819,7 @@ halves were wrong, in different files, and neither showed up as an error:
   is in neither of its lists — so a gated `callout variant=files` (the shape a
   synthesized print used for its ZIP) fell through to the **embed** default and
   drew the video card over a download. **A right block type reaching a table
-  with no arm for it.** That is why gate 94 asserts the RENDERED CARD and never
+  with no arm for it.** That is why gate 96 asserts the RENDERED CARD and never
   the block type: reading the layout back and checking it says `download` is
   true of the broken build.
 
@@ -882,7 +882,13 @@ preserved, it was deleted. **Six props across six blocks** are in that class:
 *"gallery and embed-url are FRONT-END-EDITOR ONLY … the admin metabox cannot edit
 those props. Pre-existing gap, recorded not fixed."* The unrecorded half is that
 not being able to EDIT a prop was allowed to mean destroying it. Already live on
-dev2 too: post **73510** carries a gallery with no `image_ids` key at all.
+dev2 too: post **73510** was found carrying a gallery with **no `image_ids` key at
+all** — real damage from this bug, not a hypothetical. ⚠️ **Keeper has since
+repaired 73510** (meta delete + re-bake; verified 2026-08-22 — it now carries no
+stored layout and synthesizes from a one-image `more_images`), so **that post is
+no longer evidence of anything.** Any before/after demonstration of this fix must
+use the lane's own fixture posts (78935 / 78961) or a fresh probe, and a sweep
+looking for survivors should expect to find none.
 
 Fixed by carrying unrepresented props across from the current layout, keyed on
 block **id** (slots shift under move/insert/remove in one submit) and skipped
@@ -902,7 +908,7 @@ only. The mime filter he asked for went in as well and is not wasted: a ZIP
 placed in `more_images` really does make a third tile on main, so both mechanisms
 are real — only one fired on that post.
 
-### Gate 94, and a third near-collision in four days
+### Gate 96, and the number was wrong TWICE
 
 `tools/gates/loothprint-gating-gate.py` + `loothprint-gating-probe.php`. Red-first
 **20 of 37 fail on an origin/main snapshot at exit 1** — findings, not CANNOT RUN,
@@ -910,19 +916,50 @@ which took a deliberate choice: the probe degrades to `flag=false` on a tree whe
 `Renderer::loothprintGatingEnabled()` does not exist, because calling it would
 fatal and a gate that reports CANNOT RUN proves nothing about main.
 
-⚠️ **94 was minted from CURRENT `origin/main`, not from the branch's base.** 90–93
-and 95 are taken. **95 looks like a free gap and is not one**: two lanes were both
-assigned 93 in one mid-flight window and keeper renumbered switch-menu 93→95
-(`b1ac293`) *after* this lane was cut. Reading the ledger from the branch's own
-copy would have said "94 and 95 free". Re-read main, not your base.
+⚠️ **THE NUMBER WAS WRONG TWICE, AND THE SECOND MISS IS THE INSTRUCTIVE ONE.**
+
+- **Attempt 1 — read this branch's own `run-all.sh`.** It stopped at 93, so 94
+  looked free. Wrong: keeper had renumbered switch-menu 93→95 (`b1ac293`) *after*
+  this lane was cut, so the branch's copy could not see 95.
+- **Attempt 2 — re-read CURRENT `origin/main`.** 89–93 and 95 taken, 94 free.
+  Also wrong: lane **200-featured-override holds `GATE 94` on an unmerged
+  branch**, which main cannot see *by construction*. Keeper caught it.
+- **96**, taken from keeper, who owns the next-free counter and bumps it at merge.
+  That counter postdates this lane's cut — which is exactly the race.
+
+**`main` tells you what has LANDED. It never tells you what is SPOKEN FOR.** The
+worktree sweep is necessary and still not sufficient, because a lane cut after
+your sweep holds a number you never saw:
+
+    for w in ~/worktrees/*/; do git -C "$w" diff main...HEAD \
+        | grep -oE '^\+.*GATE [0-9]+'; done
+
+**Third and fourth near-collision in five days.** The durable fix is the counter
+keeper now owns; ask for a number rather than deriving one.
 
 ### Reported by #199/#198, not fixed
 
 - **`GateCta`'s two copies have drifted**: the plugin default `button_url` is the
   Patreon URL, the vendored copy's is `/join/`. Any gate reading that button must
   know which copy answered.
-- **dev2 post 73510 is already poisoned** (gallery, no `image_ids`). The fix stops
-  it recurring; repairing that row is a data call.
+- ~~**dev2 post 73510 is already poisoned**~~ — **CLOSED**: keeper repaired it the
+  same day (meta delete + re-bake). The fix stops it recurring; the one known
+  casualty is cleaned up. **And LIVE IS CLEAN** — swept 2026-08-22 via `live-ro`:
+  **69** published stored layouts carry a gallery block and **0** of them are
+  missing `image_ids`. So the poisoner has damage on dev2 only and has never
+  fired on live, which is the reassuring half of an otherwise ugly finding. The
+  sweep is one query and worth repeating before any merge that touches
+  `MetaBox::save()`:
+
+      SELECT COUNT(*) FROM wp_postmeta pm JOIN wp_posts p ON p.ID = pm.post_id
+       WHERE pm.meta_key = '_lg_layout_v2' AND p.post_status = 'publish'
+         AND (pm.meta_value LIKE '%"type":"gallery"%'
+              OR pm.meta_value LIKE '%s:7:"gallery"%')
+         AND pm.meta_value NOT LIKE '%image_ids%';
+
+  ⚠️ The `OR` is load-bearing: `_lg_layout_v2` is stored **both** as JSON and as
+  PHP-serialized data on these boxes, so a JSON-only `LIKE` measures a fraction
+  of the corpus and reports a clean sweep it never performed.
 - The vendored-engine duplication itself. Nine files edited in pairs this lane;
   #187's image work landed in only one of them, and the download-block fallback in
   only the other. It generates this defect class on a schedule.

@@ -2449,19 +2449,30 @@ echo "=== GATE 93: a Stripe product's tier is SET from the dash, and checkout ag
 run "products-tab" php "$(dirname "$0")/products-tab-gate.php"
 echo
 
-echo "=== GATE 94: a Loothprint gates its FILE, in download words, once ==="
+echo "=== GATE 96: a Loothprint gates its FILE, in download words, once ==="
 # #199. Ian, 2026-08-22, on a member's live Loothprint viewed logged OUT (post
 # 72801, The Cleanup Stik): "The gating is off too. We only need to gate the file
 # download and it shouldn't look like the video gate. I think there is a block
 # for that already available."
 #
-# ⚠️ NUMBER 94, MINTED FROM CURRENT origin/main, NOT FROM THIS BRANCH'S BASE.
-# 90, 91, 92, 93 and 95 are taken. 95 looks like a gap in the sequence and is
-# not one: two lanes were both assigned 93 in one mid-flight window and keeper
-# renumbered switch-menu 93 -> 95 (b1ac293) AFTER this lane was cut. Reading the
-# ledger from this branch's own copy would therefore have said "94 and 95 free"
-# and taken 94 for granted while 95 was already spoken for. Third near-collision
-# in four days. Diff every live worktree, and re-read main, before minting.
+# ⚠️ NUMBER 96, AND THE NUMBER WAS WRONG TWICE BEFORE IT WAS RIGHT. Read this
+# before minting one; the ledger cannot be trusted on its own.
+#
+#   Attempt 1 — read this branch's own run-all.sh: it stopped at 93, so 94 looked
+#   free. It was not. Keeper had already renumbered switch-menu 93 -> 95
+#   (b1ac293) AFTER this lane was cut, so the branch's copy could not see 95.
+#   Attempt 2 — re-read CURRENT origin/main: 89-93 and 95 taken, 94 free. Also
+#   wrong. Lane 200-featured-override holds GATE 94 on an UNMERGED branch, which
+#   is invisible to main by construction. Keeper caught it.
+#   96 was taken from keeper, who owns the next-free counter and bumps it at
+#   merge. That counter postdates this lane's cut, which is the whole race.
+#
+# THE RULE THAT ACTUALLY WORKS: main tells you what has LANDED, never what is
+# SPOKEN FOR. Diff every live worktree against main as well —
+#   for w in ~/worktrees/*/; do git -C "$w" diff main...HEAD \
+#       | grep -oE '^\+.*GATE [0-9]+'; done
+# — and then still confirm with keeper, because a worktree cut after your sweep
+# is a number you never saw. Third and fourth near-collision in five days.
 #
 # ⚠️ IT ASSERTS THE RENDERED CARD, NEVER THE BLOCK TYPE. The obvious gate reads
 # the layout back and checks it says `download`. That is TRUE of the broken build

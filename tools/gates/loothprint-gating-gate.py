@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""gate 94 — on a Loothprint the tier gates the FILE, and it says so in download words.
+"""gate 96 — on a Loothprint the tier gates the FILE, and it says so in download words.
 
 #199. Ian, 2026-08-22, looking at a member's live Loothprint (post 72801, The
 Cleanup Stik) while logged OUT, verbatim: "The gating is off too. We only need to
@@ -74,7 +74,7 @@ def repo_root():
 
 def die(reason):
     print("GATE-ERROR  %s" % reason)
-    print("############ GATE 94 CANNOT RUN ############")
+    print("############ GATE 96 CANNOT RUN ############")
     sys.exit(2)
 
 
@@ -136,7 +136,7 @@ def main():
         die("no lg-layout-v2 in %s" % tree)
     refuse_off_dev2()
 
-    print("=== GATE 94: a Loothprint gates its FILE, in download words, once ===")
+    print("=== GATE 96: a Loothprint gates its FILE, in download words, once ===")
     print("    tree under test: %s" % tree)
 
     rc, out, err = probe("setup", tree)
@@ -160,12 +160,12 @@ def main():
 
     print()
     if FAILS:
-        print("############ GATE 94 RED — %d of %d checks failed ############"
+        print("############ GATE 96 RED — %d of %d checks failed ############"
               % (len(FAILS), CHECKS[0]))
         for f in FAILS:
             print("  - %s" % f)
         return 1
-    print("############ GATE 94 GREEN — %d checks ############" % CHECKS[0])
+    print("############ GATE 96 GREEN — %d checks ############" % CHECKS[0])
     return 0
 
 
