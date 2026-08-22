@@ -2,9 +2,17 @@
 """GATE 77 — the lanes page cannot lie about a lane.
 
 Guards #151 (three misreads in twelve hours), #159 (four chips, never more),
-#160 (the live spinner verb, one card per seat) and #156 (the poke button's
-refusals). Issue #155's checklist is asserted alongside them, because a todo
-list derived from state is only as good as the state.
+#160 (the live spinner verb, one card per seat), #156 (the poke button's
+refusals) and #202 (the decision box — what it offers, what it refuses, and
+what it delivers to keeper). Issue #155's checklist is asserted alongside them,
+because a todo list derived from state is only as good as the state.
+
+EXTENDED, NEVER RENUMBERED (#202, keeper's ruling 8/22). The truth rules below
+all still hold and the new leg is about the same page; minting a number would
+have meant editing docs/CRAFT-STANDARD.md and tools/gates/run-all.sh, both held
+by a live lane — and main's next-free line said 98 while lane 201 already held
+98 on an unmerged branch. Main tells you what has LANDED, never what is SPOKEN
+FOR.
 
 WHY THIS GATE EXISTS AT ALL: the page's entire job is to tell Ian the truth
 about what is running. On 8/19 it told him a lane that had been building for
@@ -47,6 +55,9 @@ ROOT = HERE.parent.parent                      # the branch under test
 STATUS = ROOT / "tools" / "lanes-status.sh"
 PAGE = ROOT / "tools" / "lanes-page.py"
 POKE_PHP = ROOT / "webroot" / "lanes-poke.php"
+READ_PHP = ROOT / "webroot" / "lanes-decisions.php"
+DECIDE_PHP = ROOT / "webroot" / "lanes-decide.php"
+DECIDE_CLI = ROOT / "tools" / "decisions" / "lg-decide.py"
 WORKER = ROOT / "tools" / "lanes-poke-worker.sh"
 WATCHDOG = ROOT / "tools" / "lanes" / "stall-watchdog.sh"
 
@@ -164,14 +175,24 @@ def issues_fixture(loud_failure=False, empty=False):
     }
 
 
-def render(tmp, lanes_json, issues_json, tag, repo=None, ref=None):
+def render(tmp, lanes_json, issues_json, tag, repo=None, ref=None, decisions=None):
     lp = tmp / f"lanes-{tag}.json"
     ip = tmp / f"issues-{tag}.json"
     op = tmp / f"out-{tag}"
     lp.write_text(json.dumps(lanes_json))
     ip.write_text(json.dumps(issues_json))
+    # ⚠ #202: ALWAYS an explicit store, never the box's own. Without this the
+    # renderer falls back to ~/.lg-decisions and every leg in this gate would
+    # render differently depending on whether keeper happens to be asking Ian
+    # something right now — and would grow a loud DECISIONS UNKNOWN block on
+    # any box where the deploy step has not been run. A gate whose output moves
+    # with the box's live state is a gate that reports somebody else's Tuesday.
+    if decisions is None:
+        decisions = tmp / "no-decisions"
+        decisions.mkdir(exist_ok=True)
     cmd = [sys.executable, str(PAGE), "--json-file", str(lp),
-           "--issues-file", str(ip), "--out", str(op)]
+           "--issues-file", str(ip), "--out", str(op),
+           "--decisions-dir", str(decisions)]
     # #172: the TEST-URL records live partly in commit bodies, so the git source
     # is nameable. Every leg that does not care still points at a throwaway repo
     # rather than the real box — a gate that reads keeper's live history would
@@ -1003,6 +1024,415 @@ def leg_todo(tmp):
           "one-directional restore leaves a section he closed flashing open")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# [8] #202 — the decision box: what it offers, what it refuses, what it delivers
+# ─────────────────────────────────────────────────────────────────────────────
+# Ian, 8/22: "I want a button that opens up the decision box that we use here
+# and have it communicate with you."
+#
+# FOUR THINGS THIS LEG GUARDS THAT NOTHING ELSE CAN:
+#
+#  · THE TWO ENDPOINTS' NONCE FORMULAS CANNOT DRIFT. They are standalone files
+#    by design (trap 7 — no wp-load through a deploy symlink), so the HMAC
+#    formula is written twice. #191 paid for exactly this shape: two licence
+#    tables that had to agree, where correcting one silently broke the other.
+#    The honest answer to duplication you cannot remove is to gate the
+#    agreement rather than to remember it — so every nonce here is MINTED
+#    through lanes-decisions.php and SPENT through lanes-decide.php. A drift in
+#    either file fails the end-to-end check, not a string comparison.
+#
+#  · AN OPTION KEEPER NEVER POSED CANNOT BE ANSWERED. The rescope's explicit
+#    constraint. Two ways it could be broken, so two checks: a nonce minted for
+#    option A replayed onto option B, and one minted on question X replayed
+#    onto question Y.
+#
+#  · FIRST ANSWER WINS ACROSS BOTH CHANNELS. Not asserted — raced. Eight
+#    simultaneous answerers, half claiming to be chat and half the page.
+#
+#  · "I COULD NOT LOOK" NEVER RENDERS AS "NOTHING WAITS ON YOU". Three render
+#    states, three different outputs, each asserted against the other two.
+#
+# It writes no real board message (`msg` is shimmed), touches no real store, and
+# needs no network and no browser.
+def leg_decide(tmp):
+    print("\n[8] #202 — the decision box: what it offers, refuses, and delivers")
+    if shutil.which("php") is None:
+        cannot_run("php is not installed — the endpoints cannot be exercised")
+    import hmac, hashlib, datetime
+
+    box = tmp / "decide"
+    store = box / "store"
+    store.mkdir(parents=True)
+    (box / "stamps").mkdir()
+    (box / "spool").write_text("")
+    os.chmod(box / "spool", 0o666)
+    token = "gate77-202-token-not-the-real-one"
+    envfile = box / "env"
+    envfile.write_text(f"LG_GITHUB_ISSUES_TOKEN={token}\n")
+
+    def cli(*args, **kw):
+        return sh([sys.executable, str(DECIDE_CLI), *args],
+                  env=dict(os.environ, LG_DECISIONS_DIR=str(store)), **kw)
+
+    # ── A. the store and its only mutation ──────────────────────────────────
+    r = cli("ask", "--question", "Where should the button sit?", "--issue", "202",
+            "--option", "top:Top of the page:Above Your list",
+            "--option", "inside:Inside Your list:Tidier, but buried",
+            "--recommend", "top")
+    qid = r.stdout.strip()
+    check("#202 a well-formed question is accepted", r.returncode == 0 and qid,
+          f"lg-decide said: {r.stderr[:160]!r}")
+    check("#202 one option is refused — a one-option box is not a decision",
+          cli("ask", "--question", "x", "--option", "a:A").returncode == 3)
+    check("#202 five options are refused — the box he answers in chat takes 2-4",
+          cli("ask", "--question", "x", "--option", "a:A", "--option", "b:B",
+              "--option", "c:C", "--option", "d:D",
+              "--option", "e:E").returncode == 3)
+    check("#202 a duplicate option key is refused",
+          cli("ask", "--question", "x", "--option", "a:A",
+              "--option", "a:B").returncode == 3)
+    qfile = store / f"{qid}.json"
+    check("#202 the question is world-READABLE and the store is not writable by all",
+          (qfile.stat().st_mode & 0o777) == 0o644
+          and (store.stat().st_mode & 0o777) == 0o755,
+          "the web user must read what it renders and must never author one")
+    check("#202 an option key keeper never posed is refused",
+          cli("answer", qid, "nope", "--via", "chat").returncode == 3)
+    check("#202 …and refusing it did NOT burn the claim",
+          not (store / f"{qid}.claim").exists(),
+          "a bad key that consumes the claim locks out the real answer")
+
+    # ── THE RACE, BEHIND A BARRIER ──────────────────────────────────────────
+    #
+    # ⚠ THE BARRIER IS THE WHOLE TEST, AND ITS ABSENCE MADE THIS CHECK A LIE.
+    # The first version just spawned eight `lg-decide answer` processes and
+    # counted winners. It passed — and it went on passing with the O_EXCL
+    # REMOVED FROM THE CLAIM, which red-first caught. The reason is that
+    # `answer()` reads the body and short-circuits on an already-answered
+    # question before it ever reaches the claim, and python's own startup
+    # jitter is long enough that the first process finishes before the eighth
+    # has imported json. So the fast path was doing all the work and the actual
+    # first-answer-wins guard was never under test.
+    #
+    # Each child now imports the CLI, then SPINS on a barrier file, so all
+    # eight enter answer() inside the same millisecond and the claim is the
+    # only thing standing between them. Removing O_EXCL now produces eight
+    # winners, which is what makes the assertion below mean something.
+    race = cli("ask", "--question", "Raced", "--option", "y:Yes", "--option", "n:No")
+    rid = race.stdout.strip()
+    runner = box / "race-child.py"
+    runner.write_text(
+        "import importlib.util, os, sys, time\n"
+        f"spec = importlib.util.spec_from_file_location('lgd', {str(DECIDE_CLI)!r})\n"
+        "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n"
+        "qid, key, via, go = sys.argv[1:5]\n"
+        "while not os.path.exists(go): time.sleep(0.001)\n"
+        "try:\n"
+        "    m.answer(qid, key, via); print('WON')\n"
+        "except Exception as e:\n"
+        "    print('LOST'); print(e, file=sys.stderr)\n")
+    go = box / "go"
+    procs = [subprocess.Popen(
+        [sys.executable, str(runner), rid,
+         "y" if i % 2 else "n", "chat" if i % 2 else "page", str(go)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        env=dict(os.environ, LG_DECISIONS_DIR=str(store))) for i in range(8)]
+    time.sleep(1.5)          # every child is now spinning on the barrier
+    go.write_text("go")
+    outs = [p.communicate() for p in procs]
+    won = sum(1 for o, _ in outs if "WON" in o)
+    check("#202 eight simultaneous answerers produce EXACTLY ONE winner",
+          won == 1, f"{won} of 8 believed they had answered it")
+    losers = "".join(e for _, e in outs)
+    check("#202 every loser is told WHO won and through which channel",
+          losers.count("already answered") == 7
+          and ("via chat" in losers or "via page" in losers),
+          "'already answered' with no attribution is not an answer to anybody")
+
+    # ── B. mint through one endpoint, spend through the other ───────────────
+    def drive_read(method="GET"):
+        code = (f"$_SERVER['REQUEST_METHOD']={method!r};"
+                f"define('LG_DECIDE_STORE',{str(store)!r});"
+                f"define('LG_DECIDE_ENV',{str(envfile)!r});"
+                f"require {str(READ_PHP)!r};")
+        return sh(["php", "-r", code]).stdout
+
+    def drive_write(method, qid_, key, nonce, spool=None, stamps=None,
+                    worker=None):
+        # ⚠ The worker path is INJECTED, and must be — the endpoint now refuses
+        # unless the file that drains the spool understands the verb, and the
+        # real one lives in ~/keeper-repo (main). Left to its default, every
+        # POST check here would fail on a perfectly correct branch.
+        code = (f"$_SERVER['REQUEST_METHOD']={method!r};"
+                f"$_POST=['id'=>{qid_!r},'key'=>{key!r},'nonce'=>{nonce!r}];"
+                f"define('LG_DECIDE_STORE',{str(store)!r});"
+                f"define('LG_DECIDE_SPOOL',{str(spool or box / 'spool')!r});"
+                f"define('LG_DECIDE_STAMPS',{str(stamps or box / 'stamps')!r});"
+                f"define('LG_DECIDE_WORKER',{str(worker or WORKER)!r});"
+                f"define('LG_DECIDE_ENV',{str(envfile)!r});"
+                f"require {str(DECIDE_PHP)!r};")
+        return sh(["php", "-r", code]).stdout
+
+    raw = drive_read()
+    try:
+        offered = json.loads(raw)
+    except ValueError:
+        offered = {"ok": False}
+    check("#202 the read endpoint answers with the pending set", offered.get("ok") is True,
+          f"it said: {raw[:200]!r}")
+    qs = {q["id"]: q for q in offered.get("questions", [])}
+    check("#202 an ANSWERED question is absent from the box", rid not in qs,
+          "a settled question re-offered is the failure first-answer-wins exists to stop")
+    check("#202 the pending question IS offered — the absence above is not vacuous",
+          qid in qs)
+    check("#202 the token never reaches the browser", token not in raw,
+          "only the digest may leave the box")
+    # ⚠ "GET only", not "POST only". The first draft of this check copied the
+    # poke endpoint's wording and went RED against a read endpoint that was
+    # refusing correctly — an assertion on the wrong sentence reads exactly like
+    # a broken refusal.
+    check("#202 POST is refused on the READ endpoint", "GET only" in drive_read("POST"))
+
+    nonces = {o["key"]: o["nonce"] for o in qs.get(qid, {}).get("options", [])}
+    check("#202 every option carries its own nonce",
+          set(nonces) == {"top", "inside"} and len(set(nonces.values())) == 2)
+
+    # ── C. what the write endpoint refuses ──────────────────────────────────
+    good = nonces.get("top", "")
+    check("#202 GET is refused on the WRITE endpoint",
+          "POST only" in drive_write("GET", qid, "top", good))
+    check("#202 a forged nonce is refused",
+          "stale page" in drive_write("POST", qid, "top", "deadbeef"))
+    check("#202 a nonce minted for ANOTHER OPTION is refused on this one",
+          "stale page" in drive_write("POST", qid, "inside", good),
+          "a per-option nonce that any option accepts cannot stop a box "
+          "fabricating an option keeper never posed")
+    other = cli("ask", "--question", "A different question",
+                "--option", "top:Top", "--option", "x:Other").stdout.strip()
+    check("#202 a nonce minted for ANOTHER QUESTION is refused on this one",
+          "stale page" in drive_write("POST", other, "top", good))
+    check("#202 a path-traversal id is refused",
+          "not a question id" in drive_write("POST", "../../etc", "top", good))
+    ghost = "d20260101-ffffff"
+    ghost_nonce = hmac.new(
+        token.encode(),
+        f"decide:{ghost}:top:{datetime.datetime.now(datetime.timezone.utc):%Y-%m-%d}"
+        .encode(), hashlib.sha256).hexdigest()
+    check("#202 a VALID nonce for a question that does not exist is still refused",
+          "no such question" in drive_write("POST", ghost, "top", ghost_nonce),
+          "the nonce is a claim about the past; the store is the present")
+    # answered-in-chat, refused on the page — the cross-channel half
+    chat_n = {o["key"]: o["nonce"] for o in qs.get(qid, {}).get("options", [])}
+    check("#202 the happy path is accepted",
+          '"ok":true' in drive_write("POST", qid, "top", chat_n["top"]))
+    check("#202 the immediate second tap is refused, not queued twice",
+          "already sent" in drive_write("POST", qid, "top", chat_n["top"]))
+    lines = [l for l in (box / "spool").read_text().splitlines() if l]
+    check("#202 EXACTLY ONE line reached the spool, in the documented shape",
+          len(lines) == 1 and re.match(rf"^\d+ decide {qid} top$", lines[0]),
+          f"spool holds: {lines!r}")
+    check("#202 the spool keeps its 0666 mode",
+          ((box / "spool").stat().st_mode & 0o777) == 0o666,
+          "a spool that comes back 0644 can never be queued into again")
+    # a question already answered in CHAT cannot be answered on the PAGE
+    settled = cli("ask", "--question", "Settled in chat",
+                  "--option", "y:Yes", "--option", "n:No").stdout.strip()
+    sn = {o["key"]: o["nonce"]
+          for q in json.loads(drive_read()).get("questions", [])
+          if q["id"] == settled for o in q["options"]}
+    cli("answer", settled, "y", "--via", "chat")
+    check("#202 a question answered IN CHAT is refused ON THE PAGE",
+          "already been answered" in drive_write("POST", settled, "n", sn["n"]),
+          "two channels, one law")
+    # the claim outranks a stale body, on the write side too
+    claimed = cli("ask", "--question", "Claim outranks body",
+                  "--option", "y:Yes", "--option", "n:No").stdout.strip()
+    cn = {o["key"]: o["nonce"]
+          for q in json.loads(drive_read()).get("questions", [])
+          if q["id"] == claimed for o in q["options"]}
+    (store / f"{claimed}.claim").write_text(
+        '{"at":1,"by":"ian","key":"y","label":"Yes","via":"chat"}')
+    check("#202 a claim outranks a body that still says unanswered",
+          "already been answered" in drive_write("POST", claimed, "n", cn["n"]),
+          "the claim is written first; the rewrite can be lost to a crash")
+    check("#202 …and such a question is absent from the box as well",
+          claimed not in {q["id"] for q in json.loads(drive_read())["questions"]})
+    # A missing spool must fail LOUD — and reaching that check needs a VALID
+    # nonce. ⚠ The first draft passed a forged one, which is refused four checks
+    # earlier, so it was asserting the nonce guard a second time and calling it
+    # the spool guard. A refusal for the wrong reason is not a refusal.
+    other_n = {o["key"]: o["nonce"]
+               for q in json.loads(drive_read()).get("questions", [])
+               if q["id"] == other for o in q["options"]}
+    check("#202 a missing spool fails LOUDLY rather than reporting success",
+          "not installed" in drive_write("POST", other, "x", other_n["x"],
+                                         spool=box / "no-such-spool"),
+          "the ancestor of this endpoint queued into a gap for two days")
+    # ⚠ QUEUEING IS NOT DELIVERING. The endpoint appends to a spool drained by a
+    # worker in ~/keeper-repo — main's copy, not this branch's. Before this
+    # check existed, an answer tapped on an un-pulled box was queued, dropped by
+    # a worker that did not know the verb, and reported to Ian as success:
+    # bit-for-bit the failure the Poke keeper button shipped with for two days.
+    stale = box / "old-worker.sh"
+    stale.write_text("#!/usr/bin/env bash\n# a pre-#202 worker: pokes only\n")
+    fresh = cli("ask", "--question", "Undeployed?", "--option", "y:Yes",
+                "--option", "n:No").stdout.strip()
+    fn = {o["key"]: o["nonce"]
+          for q in json.loads(drive_read()).get("questions", [])
+          if q["id"] == fresh for o in q["options"]}
+    out_stale = drive_write("POST", fresh, "y", fn["y"], worker=stale)
+    check("#202 an UNDEPLOYED delivery worker refuses the answer, loudly",
+          "not deployed yet" in out_stale and '"ok":false' in out_stale,
+          "a queued answer nothing will drain must never report success")
+    check("#202 …and nothing was queued when it refused",
+          not any("decide " + fresh in l
+                  for l in (box / "spool").read_text().splitlines()))
+    check("#202 an UNREADABLE worker refuses with its OWN sentence",
+          "unreadable" in drive_write("POST", fresh, "y", fn["y"],
+                                      worker=box / "no-worker-at-all"),
+          "'I could not check' and 'it is not deployed' are different answers")
+    check("#202 …and the SAME answer goes through once the worker knows the verb",
+          '"ok":true' in drive_write("POST", fresh, "y", fn["y"]),
+          "the liveness half — without it the two refusals above are vacuous")
+
+    # a store that cannot be read is an ERROR, never an empty list
+    code = (f"$_SERVER['REQUEST_METHOD']='GET';"
+            f"define('LG_DECIDE_STORE',{str(box / 'no-such-store')!r});"
+            f"define('LG_DECIDE_ENV',{str(envfile)!r});"
+            f"require {str(READ_PHP)!r};")
+    missing = sh(["php", "-r", code]).stdout
+    check("#202 an unreadable store is an ERROR, never an empty question list",
+          '"ok":false' in missing and "questions" not in missing,
+          "'nothing waits on you' and 'I could not look' must never render alike")
+
+    # ── D. the worker delivers, as ubuntu, without touching the real board ──
+    home = box / "home"
+    (home / "bin").mkdir(parents=True)
+    (home / "bin" / "msg").write_text(
+        '#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> "$HOME/msg-calls.txt"\n')
+    (home / "bin" / "msg").chmod(0o755)
+    spool = home / ".lanes-poke-request"
+    now = int(time.time())
+    lost = cli("ask", "--question", "Lost the race",
+               "--option", "y:Yes", "--option", "n:No").stdout.strip()
+    cli("answer", lost, "y", "--via", "chat")
+    live = cli("ask", "--question", "A live one for the worker", "--issue", "202",
+               "--option", "top:Top of the page", "--option", "inside:Inside").stdout.strip()
+    spool.write_text(f"{now} 900-running\n"
+                     f"{now} decide {live} top\n"
+                     f"{now} decide {lost} n\n"
+                     f"{now} decide bad;id top\n")
+    wenv = dict(os.environ, HOME=str(home),
+                PATH=f"{home / 'bin'}:{os.environ['PATH']}",
+                LG_DECISIONS_DIR=str(store), LG_DECIDE_CLI=str(DECIDE_CLI))
+    sh(["bash", str(WORKER)], env=wenv)
+    calls = (home / "msg-calls.txt").read_text() if (home / "msg-calls.txt").exists() else ""
+    check("#202 the worker tells keeper, naming the question and the CHOSEN LABEL",
+          "Top of the page" in calls and live in calls,
+          f"msg was called with: {calls[:200]!r}")
+    check("#202 the answer is marked as an IAN act (ian-via-page)",
+          "ian-via-page" in calls,
+          "a click is an Ian act and must render as one on the board")
+    check("#202 a POKE still delivers, unchanged — the back-compat liveness",
+          "900-running" in calls and "looks idle" in calls,
+          "every absence assertion in this leg is vacuous if the old verb broke")
+    check("#202 a tap that LOST the race still reaches the board, saying so",
+          "did NOT take" in calls and lost in calls,
+          "a silently discarded tap is indistinguishable from one that worked")
+    check("#202 a malformed id in the spool is dropped, not delivered",
+          "bad;id" not in calls)
+    check("#202 no board message contains a backtick",
+          "`" not in calls,
+          "a backticked word is command-substituted away before msg sees it")
+    check("#202 the store is marked answered, by the page",
+          json.loads((store / f"{live}.json").read_text())
+          .get("answered", {}).get("via") == "page")
+    check("#202 the answer is recorded where the watchdog looks",
+          (home / ".keeper-decisions").exists()
+          and live in (home / ".keeper-decisions").read_text())
+    check("#202 an answer is NOT written to the poke wake file",
+          live not in ((home / ".keeper-pokes").read_text()
+                       if (home / ".keeper-pokes").exists() else ""),
+          "the poke alert says the seats look IDLE — a lie about a man answering")
+
+    # ── E. the wake half ────────────────────────────────────────────────────
+    r = subprocess.run(["timeout", "20", "bash", str(WATCHDOG)],
+                       capture_output=True, text=True, env=wenv)
+    check("#202 an answer wakes keeper — the watchdog exits with ian-decision",
+          "ALERT ian-decision" in r.stdout and live in r.stdout,
+          f"watchdog said: {r.stdout[:200]!r}")
+    check("#202 the alert says DECISION, never idle",
+          "ALERT ian-decision" in r.stdout and "as idle" not in r.stdout,
+          "two different things must never render alike")
+    r2 = subprocess.run(["timeout", "20", "bash", str(WATCHDOG)],
+                        capture_output=True, text=True, env=wenv)
+    check("#202 the SAME answer does not re-alarm (the watermark advanced)",
+          "ALERT ian-decision" not in r2.stdout)
+
+    # ── F. the render: three states, three different pages ──────────────────
+    two = box / "two"
+    two.mkdir()
+    for n in ("a", "b"):
+        sh([sys.executable, str(DECIDE_CLI), "ask", "--question", f"Question {n}",
+            "--option", "y:Yes:go ahead", "--option", "n:No:hold"],
+           env=dict(os.environ, LG_DECISIONS_DIR=str(two)))
+    empty = box / "empty"
+    empty.mkdir()
+
+    def markup(h):
+        """⚠ STRIP THE STYLESHEET AND THE SCRIPT BEFORE COUNTING ANYTHING.
+        Both name every class this leg looks for. A naive count of `optbtn` on
+        a correct build reports 10 when the real markup holds ZERO — an
+        assertion written that way passes on the very defect it is written
+        against (feedback-red-first-that-stays-green)."""
+        return re.sub(r"<style>.*?</style>", "", h, flags=re.S).split("<script>")[0]
+
+    hp, _ = render(tmp, lanes_fixture(), issues_fixture(), "d-pending", decisions=two)
+    hn, _ = render(tmp, lanes_fixture(), issues_fixture(), "d-none", decisions=empty)
+    hb, _ = render(tmp, lanes_fixture(), issues_fixture(), "d-broken",
+                   decisions=box / "no-such-store-at-all")
+    if not (hp and hn and hb):
+        cannot_run("the renderer would not run for the decision-box states")
+    mp, mn, mb = markup(hp), markup(hn), markup(hb)
+
+    check("#202 pending ⇒ the button renders", 'id="lg-decide-open"' in mp)
+    check("#202 …and says how many are waiting", "2 decisions waiting for you" in mp)
+    check("#202 nothing pending ⇒ SILENCE (quiet when healthy)",
+          'id="lg-decide-open"' not in mn and "DECISIONS UNKNOWN" not in mn)
+    check("#202 an UNREADABLE store ⇒ LOUD, never silence",
+          "DECISIONS UNKNOWN" in mb and 'id="lg-decide-open"' not in mb,
+          "this page's oldest law, and the one inversion of quiet-when-healthy")
+    check("#202 the two failure-shaped states do not render alike",
+          mn != mb, "'there are none' and 'I could not look' are different answers")
+
+    # the loud layer is never inside an accordion — walked, not eyeballed
+    depth, at = 0, None
+    for m in re.finditer(r'<details|</details>|id="lg-decide-open"', mp):
+        s = m.group(0)
+        if s == "<details":
+            depth += 1
+        elif s == "</details>":
+            depth -= 1
+        else:
+            at = depth
+    check("#202 the button is at accordion depth ZERO",
+          at == 0, f"it rendered at depth {at} — a collapsed decision is a hidden one")
+
+    check("#202 NO question text is baked into the page",
+          "Question a" not in mp and "Question b" not in mp,
+          "the box fetches on open, so chat's answers clear it and a stale page still works")
+    check("#202 NO option control and NO decision nonce is baked into the page",
+          'class="optbtn"' not in mp
+          and mp.count("lg-decide-body") == 1
+          and "loading" in mp,
+          "the dialog ships as an empty shell; nonces are minted per request")
+    j = json.loads((tmp / "out-d-broken" / "lanes.json").read_text())
+    check("#202 lanes.json carries the same three states a machine can read",
+          j["decisions"] == {"pending": 0, "readable": False}
+          and json.loads((tmp / "out-d-pending" / "lanes.json").read_text())
+          ["decisions"] == {"pending": 2, "readable": True})
+
+
 def html_unescape(x):
     import html as _h
     return _h.unescape(x)
@@ -1011,9 +1441,10 @@ def html_unescape(x):
 def main():
     print("=" * 74)
     print("GATE 77 — the lanes page cannot lie about a lane "
-          "(#151/#155/#156/#159/#160/#164/#172)")
+          "(#151/#155/#156/#159/#160/#164/#172/#202)")
     print("=" * 74)
-    for f in (STATUS, PAGE, POKE_PHP, WORKER, WATCHDOG):
+    for f in (STATUS, PAGE, POKE_PHP, WORKER, WATCHDOG,
+              READ_PHP, DECIDE_PHP, DECIDE_CLI):
         if not f.exists():
             cannot_run(f"missing under test: {f}")
     print(f"branch under test: {ROOT}")
@@ -1026,6 +1457,7 @@ def main():
         leg_git(tmp)
         leg_poke(tmp)
         leg_todo(tmp)
+        leg_decide(tmp)
     if RECORD_REPO and RECORD_REPO.exists():
         shutil.rmtree(RECORD_REPO, ignore_errors=True)
     print("\n" + "-" * 74)

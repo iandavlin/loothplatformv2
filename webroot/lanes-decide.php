@@ -41,6 +41,10 @@ defined('LG_DECIDE_STORE')  || define('LG_DECIDE_STORE',  '/home/ubuntu/.lg-deci
 defined('LG_DECIDE_SPOOL')  || define('LG_DECIDE_SPOOL',  '/home/ubuntu/.lanes-poke-request');
 defined('LG_DECIDE_STAMPS') || define('LG_DECIDE_STAMPS', '/home/ubuntu/.lanes-poke');
 defined('LG_DECIDE_ENV')    || define('LG_DECIDE_ENV',    '/etc/looth/env');
+// The file that actually DRAINS the spool. Read from ~/keeper-repo, because
+// that is the clone lanes-poke.service names — see the liveness check below.
+defined('LG_DECIDE_WORKER') || define('LG_DECIDE_WORKER',
+    '/home/ubuntu/keeper-repo/tools/lanes-poke-worker.sh');
 const DUP_WINDOW = 120;   // a double-tap or a retried fetch is not two answers
 
 function fail(int $code, string $msg): void
@@ -113,6 +117,35 @@ if (!$offered) fail(409, 'that is not one of the options on this question');
 // endpoint's ancestor spent two days queueing into a spool nothing drained.
 if (!is_dir(LG_DECIDE_STAMPS) || !is_writable(LG_DECIDE_STAMPS)) fail(500, 'decision spool not installed on this box');
 if (!is_file(LG_DECIDE_SPOOL) || !is_writable(LG_DECIDE_SPOOL))  fail(500, 'decision spool not installed on this box');
+
+// ⚠ THE LIVENESS CHECK — QUEUEING IS NOT DELIVERING, AND THIS IS THE WHOLE
+// DIFFERENCE BETWEEN THIS BUTTON AND THE ONE IT WAS MODELLED ON.
+//
+// This endpoint only ever appends a line. The thing that DRAINS that line is
+// lanes-poke-worker.sh, run by lanes-poke.service out of ~/keeper-repo — a
+// clone that carries main, not whatever branch introduced this file. So an
+// answer tapped before keeper's clone has pulled is queued into a worker that
+// does not know the verb, dropped on its seat-name charset, and reported to Ian
+// as success.
+//
+// That is not hypothetical. The Poke keeper button spent two days doing exactly
+// this on this box, printing "keeper told ✓" into a spool nothing drained,
+// because #156's systemd half had never been installed. Measured, not recalled.
+//
+// So: confirm the drainer exists AND understands the verb, or refuse and say
+// why. An unreadable worker refuses too, with its own sentence — "I could not
+// check" and "it is not deployed" are different answers and must not render
+// alike, and neither of them is "sent".
+$worker = @file_get_contents(LG_DECIDE_WORKER);
+if ($worker === false) {
+    fail(503, 'cannot confirm the answer would reach keeper — the delivery '
+            . 'worker is unreadable on this box. Nothing was sent.');
+}
+if (strpos($worker, 'LG_DECIDE_WORKER_V1') === false) {
+    fail(503, 'the answer path is not deployed yet — keeper\'s checkout still '
+            . 'has the old delivery worker, which would drop this silently. '
+            . 'Nothing was sent. Ask keeper to pull.');
+}
 
 // A duplicate guard, not a debounce: the store is not marked answered until the
 // worker runs a second later, so a double-tap or a retried fetch would queue the

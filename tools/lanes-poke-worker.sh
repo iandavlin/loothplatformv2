@@ -15,6 +15,18 @@
 #     <ts> <seat>              a poke   — "this agent looks idle"    (#156)
 #     <ts> decide <id> <key>   an answer — Ian picked an option      (#202)
 #
+# ⚠ THE MARKER BELOW IS LOAD-BEARING — DO NOT RENAME OR DELETE IT.
+# lanes-decide.php greps THIS FILE for it before accepting an answer, because
+# the endpoint queues into a spool that only this file drains, and this file is
+# read from ~/keeper-repo — which carries main, not a branch. Without the check,
+# an answer tapped on a box whose keeper clone has not pulled is validated,
+# queued, silently dropped by a worker that does not know the verb, and reported
+# to Ian as "keeper has been told". That is not a hypothetical: it is exactly
+# what the Poke keeper button did on this box for two days (#156's systemd half
+# was never installed), and it is the failure this whole lane was told to avoid
+# repeating.
+#     LG_DECIDE_WORKER_V1
+#
 # The old shape is untouched and still validated the same way, so a pre-#202
 # worker meeting a decide line rejects it on the seat charset (it contains
 # spaces) rather than mis-delivering it as a seat name. The name of this file

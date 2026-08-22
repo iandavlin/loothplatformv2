@@ -1116,3 +1116,187 @@ rendered pictures** — an HTML entity printed as literal text in the masthead, 
 a thumbnail grid wrecked by 4,900px-tall phone captures. Neither was reachable by
 any assertion in the harness. **That is now the fourth time on this page that
 only the picture has caught the defect** (#172 found three the same way).
+
+---
+
+## #202 — THE DECISION BOX ON THE WEB (built 2026-08-22)
+
+Ian's rescope, verbatim, after the todo-page proposal was drawn and rejected:
+*"I don't want the todo proposal. I want a button that opens up the decision box
+that we use here and have it communicate with you. Can we build that ?"*
+
+So the page gained the thing chat has and a page never had: **the same 2–4-option
+box keeper poses in conversation, answerable with one tap, reaching keeper inside
+a minute.** The two drawn shapes from the design seat are dead.
+
+### The four pieces
+
+| | |
+|---|---|
+| `~/.lg-decisions/` | the store. `0755 ubuntu:ubuntu`, `0644` files, one per question, plus an `<id>.claim` |
+| `tools/decisions/lg-decide.py` | keeper's end: `ask` · `list` · `show` · `answer` · `pending-count` |
+| `webroot/lanes-decisions.php` | **GET** — the pending set, each option carrying its own nonce |
+| `webroot/lanes-decide.php` | **POST** — queue exactly one answer onto the existing poke spool |
+
+Delivery reuses `lanes-poke.path` / `.service` / `lanes-poke-worker.sh` with a
+second verb (`<ts> decide <id> <key>` beside `<ts> <seat>`), then a **separate**
+wake file `~/.keeper-decisions` and a **separate** `ALERT ian-decision` in
+`stall-watchdog.sh`. Gate 77 was **extended, not renumbered** (keeper's ruling).
+
+### ⚠️ THE STORE'S LOCATION IS A MEASUREMENT, NOT A PREFERENCE
+
+`/srv/lg-shared-state` is the obvious home and is wrong twice: it is
+`looth-dev:looth-dev 755` so **keeper (ubuntu) cannot write it at all**, and it
+is where the tester-unlock hash lives, so loosening it would trade a real secret
+for a convenience. What was measured instead, and what any future store on this
+box should be measured against:
+
+    /home/ubuntu is drwxr-x--x     the web user TRAVERSES, cannot list or write
+    sudo -u looth-dev cat  q.json  → succeeded
+    sudo -u looth-dev touch nope   → Permission denied
+
+That asymmetry — keeper writes, the endpoints read, neither can do the other's
+half — is the whole security model, and it needed no new group, ACL or daemon.
+
+### ⚠️ THE PAGE BAKES THE COUNT AND NOTHING ELSE
+
+The renderer could have baked the questions and their nonces into the 5-minute
+static page. It deliberately does not, and each reason is load-bearing:
+
+- a question posed 30 seconds ago is answerable **now**, not at the next redraw;
+- a question Ian **already answered in chat** is simply absent when he opens the
+  box — first-answer-wins is *visible*, not merely enforced;
+- **a page cached from yesterday still works**, because the nonces are minted per
+  request rather than frozen into HTML.
+
+Gate 77 asserts the absence positively: zero question text and zero decision
+nonces in the rendered markup, paired with the liveness that the GET does return
+them. The dialog ships as an empty shell reading *loading…*.
+
+### The three render states, and the oldest law again
+
+    pending > 0     the amber block and its button, at accordion depth ZERO
+    pending = 0     SILENCE
+    store unread    LOUD — "DECISIONS UNKNOWN … that is not the same as there
+                    being none. Nothing is waiting to be concluded from this."
+
+Depth zero for the same reason AT RISK is: **a collapsed decision is a hidden
+decision**. Below the risk blocks, because a decision is a request and not a
+failure. And the third state exists because *"nothing waits on you"* and *"I
+could not look"* must never render alike — the gate asserts the two
+failure-shaped renders differ from each other, not merely that each looks right.
+
+### ⚠️ FIRST ANSWER WINS IS RACED, NOT ASSERTED
+
+`O_CREAT|O_EXCL` on `<id>.claim` — atomic on a local filesystem, no lock, no
+daemon, no database. **Twelve simultaneous answerers produced exactly one
+winner** during the build and eight do so in the gate on every run, half claiming
+to be chat and half the page.
+
+**THE CLAIM FILE OUTRANKS THE JSON, in all four readers** (CLI, both endpoints,
+renderer). The claim is written first and the body rewrite can be lost to a
+crash, so a question whose claim exists has been answered even when its own body
+still says otherwise. Reading only the body re-offers a settled question, which
+is precisely the failure first-answer-wins exists to prevent. The CLI self-heals
+the body on the next read; the endpoints cannot (no write permission, by design)
+and simply honour the claim.
+
+### Keeper's half of the contract, now law
+
+**Every box posed in chat is also written to the store while unanswered, and
+answered there the moment Ian answers in chat.** Without that the two channels
+show different things and the page's silence stops meaning anything — which is
+the same failure mode #202 was opened to fix, since the old list selected on a
+hand-applied label and froze for two days when the ritual slipped.
+
+⚠️ **A question is never deleted and never expires.** It leaves the pending set
+by being answered and by nothing else (#172's ruling: a wrong quiet line is
+recoverable, a wrong disappearance is not).
+
+⚠️ **A question is readable by the web user.** Behind the dev gate, but never put
+a secret, a token or a member's personal data in one. The options are labels for
+a button, not a payload.
+
+### #178 is folded in and superseded
+
+The Landed button is now **just another question type**: keeper poses a question
+bound to an issue whose options are *Landed as expected* / *Not right*. There is
+no auto-derivation from the `look` family, which structurally resolves #178's own
+recorded caveat (*"a Landed tap on a card whose real ask is a decision must ask,
+not clear"*) — a posed question can only exist where keeper decided it IS the ask.
+`handoffs/plans/178-confirm-button-PLAN.md` remains on its parked branch as the
+endpoint's ancestor; its Decision 3 (reuse the spool, mint no new systemd units)
+was taken again here for the same reason.
+
+### ⚠️ THE POKE BUTTON HAD NEVER BEEN DEPLOYED — found by this lane, fixed by keeper
+
+Measured 2026-08-22 while planning to reuse it: `lanes-poke.path` and
+`lanes-poke.service` **did not exist on dev2**. No unit files in
+`/etc/systemd/system`; `systemctl list-unit-files 'lanes-*'` showed only
+`lanes-refresh.path` and `lanes-page.timer`. The rest of #156 *was* deployed — the
+endpoint was symlinked, the spool existed at `0666`, the stamps dir at `0777` — so
+a tap on **Poke keeper** validated its nonce, appended to a spool **nothing
+drained**, and printed *"keeper told ✓"* at Ian. Nothing had been lost only
+because the button had apparently never been pressed (spool 0 bytes,
+`~/.keeper-pokes` absent).
+
+**The general shape, and it is this file's own recurring lesson:** the code was
+right the whole time and the box was not. A `git pull` does not run
+`systemctl enable`, and PAGE.md's own "deploy couplings" list said so — but
+nothing *checked*. So:
+
+`tools/lanes-poke-install.sh --verify` now measures the whole chain — spool, its
+mode, stamps, the store and its mode and owner, the path unit active AND enabled,
+every docroot symlink, and **whether the web user can actually read the store and
+actually cannot write it**. Run it after a deploy; read what it prints.
+
+⚠️ **And that liveness check is deliberately NOT in the gate.** A gate that goes
+red because a box lacks a systemd unit blocks every lane on that box for somebody
+else's install. Deploy liveness belongs in the deploy tool, where it is not a
+merge blocker; the gate asserts behaviour with injected paths.
+
+⚠️ **One `--verify` check was vacuous for a revision**: *"the web user cannot
+write the store"* is trivially true of a box with no store at all, and it printed
+OK against a missing directory. It is now paired with a liveness check and reports
+*"n/a — no store to test against"*. **An absence assertion with no liveness
+assertion beside it is a green light for the broken state.**
+
+### Two measurement traps this lane paid for
+
+1. **Counting a class name counts the stylesheet and the script.** `optbtn`
+   appears **10** times in a correct page whose real markup contains **zero** —
+   the CSS rules and the JS both name it. An assertion written that way passes on
+   the very defect it is written against. Gate 77's leg strips `<style>` **and**
+   `<script>` before counting anything.
+2. **`render()` in gate 77 now always passes an explicit `--decisions-dir`.**
+   Without it the renderer falls back to `~/.lg-decisions` and every leg in the
+   gate would render differently depending on whether keeper happens to be asking
+   Ian something right now — and would grow a loud `DECISIONS UNKNOWN` block on
+   any box where the deploy step has not been run. A gate whose output moves with
+   the box's live state reports somebody else's Tuesday.
+
+### Verifying it before the merge
+
+`platform/nginx/lane-preview-202-web-decision-box.conf` +
+`tools/preview/lane-preview.sh up 202-web-decision-box`. ⚠️ It **deviates from
+the `/preview/<lane>/` convention on purpose**: the shipped page fetches
+`/lanes-decisions.php` and posts to `/lanes-decide.php` as ABSOLUTE paths, and
+rewriting them for the preview would mean verifying a page whose JS is not the JS
+that ships. Both are claimed as `location =` at the vhost root, which is safe
+only because **neither path exists on dev2 today** (measured — they cannot be
+symlinked in until this is in the serving checkout) and `down` removes them. If
+either is ever deployed, that conf must return to the convention or it shadows
+the real one.
+
+### Reported by #202, not fixed
+
+- **The `page` label**: #202 is the FIRST of the last ten `page`-labelled issues
+  that genuinely is a lanes-page issue. The other nine each spent a paragraph in
+  this file explaining what the label did not mean. #200 already flagged the
+  likely root — this repo has a `/lanes/` status page and a member-facing front
+  page, and `page` reads naturally as either. It still needs Ian's ruling.
+- **The todo list still selects on a hand-applied label.** #202's design seat
+  measured it frozen since 20 August: 11 bullets, 8 with no door, and 10 items
+  owed to Ian absent entirely — 6 of which already had a `TEST-URL` written. The
+  decision box does not fix that; it gives keeper a channel that does not depend
+  on the ritual. The list itself is still owed the fix the proposal described.

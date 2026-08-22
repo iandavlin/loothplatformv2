@@ -23,12 +23,18 @@ pass=0; fail=0
 
 snapshot() {   # snapshot <dir>
     local d="$1"
-    mkdir -p "$d/tools/gates" "$d/tools/lanes" "$d/webroot"
+    mkdir -p "$d/tools/gates" "$d/tools/lanes" "$d/tools/decisions" "$d/webroot"
     cp "$ROOT/tools/lanes-status.sh"      "$d/tools/"
     cp "$ROOT/tools/lanes-page.py"        "$d/tools/"
     cp "$ROOT/tools/lanes-poke-worker.sh" "$d/tools/"
     cp "$ROOT/tools/lanes/stall-watchdog.sh" "$d/tools/lanes/"
     cp "$ROOT/webroot/lanes-poke.php"     "$d/webroot/"
+    # #202 — the decision box's three files. A snapshot that does not carry
+    # them makes every mutation below fail as CANNOT RUN, which reads exactly
+    # like a gate with nothing to say.
+    cp "$ROOT/webroot/lanes-decisions.php" "$d/webroot/"
+    cp "$ROOT/webroot/lanes-decide.php"    "$d/webroot/"
+    cp "$ROOT/tools/decisions/lg-decide.py" "$d/tools/decisions/"
     cp "$ROOT/tools/gates/lanes-page-truth-gate.py" "$d/tools/gates/"
 }
 
@@ -44,13 +50,27 @@ PY
 }
 
 # run <expect green|red> <name> <must-name-this-check> <file> <needle> <repl>
+#     [<file2> <needle2> <repl2>]
+#
+# The optional SECOND file exists for one specific shape: a property held
+# jointly by two files that must agree. Breaking only one of them breaks their
+# AGREEMENT (and is worth its own mutation); breaking both IDENTICALLY is the
+# only way to break the property while leaving them agreeing — which is exactly
+# how you prove an assertion about the property rather than about the drift.
 run() {
     local expect="$1" name="$2" want="$3" file="$4" needle="$5" repl="$6"
+    local file2="${7:-}" needle2="${8:-}" repl2="${9:-}"
     local d="$WORK/m$((pass+fail))"
     snapshot "$d"
     if [ -n "$needle" ]; then
         if ! mutate "$d" "$file" "$needle" "$repl"; then
             echo "  ✗ $name — the mutation could not be applied (stale needle)"
+            fail=$((fail+1)); return
+        fi
+    fi
+    if [ -n "$file2" ]; then
+        if ! mutate "$d" "$file2" "$needle2" "$repl2"; then
+            echo "  ✗ $name — the SECOND mutation could not be applied (stale needle)"
             fail=$((fail+1)); return
         fi
     fi
@@ -309,6 +329,91 @@ run red "the remembered open state restores one way only" \
     "if(v==='1')d.open=true;"
 
 echo
+echo "#202 — the decision box:"
+# ⚠ THE FIRST TWO ARE ABOUT DRIFT, NOT BINDING, AND THEY WERE MIS-AIMED AT
+# FIRST. Changing the formula in ONE endpoint makes the two files disagree, so
+# NOTHING authenticates: every "…is refused" check passes vacuously and it is
+# the HAPPY PATH that reddens. That is a real and valuable thing to prove — it
+# is the #191 lesson (gate the agreement you cannot de-duplicate) made
+# executable — but it is not a test of what the nonce binds. Naming it that way
+# was the harness reporting a pass for the wrong reason.
+run red "the two endpoints' nonce formulas DRIFT (the option half)" \
+    "#202 the happy path is accepted" webroot/lanes-decide.php \
+    "'decide:' . \$id . ':' . \$key . ':'" \
+    "'decide:' . \$id . ':'"
+run red "the two endpoints' nonce formulas DRIFT (the question half)" \
+    "#202 the happy path is accepted" webroot/lanes-decide.php \
+    "'decide:' . \$id . ':' . \$key . ':'" \
+    "'decide:' . \$key . ':'"
+# …and these two break the BINDING while keeping the files in agreement, which
+# is the only way to make a forged option or question actually go through.
+run red "the nonce stops binding the OPTION (both files, still agreeing)" \
+    "#202 a nonce minted for ANOTHER OPTION is refused on this one" webroot/lanes-decide.php \
+    "'decide:' . \$id . ':' . \$key . ':'" \
+    "'decide:' . \$id . ':'" \
+    webroot/lanes-decisions.php \
+    "'decide:' . \$id . ':' . \$k . ':' . \$day" \
+    "'decide:' . \$id . ':' . \$day"
+run red "the nonce stops binding the QUESTION (both files, still agreeing)" \
+    "#202 a nonce minted for ANOTHER QUESTION is refused on this one" webroot/lanes-decide.php \
+    "'decide:' . \$id . ':' . \$key . ':'" \
+    "'decide:' . \$key . ':'" \
+    webroot/lanes-decisions.php \
+    "'decide:' . \$id . ':' . \$k . ':' . \$day" \
+    "'decide:' . \$k . ':' . \$day"
+run red "first-answer-wins loses its atomic claim" \
+    "#202 eight simultaneous answerers produce EXACTLY ONE winner" tools/decisions/lg-decide.py \
+    'os.O_CREAT | os.O_EXCL | os.O_WRONLY' \
+    'os.O_CREAT | os.O_WRONLY'
+run red "the claim stops outranking a stale body, so a settled question is re-offered" \
+    "#202 …and such a question is absent from the box as well" webroot/lanes-decisions.php \
+    "if (file_exists(LG_DECIDE_STORE . '/' . \$id . '.claim')) continue;" \
+    "if (false) continue;"
+run red "the 2-4 bound goes, and a wall of options becomes a decision box" \
+    "#202 five options are refused" tools/decisions/lg-decide.py \
+    'if not (MIN_OPTIONS <= len(opts) <= MAX_OPTIONS):' \
+    'if False:'
+run red "an option keeper never posed stops being refused before the claim" \
+    "#202 an option key keeper never posed is refused" tools/decisions/lg-decide.py \
+    'if key not in keys:' \
+    'if False:'
+run red "a missing spool reports success instead of failing loud" \
+    "#202 a missing spool fails LOUDLY rather than reporting success" webroot/lanes-decide.php \
+    "if (!is_file(LG_DECIDE_SPOOL) || !is_writable(LG_DECIDE_SPOOL))  fail(500, 'decision spool not installed on this box');" \
+    "if (false) fail(500, 'decision spool not installed on this box');"
+run red "an unreadable store renders as silence — this page's oldest law" \
+    "#202 an UNREADABLE store ⇒ LOUD, never silence" tools/lanes-page.py \
+    "    if not dok:
+        h.append('<div class=\"block gap\"><b>DECISIONS UNKNOWN</b><br>'" \
+    "    if False:
+        h.append('<div class=\"block gap\"><b>DECISIONS UNKNOWN</b><br>'"
+run red "the token is handed to the browser" \
+    "#202 the token never reaches the browser" webroot/lanes-decisions.php \
+    "echo json_encode(['ok' => true, 'questions' => \$out," \
+    "echo json_encode(['tok' => \$token, 'ok' => true, 'questions' => \$out,"
+run red "a tap that lost the race is silently dropped" \
+    "#202 a tap that LOST the race still reaches the board, saying so" tools/lanes-poke-worker.sh \
+    'why=$(clean "$(cat "$err" 2>/dev/null)")' \
+    'why=""; if true; then rm -f "$err"; continue; fi'
+# ⚠ SINGLE-QUOTED, and the reason is worth the line: written with double
+# quotes, bash expanded $ts itself under `set -u`, the script died with
+# "ts: unbound variable" at this line, and every mutation AFTER it silently
+# never ran. A harness that aborts mid-suite reports fewer proofs than it has,
+# and the missing ones look like they were never written.
+run red "an answer is filed as a poke, so keeper is told a seat looks idle" \
+    "#202 an answer is NOT written to the poke wake file" tools/lanes-poke-worker.sh \
+    'printf '"'"'%s %s %s\n'"'"' "$ts" "$qid" "$key" >> "$DECIDES"' \
+    'printf '"'"'%s %s %s\n'"'"' "$ts" "$qid" "$key" >> "$POKES"' 
+run red "the worker stops marking the store, so the other channel never clears" \
+    "#202 the store is marked answered, by the page" tools/lanes-poke-worker.sh \
+    'if rec=$(python3 "$DECIDE_CLI" answer "$qid" "$key" --via page 2>"$err"); then' \
+    'if rec=$(python3 "$DECIDE_CLI" show "$qid" --json 2>"$err"); then'
+run red "the button is drawn even when nothing is pending" \
+    "#202 nothing pending ⇒ SILENCE (quiet when healthy)" tools/lanes-page.py \
+    '    elif dcount:' \
+    '    elif True:'
+
+echo
 echo "no-ops — these MUST stay green, or the gate is merely edit-sensitive:"
 run green "a comment added to the renderer" "" tools/lanes-page.py \
     'def git_words(l):' \
@@ -324,6 +429,13 @@ def _absorb(records, triples):'
 run green "the accordion CSS reflowed" "" tools/lanes-page.py \
     '.accbody{padding:2px 0 12px;}' \
     '.accbody{ padding:2px 0 12px; }'
+run green "a comment added inside the question store" "" tools/decisions/lg-decide.py \
+    'def new_id():' \
+    '# changes nothing about how an id is shaped
+def new_id():'
+run green "the decision-box CSS reflowed" "" tools/lanes-page.py \
+    '.qdone{color:#9db668;font-size:13px;font-weight:700;margin-top:8px;}' \
+    '.qdone{ color:#9db668; font-size:13px; font-weight:700; margin-top:8px; }'
 
 echo
 echo "──────────────────────────────────────────────────────────────"
