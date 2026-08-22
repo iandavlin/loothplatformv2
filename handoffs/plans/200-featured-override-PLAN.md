@@ -144,6 +144,14 @@ member set themselves" would have been the silent reading; this is the loud one.
 3. **`_config.php`** accepts `pinned` (it already merges arbitrary scalars into
    `featured_member`; this is a whitelist + doc change, not new machinery), and
    the history row records it so a past stint can be read honestly.
+   ⚠️ **`pinned` must be written on EVERY save, `false` included.** The webhook
+   merges with `$clean + $existing['featured_member']`, and PHP's `+` keeps the
+   left operand's keys and fills the rest from the right — so a key omitted
+   from a POST **persists**. Omitting `pinned` on an ordinary Feature click
+   would let a stale `true` from a previous pin carry over and silently
+   reclassify a consented pick as one of Ian's. This is the same discipline
+   `consent_ack` already documents for exactly the same reason, and it is why
+   that comment says "explicitly false included".
 4. **`lg_resolve_featured_member()`** takes a `$pinned` argument: drops
    `featured_opt_in = true` from the WHERE, keeps `profile_visibility='public'`,
    forces the consent republication rule to *off* for the glance, and skips the
@@ -203,6 +211,14 @@ intent:
   no dash write and no stale config can ever clobber it. This is what stops the
   live failure mode where the leftover hand-typed fields had drifted into a
   Frankenstein card (name *Jonathan Scott*, bio about *Beau Hannam*).
+- ⚠️ **The law also closes the failure mode that caused this issue.** A pinned
+  pick still reads `featured_opt_in_at`, so on a box whose grant is missing the
+  resolver still throws — but the `catch` now lands on the fallback instead of
+  on nothing. **After this lane, a missing grant degrades to a visible fallback
+  band rather than a hole in the page.** Still wrong, but no longer invisible;
+  gate 39 §G2 is what says *why*. I am deliberately **not** narrowing the
+  pinned SELECT to dodge the ungranted column — that would hide a real
+  misconfiguration and would not help the consented path anyway.
 - **"Remove from front page" stops meaning "hide the band".** It clears the pick
   and leaves `enabled: true`, so the band reverts to the fallback. A separate,
   explicitly-labelled **"Hide the band entirely"** control keeps the real
@@ -299,7 +315,10 @@ rather than an assertion quietly deleted because it went red.
     archive-poc/web/archive.css                   fallback card styles
     archive-poc/api/v0/_config.php                accept `pinned`
     archive-poc/api/v0/_featured-history.php      record `pinned`
-    archive-poc/api/v0/fp-save.php                (read only unless it forwards `pinned`)
+    archive-poc/api/v0/fp-save.php                doc only — it forwards a raw featured_member
+                                                  object and, because omitted keys persist,
+                                                  carries `pinned` through unchanged. Safe
+                                                  direction, but it must be SAID.
     profile-app/api/v0/internal-featured-pool.php ?q= candidates
     profile-app/api/v0/me-featured.php            flag reader
     profile-app/web/u.php                         flag reader
