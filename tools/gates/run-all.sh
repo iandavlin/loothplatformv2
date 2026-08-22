@@ -2449,6 +2449,50 @@ echo "=== GATE 93: a Stripe product's tier is SET from the dash, and checkout ag
 run "products-tab" php "$(dirname "$0")/products-tab-gate.php"
 echo
 
+echo "=== GATE 94: Ian's picks stay on the front page, and the band is never a hole ==="
+# #200. Ian, 2026-08-22: "The changes made to featured member has removed members
+# from the front page. The override I wanted would still have them on the
+# frontpage even if they didn't meet the criteria."
+#
+# MEASURED on live before anything was built, and the issue's own stated cause
+# turned out to be half of it. TWO causes, either one sufficient:
+#   1. tools/cut/featured-member-grants.sql had never been APPLIED to live, so
+#      the resolver raised "permission denied for table users", the caller's
+#      try/catch swallowed it, and the band vanished for EVERY visitor and EVERY
+#      pick however perfect. §E now measures that grant instead of trusting the
+#      warning comment that already existed and was already right.
+#   2. Even with the grant, live's pick resolves role '' and the card-ready guard
+#      returns null. Only 2 of live's 6 opted-in members render at all.
+#
+# WHY GATE 39 COULD NOT HAVE CAUGHT ANY OF IT: its §C proves the flag is a no-op
+# by GREPPING THE SOURCE. It never rendered the page with a member_uuid in
+# config.json and the flag off -- the exact pairing live was in -- so it read
+# "byte-identical OFF" as true while OFF removed the band entirely. Every section
+# here RENDERS the branch, or EXECUTES a lifted pure function, against the real
+# profile_app. It renders THIS worktree, not /srv/archive-poc, which is a symlink
+# into the serving checkout and would mean measuring main.
+#
+# Fixtures are CHOSEN BY QUERY, never hardcoded: dev2 and live disagree about the
+# opt-in state of the very member the issue is about.
+#
+# RED-FIRST: 12 mutations + 2 no-op controls, 14/14 --
+# tools/gates/featured-override-redfirst.py. Three of its legs found real defects
+# in THIS gate rather than in the code, and a fourth found one by disbelief:
+#   1. §A1 counted that a band EXISTED, not that it said anything -- and a
+#      cleared pick really did render a card with an empty <h2>. A real defect,
+#      found because the assertion prints what it measured.
+#   2. §A3 asked for a fallback shape and never checked which shape came back, so
+#      disabling the invite branch fell through to 'member' and passed.
+#   3. the card-ready guard could be deleted outright with everything green,
+#      because no fixture reached it on the consented path. §B3 exists for that.
+#   4. §E compared a Postgres boolean::text ('true') against psql's 't' and
+#      reported dev2, which HAS the grant, as missing it -- a false RED that
+#      would have blocked every lane the moment the flag is ruled back on. The
+#      suite was 14/14 when that was found; the surprise in the wording is what
+#      found it.
+run "featured-override" python3 "$(dirname "$0")/featured-override-gate.py"
+echo
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"

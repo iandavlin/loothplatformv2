@@ -1089,7 +1089,18 @@ if ($lg_fm && !empty($lg_fm['member_uuid'])) {
 // `featured_member.enabled = false`, which the dash's own "Hide the band
 // entirely" control sets. That is a person choosing silence, not the page
 // failing to speak, and the two must not look alike.
-if ($lg_fm === null && (defined('LG_FEATURED_MEMBER') && !empty(LG_FEATURED_MEMBER['enabled']))) {
+//
+// ⚠️ "NO BAND" AND "A BAND WITH NOTHING IN IT" ARE THE SAME DEFECT, and the
+// second is the one that nearly shipped. `$lg_fm` is a config map, so a
+// featured_member of `{enabled: true}` with no member_uuid — precisely what the
+// dash's "Clear this pick" now writes — is TRUTHY, skips the resolution above
+// entirely, and renders a card with an empty <h2>. Found by gate 94 §A1, which
+// caught it only because it prints the NAME rather than merely counting that a
+// band exists; the first version of that assertion checked presence alone and
+// went green on a blank card. So the test below is "is there anything to draw",
+// not "is $lg_fm null".
+$lg_fm_drawable = is_array($lg_fm) && trim((string) ($lg_fm['name'] ?? '')) !== '';
+if (!$lg_fm_drawable && (defined('LG_FEATURED_MEMBER') && !empty(LG_FEATURED_MEMBER['enabled']))) {
     $lg_fm = lg_fm_fallback_card(LG_FEATURED_MEMBER_FALLBACK);
 }
 

@@ -409,15 +409,57 @@ def section_c_flag_off():
         # updated to match at the same time, and re-red-fired (moving the
         # call above the `if` still trips it) so the structural check didn't
         # quietly weaken along with the refactor.
-        m = re.search(
-            r"if\s*\(\s*\$lg_fm_on\s*\)\s*\{.*?lg_resolve_featured_member\s*\(.*?\}\s*else\s*\{\s*\$lg_fm\s*=\s*null;",
-            idx_src, re.S)
-        if not m:
-            RED.append("[C3] index.php's member_uuid resolution is not textually gated behind "
-                       "a flag check — a stale member_uuid in config.json could resolve a real "
-                       "card even with the feature meant to be off")
+        # RESTATED for #200 (2026-08-22). This used to require the literal shape
+        # `if ($lg_fm_on) { … } else { $lg_fm = null;` with nothing but
+        # whitespace after the else brace. #200's empty-pool law put a comment
+        # block there explaining why the branch exists, and the regex went RED
+        # on code whose behaviour was unchanged — the classic "assert the
+        # spelling, not the property".
+        #
+        # What C3 is actually FOR is one property: with the flag off, no stale
+        # member_uuid in config.json can resolve a real member. So that is what
+        # is asserted now — by brace-matching the flag block rather than by
+        # pattern-matching one way of writing it — plus the stronger claim the
+        # old regex never made: that there is no SECOND, ungated call site.
+        calls = [m.start() for m in re.finditer(r"lg_resolve_featured_member\s*\(", idx_src)
+                 if not idx_src[:m.start()].rstrip().endswith("function")]
+        blk = re.search(r"if\s*\(\s*\$lg_fm_on\s*\)\s*\{", idx_src)
+        if not blk:
+            RED.append("[C3] index.php has no `if ($lg_fm_on) {` block — the real-member "
+                       "resolution is not gated behind the flag at all")
+        elif not calls:
+            RED.append("[C3] index.php never calls lg_resolve_featured_member() — the real-member "
+                       "path is gone entirely, which is not what the flag being off means")
         else:
-            OK.append("[C3] index.php's real-member resolution is gated behind the flag check")
+            # brace-match the flag block
+            i = idx_src.index("{", blk.start())
+            depth, j = 0, i
+            while j < len(idx_src):
+                if idx_src[j] == "{": depth += 1
+                elif idx_src[j] == "}":
+                    depth -= 1
+                    if depth == 0: break
+                j += 1
+            outside = [c for c in calls if not (i < c < j)]
+            # the matching else, comments and all
+            tail = idx_src[j:j + 2000]
+            else_m = re.search(r"^\s*\}\s*else\s*\{(.*?)^\s*\}", tail, re.S | re.M)
+            else_body = else_m.group(1) if else_m else ""
+            if outside:
+                RED.append(f"[C3] lg_resolve_featured_member() is called from {len(outside)} place(s) "
+                           f"OUTSIDE the `if ($lg_fm_on)` block — a stale member_uuid could resolve "
+                           f"a real card with the feature meant to be off")
+            elif not else_m:
+                RED.append("[C3] the flag block has no `else` branch — with the flag off and a "
+                           "member_uuid present, nothing decides what happens to it")
+            elif not re.search(r"\$lg_fm\s*=\s*null\s*;", else_body):
+                RED.append("[C3] the flag-off branch no longer clears $lg_fm — the config's own "
+                           "member_uuid map would render as a card, which is the real-member path "
+                           "leaking back on through the door marked off")
+            else:
+                OK.append("[C3] the ONLY call to lg_resolve_featured_member() is inside the flag "
+                          "block, and the flag-off branch clears the pick — no stale member_uuid "
+                          "can resolve while the feature is off")
 
     # C4: me-featured.php's OWN include of the flag file must resolve to a
     # REAL, readable file — found 2026-08-15 via a live PUT that came back
@@ -722,7 +764,16 @@ def section_f3_predictor_tracks_resolver():
     if idx is None or pool_src is None:
         DEAD.append("[F3] index.php or the pool endpoint is missing — cannot check predictor drift")
         return
-    m = re.search(r"if \(trim\(\(string\) \$u\['avatar_url'\]\) === ''[^\n]*\) return null;", idx)
+    # RESTATED for #200 (2026-08-22). Ian's override means the guard no longer
+    # applies to a PINNED pick — a member he places renders whether or not the
+    # card can resolve a role. What must not change is the CONSENTED path, which
+    # is the one the pool endpoint's card_renderable predicts for the dash.
+    #
+    # So this asserts BOTH ARMS: the guard still tests avatar and role, and it is
+    # still reached for a pick that is not pinned. A guard that had quietly
+    # become unconditional-off would leave the dash promising bands the front
+    # page never draws — the exact #107 failure this section was written for.
+    m = re.search(r"if \([^\n]*trim\(\(string\) \$u\['avatar_url'\]\) === ''[^\n]*\) return null;", idx)
     if not m:
         RED.append("[F3] lg_resolve_featured_member's card guard is no longer the known "
                    "`avatar_url empty || role empty => return null` — the pool's card_renderable "
@@ -734,6 +785,20 @@ def section_f3_predictor_tracks_resolver():
         RED.append(f"[F3] the resolver's guard changed shape ({guard[:120]}) — re-check "
                    f"card_renderable in internal-featured-pool.php against it")
         return
+    # The ONLY condition allowed to switch the guard off is the #200 pin. Anything
+    # else in front of it (a flag, an env read, a `true`) would disable the guard
+    # for the self-serve pool too, silently and for everybody.
+    head = guard[:guard.index("trim((string) $u['avatar_url'])")]
+    extra = head.replace("if (", "", 1).replace("!$pinned", "").replace("&&", "").replace("(", "").strip()
+    if extra:
+        RED.append(f"[F3] the card guard has grown a condition other than the #200 pin "
+                   f"({head.strip()!r}) — anything else there turns the guard off for CONSENTED "
+                   f"picks as well, and card_renderable would then be predicting a rule that no "
+                   f"longer runs")
+        return
+    if "!$pinned" in head:
+        OK.append("[F3] the card guard is bypassed for a pinned pick only — the consented path "
+                  "it predicts for the dash is untouched")
     if "card_renderable" not in pool_src or "card_blockers" not in pool_src:
         RED.append("[F3] the pool endpoint no longer reports card_renderable/card_blockers, but "
                    "the resolver still refuses to draw a card without an avatar and a role — "
