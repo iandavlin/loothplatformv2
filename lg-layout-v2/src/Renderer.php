@@ -29,6 +29,70 @@ final class Renderer
      *  stay visible as preview content. */
     private const AUTO_GATE_TYPES = ['embed', 'video', 'download', 'file', 'attachment'];
 
+    /** The narrower set used on the print CPTs once the loothprint-gating flag
+     *  is on: the FILE is the members-only deliverable, the media is the shop
+     *  window. Ian, 2026-08-22, on a live Loothprint viewed logged out: "We only
+     *  need to gate the file download and it shouldn't look like the video gate."
+     *
+     *  Before this, `embed` auto-gated from the post tier and the print file
+     *  rendered as a `callout` whose gate-CTA variant fell through to `embed`
+     *  too — so a tiered print showed the SAME "Members-only video" card twice,
+     *  once for the video and once for the ZIP. */
+    private const AUTO_GATE_TYPES_DELIVERABLE = ['download', 'file', 'attachment'];
+
+    /** CPTs whose primary deliverable is the downloadable file, never the
+     *  media around it. Both synthesize their layout from postmeta. */
+    private const DELIVERABLE_ONLY_CPTS = ['loothprint', 'loothcuts'];
+
+    /** The auto-gate set in force for THIS render.
+     *
+     *  Post-type aware rather than global: a `post-type-videos` post's whole
+     *  reason to exist is the video, so its embed must keep auto-gating. Only
+     *  the print CPTs, where the file is what a member pays for, narrow down.
+     *  Flag OFF returns the original constant unchanged, which is what makes
+     *  the OFF state byte-identical. */
+    public static function autoGateTypes(array $ctx): array
+    {
+        if (!self::loothprintGatingEnabled()) return self::AUTO_GATE_TYPES;
+        return in_array((string) ($ctx['post_type'] ?? ''), self::DELIVERABLE_ONLY_CPTS, true)
+            ? self::AUTO_GATE_TYPES_DELIVERABLE
+            : self::AUTO_GATE_TYPES;
+    }
+
+    /**
+     * The loothprint-gating flag.
+     *
+     * Lives HERE, not on Plugin::block_flag() where its three siblings live,
+     * for one measured reason: the standalone renderer
+     * (archive-poc/standalone/render.php) runs a VENDORED COPY of this engine
+     * whose Plugin.php is a stale snapshot — it does not carry block_flag(),
+     * does not list the print CPTs in MANAGED_CPTS, and is never booted on that
+     * path. Renderer, by contrast, is the one class BOTH hosts execute. So this
+     * is the only home from which the WP synthesizer and the standalone render
+     * can read one flag through one implementation.
+     *
+     * Reads getenv() AND $_SERVER because a fastcgi_param lands in $_SERVER only
+     * — reading getenv() alone would serve the OFF path on the very lane-preview
+     * URL built to show the ON one. Missing or unreadable config means OFF: a
+     * member-facing change must never switch itself on by accident.
+     */
+    public static function loothprintGatingEnabled(): bool
+    {
+        static $cache = null;
+        if ($cache !== null) return $cache;
+
+        foreach ([getenv('LG_V2_LOOTHPRINT_GATING'), $_SERVER['LG_V2_LOOTHPRINT_GATING'] ?? null] as $override) {
+            if ($override !== false && $override !== null && $override !== '') {
+                return $cache = in_array(strtolower((string) $override), ['1', 'true', 'on', 'yes'], true);
+            }
+        }
+
+        $path = dirname(__DIR__) . '/config/loothprint-gating.php';
+        if (!is_readable($path)) return $cache = false;
+        $cfg = include $path;
+        return $cache = (is_array($cfg) && !empty($cfg['enabled']));
+    }
+
 
     /**
      * @param array $layout    Parsed layout JSON: { schema, _meta, blocks }
@@ -104,18 +168,35 @@ final class Renderer
 
     /** Strip <a href> wrappers around same-video YouTube URLs for viewers
      *  who don't satisfy the post's tier. Anchors to OTHER videos are left
-     *  alone (those are external references, not bypass routes). */
+     *  alone (those are external references, not bypass routes).
+     *
+     *  ⚠️ SCRUB WHAT IS ACTUALLY GATED, NEVER "the post has a tier". This used
+     *  to key on post_tier alone, which was the same thing while every embed
+     *  auto-gated. Once a Loothprint's video is public (autoGateTypes above),
+     *  it stops being the same thing: a post can carry a tier AND a freely
+     *  playable video, and stripping the anchor then breaks a working link in
+     *  the member's own write-up while the embed beside it plays. So each embed
+     *  is asked for its OWN effective gate — explicit `gated_tier` first, the
+     *  post tier only if its type still auto-gates — and only the ones this
+     *  viewer genuinely cannot see are scrubbed. */
     private static function scrubGatedAnchors(string $html, array $blocks, array $ctx): string
     {
         if (!empty($ctx['editor_mode'])) return $html;
         $postTier = (string) ($ctx['post_tier'] ?? '');
         if ($postTier === '') return $html;
-        if (TierResolver::satisfies($ctx['viewer'], $postTier)) return $html;
+
+        $autoGate = self::autoGateTypes($ctx);
 
         $videoIds = [];
         foreach ($blocks as $b) {
             if (!is_array($b)) continue;
             if (($b['type'] ?? '') !== 'embed') continue;
+
+            $gated = $b['gated_tier'] ?? null;
+            if ($gated === null && in_array('embed', $autoGate, true)) $gated = $postTier;
+            if ($gated === null) continue;                                  /* public embed */
+            if (TierResolver::satisfies($ctx['viewer'], (string) $gated)) continue;
+
             $url = (string) ($b['url'] ?? '');
             if (preg_match('~(?:youtu\.be/|youtube\.com/(?:watch\?v=|embed/|shorts/))([A-Za-z0-9_-]{6,})~', $url, $m)) {
                 $videoIds[] = $m[1];
@@ -166,7 +247,7 @@ final class Renderer
            treat it as gated to the post's tier. Lets authors tag the post
            with a tier and forget per-block gating. */
         if ($gated === null && !empty($ctx['post_tier'])
-            && in_array($type, self::AUTO_GATE_TYPES, true)) {
+            && in_array($type, self::autoGateTypes($ctx), true)) {
             $gated = (string) $ctx['post_tier'];
         }
         if ($gated !== null) {
