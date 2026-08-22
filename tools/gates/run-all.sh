@@ -2449,6 +2449,39 @@ echo "=== GATE 93: a Stripe product's tier is SET from the dash, and checkout ag
 run "products-tab" php "$(dirname "$0")/products-tab-gate.php"
 echo
 
+echo "=== GATE 94: a Loothprint gates its FILE, in download words, once ==="
+# #199. Ian, 2026-08-22, on a member's live Loothprint viewed logged OUT (post
+# 72801, The Cleanup Stik): "The gating is off too. We only need to gate the file
+# download and it shouldn't look like the video gate. I think there is a block
+# for that already available."
+#
+# ⚠️ NUMBER 94, MINTED FROM CURRENT origin/main, NOT FROM THIS BRANCH'S BASE.
+# 90, 91, 92, 93 and 95 are taken. 95 looks like a gap in the sequence and is
+# not one: two lanes were both assigned 93 in one mid-flight window and keeper
+# renumbered switch-menu 93 -> 95 (b1ac293) AFTER this lane was cut. Reading the
+# ledger from this branch's own copy would therefore have said "94 and 95 free"
+# and taken 94 for granted while 95 was already spoken for. Third near-collision
+# in four days. Diff every live worktree, and re-read main, before minting.
+#
+# ⚠️ IT ASSERTS THE RENDERED CARD, NEVER THE BLOCK TYPE. The obvious gate reads
+# the layout back and checks it says `download`. That is TRUE of the broken build
+# in the only way that matters: the second panel was not a wrong block type, it
+# was a right one reaching GateCta::variantFor(), whose dispatch table has no arm
+# for `callout` and falls through to the EMBED default. A layout can name the
+# right block and still paint the video card. And it COUNTS panels rather than
+# looking for one, because "there is a download card" was true of the broken page
+# too — it had a download card AND a video card, which was the complaint.
+#
+# Reads the flag per state (OFF and ON) off the same build, so flipping the
+# tracked default needs no edit here. Mints a PER-RUN probe post keyed to its PID
+# and deletes it, so two concurrent gate runs cannot false-RED each other.
+#
+# RED-FIRST: 20 of 37 checks fail against a snapshot of origin/main, at exit 1 —
+# findings, not CANNOT RUN. The probe degrades to flag=false on a tree with no
+# such flag precisely so main answers as the OFF build it is instead of fataling.
+run "loothprint-gating" python3 "$(dirname "$0")/loothprint-gating-gate.py"
+echo
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"
