@@ -193,8 +193,8 @@ MUTATIONS = [
 
     # ---- #193: a cohort of ADDRESSES is not an empty cohort ---------------
     ("M25b", HEALTH,
-     "        $addrs  = CohortAllowlist::emails();\n        $n      = count( $cohort ) + count( $addrs );",
-     "        $addrs  = CohortAllowlist::emails();\n        $n      = count( $cohort );",
+     "        $n      = CohortAllowlist::count();",
+     "        $n      = count( $cohort );",
      "E2b", "the panel counts only the member ids again, so a cohort holding "
             "nothing but tester ADDRESSES is reported EMPTY — nobody at all can "
             "buy — on the very day it starts working"),

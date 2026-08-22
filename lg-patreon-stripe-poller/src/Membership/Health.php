@@ -612,7 +612,7 @@ final class Health
            working — the panel crying wolf on itself, which is the exact failure
            #192 spent a rewrite removing. */
         $addrs  = CohortAllowlist::emails();
-        $n      = count( $cohort ) + count( $addrs );
+        $n      = CohortAllowlist::count();   // ONE definition of "how many are admitted"
 
         $pagesLive     = (string) get_option( 'lgms_stripe_pages_live', '' );
         $testerPages   = (string) get_option( 'lgms_stripe_testgroup_pages', '' );
