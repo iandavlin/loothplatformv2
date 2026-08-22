@@ -48,6 +48,13 @@ const LG_MAT_POST_META_KEYS = [
     'events_start_date_and_time_',
     'time_of_event',
     'zoom_url_for_looth_group_virtual_event',
+    /* The print CPTs' deliverable file. blocks/download/render.php falls back to
+       "no file pinned ⇒ read the post's own meta" so a stored layout's frozen
+       file_id can never drift from the file the form currently holds — and that
+       fallback needs these two keys present in the blob to work off-WP. See the
+       ⚠️ beside $ids below: baking the KEY is only half of it. */
+    'loothprint_3d_file',
+    'loothcut_cnc_file',
 ];
 
 /** Author user-meta the post-header / post-footer read. NOT `author_image` —
@@ -196,6 +203,26 @@ function lg_materialize_build_blob(int $post_id): ?array {
     $media = [];
     $ids = lg_materialize_collect_media_ids($layout);
     if ($thumb_id > 0) $ids[$thumb_id] = true;          // GateCta poster reads media[thumb_id]
+    /* ⚠️ A `download` block with NO file_id resolves the post's own print file at
+       render (blocks/download/render.php). collect_media_ids() cannot see that —
+       it only walks ids the layout literally states — so without this the block
+       would find a baked meta key, resolve an attachment id, and then look it up
+       in a media map that never heard of it: no URL, and the block renders
+       nothing at all. Measured 2026-08-22: ZERO stored layouts are in that shape
+       (178 carry a file_id, 2 carry a url), so this fires on nothing today. It is
+       here so the fallback is real rather than decorative if one ever appears. */
+    foreach (($layout['blocks'] ?? []) as $b) {
+        if (!is_array($b) || ($b['type'] ?? '') !== 'download') continue;
+        if (!empty($b['file_id']) || !empty($b['url'])) continue;
+        $mk = match ($post->post_type) {
+            'loothprint' => 'loothprint_3d_file',
+            'loothcuts'  => 'loothcut_cnc_file',
+            default      => '',
+        };
+        if ($mk === '') continue;
+        $fid = (int) get_post_meta($post_id, $mk, true);
+        if ($fid > 0) $ids[$fid] = true;
+    }
     foreach (array_keys($ids) as $mid) {
         if ($mid <= 0) continue;
         $m = \LG\LayoutV2\WpMedia::resolve((int) $mid);

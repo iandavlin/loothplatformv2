@@ -518,9 +518,7 @@ final class Plugin
         $body = wpautop(trim((string) $post->post_content));
 
         $raw_images = get_post_meta($pid, 'loothprint_more_images', true);
-        $image_ids  = is_array($raw_images)
-            ? array_values(array_filter(array_map('intval', $raw_images)))
-            : [];
+        $image_ids  = self::gallery_image_ids($raw_images);
 
         $file_id   = (int) get_post_meta($pid, 'loothprint_3d_file', true);
         $file_url  = $file_id > 0 ? (string) (wp_get_attachment_url($file_id) ?: '') : '';
@@ -545,17 +543,7 @@ final class Plugin
             $blocks[] = ['type' => 'embed', 'id' => 'lp_video', 'url' => $video];
         }
         if ($file_url !== '') {
-            if (self::download_block_enabled()) {
-                /* No file_id baked: the block resolves the post's own print file
-                   at render, so replacing it through the form changes the page. */
-                $dl = ['type' => 'download', 'id' => 'lp_download', 'title' => 'Download'];
-            } else {
-                $dl = [
-                    'type' => 'callout', 'id' => 'lp_download', 'variant' => 'files',
-                    'title' => 'Download',
-                    'items' => [['icon' => 'file-zip', 'label' => $file_name ?: 'Download File', 'url' => $file_url]],
-                ];
-            }
+            $dl = self::synth_download_block('lp_download', $file_id, $file_url, $file_name, 'Download File');
             if ($gate) $dl['gated_tier'] = $gate;
             $blocks[] = $dl;
         }
@@ -565,7 +553,10 @@ final class Plugin
                 'title' => 'CAD',
                 'items' => [['icon' => 'globe', 'label' => 'Open in OnShape', 'url' => $onshape]],
             ];
-            if ($gate) $os['gated_tier'] = $gate;
+            /* Only the FILE is gated (Ian 8/22). A CAD link is a link, not the
+               deliverable — and a second gated block would put a second gate
+               panel on the page, which is the thing he asked us to stop. */
+            if ($gate && !Renderer::loothprintGatingEnabled()) $os['gated_tier'] = $gate;
             $blocks[] = $os;
         }
         if ($cc !== '') {
@@ -612,9 +603,7 @@ final class Plugin
         $body  = wpautop($about);
 
         $raw_images = get_post_meta($pid, 'loothcut_more_images', true);
-        $image_ids  = is_array($raw_images)
-            ? array_values(array_filter(array_map('intval', $raw_images)))
-            : [];
+        $image_ids  = self::gallery_image_ids($raw_images);
 
         $file_id   = (int) get_post_meta($pid, 'loothcut_cnc_file', true);
         $file_url  = $file_id > 0 ? (string) (wp_get_attachment_url($file_id) ?: '') : '';
@@ -637,11 +626,7 @@ final class Plugin
             $blocks[] = ['type' => 'embed', 'id' => 'lc_video', 'url' => $video];
         }
         if ($file_url !== '') {
-            $dl = [
-                'type' => 'callout', 'id' => 'lc_download', 'variant' => 'files',
-                'title' => 'Download',
-                'items' => [['icon' => 'file-zip', 'label' => $file_name ?: 'Download CNC File', 'url' => $file_url]],
-            ];
+            $dl = self::synth_download_block('lc_download', $file_id, $file_url, $file_name, 'Download CNC File');
             if ($gate) $dl['gated_tier'] = $gate;
             $blocks[] = $dl;
         }
@@ -651,7 +636,8 @@ final class Plugin
                 'title' => 'CAD',
                 'items' => [['icon' => 'globe', 'label' => 'Open in OnShape', 'url' => $onshape]],
             ];
-            if ($gate) $os['gated_tier'] = $gate;
+            /* See default_loothprint_layout(): only the file is gated. */
+            if ($gate && !Renderer::loothprintGatingEnabled()) $os['gated_tier'] = $gate;
             $blocks[] = $os;
         }
         if ($cc !== '') {
@@ -784,6 +770,76 @@ final class Plugin
      * Return the first non-public tier taxonomy slug for a post, or null if public/unset.
      * Used by synthesized CPT layouts to decide whether to add gated_tier to download blocks.
      */
+    /**
+     * The gallery's image ids for a synthesized print page — IMAGES ONLY.
+     *
+     * Ian, 2026-08-22, on the ghost tile: the print's ZIP is an attachment of
+     * the same post, so anything that collects "the post's attachments" picks it
+     * up, resolves it to no image URL and renders an empty placeholder tile.
+     *
+     * ⚠️ MEASURED: that is NOT what happened on post 72801 — its
+     * `loothprint_more_images` held exactly the two images and no ZIP, and the
+     * third tile came from the gallery block's own three-tile minimum (fixed in
+     * blocks/gallery/render.php). This filter is still right: the ACF field
+     * accepts whatever the library hands it, nothing downstream re-checks, and
+     * a non-image in here renders as a hole. Forecloses the path rather than
+     * fixing today's defect.
+     *
+     * wp_attachment_is_image() is the check core itself uses; a missing or
+     * deleted attachment fails it too, which is the behaviour we want.
+     */
+    private static function gallery_image_ids($raw): array
+    {
+        if (!is_array($raw)) return [];
+        $ids = array_values(array_filter(array_map('intval', $raw)));
+        if (!function_exists('wp_attachment_is_image')) return $ids;
+        return array_values(array_filter($ids, fn(int $id) => wp_attachment_is_image($id)));
+    }
+
+    /**
+     * The print file's block for a synthesized page.
+     *
+     * Ian, 2026-08-22: "it shouldn't look like the video gate. I think there is
+     * a block for that already available." There is — `download` — and this is
+     * where a synthesized page starts emitting it.
+     *
+     * WHY THIS MATTERS BEYOND THE LOOK. A gated `callout` has no gate-CTA
+     * variant of its own: GateCta::variantFor() matches neither its download nor
+     * its embed list and falls through to the `embed` default, so the ZIP
+     * rendered the SAME "Members-only video" card as the video above it. Two
+     * identical panels, which is exactly what he screenshotted. A `download`
+     * block is in GateCta::DOWNLOAD_TYPES and gets download words.
+     *
+     * ⚠️ THE file_id BAKE IS LOAD-BEARING — LEAVING IT OUT DELETES THE DOWNLOAD.
+     * config/download-block.php deliberately bakes no file_id, so the block
+     * follows the post at render. That reasoning holds for the WP renderer,
+     * where blocks/download/render.php has a "no file pinned ⇒ read the post's
+     * own meta" fallback. It does NOT hold for the page members actually read:
+     * /loothprint/ is served by archive-poc/standalone/render.php from a
+     * MATERIALIZED BLOB, whose media map is built by
+     * lg_materialize_collect_media_ids() from the `file_id`s it finds in the
+     * layout. No file_id ⇒ the ZIP is not in the blob ⇒ the standalone block
+     * resolves no URL and returns nothing at all. Baking it is safe precisely
+     * because a synthesized layout is rebuilt from postmeta every time it is
+     * rendered or re-materialized, so it cannot go stale the way a STORED
+     * layout's frozen file_id can.
+     */
+    private static function synth_download_block(
+        string $id, int $file_id, string $file_url, string $file_name, string $fallback_label
+    ): array {
+        if (Renderer::loothprintGatingEnabled() || self::download_block_enabled()) {
+            $dl = ['type' => 'download', 'id' => $id, 'title' => 'Download'];
+            if (Renderer::loothprintGatingEnabled() && $file_id > 0) $dl['file_id'] = $file_id;
+            return $dl;
+        }
+        /* OFF — byte-identical to what shipped before this flag existed. */
+        return [
+            'type' => 'callout', 'id' => $id, 'variant' => 'files',
+            'title' => 'Download',
+            'items' => [['icon' => 'file-zip', 'label' => $file_name ?: $fallback_label, 'url' => $file_url]],
+        ];
+    }
+
     private static function synth_gate_tier(int $post_id): ?string
     {
         $terms = wp_get_object_terms($post_id, 'tier', ['fields' => 'slugs']);

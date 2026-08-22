@@ -65,12 +65,24 @@ foreach ($imageIds as $id) {
     ];
 }
 
-/* Three-tile minimum: pad with placeholders if the author hasn't filled the
-   block yet. Three reads as "intentional gallery"; two would just look like
-   two image blocks. The placeholders are obvious affordances for "add a
-   photo here" in edit mode. */
-while (count($tiles) < 3) {
-    $tiles[] = ['placeholder' => true];
+/* Three-tile minimum — IN EDIT MODE ONLY.
+   The placeholders are affordances: "add a photo here". That is useful to an
+   author looking at a half-filled block and meaningless to a reader, who just
+   sees a hole in the page.
+
+   ⚠️ THIS IS THE GHOST TILE (#198 BUG B), and it was pinned on the wrong cause.
+   The report says the post's ZIP was being collected into the gallery's image
+   set. Measured on the live post it came from (72801): its
+   `loothprint_more_images` holds exactly its two images and the ZIP is not in
+   it — the third tile was this loop, padding two real photos up to three, for
+   everybody. It reached EVERY gallery with fewer than three images, on every
+   CPT, anon and member alike.
+
+   A reader now sees exactly as many tiles as there are photos. */
+if (!empty($ctx['editor_mode'])) {
+    while (count($tiles) < 3) {
+        $tiles[] = ['placeholder' => true];
+    }
 }
 
 /* Split image_text on blank lines into paragraphs. */

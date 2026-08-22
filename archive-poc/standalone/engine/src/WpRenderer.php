@@ -77,6 +77,7 @@ final class WpRenderer
             'can_edit'       => $canEdit,
             'media_resolver' => [WpMedia::class, 'resolve'],
             'post_id'        => $post->ID,
+            'post_type'      => $post->post_type,
             'post_tier'      => $postTier,
         ];
 

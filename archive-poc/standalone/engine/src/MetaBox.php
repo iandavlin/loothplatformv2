@@ -850,7 +850,31 @@ final class MetaBox
             $post_id, $action !== '' ? $action : '(update)', count($rawBlocks)
         ));
 
-        $parsed = self::parse_slots_recursive($rawBlocks, $manifests, /* atRoot */ true);
+        /* ⚠️ THE FORM IS NOT THE WHOLE BLOCK, AND SAVING USED TO ASSUME IT WAS.
+           parse_block_props() walks the manifest's schema and skips every prop
+           of type `array` or `object` — it has no field for them. Because save()
+           then REBUILT the layout from the form alone, every one of those props
+           was silently dropped: a gallery came back carrying its columns, layout
+           and variant and NO image_ids, which is exactly the shape that blanked
+           a member's photos on live post 72801 (#198). Six props across six
+           blocks are in that class today — gallery.image_ids,
+           post-header.hidden_links, taxonomy.taxonomies, event-header.event_types
+           and the items lists on featured-products and recent-posts.
+
+           EditorPickers already recorded half of this in its own docblock
+           ("gallery and embed-url are FRONT-END-EDITOR ONLY … the admin metabox
+           cannot edit those props. Pre-existing gap, recorded not fixed"). The
+           gap is that not being able to EDIT a prop was allowed to mean
+           destroying it.
+
+           So the previous layout is indexed by block id and handed down to the
+           parser, which carries those props across untouched. Keyed on id, not
+           slot index, because slots shift under move / insert / remove within
+           the same submit. */
+        $prevLayout = Plugin::load_layout($post_id);
+        $prevById   = is_array($prevLayout) ? self::index_blocks_by_id($prevLayout) : [];
+
+        $parsed = self::parse_slots_recursive($rawBlocks, $manifests, /* atRoot */ true, $prevById);
 
         /* 2. Apply slot-level actions. Grammar:
                 add_block                       → append at root
@@ -968,6 +992,22 @@ final class MetaBox
             return;
         }
 
+        /* Belt and braces on the ⚠️ above. carry_unrepresented_props() should
+           make this unreachable, but the failure it guards against is a member
+           losing their photos with nothing said and nothing logged, so it is
+           worth a second, independent check that does not share the first one's
+           assumptions. A save that would empty a list the block already had is
+           REFUSED, and says so through the same channel every other rejection
+           uses. Deleting the block outright is untouched — this only compares
+           ids present on BOTH sides. */
+        $lost = self::lost_list_props($prevById, self::index_blocks_by_id($layout));
+        if ($lost) {
+            self::dbg('save: REFUSED — would empty ' . count($lost) . ' stored list(s): '
+                . implode(', ', array_map(fn($l) => $l['path'], $lost)));
+            set_transient(self::TRANSIENT_ERR . $post_id, $lost, 120);
+            return;
+        }
+
         update_post_meta($post_id, LG_LAYOUT_V2_META_KEY, $layout);
         self::dbg(sprintf('save: persisted %d blocks (%s)', count($blocks),
             implode(', ', array_map(fn($b) => $b['type'], $blocks))));
@@ -1039,7 +1079,7 @@ final class MetaBox
      *  by __pos. For columns blocks (root-level only — validator forbids
      *  nesting), recurses into raw['columns'][*]['blocks'] and stores the
      *  parsed children under block['columns'][i]['blocks']. */
-    private static function parse_slots_recursive(array $rawSlots, array $manifests, bool $atRoot): array
+    private static function parse_slots_recursive(array $rawSlots, array $manifests, bool $atRoot, array $prevById = []): array
     {
         $parsed = [];
         foreach ($rawSlots as $slotKey => $raw) {
@@ -1053,7 +1093,7 @@ final class MetaBox
                 continue;
             }
             $pos   = isset($raw['__pos']) ? (int) $raw['__pos'] : (int) $slotKey;
-            $block = self::build_block_from_raw($type, $raw, $manifests[$type]);
+            $block = self::build_block_from_raw($type, $raw, $manifests[$type], $prevById);
 
             if ($type === 'columns' && $atRoot && isset($raw['columns']) && is_array($raw['columns'])) {
                 $cols = [];
@@ -1064,7 +1104,7 @@ final class MetaBox
                 foreach ($raw['columns'] as $colKey => $colRaw) {
                     if (!is_array($colRaw)) continue;
                     $rawChildren = is_array($colRaw['blocks'] ?? null) ? $colRaw['blocks'] : [];
-                    $childParsed = self::parse_slots_recursive($rawChildren, $manifests, /* atRoot */ false);
+                    $childParsed = self::parse_slots_recursive($rawChildren, $manifests, /* atRoot */ false, $prevById);
                     $cols[] = ['blocks' => array_map(fn($p) => $p['block'], $childParsed)];
                 }
                 if ($cols) $block['columns'] = $cols;
@@ -1080,7 +1120,7 @@ final class MetaBox
     }
 
     /** Build one block array from its raw POST slice + manifest. */
-    private static function build_block_from_raw(string $type, array $raw, array $m): array
+    private static function build_block_from_raw(string $type, array $raw, array $m, array $prevById = []): array
     {
         $block = [
             'type' => $type,
@@ -1162,7 +1202,96 @@ final class MetaBox
                 if ($sv !== '') $block[$propName] = $sv;
             }
         }
+
+        self::carry_unrepresented_props($block, $m, $prevById);
         return $block;
+    }
+
+    /**
+     * Copy across the props this form has no field for, from the block as it
+     * stands in the CURRENT layout. See the ⚠️ in save().
+     *
+     * ── SCOPED DELIBERATELY NARROW, AND HERE IS THE LINE ────────────────────
+     * Only `array` / `object` props qualify — the exact set parse_block_props()
+     * skips as "structural". That matters: the generic walker drops an EMPTY
+     * scalar too (`if ($sv !== '') $block[$propName] = $sv;`), so a broader rule
+     * would restore an old value every time somebody deliberately cleared a text
+     * field, and clearing a field from the metabox would become impossible. For
+     * an array prop there is no such ambiguity — the form cannot express any
+     * value for it, empty or otherwise, so "absent" can only mean "not asked".
+     *
+     * `columns` on a columns block is excluded: parse_slots_recursive genuinely
+     * owns that container and rebuilds it from the nested slots, so carrying the
+     * old one across would undo every add/remove/move the user just made.
+     */
+    private static function carry_unrepresented_props(array &$block, array $m, array $prevById): void
+    {
+        $id = (string) ($block['id'] ?? '');
+        if ($id === '' || !isset($prevById[$id])) return;
+
+        $prev = $prevById[$id];
+        /* A slot that changed type is a different block wearing a recycled id;
+           its old props belong to the old type and must not follow it. */
+        if (($prev['type'] ?? '') !== ($block['type'] ?? '')) return;
+
+        foreach (($m['schema']['props'] ?? []) as $propName => $propDef) {
+            if (!in_array((string) ($propDef['type'] ?? ''), ['array', 'object'], true)) continue;
+            if ($propName === 'columns' && ($block['type'] ?? '') === 'columns') continue;
+            if (array_key_exists($propName, $block)) continue;      /* the form spoke — it wins */
+            if (!array_key_exists($propName, $prev)) continue;
+            $block[$propName] = $prev[$propName];
+        }
+    }
+
+    /**
+     * Blocks that held a non-empty list before and would hold none after.
+     * Returns Validator-shaped fatal errors so the metabox renders them with no
+     * new plumbing.
+     */
+    private static function lost_list_props(array $before, array $after): array
+    {
+        $out = [];
+        foreach ($before as $id => $prev) {
+            if (!isset($after[$id])) continue;                       /* deleted on purpose */
+            $now = $after[$id];
+            if (($prev['type'] ?? '') !== ($now['type'] ?? '')) continue;
+            foreach ($prev as $k => $v) {
+                if (!is_array($v) || $v === []) continue;
+                if ($k === 'columns' || $k === 'blocks') continue;    /* containers, owned by the parser */
+                $after_v = $now[$k] ?? null;
+                if (is_array($after_v) && $after_v !== []) continue;
+                $out[] = [
+                    'path'  => ($prev['type'] ?? 'block') . "#$id.$k",
+                    'msg'   => sprintf(
+                        'Refused: saving would empty “%s” on the %s block (%d item(s) stored). '
+                        . 'The layout was left unchanged. This form has no field for that list, '
+                        . 'so it cannot be edited here — use the on-page editor.',
+                        $k, $prev['type'] ?? 'block', count($v)
+                    ),
+                    'fatal' => true,
+                ];
+            }
+        }
+        return $out;
+    }
+
+    /** Every block in a layout, keyed by its `id`, columns children included.
+     *  Duplicate ids keep the FIRST seen — an id collision is already broken,
+     *  and picking arbitrarily would make the carry-across nondeterministic. */
+    private static function index_blocks_by_id(array $layout): array
+    {
+        $out = [];
+        $walk = function ($b) use (&$walk, &$out): void {
+            if (!is_array($b)) return;
+            $id = (string) ($b['id'] ?? '');
+            if ($id !== '' && !isset($out[$id])) $out[$id] = $b;
+            foreach (($b['blocks'] ?? []) as $c) $walk($c);
+            foreach (($b['columns'] ?? []) as $col) {
+                if (is_array($col)) foreach (($col['blocks'] ?? []) as $c) $walk($c);
+            }
+        };
+        foreach (($layout['blocks'] ?? []) as $b) $walk($b);
+        return $out;
     }
 
     /* ── Helpers ─────────────────────────────────────────────────────── */

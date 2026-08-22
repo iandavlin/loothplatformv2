@@ -92,6 +92,33 @@ final class GateCta
                 if (!empty($first['ext']))  $parts[] = (string) $first['ext'];
                 if (!empty($first['size'])) $parts[] = (string) $first['size'];
                 if ($parts) $rowMeta = ' — ' . implode(', ', $parts);
+            } elseif (($blockHint['type'] ?? '') === 'download') {
+                /* The `download` BLOCK's shape, which is not the callout's.
+                   Everything above reads `items[0]` — the prose-callout row this
+                   card was originally written against. A download block carries
+                   file_id / label / title instead, so without this arm the card
+                   fell back to the generic "Members-only content" headline on
+                   the very block Ian asked us to route the file through.
+
+                   ⚠️ LABEL, EXTENSION AND SIZE ONLY — never the URL. This card is
+                   what a NON-MEMBER sees; naming the file is the teaser, handing
+                   over its address is the leak the gate exists to prevent. */
+                $rowLabel = isset($blockHint['label']) ? trim((string) $blockHint['label']) : '';
+                $fileId   = (int) ($blockHint['file_id'] ?? 0);
+                if ($fileId > 0 && isset($ctx['media_resolver'])) {
+                    $media = ($ctx['media_resolver'])($fileId);
+                    if ($rowLabel === '') {
+                        $rowLabel = trim((string) ($media['title'] ?? ''));
+                        if ($rowLabel === '') $rowLabel = (string) ($media['filename'] ?? '');
+                    }
+                    $parts    = [];
+                    $filename = (string) ($media['filename'] ?? '');
+                    if ($filename !== '' && ($dot = strrpos($filename, '.')) !== false) {
+                        $parts[] = strtoupper(substr($filename, $dot + 1));
+                    }
+                    if (!empty($media['filesize_human'])) $parts[] = (string) $media['filesize_human'];
+                    if ($parts) $rowMeta = ' — ' . implode(', ', $parts);
+                }
             }
             if ($rowLabel === '') $rowLabel = (string) ($s['headline'] ?? 'Members-only download');
             $eyebrow  = Renderer::text((string) ($s['eyebrow_download'] ?? 'Members-only download'));
@@ -147,9 +174,30 @@ final class GateCta
      * Pick the right CTA variant for a gated block. Public so the Renderer
      * can use the same dispatch table.
      */
-    public static function variantFor(string $blockType): string
+    public static function variantFor(string $blockType, array $block = []): string
     {
         if (in_array($blockType, self::DOWNLOAD_TYPES, true)) return 'download';
+
+        /* A `callout variant=files` IS a download — it is the shape a
+           synthesized print page used before the `download` block, and 3 stored
+           layouts still carry it. It is in neither list below, so it fell all
+           the way through to the `embed` default and drew the VIDEO card over a
+           ZIP. That is the second of the two identical panels Ian photographed
+           on live post 72801 (#199).
+
+           Fixing it at the synthesizer was not enough on its own: a layout that
+           already exists on disk still says `callout`, and nothing re-renders it
+           into a download block. So the dispatch table learns the shape too.
+
+           Behind the same flag as the rest of #199, so OFF stays byte-identical.
+           Depends on the block, not just its type, which is why this signature
+           now takes one — the caller always had it. */
+        if ($blockType === 'callout'
+            && ($block['variant'] ?? '') === 'files'
+            && Renderer::loothprintGatingEnabled()) {
+            return 'download';
+        }
+
         if (in_array($blockType, self::EMBED_TYPES, true))    return 'embed';
         /* Default for any other gated block — text-only `wysiwyg` etc.
            Use `embed` shape since it carries the featured image; better

@@ -330,6 +330,10 @@ function lg_standalone_render_article(array $layout, array $pc, array $viewer, b
         'can_edit'       => false,
         'media_resolver' => 'lg_standalone_media_resolver',
         'post_id'        => (int) ($pc['post_id'] ?? 0),
+        /* post_type drives Renderer::autoGateTypes() — a Loothprint gates its
+           FILE, a video post gates its VIDEO. Set on $postContext at the top of
+           this file from LG_POST_TYPE, so it is always present here. */
+        'post_type'      => (string) ($pc['post_type'] ?? ''),
         'post_tier'      => (string) ($pc['post_tier'] ?? ''),
         // Live feed loop for the sponsor-page carousels (featured-products /
         // recent-posts): queries the discovery index by author + cpt at render
