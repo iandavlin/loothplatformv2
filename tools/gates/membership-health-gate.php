@@ -339,6 +339,25 @@ function words( array $c ): string {
     return $s;
 }
 
+/**
+ * ONE named line's value, so an assertion can be about THAT LINE rather than
+ * about every word the check rendered.
+ *
+ * ⚠️ IT EXISTS BECAUSE words() MADE AN ASSERTION VACUOUS (#203, found by the
+ * red-first, not by review). "The open routes are not on the still-shut line"
+ * was written against words(), which concatenates every line — and the
+ * roll-call line names all of them a few characters earlier, so the phrase was
+ * always present and the assertion could never fail. Mutating the panel to
+ * report EVERY secret route as still shut left it green. Ask a line, not a
+ * blob.
+ */
+function line_value( array $c, string $labelFragment ): string {
+    foreach ( $c['lines'] as $l ) {
+        if ( stripos( $l['label'], $labelFragment ) !== false ) { return (string) $l['value']; }
+    }
+    return '';
+}
+
 function render_panel(): string {
     ob_start();
     HealthPanel::render();
@@ -781,15 +800,25 @@ is_( str_contains( $w, count( real_exemptions() ) . ' route(s) exempted' ),
    would pass on a panel that names ALL of them, which is the pre-#203 failure
    inverted; what an operator needs is the DIFFERENCE. /run-now is what #203
    deliberately left shut, so it must appear here and nowhere in the open list. */
-is_( str_contains( $w, '/lg-member-sync/v1/run-now' ),
+is_( str_contains( line_value( chk( $d, 'channel' ), 'still behind' ), '/lg-member-sync/v1/run-now' ),
      'F10c the still-shut line names /run-now — #203 shut it on purpose, so it must stay visible' );
 is_( ! in_array( '/lg-member-sync/v1/run-now', real_exemptions(), true ),
      'F10d ...and nothing exempted it behind the panel\'s back' );
+/* ⚠️ THESE TWO LEGS WERE ONE LEG, AND IT MEASURED NOTHING. It read
+   "$opened is OPEN after #203 — so it is not on the still-shut line" and then
+   asked only real_exemptions(), which is a fact about the FILTERS. The panel
+   could report all four routes as still shut and it stayed green — proven, by
+   the mutation that does exactly that. The claim about the LINE has to be
+   asked of the line. */
+$shutLine = line_value( chk( $d, 'channel' ), 'still behind' );
+is_( $shutLine !== '', 'F10e the still-shut line is rendered at all — an absent line passes every absence below' );
 foreach ( [ '/lg-member-sync/v1/sync-customer',
             '/lg-member-sync/v1/send-gift-codes',
             '/lg-member-sync/v1/send-gift-recipient' ] as $opened ) {
     is_( in_array( $opened, real_exemptions(), true ),
-         'F10e ' . $opened . ' is OPEN after #203 — so it is not on the still-shut line' );
+         'F10e2 ' . $opened . ' is OPEN after #203 — asked of the filters' );
+    is_( ! str_contains( $shutLine, $opened ),
+         'F10e3 ...and the still-shut LINE does not name it — asked of the line' );
 }
 $shutCount = count( array_diff( LGMS\Wp\RestController::SECRET_ROUTES, real_exemptions() ) );
 is_( $shutCount === 1,
