@@ -1473,3 +1473,124 @@ member-facing path only. The synthesizer now bakes `file_id`; details in PAGE.md
 **General rule for any gated deliverable on this box:** "it resolves live at
 render" is a claim about the WP renderer. The standalone path has no WP — it has
 whatever the materializer baked.
+
+---
+
+## State (8/22, #201 — the shared secret gets a status line and a Refresh button)
+
+- **THE LAW THIS ADDS (Ian 8/22, verbatim, reshaping his own issue):** *"Should
+  just be a refresh button or something with a status check."* That superseded
+  the paste-in field of the first draft, and keeper then applied it to the whole
+  surface it describes.
+- **WHAT IT ANSWERS.** `lgms_shared_secret` authenticates the billing app's
+  server-to-server calls into WordPress. It is **ABSENT ON LIVE**, and #181's
+  checkout guard is **fail-open by design** — a route that cannot answer produces
+  UNKNOWN, and UNKNOWN waves every checkout through. So the guard reads as ARMED
+  on the dash and refuses nobody, and **nothing on any screen said so**. A
+  **Shared secret** section now sits FIRST on the Health tab: WordPress
+  present/absent + length, billing app present/absent + length (or *which* of the
+  four unreadable states), MATCH / DIFFER / cannot-compare, and a *Checked at*
+  UTC stamp. **Refresh** re-reads both halves without a page load.
+- **IT IS REPORTED ONCE, so it came OUT of `Health::checkSecrets()`.** Leaving
+  it in both places puts one fact on one screen in two presentations — the #199
+  two-stacked-panels shape, which this platform has already paid for. The
+  comparison is now **`Health::secretPair()`**, one definition, used by the new
+  section and by the webhook-secret card alike. **Gate 91 §B was RE-POINTED, not
+  deleted** (the gate 86 §I9 discipline) and **gained a ratchet**: §B6 asserts
+  the shared secret is NOT on that card, so re-adding it is a RED rather than a
+  silent duplicate.
+- ⚠️ **THE SETTINGS TAB'S SHARED-SECRET FIELD IS RETIRED, and the issue's premise
+  that "setting stays a command-line act" was NOT true when it was written.**
+  Measured on main: `Admin.php:1613` held a working setter whose `value=`
+  attribute **printed the live secret into that page's HTML source** —
+  `type="password"` hides it from the eye, not from View Source. Keeper ruled it
+  out (8/22) on Ian's own shape for the surface plus the structural argument the
+  issue itself makes: the billing app's half is a server file the web user cannot
+  write, so a dash setter can only ever move **one** half — which is precisely
+  how a pair comes to DIFFER with nobody meaning it. `lgms_db_pass` and
+  `lgms_stripe_secret_key` carry the same echo and are **REPORTED, NOT TOUCHED**;
+  keeper is filing that class as its own issue with #197's plaintext-`db_pass`
+  finding.
+- ⚠️ **RETIRING THE FIELD WITHOUT RETIRING THE REGISTRATION WOULD HAVE BLANKED
+  THE SECRET ON EVERY SAVE.** Verified in the running WordPress, not recalled:
+  `wp-admin/options.php:336-345` walks the registered options of the submitted
+  group and calls **`update_option( $option, null )` for every one absent from
+  POST**. A registered setting with no field is not "left alone" — it is emptied
+  by anyone pressing Save, silently, and server-to-server auth fails closed from
+  that moment. **The two must always move together**; gate 98 §I2b asserts it.
+- **ONE RENDERER SERVES THE PAGE LOAD AND THE REFRESH**, and the refresh ships
+  server-rendered markup rather than JSON a script re-renders — two renderers is
+  two places a secret can leak and two things to keep gated. Both locks on the
+  door (capability AND nonce), no `nopriv` twin, and the error path answers a
+  **FIXED sentence, never `$e->getMessage()`**: a Throwable out of a file read or
+  a PDO handle can carry a value, and nobody is looking at an error path.
+- ⚠️ **A REFRESH THAT CAN RETURN A CACHED ANSWER IS A LIE**, and the fix needs
+  BOTH cache layers. Measured on dev2: the box runs a persistent object cache
+  (`wp-content/object-cache.php`, 105,926 bytes) and `lgms_shared_secret` is
+  **autoloaded**, so it is served out of the `alloptions` blob and **not** from
+  its own key. `refreshRead()` drops both, plus `Health::reset()` for the
+  memoised settings file.
+- **NO FLAG** — dash-only, matching #190, #192, #194 and #183. The one shared
+  change is a pure refactor of a read-only reporter.
+- **#201 BUILT** on `201-secret-status`, gate **98** (78 assertions; red-first
+  **51/51** — 48 mutations each reddening its own named assertion, 3 no-op
+  controls proven inert). Gate 91 is at 104 assertions, red-first 67/67.
+- ⚠️ **THE GATE HAD NINE DEFECTS OF ITS OWN, and every one was found by red-first
+  or by looking at the picture — none by review.** Six in the assertions: §C4
+  wrote **one** settings file six times (the six fixtures are all evaluated
+  before the loop runs) and rendered the same state under six names; §B6 asked
+  *"both halves report their length"* of the whole render and was satisfied by
+  **one** half; §H1 matched a different sentence in the same page; §G1 was
+  vacuous because the cache stub let an `alloptions` delete wipe everything;
+  §C3e could not fail because nothing threw mid-render; §E3 counted a **CSS
+  rule** as a second renderer. Three more in the SCREEN, found by building the
+  real thing and looking at it — see below.
+- ⚠️ **AND ONE IN THE NEIGHBOUR: gate 91 died at exit 255 with NO FAIL LINE** the
+  moment `HealthPanel` gained the new section, because the require list did not
+  name it. **That is the FIFTH time a file in this plugin has died that way.**
+  run-all reads a bare 255 as "red, culprit unknown". Gate 98 installs an
+  exception handler and a shutdown handler so a fatal is reported **as a
+  finding**.
+
+### Verified on dev2 against both real halves (2026-08-22)
+
+Driven as the site's own user, real code, real stores: the option out of dev2's
+database and `LGMS_SHARED_SECRET` out of the real `/srv/lg-stripe-billing/.env`.
+Verdict **MATCH**, both halves 64 characters. The **refresh handler** answers
+200 with 3,711 bytes of markup. **No value, fragment, prefix or sha256 of either
+real half appears in the markup or in the refresh response, and there are zero
+`<input>` elements.**
+
+- **PICTURE for Ian:** `/mockups/lanes/201-secret-status.html` — the real screen
+  with the real reading, then every state it can be in, then the Settings tab
+  before and after.
+- ⚠️ **THREE DEFECTS THE PICTURE FOUND THAT 78 GREEN ASSERTIONS HAD NOT.**
+  **(1)** every chip rendered as identical plain grey text — MATCH and BROKEN
+  alike — because the palette lives in `HealthPanel`'s style block and this
+  section only borrowed the class names; it is self-contained now (§H8).
+  **(2)** PHP **swallows one newline directly after `?>`**, so the billing-app
+  command rejoined into one line running off the edge of its box (§H4b).
+  **(3)** the copy told the operator to reload PHP-FPM — checked rather than
+  assumed, `LGSB\App::create()` calls `Dotenv::createImmutable(...)->load()` on
+  **every request**, so the app re-reads that file as it stands and the reload
+  was a real action on a live box for no reason (§H4c).
+- **Owed:** Ian looks at the tab on dev2 after the merge. **The live gap is
+  `lgms_shared_secret` itself** — still absent, still a live write and therefore
+  his; this section is what will say so out loud, and what will confirm the fix
+  landed on both halves the moment he presses Refresh.
+
+### Two stale artifacts found while measuring, reported not fixed
+
+- ⚠️ **`lg-patreon-stripe-poller/PICKUP.md:140` is confidently wrong about
+  deploy.** It says the poller is *"a wp-content plugin, not a /srv git-served
+  app … deployed via the self-verifying patchers in `deploy/patch-*.py` — NOT
+  git pull."* Both boxes contradict it:
+  `wp-content/mu-plugins/lg-patreon-stripe-poller` is a **symlink into
+  `~/loothplatformv2-clean`** on **dev2 AND live**, and the plugin autoloads
+  `LGMS\` PSR-4 from `src/`, so a new class file needs no require-list edit and
+  no symlink. **A pull delivers it.** A lane that believes that line will
+  hand-deploy over a symlink.
+- **Live's `mu-plugins/lg-patreon-stripe-poller.php` loader is a REAL FILE**
+  (2,193 bytes), not a symlink as it is on dev2. Its content matches the repo's
+  and it only `require_once`s the folder's main file, so nothing here depends on
+  it — recorded because a change to **that loader** would not reach live by pull.
