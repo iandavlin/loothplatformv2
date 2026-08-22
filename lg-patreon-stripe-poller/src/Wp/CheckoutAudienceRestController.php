@@ -58,15 +58,22 @@ use WP_REST_Response;
  * does the refusing, and this one can tell a valid caller apart from an
  * anonymous one.
  *
- * ⚠️ THE SAME 401 IS SITTING ON THREE OTHER ROUTES AND THEY ARE NOT MINE TO
+ * ⚠️ THE SAME 401 WAS SITTING ON THREE OTHER ROUTES AND THEY WERE NOT MINE TO
  * OPEN. `/sync-customer`, `/patreon-standing` and `/send-gift-codes` are all
- * shared-secret routes and all currently unreachable — which means #150's
- * double-pay probe has been answering UNKNOWN on every call since the option
- * was last re-armed, and the Slim app's post-checkout sync ping is dead (the
- * five-minute `Sync::all()` sweep is what has been covering for it, which is
- * why nothing looked broken). Reported to keeper as a separate finding with
- * this exact one-line fix. Widening an auth surface beyond the route this lane
- * needs is not a decision to make in passing.
+ * shared-secret routes and were all unreachable — which meant #150's double-pay
+ * probe answered UNKNOWN on every call since the option was last re-armed, and
+ * the Slim app's post-checkout sync ping was dead (the five-minute
+ * `Sync::all()` sweep is what covered for it, which is why nothing looked
+ * broken). Reported to keeper as a separate finding with this exact one-line
+ * fix. Widening an auth surface beyond the route this lane needs is not a
+ * decision to make in passing.
+ *
+ * ✅ ALL THREE ARE OPEN NOW, each on its own ruling and each by its OWN filter:
+ * `/patreon-standing` on #193's rider once that guard was armed and measured
+ * refusing nobody, and the other two on #203 — which also found a FOURTH,
+ * `/send-gift-recipient`, that this comment's count missed. Six filters on that
+ * hook, `/run-now` alone still shut. The list above is left standing because
+ * the discipline it describes is what each of those lanes followed.
  */
 final class CheckoutAudienceRestController
 {

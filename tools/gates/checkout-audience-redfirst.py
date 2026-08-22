@@ -67,11 +67,30 @@ TOUCHED = [AUD, REST, PROV, PLUG, GUARD, PROBE, SLIM, ENVS, COMP, SL, RESTCTL, C
 
 
 def sub(path, old, new, count=1):
-    """One textual replacement. Raises if the anchor is not unique/present."""
+    """One textual replacement.
+
+    ⚠️ IT REFUSES AN AMBIGUOUS ANCHOR, and that is not pedantry — the docstring
+    used to CLAIM uniqueness and never check it. `str.replace(..., 1)` silently
+    takes the FIRST match, so a mutation whose anchor appears twice edits
+    whichever function happens to come first in the file and reports RED under
+    a label naming the other one. Found on #203: M47 said "appendExemption
+    turns a non-array into an array" and was mutating
+    exemptAuthFromBuddyBossRestriction, because the two share a guard clause
+    character for character. It went RED, so nothing complained — a false RED
+    attributed to the wrong assertion, which is the same family as this repo's
+    false GREENs and just as expensive. Pass count>1 to mean it deliberately.
+    """
     def apply():
         s = path.read_text()
-        if s.count(old) < count:
-            raise AssertionError(f"anchor not found in {path.name}: {old[:70]!r}")
+        found = s.count(old)
+        if found < count:
+            raise AssertionError(
+                f"anchor not found in {path.name} ({found} of {count}): {old[:70]!r}")
+        if found > count:
+            raise AssertionError(
+                f"AMBIGUOUS anchor in {path.name}: {found} matches, expected {count}. "
+                f"Widen it until it is unique — the first match is not necessarily "
+                f"the function this mutation names: {old[:70]!r}")
         path.write_text(s.replace(old, new, count))
     return apply
 
@@ -258,8 +277,8 @@ MUTATIONS = {
     "M34": ("the /auth exemption is removed — a listed tester still cannot make an account",
             sub(RESTCTL, "        foreach ( self::AUTH_ROUTES as $route ) {", "        foreach ( [] as $route ) {")),
     "M35": ("the exemption replaces another plugin's entries instead of appending",
-            sub(RESTCTL, "        if ( ! is_array( $endpoints ) ) {\n            return $endpoints;   // never replace another plugin's shape\n        }",
-                         "        if ( ! is_array( $endpoints ) ) {\n            return $endpoints;\n        }\n        $endpoints = [];")),
+            sub(RESTCTL, "        if ( ! is_array( $endpoints ) ) {\n            return $endpoints;   // never replace another plugin's shape\n        }\n        foreach ( self::AUTH_ROUTES as $route ) {",
+                         "        if ( ! is_array( $endpoints ) ) {\n            return $endpoints;\n        }\n        $endpoints = [];\n        foreach ( self::AUTH_ROUTES as $route ) {")),
     "M36": ("the /auth route loses its per-IP throttle (keeper condition 1)",
             sub(RESTCTL, "            if ( $ipHits >= 20 ) {", "            if ( false ) {")),
     "M37": ("the /auth route stops checking the password at all (keeper condition 1)",
@@ -307,8 +326,8 @@ MUTATIONS = {
             sub(RESTCTL, "        if ( ! in_array( $route, $endpoints, true ) ) {\n            $endpoints[] = $route;\n        }\n        return $endpoints;",
                          "        return [ $route ];")),
     "M47": ("appendExemption turns a non-array into an array — another plugin's shape is replaced",
-            sub(RESTCTL, "        if ( ! is_array( $endpoints ) ) {\n            return $endpoints;   // never replace another plugin's shape\n        }",
-                         "        if ( ! is_array( $endpoints ) ) {\n            $endpoints = [];\n        }")),
+            sub(RESTCTL, "        if ( ! is_array( $endpoints ) ) {\n            return $endpoints;   // never replace another plugin's shape\n        }\n        if ( ! in_array( $route, $endpoints, true ) ) {",
+                         "        if ( ! is_array( $endpoints ) ) {\n            $endpoints = [];\n        }\n        if ( ! in_array( $route, $endpoints, true ) ) {")),
     "M48": ("appendExemption stops being idempotent — a double-registered filter duplicates",
             sub(RESTCTL, "        if ( ! in_array( $route, $endpoints, true ) ) {\n            $endpoints[] = $route;\n        }",
                          "        $endpoints[] = $route;")),
@@ -363,8 +382,8 @@ NO_OPS = {
     # #203 — the exemption section needs its own no-op, or a green run above
     # proves nothing about whether §K10/§K11 are keying on prose rather than code.
     "N4": ("reword a comment in the shared exemption appender",
-           sub(RESTCTL, "            return $endpoints;   // never replace another plugin's shape",
-                        "            return $endpoints;   // another plugin's shape is never replaced")),
+           sub(RESTCTL, "            return $endpoints;   // never replace another plugin's shape\n        }\n        if ( ! in_array( $route, $endpoints, true ) ) {",
+                        "            return $endpoints;   // another plugin's shape is never replaced\n        }\n        if ( ! in_array( $route, $endpoints, true ) ) {")),
     "N5": ("reword a comment in the health panel's roll-call",
            sub(HEALTH, "               there for why the list lives beside the routes it describes. */",
                        "               there for why that list lives next to the routes it names. */"), GATE91),

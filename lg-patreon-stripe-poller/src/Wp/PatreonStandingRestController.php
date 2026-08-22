@@ -56,9 +56,15 @@ use WP_REST_Response;
  * hash_equals, so a caller without the secret is refused exactly as before —
  * only WHICH check does the refusing changes); the exemption names this ONE
  * route; and gate 86's list of still-restricted routes was updated DELIBERATELY
- * rather than left to drift. `/sync-customer` and `/send-gift-codes` stay shut
- * on purpose — the five-minute `Sync::all()` sweep covers the first, and nothing
- * is waiting on the second.
+ * rather than left to drift. `/sync-customer` and `/send-gift-codes` stayed shut
+ * on purpose at the time — the five-minute `Sync::all()` sweep covered the
+ * first, and nothing appeared to be waiting on the second.
+ *
+ * ✅ BOTH WERE OPENED BY #203 (2026-08-22), each by its own filter, together
+ * with `/send-gift-recipient` — which neither #181 nor this lane had noticed,
+ * and which made "nothing is waiting on the second" wrong: the buyer's Resend
+ * button was waiting on it. Only `/run-now` is still shut. The ruling recorded
+ * above is unchanged and is what #203 followed.
  *
  * ⚠️ THE FILTER IS REGISTERED UNCONDITIONALLY EVEN THOUGH THE ROUTE IS NOT, and
  * that is deliberate. Naming a route that does not exist changes nothing —
