@@ -2224,6 +2224,49 @@ echo "=== GATE 90: the tester link is recoverable, and rotating kills the old on
 run "tester-dash" php "$(dirname "$0")/tester-dash-gate.php"
 echo
 
+
+echo "=== GATE 91: the membership health panel tells the truth when things are broken ==="
+# #192, split out of #190 which explicitly did not reach this. Three failures on
+# 2026-08-21 cost about an hour each and NOT ONE announced itself: the billing
+# app pointed at a host that does not exist, lgms_shared_secret was present in
+# one half and absent in the other, and BuddyBoss 401'd every lg-member-sync
+# route before any permission callback ran. Each was a SILENCE, which is why a
+# panel is the fix and a log line is not.
+#
+# ⚠️ EVERY ANSWER IS PROVED AGAINST A DELIBERATELY BROKEN STATE, not just a
+# healthy one -- a health panel is worthless on a healthy box, and the only run
+# that matters is the broken one. Mismatched secrets, an absent half, a sync URL
+# on a host that cannot resolve, an emptied cohort, a product with no tier ref,
+# a webhook that never came, a database that will not answer.
+#
+# THREE THINGS THIS GATE LEARNED THE HARD WAY, all from red-first rather than
+# review:
+#   1. `unknown` MUST NOT COLLAPSE INTO `ok`. A5/F7/G6 take away the settings
+#      file, the probe and the database respectively and require `unknown` --
+#      the failure mode of a health panel is a green tick for a question it
+#      could not answer.
+#   2. A BLANK CELL READS LIKE HEALTH. G7 asserts the WORD "Never" in the
+#      rendered markup, and G4 requires a stale receipt to print its AGE.
+#   3. TWO ASSERTIONS WERE THE SAME ASSERTION WEARING TWO NAMES. M40 renamed the
+#      tab slug and H1 stayed green off the dispatch one line away; M51
+#      relabelled the copy button and H6 stayed green off the panel's own
+#      clipboard JS. Both are now measured on the thing they claim to watch.
+#
+# ⚠️ THE FIRST REAL RUN AGAINST dev2 FOUND A FALSE ALARM IN THE PANEL ITSELF and
+# G2/G2b/G2c/G2d exist because of it: "money moved with no webhook recorded"
+# fired against 109 customers that ALL predated the recorder. "Since recording
+# started" is now the recorder file's own mtime on the box -- a fact that can be
+# read -- and history is counted separately and labelled.
+#
+# Real code: Health, HealthPanel, CheckoutAudience, CohortAllowlist,
+# StripeLifecycle, StripePrice. The catalogue and webhook questions run REAL SQL
+# against in-memory SQLite, so the queries themselves are exercised. No browser,
+# no FPM, no network -- it cannot go vacuously green behind a locked-out browser.
+#
+# RED-FIRST: 60 mutations + 3 no-op controls, 63/63 -- tools/gates/membership-health-redfirst.py.
+run "membership-health" php "$(dirname "$0")/membership-health-gate.php"
+echo
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"

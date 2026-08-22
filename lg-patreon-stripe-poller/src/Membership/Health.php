@@ -86,6 +86,12 @@ final class Health
     public const APP_HEALTH_PATH = '/billing/health';
 
     /**
+     * The receipt recorder, on disk. Its MTIME is when webhook recording
+     * arrived on THIS box — see whenRecordingStarted().
+     */
+    public const RECORDER_PATH = '/srv/lg-stripe-billing/src/Core/WebhookReceipts.php';
+
+    /**
      * Keys whose VALUE must never leave this class. Reduced to
      * present/length/sha256 the moment the file is parsed.
      */
@@ -116,6 +122,9 @@ final class Health
 
     /** Memoised so one page load parses the file once. */
     private static ?array $envCache = null;
+
+    /** Test seam for the loopback probe's transport. See post(). */
+    public static ?\Closure $transport = null;
 
     // =========================================================================
     // The public surface
@@ -192,6 +201,20 @@ final class Health
      *   arrived, long ago     ⇒ warn, WITH THE AGE SPELLED OUT
      *   cannot read the table ⇒ unknown, with the reason
      *
+     * ⚠️ "MONEY MOVED" MEANS SINCE RECORDING STARTED, NOT EVER, AND THE FIRST
+     * REAL RUN IS WHAT TAUGHT US THAT. Pointed at dev2 this check said "a
+     * payment completed with no webhook recorded" against 109 customers and
+     * subscriptions — every one of them from before the recorder existed. A
+     * panel that cries wolf on its own deployment day teaches its reader to
+     * ignore it, which is the one thing this screen cannot afford.
+     *
+     * The reference point is a fact that can be read rather than assumed: the
+     * MTIME of the recorder file on this box, which is when a `git pull` put it
+     * there. Sales after that with no receipt are unambiguous. Sales before it
+     * are history, and are counted separately and labelled as such. When the
+     * recorder cannot be found at all the check says so and declines to score
+     * the difference, rather than picking whichever answer looks tidier.
+     *
      * Signature failures are surfaced beside the successes on purpose: a
      * rising failure count next to a silent success count IS the mismatched
      * webhook secret showing itself from the outside, which is the only place
@@ -222,11 +245,23 @@ final class Health
             $badN   = $by[ self::ACT_SIG_FAIL ]['n']    ?? 0;
             $badLast= $by[ self::ACT_SIG_FAIL ]['last'] ?? '';
 
-            /* Has money ever moved on this box? The question that turns
-               "never" from expected into alarming. */
-            $sold = (int) $pdo->query(
+            /* Has money moved on this box, and — the part that matters — has
+               any of it moved SINCE recording started? See the docblock. */
+            $soldEver = (int) $pdo->query(
                 'SELECT (SELECT COUNT(*) FROM subscriptions) + (SELECT COUNT(*) FROM customers)'
             )->fetchColumn();
+
+            $since = self::whenRecordingStarted();
+            if ( $since === null ) {
+                $soldSince = null;
+            } else {
+                $st = $pdo->prepare(
+                    'SELECT (SELECT COUNT(*) FROM subscriptions WHERE created_at >= :a)
+                          + (SELECT COUNT(*) FROM customers     WHERE created_at >= :b)'
+                );
+                $st->execute( [ ':a' => $since, ':b' => $since ] );
+                $soldSince = (int) $st->fetchColumn();
+            }
 
         } catch ( Throwable $e ) {
             return self::check(
@@ -242,11 +277,26 @@ final class Health
         }
 
         if ( $okN === 0 ) {
-            $status = $sold > 0 ? 'fail' : 'warn';
-            $summary = $sold > 0
-                ? 'NEVER — and this box has sold something, so a payment completed with no webhook recorded.'
-                : 'NEVER — but nothing has ever been sold on this box, so that is expected.';
-            $lines[] = self::line( 'Last verified webhook', 'Never', $sold > 0 ? 'fail' : 'warn' );
+            if ( $soldSince === null ) {
+                /* We cannot find the recorder, so we cannot say when recording
+                   started — and therefore cannot tell a real miss from history.
+                   Said plainly rather than guessed. */
+                $status  = 'unknown';
+                $summary = 'NEVER — and this box cannot tell when webhook recording started, '
+                         . 'so it cannot say whether that is a problem.';
+            } elseif ( $soldSince > 0 ) {
+                $status  = 'fail';
+                $summary = 'NEVER — and ' . $soldSince . ' sale(s) landed SINCE recording started, '
+                         . 'so a payment completed with no webhook recorded.';
+            } elseif ( $soldEver > 0 ) {
+                $status  = 'warn';
+                $summary = 'NEVER — but every one of the ' . $soldEver . ' sale(s) on this box predates '
+                         . 'webhook recording, so that is expected.';
+            } else {
+                $status  = 'warn';
+                $summary = 'NEVER — but nothing has ever been sold on this box, so that is expected.';
+            }
+            $lines[] = self::line( 'Last verified webhook', 'Never', $status === 'fail' ? 'fail' : 'warn' );
         } else {
             $age     = self::ageOf( $okLast );
             $stale   = $age === null || $age > self::STALE_AFTER;
@@ -263,7 +313,15 @@ final class Health
             $badN === 0 ? 'none' : $badN . ' (last ' . self::ago( $badLast ) . ')',
             $badN === 0 ? 'ok' : 'fail'
         );
-        $lines[] = self::line( 'Customers + subscriptions on this box', (string) $sold, 'neutral' );
+        $lines[] = self::line( 'Customers + subscriptions on this box', (string) $soldEver, 'neutral' );
+        $lines[] = self::line(
+            'Recording started',
+            $since === null ? 'UNKNOWN — the recorder was not found on this box' : $since . ' UTC',
+            $since === null ? 'unknown' : 'neutral'
+        );
+        if ( $soldSince !== null ) {
+            $lines[] = self::line( 'Sales since recording started', (string) $soldSince, $soldSince > 0 && $okN === 0 ? 'fail' : 'neutral' );
+        }
 
         /* A signature failure outranks everything else this check can say: it
            means Stripe IS reaching us and we are throwing the event away. */
@@ -279,10 +337,12 @@ final class Health
             $status,
             $summary,
             $lines,
-            'Recording started with #192. A count of zero on a box that has taken payments since '
-            . 'then is a real finding; on a box that has taken none it is not. Signature failures '
-            . 'are rate-limited to one record per five minutes, because that endpoint is '
-            . 'unauthenticated and anyone can post rubbish at it.'
+            'A count of zero on a box that has taken payments SINCE recording started is a real '
+            . 'finding; on a box whose sales all predate it, it is not — so the two are counted '
+            . 'separately rather than added together. "Recording started" is the recorder file\'s '
+            . 'own timestamp on this box, which is a fact that can be read rather than assumed. '
+            . 'Signature failures are rate-limited to one record per five minutes, because that '
+            . 'endpoint is unauthenticated and anyone can post rubbish at it.'
         );
     }
 
@@ -721,31 +781,29 @@ final class Health
             ];
         }
 
-        $host = (string) wp_parse_url( home_url(), PHP_URL_HOST );
-        $path = (string) wp_parse_url( rest_url( 'lg-member-sync/v1/checkout-audience' ), PHP_URL_PATH );
-        $url  = 'https://127.0.0.1' . $path;
+        $url    = rest_url( 'lg-member-sync/v1/checkout-audience' );
+        $parts  = (array) wp_parse_url( $url );
+        $scheme = strtolower( (string) ( $parts['scheme'] ?? 'https' ) );
+        $host   = (string) ( $parts['host'] ?? '' );
+        $port   = (int) ( $parts['port'] ?? ( $scheme === 'https' ? 443 : 80 ) );
 
-        $res = wp_remote_post( $url, [
-            'timeout'   => 3,
-            'sslverify' => false,   // loopback to ourselves; the cert names the public host
-            'headers'   => [
-                'Host'         => $host,
-                'X-LGMS-Token' => $secret,
-                'Content-Type' => 'application/json',
-            ],
-            'body'      => '{}',
+        $res = self::post( $url, [
+            'resolve' => $host !== '' ? [ "{$host}:{$port}:127.0.0.1" ] : [],
+            'timeout' => 3,
+            'headers' => [ 'Content-Type: application/json', 'X-LGMS-Token: ' . $secret ],
+            'body'    => '{}',
         ] );
 
-        if ( is_wp_error( $res ) ) {
+        if ( $res['error'] !== '' ) {
             return [
                 'status' => 'unknown',
-                'words'  => 'could not reach the site over loopback (' . self::short( $res->get_error_message() ) . ')',
+                'words'  => 'could not reach the site over loopback (' . self::short( $res['error'] ) . ')',
                 'issue'  => 'the loopback probe failed',
             ];
         }
 
-        $code = (int) wp_remote_retrieve_response_code( $res );
-        $body = (string) wp_remote_retrieve_body( $res );
+        $code = (int) $res['code'];
+        $body = (string) $res['body'];
 
         if ( $code === 200 && str_contains( $body, '"state"' ) ) {
             return [ 'status' => 'ok', 'words' => 'HTTP 200 — our own answer came back', 'issue' => '' ];
@@ -771,6 +829,57 @@ final class Health
         ];
     }
 
+    /**
+     * ⚠️ RAW CURL WITH CURLOPT_RESOLVE, NOT wp_remote_post — AND THAT IS THIS
+     * PLUGIN'S DOCUMENTED CONVENTION, not a preference.
+     * lg-patreon-stripe-poller/CLAUDE.md: *"Server-to-server HTTP: raw curl with
+     * CURLOPT_RESOLVE => host:port:127.0.0.1 (CF challenges PHP-curl).
+     * wp_remote_post does NOT work for these."* RestController::proxyToSlim and
+     * Tick both already do exactly this.
+     *
+     * RESOLVE rather than a 127.0.0.1 URL with a Host header, which is the
+     * tempting shortcut: keeping the real hostname in the URL means SNI, the
+     * certificate and nginx's server_name all still match, and only the TCP
+     * connection is pinned to the box. Cloudflare is never in the path, so the
+     * bot-challenge 403 that reads exactly like an outage cannot happen.
+     *
+     * @param array{resolve:list<string>,timeout:int,headers:list<string>,body:string} $opts
+     * @return array{error:string,code:int,body:string}
+     */
+    private static function post( string $url, array $opts ): array
+    {
+        /* TEST SEAM. Gate 91 swaps this to observe exactly what the probe asks
+           for — the URL, the loopback pin and the timeout are all assertions,
+           and a probe nobody can watch is a probe nobody can prove. */
+        if ( self::$transport !== null ) {
+            return ( self::$transport )( $url, $opts );
+        }
+
+        $ch = curl_init( $url );
+        if ( $ch === false ) {
+            return [ 'error' => 'curl_init failed', 'code' => 0, 'body' => '' ];
+        }
+        curl_setopt_array( $ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => $opts['timeout'],
+            CURLOPT_CONNECTTIMEOUT => 2,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_HTTPHEADER     => $opts['headers'],
+            CURLOPT_POSTFIELDS     => $opts['body'],
+            CURLOPT_RESOLVE        => $opts['resolve'],
+        ] );
+        $body = curl_exec( $ch );
+        $code = (int) curl_getinfo( $ch, CURLINFO_HTTP_CODE );
+        $err  = (string) curl_error( $ch );
+        curl_close( $ch );
+
+        if ( $body === false || $err !== '' ) {
+            return [ 'error' => $err !== '' ? $err : 'the request failed', 'code' => $code, 'body' => '' ];
+        }
+        return [ 'error' => '', 'code' => $code, 'body' => (string) $body ];
+    }
+
     // =========================================================================
     // Reading the billing app's settings file
     // =========================================================================
@@ -786,6 +895,13 @@ final class Health
      *   empty       readable and parsed to nothing. A truncated deploy.
      *   ok          parsed.
      *
+     * ⚠️ A DIRECTORY AT THAT PATH IS `unreadable`, NOT `empty`, AND THE
+     * DISTINCTION WAS FOUND BY GATE 91 RATHER THAN BY REVIEW. PHP's
+     * file_get_contents() on a directory returns the EMPTY STRING, not false —
+     * so the obvious implementation parsed nothing and reported "a truncated
+     * deploy", sending whoever read it to look for a broken write when the real
+     * answer is that the path points somewhere else entirely.
+     *
      * @return array{state:string,path:string,reason:string,secrets:array,plain:array}
      */
     public static function envFacts(): array
@@ -800,6 +916,11 @@ final class Health
         if ( ! file_exists( $path ) ) {
             $out['state']  = 'missing';
             $out['reason'] = 'no file at that path';
+            return self::$envCache = $out;
+        }
+        if ( ! is_file( $path ) ) {
+            $out['state']  = 'unreadable';
+            $out['reason'] = 'that path exists but is not a file';
             return self::$envCache = $out;
         }
         if ( ! is_readable( $path ) ) {
@@ -841,6 +962,29 @@ final class Health
         }
 
         return self::$envCache = $out;
+    }
+
+    /**
+     * WHEN WEBHOOK RECORDING ARRIVED ON THIS BOX, as 'Y-m-d H:i:s' UTC.
+     *
+     * The recorder file's own mtime, which a `git pull` sets. It is not a
+     * perfect clock — a redeploy moves it forward and the window shrinks
+     * accordingly — but it errs in the SAFE direction: it can only ever make
+     * this check quieter, never make it invent a failure. Guessing the other
+     * way round would be a panel that cries wolf, which is the failure mode
+     * that gets a health screen ignored.
+     *
+     * Returns null when the recorder cannot be found, and the caller reports
+     * `unknown` rather than choosing whichever answer looks tidier.
+     */
+    public static function whenRecordingStarted(): ?string
+    {
+        $path = (string) ( $_SERVER['LG_HEALTH_RECORDER'] ?? getenv( 'LG_HEALTH_RECORDER' ) ?: self::RECORDER_PATH );
+        if ( $path === '' || ! is_file( $path ) ) {
+            return null;
+        }
+        $t = @filemtime( $path );
+        return $t === false ? null : gmdate( 'Y-m-d H:i:s', $t );
     }
 
     /** Where the app's settings file is. Overridable so a gate can point elsewhere. */
