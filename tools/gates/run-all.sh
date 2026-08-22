@@ -2475,9 +2475,20 @@ echo "=== GATE 94: Ian's picks stay on the front page, and the band is never a h
 # Fixtures are CHOSEN BY QUERY, never hardcoded: dev2 and live disagree about the
 # opt-in state of the very member the issue is about.
 #
-# RED-FIRST: 12 mutations + 2 no-op controls, 14/14 --
-# tools/gates/featured-override-redfirst.py. Three of its legs found real defects
-# in THIS gate rather than in the code, and a fourth found one by disbelief:
+# ⚠️ IAN OVERRULED PART OF THIS LANE MID-BUILD, 2026-08-22, and the gate was
+# RE-AIMED rather than patched around: "If I select a user for featured member I
+# want them shown. Regardless of the status of their profile. Please strip the
+# saftey feature. I want to know what it is in the dash." So §F3 flipped from
+# asserting that a Private profile is REFUSED to asserting that it is offered,
+# labelled and counted; §B4 asserts a pinned private member actually renders; and
+# §C stopped asserting a consent fence on pins and now asserts the invariant that
+# survived it — the consent FLAG is the switch, and #107's acknowledgement door is
+# the only way through. A gate kept green by defending a struck-out behaviour is
+# worse than no gate.
+#
+# RED-FIRST: 18 mutations + 2 no-op controls, 20/20 --
+# tools/gates/featured-override-redfirst.py. FIVE of its legs found defects in
+# THIS gate rather than in the code, and one more was found by disbelief:
 #   1. §A1 counted that a band EXISTED, not that it said anything -- and a
 #      cleared pick really did render a card with an empty <h2>. A real defect,
 #      found because the assertion prints what it measured.
@@ -2490,6 +2501,15 @@ echo "=== GATE 94: Ian's picks stay on the front page, and the band is never a h
 #      would have blocked every lane the moment the flag is ruled back on. The
 #      suite was 14/14 when that was found; the surprise in the wording is what
 #      found it.
+#   5. the status-filter assertion GREPPED THE SOURCE for "pinst" and stayed
+#      green when the filter was removed, because the string also lives in the
+#      chip loop the mutation had not touched -- the "assertion matches a string
+#      that also lives elsewhere" family, five instances deep in this repo now.
+#      The fix was not a cleverer grep: §F5 RENDERS the admin page under real
+#      WordPress with the BRANCH's class (lazy PSR-4 autoloader + wp --require,
+#      ReflectionClass asserting which file actually loaded, pool payload stubbed
+#      through pre_http_request because the dash's loopback URLs route into the
+#      serving checkout and would measure main).
 run "featured-override" python3 "$(dirname "$0")/featured-override-gate.py"
 echo
 

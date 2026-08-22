@@ -493,26 +493,46 @@ disagree.
 | criterion | consented pick | **pinned pick** |
 |---|---|---|
 | `featured_opt_in` (the tick) | required | **bypassed** |
-| `profile_visibility = 'public'` | required | **still required** |
+| `profile_visibility = 'public'` | required | **bypassed** |
 | avatar present | required (else no band) | bypassed — the line is omitted |
 | resolved `role` non-empty | required (else no band) | bypassed — the line is omitted |
-| a members-only `at_a_glance` republished | per consent-A | **never** |
+| a members-only `at_a_glance` republished | per consent-A | **per consent-A, same as anyone** |
 
-**Why the privacy carve-out** (keeper's ruling 8/22, upholding the lane's
-recommendation): `profile_visibility = private` is not a completeness bar, it is
-the member's own switch saying "I am not public", and it outranks admin pinning
-under the same consent-A principle. Pinning them would put their face on the open
-web pointing at a page the public cannot open. The dash lists them marked
-*"cannot be pinned — their profile is Private"*, because a name that silently is
-not there is a question rather than an answer.
+⚠️ **THE PIN IS ABSOLUTE, AND THAT IS IAN'S OVERRULE OF KEEPER, 8/22:** *"If I
+select a user for featured member I want them shown. Regardless of the status of
+their profile. Please strip the saftey feature. I want to know what it is in the
+dash. I want a link to check out their profile. Open in new tab. I don't want to
+dissapear the band."* Keeper had earlier upheld a privacy carve-out (with an
+explicit "Ian can overrule" note); this is the overrule, and the fence was
+stripped rather than narrowed.
 
-**Why a pinned pick republishes nothing.** Every route through `$mayRepublish` is
-a claim about a **tick** — made under copy describing the republication, or
-knowingly accepted by an admin. A pinned member has not ticked, so there is no
-consent to be informed or acknowledged, and inferring one from the act of pinning
-would turn *"Ian features them knowingly"* into *"Ian consents on their behalf"*.
-`$pinned` is a parameter of the existing pure `lg_fm_card_role()` (defaulting
-false, so gate 39 §G3's truth table is unchanged), not a second rule beside it.
+**What was measured before the fence came out**, because the question worth
+asking was what a pin could newly expose beyond a name, a photo and a link — a
+members-only About or one-liner belonging to somebody whose whole profile is
+private. **Live has ZERO members who are not public; dev2 has exactly one, a test
+fixture with neither.** The exposure is not small, it is nil on both boxes, so no
+carve-out was kept and none is hiding behind a comment. ⚠️ **One forward-looking
+fact, recorded rather than fenced:** if a member ever goes Private while their
+About section is marked public, a pinned card would publish that About.
+
+**The one-liner follows the same rule as for anybody else.** Ian: *"if pinned,
+show what the band shows for anyone else."* So `$pinned` is deliberately **not**
+consulted in `lg_fm_card_role()`. A pinned member reaches `$mayRepublish` through
+the same two doors as everyone, and #107's own wording opens the second for them
+— *"until they re-confirm OR Ian features them knowingly"* — so the dash records
+`consent_ack` on a pin and this is #107 being **exercised**, not routed around.
+The `informed` door stays shut for a pin by construction: no tick, so
+`featured_opt_in_at` is null. **Today it changes nothing on either box** — the
+featured-consent flag is OFF, so `$mayRepublish` is false for everybody.
+
+**The dash informs; it never blocks.** Status (`consented` / `never asked` /
+`private profile`) is a **winnowing filter with counts**, not a label — Ian: *"The
+privacy status was more for a stat for winnowing selections in the dash I
+thought."* The buckets are mutually exclusive and computed by the **same SQL
+expression** that produces the counts, so a filter's number and its rows cannot
+disagree; the counts cover the whole match set, not the 25 rows shown. Every row
+carries a `target="_blank" rel="noopener"` link to the member's profile, and
+every row has a button.
 
 **And pinning never writes `users.featured_opt_in`.** Gate 39 §D keeps
 `me-featured.php` off the admin-impersonation allowlist so an admin cannot tick a
@@ -576,6 +596,14 @@ recording stints, and a SELECT naming one would 500 the read so the dash says
 as a dash, never as *"opted in"*.
 
 ### Still open — reported, not fixed
+
+- **The band always draws the pinned member.** Ian: *"I don't want to dissapear
+  the band. Same band. Vis if I select the member."* With the fences stripped, the
+  only way a pick fails to resolve is the member's row not existing at all, and
+  that lands on the empty-pool fallback rather than on nothing. Gate 94 §B4
+  renders a pinned non-public member and asserts the card shows **them**, not the
+  fallback — a fallback there would be the disappearance he is describing wearing
+  a different card.
 
 - **Live needs the grant**, and it is Ian's to run:
   `sudo -u postgres psql profile_app -f tools/cut/featured-member-grants.sql`.

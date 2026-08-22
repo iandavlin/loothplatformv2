@@ -117,17 +117,19 @@ final class FeaturedMemberDash
         return is_array($j) ? $j : [];
     }
 
-    private static function fetch_pool(string $search = ''): array
+    private static function fetch_pool(string $search = '', string $status = 'all'): array
     {
         $secret = self::read_file_secret(self::INTERNAL_SECRET_FILE);
-        if ($secret === '') return ['pool' => [], 'candidates' => null];
-        $url = self::POOL_URL . ($search !== '' ? '?q=' . rawurlencode($search) : '');
+        if ($secret === '') return ['pool' => [], 'candidates' => null, 'candidate_counts' => null];
+        $url = self::POOL_URL . ($search !== ''
+            ? '?q=' . rawurlencode($search) . '&status=' . rawurlencode($status)
+            : '');
         $resp = wp_remote_get($url, [
             'timeout' => 5, 'sslverify' => false,
             'headers' => ['Host' => self::resolve_host(), 'X-LG-Internal-Auth' => $secret],
         ]);
         if (is_wp_error($resp) || (int) wp_remote_retrieve_response_code($resp) !== 200) {
-            return ['pool' => [], 'candidates' => null];
+            return ['pool' => [], 'candidates' => null, 'candidate_counts' => null];
         }
         $j = json_decode((string) wp_remote_retrieve_body($resp), true);
         return [
@@ -137,6 +139,7 @@ final class FeaturedMemberDash
             // different answers and must not render alike. Same absent-key
             // discipline card_renderable already uses one field over.
             'candidates' => is_array($j['candidates'] ?? null) ? $j['candidates'] : null,
+            'candidate_counts' => is_array($j['candidate_counts'] ?? null) ? $j['candidate_counts'] : null,
         ];
     }
 
@@ -490,30 +493,27 @@ final class FeaturedMemberDash
             self::redirect_back(rawurlencode('that member could not be looked up just now — nothing was changed'));
             return;
         }
-        // KEEPER'S RULING, 2026-08-22: a pinned pick does NOT bypass a member's
-        // own profile_visibility. Placing them is Ian's call; being public at
-        // all is theirs, and the front page would otherwise link the world to a
-        // profile the world cannot open.
-        if (empty($member['eligible'])) {
-            self::redirect_back(rawurlencode(
-                trim((string) $member['display_name']) . ' has set their profile to Private, so they cannot be '
-                . 'put on the public front page. That is their own setting, not a completeness bar — ask them '
-                . 'to make their profile public first.'
-            ));
-            return;
-        }
-
+        // ⚠️ NO REFUSAL HERE, DELIBERATELY, AND IT USED TO BE ONE.
+        // Ian, 2026-08-22: "If I select a user for featured member I want them
+        // shown. Regardless of the status of their profile. Please strip the
+        // saftey feature. I want to know what it is in the dash."
+        // An earlier cut refused a Private profile. His ruling is that the
+        // status is a FACT for winnowing, shown beside the name and in the
+        // filter, never a wall — so the only thing that can stop a pin now is
+        // not being able to find the member at all.
         $user = wp_get_current_user();
         $res = self::post_config([
             'enabled'     => true,
             'member_uuid' => $uuid,
             'name'        => (string) $member['display_name'],
             'role'        => (string) ($member['public_role'] ?? ''),
-            // A pin carries NO consent, so it carries no acknowledgement of one.
-            // Writing false explicitly matters here more than anywhere: a stale
-            // true from a previous consented pick would tell the resolver an
-            // admin knowingly accepted a tick this member never made.
-            'consent_ack' => false,
+            // #107's own second clause, exercised: "until they re-confirm OR Ian
+            // features them knowingly". Pinning IS featuring them knowingly, so
+            // the acknowledgement is recorded rather than inferred later — and
+            // the row he clicked from said, in words, what it would publish.
+            // Today this changes nothing on either box: the featured-consent
+            // flag is OFF, so no one-liner is republished for anybody.
+            'consent_ack' => true,
             'pinned'      => true,
             'chosen_by'   => $user && $user->user_login ? $user->user_login : 'wp-admin',
         ]);
@@ -566,9 +566,17 @@ final class FeaturedMemberDash
 
         $current = self::fetch_current();
         $search  = isset($_GET['pinq']) ? sanitize_text_field(wp_unslash((string) $_GET['pinq'])) : '';
-        $fetched = self::fetch_pool($search);
+        // Ian, 2026-08-22: "The privacy status was more for a stat for winnowing
+        // selections in the dash I thought." So status narrows the list he is
+        // reading. Validated against the same four values the endpoint accepts —
+        // an unknown one falls back to 'all', never to an empty list, because a
+        // filter that silently matches nothing reads as "there is nobody".
+        $status  = isset($_GET['pinst']) ? sanitize_key(wp_unslash((string) $_GET['pinst'])) : 'all';
+        if (!in_array($status, ['all', 'consented', 'never', 'private'], true)) $status = 'all';
+        $fetched = self::fetch_pool($search, $status);
         $pool    = $fetched['pool'];
         $candidates = $fetched['candidates'];
+        $counts  = $fetched['candidate_counts'];
         $history = self::fetch_history();
         $fm      = is_array($current['featured_member'] ?? null) ? $current['featured_member'] : [];
         $currentUuid = (string) ($fm['member_uuid'] ?? '');
@@ -721,18 +729,45 @@ final class FeaturedMemberDash
            and the endpoint only computes candidates when asked, so an unsearched
            page load costs nothing. */
         echo '<h2>Pin a member <span style="font-weight:400;color:#646970">&mdash; anyone, criteria or not</span></h2>';
-        echo '<p class="description" style="max-width:70em">Puts a member on the front page who has <strong>not</strong> ticked the box. '
-           . 'Their card shows only what their profile already shows the public &mdash; their photo, their name, and their public '
-           . 'one-liner if they have one. A members-only one-liner is never repeated here, because they have not agreed to that; '
-           . 'ticking the box is what agreeing looks like, and a pinned member has not done it. '
-           . '<strong>That conversation is yours to have with them.</strong></p>';
-        echo '<form method="get" action="' . esc_url(admin_url('admin.php')) . '" style="margin:10px 0 16px">'
+        echo '<p class="description" style="max-width:70em">Puts <strong>anyone</strong> on the front page &mdash; ticked or not, '
+           . 'public profile or not. Nothing here refuses a pick. The <strong>Status</strong> column is there to help you narrow '
+           . 'the list, and the filter above it counts each kind; every profile link opens in a new tab so you can look before '
+           . 'you choose. A member who has not ticked the box has not been asked &mdash; '
+           . '<strong>that conversation is yours to have with them.</strong></p>';
+        echo '<form method="get" action="' . esc_url(admin_url('admin.php')) . '" style="margin:10px 0 10px">'
            . '<input type="hidden" name="page" value="' . esc_attr(self::PAGE_SLUG) . '">'
+           . '<input type="hidden" name="pinst" value="' . esc_attr($status) . '">'
            . '<input type="search" name="pinq" value="' . esc_attr($search) . '" class="regular-text" '
            . 'placeholder="Search members by name, handle or business">'
            . ' <button type="submit" class="button">Search</button>'
            . ($search !== '' ? ' <a class="button-link" href="' . esc_url(admin_url('admin.php?page=' . self::PAGE_SLUG)) . '">clear</a>' : '')
            . '</form>';
+
+        /* THE WINNOWING FILTER. Counts come from the endpoint and cover the WHOLE
+           match set, not the 25 rows shown — a number that silently meant "of the
+           page you can see" would be worse than no number, since narrowing is the
+           entire job. Rendered only with a search in play, because a filter over
+           nothing is furniture. */
+        if ($search !== '' && is_array($counts)) {
+            $labels = [
+                'all'       => 'Everyone',
+                'consented' => 'Consented',
+                'never'     => 'Never asked',
+                'private'   => 'Private profile',
+            ];
+            echo '<p style="margin:0 0 14px">';
+            foreach ($labels as $key => $label) {
+                $n = (int) ($counts[$key] ?? 0);
+                $url = add_query_arg(['page' => self::PAGE_SLUG, 'pinq' => $search, 'pinst' => $key],
+                                     admin_url('admin.php'));
+                $on = ($status === $key);
+                echo '<a href="' . esc_url($url) . '" style="display:inline-block;margin-right:6px;'
+                   . 'padding:4px 10px;border-radius:999px;text-decoration:none;font-size:12px;'
+                   . ($on ? 'background:#2271b1;color:#fff;font-weight:600' : 'background:#f0f0f1;color:#2c3338')
+                   . '">' . esc_html($label) . ' <span style="opacity:.75">' . $n . '</span></a>';
+            }
+            echo '</p>';
+        }
 
         if ($search === '') {
             // Say nothing rather than show an empty table — an empty table reads
@@ -748,44 +783,72 @@ final class FeaturedMemberDash
             echo '<p style="color:#646970">No member matches &ldquo;' . esc_html($search) . '&rdquo;.</p>';
         } else {
             echo '<table class="wp-list-table widefat fixed striped"><thead><tr>'
-               . '<th>Member</th><th>Card would say</th><th>Where</th><th>Status</th><th></th></tr></thead><tbody>';
+               . '<th>Member</th><th>Status</th><th>Card would say</th><th>Where</th><th></th></tr></thead><tbody>';
+            /* Status sits SECOND, beside the name, because it is the thing being
+               winnowed on (Ian: "more for a stat for winnowing selections") and
+               it should read left-to-right with what it describes rather than
+               sitting at the far edge next to the button. */
+            $statusLabel = [
+                'consented' => ['Consented',       '#1a6b2a', 'they ticked the featured box themselves'],
+                'never'     => ['Never asked',     '#646970', 'a public profile; they have not ticked the box'],
+                'private'   => ['Private profile', '#8a6d1f', 'not publicly visible — pinning still shows them'],
+            ];
             foreach ($candidates as $c) {
                 $cUuid = (string) ($c['uuid'] ?? '');
                 $isCur = $isLiveReal && strcasecmp($cUuid, $currentUuid) === 0;
                 echo '<tr' . ($isCur ? ' style="background:#fcf9e8"' : '') . '>';
+                /* "I want a link to check out their profile. Open in new tab."
+                   rel=noopener as well, because target=_blank alone hands the
+                   opened page a handle on this admin window. */
+                $purl = (string) ($c['profile_url'] ?? ('/u/' . (string) $c['slug']));
                 echo '<td><strong>' . esc_html((string) $c['display_name']) . '</strong><br>'
-                   . '<span style="color:#787c82;font-size:11.5px">/u/' . esc_html((string) $c['slug']) . '</span></td>';
+                   . '<a href="' . esc_url($purl) . '" target="_blank" rel="noopener noreferrer" '
+                   . 'style="font-size:11.5px">/u/' . esc_html((string) $c['slug'])
+                   . ' <span aria-hidden="true">&#8599;</span>'
+                   . '<span class="screen-reader-text"> (opens in a new tab)</span></a></td>';
+                /* An UNKNOWN status prints a dash and says the endpoint did not
+                   answer — the same absent-key discipline as card_renderable. A
+                   pool endpoint older than this dash must not be reported as
+                   "never asked", which is a claim about the member. */
+                $sl = $statusLabel[(string) ($c['status'] ?? '')] ?? null;
+                echo '<td style="color:' . esc_attr($sl ? $sl[1] : '#787c82') . '"><strong>'
+                   . ($sl ? esc_html($sl[0]) : '&mdash;') . '</strong><br>'
+                   . '<span style="font-size:11.5px;color:#787c82">'
+                   . esc_html($sl ? $sl[2] : 'this pool endpoint did not say') . '</span></td>';
                 // What the card will SAY, stated before the click rather than
                 // discovered after it — the lesson #107 paid for with Rick
                 // Liftig, one category over.
                 if (($c['public_role'] ?? '') !== '') {
                     echo '<td>' . esc_html((string) $c['public_role']) . '</td>';
                 } else {
-                    echo '<td style="color:#8a6d1f">their name and a link only<br>'
-                       . '<span style="font-size:11.5px">nothing on their profile is public enough to repeat</span></td>';
+                    echo '<td style="color:#646970">their name and a link only<br>'
+                       . '<span style="font-size:11.5px">nothing on their profile is public enough to repeat</span>'
+                       . (!empty($c['glance_members_only'])
+                            ? '<br><span style="font-size:11.5px;color:#8a6d1f">they have written one, but keep it members-only</span>'
+                            : '')
+                       . '</td>';
                 }
                 echo '<td>' . esc_html((string) ($c['location'] ?? '')) . '</td>';
 
+                /* EVERY ROW GETS A BUTTON. Ian, 2026-08-22: "Please strip the
+                   saftey feature." The Status column has already told him what he
+                   is picking; nothing here refuses on it. The only row without a
+                   button is the member already on the front page, and that is not
+                   a refusal — there is simply nothing to do. */
                 if ($isCur) {
-                    echo '<td colspan="2"><span style="background:#edf7ee;color:#1a6b2a;border-radius:3px;padding:3px 7px;font-size:11px;font-weight:600">On now</span></td>';
-                } elseif (empty($c['eligible'])) {
-                    // The one refusal a pin still honours, said in full rather
-                    // than by omitting the row — a name that silently is not
-                    // there is a question, not an answer.
-                    echo '<td colspan="2" style="color:#646970"><strong>Cannot be pinned</strong> &mdash; their profile is Private. '
-                       . 'That is their own setting, not a completeness bar.</td>';
-                } elseif (!empty($c['opted_in'])) {
-                    echo '<td colspan="2" style="color:#646970"><strong>Already in the pool</strong> &mdash; they ticked the box, '
-                       . 'so feature them from the table above and their card can say more.</td>';
+                    echo '<td><span style="background:#edf7ee;color:#1a6b2a;border-radius:3px;padding:3px 7px;font-size:11px;font-weight:600">On now</span></td>';
                 } else {
-                    echo '<td style="color:#8a6d1f">Never asked</td>';
+                    // A member already in the pool is FEATURED rather than pinned
+                    // — same button, honest verb, and handle_pin records which
+                    // it was from their live opt-in state, not from this label.
+                    $verb = !empty($c['opted_in']) ? 'Feature' : 'Pin to front page';
                     echo '<td><form method="post" action="' . esc_url($postUrl) . '">'
                        . '<input type="hidden" name="action" value="' . esc_attr(self::PIN_ACTION) . '">'
                        . '<input type="hidden" name="member_uuid" value="' . esc_attr($cUuid) . '">'
                        . '<input type="hidden" name="_wpnonce" value="' . esc_attr($nonce) . '">'
                        . '<button type="submit" class="button" title="' . esc_attr(
-                            'Places them on the front page without a tick. They have not been asked — that is yours to do.'
-                         ) . '">Pin to front page</button></form></td>';
+                            'Puts them on the front page now, whatever their status. Their profile link opens in a new tab if you want to look first.'
+                         ) . '">' . esc_html($verb) . '</button></form></td>';
                 }
                 echo '</tr>';
             }

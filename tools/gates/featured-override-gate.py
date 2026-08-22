@@ -401,15 +401,56 @@ def section_b_pin_overrides_criteria():
                       "the override reaches pinned picks only")
 
 
-# ── C. THE CONSENT FENCE, ALSO AS A PAIR ─────────────────────────────────────
-def section_c_pin_never_republishes():
-    """Consent-A (#107): "the tick is consent". A pinned member has not ticked,
-    so their members-only one-liner may never appear on the public card — under
-    either state of the consent flag, and even with consent_ack set in the
-    config, because an admin cannot acknowledge a consent that was never given.
+    # B4 — THE RULING'S HEADLINE, RENDERED. Ian, 2026-08-22: "If I select a user
+    # for featured member I want them shown. Regardless of the status of their
+    # profile. … I don't want to dissapear the band. Same band."
+    #
+    # The band must draw the MEMBER, not the fallback — a fallback here would be
+    # the disappearance he is describing, wearing a different card.
+    fx4 = pick("SELECT uuid, display_name FROM users WHERE profile_visibility <> 'public' "
+               "ORDER BY id LIMIT 1", "a non-public member")
+    if not fx4:
+        DEAD.append("[B4] no non-public member exists on this box, so the ruling's headline case "
+                    "cannot be exercised here")
+    else:
+        html4, err4 = render(fm(fx4[0], True), {"LG_FEATURED_MEMBERS": "1"})
+        if not liveness(html4):
+            DEAD.append(f"[B4] the front page did not render: {err4 or 'no page'}")
+        else:
+            b4 = band(html4)
+            if b4["present"] == 0:
+                RED.append(f"[B4] pinning the non-public member {fx4[1]!r} left NO band at all — "
+                           f"the band disappeared, which is the thing the ruling names")
+            elif b4["name"] != fx4[1]:
+                RED.append(f"[B4] pinning {fx4[1]!r} drew {b4['name']!r} instead — a private "
+                           f"profile is still being refused somewhere, and the fallback is hiding "
+                           f"it. Ian's ruling: \"Regardless of the status of their profile.\"")
+            else:
+                OK.append(f"[B4] a pinned member with a non-public profile renders on the front "
+                          f"page ({fx4[1]!r}) — the pin is absolute, per the ruling")
 
-    PAIRED with the consented case under the same flag. A fence that refuses
-    everybody would pass the first half while proving nothing."""
+
+# ── C. WHERE A MEMBERS-ONLY ONE-LINER MAY REACH THE PUBLIC CARD ──────────────
+def section_c_pin_never_republishes():
+    """⚠️ RENAMED BY RULING, NOT WEAKENED BY CONVENIENCE. Ian, 2026-08-22:
+    "If I select a user for featured member I want them shown. Regardless of the
+    status of their profile. Please strip the saftey feature." and "if pinned,
+    show what the band shows for anyone else."
+
+    An earlier cut of this section asserted that a PINNED member's members-only
+    one-liner is never republished. That fence is stripped by the ruling above,
+    so asserting it now would be asserting a behaviour Ian removed.
+
+    WHAT SURVIVES IS THE INVARIANT UNDERNEATH IT, which the ruling does not
+    touch: a members-only one-liner reaches the public card ONLY through a route
+    #107 names — the consent flag being ON, plus either an informed tick or an
+    admin's recorded acknowledgement. Pinning goes through the SECOND of those
+    doors on purpose ("until they re-confirm OR Ian features them knowingly"),
+    which is #107 being exercised rather than bypassed.
+
+    So C1 now asserts the state both boxes are actually in — flag OFF, nothing
+    republished for anybody, pinned or not — and C2 keeps its liveness half, so
+    "nothing is republished" can never pass because republication is broken."""
     pin_fx = FX.get("glance_pin")
     con_fx = FX.get("glance_consented")
 
@@ -418,21 +459,36 @@ def section_c_pin_never_republishes():
                     "fixture is absent, so this is not run rather than passing vacuously")
     else:
         uuid, name, glance = pin_fx[0], pin_fx[1], pin_fx[2]
-        for flag in ("0", "1"):
-            # consent_ack deliberately TRUE: if the pin honoured it, that
-            # would be a consent nobody ever gave.
-            html, err = render(fm(uuid, True, ack=True),
-                               {"LG_FEATURED_MEMBERS": "1", "LG_FEATURED_CONSENT": flag})
-            if not liveness(html):
-                DEAD.append(f"[C1] the front page did not render (consent={flag}): {err or 'no page'}")
-                continue
-            if glance and glance in html:
-                RED.append(f"[C1] with the consent flag {flag}, PINNING {name!r} republished their "
-                           f"members-only one-liner on the public front page — they never ticked "
-                           f"the box, so nothing consented to that")
-            else:
-                OK.append(f"[C1] consent flag {flag}: a pinned member's members-only one-liner is "
-                          f"withheld, even with consent_ack set")
+        # THE SHIPPED STATE, and the one that matters today: the consent flag is
+        # OFF on dev2 and live, so no members-only one-liner reaches the public
+        # card for anybody — pinned, consented, acked or not. consent_ack is set
+        # deliberately, because with the flag off it must not be a route on its
+        # own; that is the pairing gate 39 §G1 exists for, seen from the outside.
+        html, err = render(fm(uuid, True, ack=True),
+                           {"LG_FEATURED_MEMBERS": "1", "LG_FEATURED_CONSENT": "0"})
+        if not liveness(html):
+            DEAD.append(f"[C1] the front page did not render: {err or 'no page'}")
+        elif glance and glance in html:
+            RED.append(f"[C1] with the consent flag OFF, {name!r}'s members-only one-liner reached "
+                       f"the public front page anyway — the flag is not the switch it claims to "
+                       f"be, and consent_ack has become a route of its own")
+        else:
+            OK.append("[C1] consent flag OFF — no members-only one-liner is republished for a "
+                      "pinned pick, even with consent_ack recorded")
+        # AND WITH THE FLAG ON, the recorded acknowledgement IS a route, by
+        # ruling. Asserted so that turning the flag on later cannot quietly do
+        # something nobody predicted here.
+        html, err = render(fm(uuid, True, ack=True),
+                           {"LG_FEATURED_MEMBERS": "1", "LG_FEATURED_CONSENT": "1"})
+        if not liveness(html):
+            DEAD.append(f"[C1b] the front page did not render: {err or 'no page'}")
+        elif glance and glance in html:
+            OK.append("[C1b] consent flag ON — a pinned pick republishes through the "
+                      "acknowledgement door #107 names, which is what Ian's ruling asks for")
+        else:
+            RED.append(f"[C1b] with the consent flag ON and consent_ack recorded, {name!r}'s "
+                       f"one-liner is still withheld — #107's \"OR Ian features them knowingly\" "
+                       f"clause has stopped working, so the flag would do nothing for a pin")
 
     if not con_fx:
         DEAD.append("[C2] no OPTED-IN member on this box has a members-only one-liner, so the "
@@ -444,8 +500,9 @@ def section_c_pin_never_republishes():
         if not liveness(html):
             DEAD.append(f"[C2] the front page did not render: {err or 'no page'}")
         elif glance and glance in html:
-            OK.append(f"[C2] liveness: the SAME rule still republishes for a CONSENTED member "
-                      f"under the consent flag — so C1's refusal is the pin, not a dead path")
+            OK.append("[C2] liveness: the rule really does republish for a CONSENTED member "
+                      "under the consent flag — so C1's silence with the flag OFF is the flag "
+                      "doing its job, not republication being broken everywhere")
         else:
             RED.append(f"[C2] a consented member's one-liner is NOT republished with the consent "
                        f"flag on — either #107's rule has regressed, or C1 above is passing "
@@ -656,15 +713,21 @@ def section_f_dash_is_honest():
         else:
             OK.append(f"[F2] {fn}() writes 'pinned' => {want} explicitly")
 
-    # F3 — the Private refusal, EXECUTED. Keeper's ruling of 2026-08-22: a pinned
-    # pick does not bypass a member's own profile_visibility. Run the real
-    # endpoint against the box and check a private member comes back listed and
-    # marked ineligible — listed, because a name that silently is not there is a
-    # question rather than an answer.
+    # F3 — ⚠️ RENAMED BY RULING. Ian, 2026-08-22: "Please strip the saftey
+    # feature. I want to know what it is in the dash." and, on the status
+    # column, "more for a stat for winnowing selections in the dash I thought."
+    #
+    # This used to assert that a Private profile is REFUSED. It now asserts the
+    # opposite shape — that a Private member is offered, LABELLED, and COUNTED —
+    # because the fence was removed by ruling, and a gate that kept asserting it
+    # would be defending a behaviour Ian struck out. The invariant that replaces
+    # it is that the status is never LOST: it must reach the dash as a fact, and
+    # as a filter he can narrow on, or "informs instead of blocking" degrades
+    # into "does neither".
+    #
     # ⚠️ BY UUID, NOT BY NAME. This box has TWO members displaying "test", one
-    # public and one private, and matching on the name picked the public one —
-    # so the gate reported the private-profile refusal as broken when it was
-    # working. A fixture that can match the wrong row is not a fixture.
+    # public and one private, and matching on the name picked the public one.
+    # A fixture that can match the wrong row is not a fixture.
     rc, out, err = psql("SELECT uuid, display_name FROM users "
                         "WHERE profile_visibility <> 'public' LIMIT 1")
     if rc != 0:
@@ -678,7 +741,8 @@ def section_f_dash_is_honest():
         with open(probe, "w") as f:
             f.write("<?php\n$_SERVER['REQUEST_METHOD'] = 'GET';\n"
                     "$_SERVER['HTTP_X_LG_INTERNAL_AUTH'] = trim((string) @file_get_contents('/etc/lg-internal-secret'));\n"
-                    "$_GET['q'] = getenv('Q');\nrequire %r;\n" % POOL_PHP)
+                    "$_GET['q'] = getenv('Q');\n"
+                    "if (getenv('ST')) $_GET['status'] = getenv('ST');\nrequire %r;\n" % POOL_PHP)
         os.chmod(probe, 0o644)
         r = subprocess.run(["sudo", "-n", "-u", "profile-app", "env", f"Q={puuid}", "php", probe],
                            capture_output=True, text=True, timeout=40)
@@ -696,20 +760,72 @@ def section_f_dash_is_honest():
                 match = [c for c in cands if c.get("uuid") == puuid]
                 if not match:
                     RED.append(f"[F3] the non-public member {pname!r} is absent from the candidate "
-                               f"list entirely — a name that silently is not there reads as a bug, "
-                               f"which is why the ruling asks for a legible refusal instead")
-                elif match[0].get("eligible"):
-                    RED.append(f"[F3] {pname!r} has a non-public profile but is marked eligible to "
-                               f"pin — that is the member's own switch and it outranks pinning")
+                               f"list entirely — Ian's ruling is that he picks anyone and the dash "
+                               f"tells him what they are; a name that is simply not there tells him "
+                               f"nothing and refuses him silently")
+                elif match[0].get("status") != "private":
+                    RED.append(f"[F3] {pname!r} has a non-public profile but the dash is told "
+                               f"status={match[0].get('status')!r} — the status is the winnowing "
+                               f"fact, and a wrong one is worse than none")
                 else:
-                    OK.append(f"[F3] a non-public member is listed and marked ineligible, so the "
-                              f"dash can say why rather than omitting them")
-                # And the search must be usable at all.
+                    OK.append("[F3] a non-public member is offered for pinning and carries "
+                              "status='private', so the dash can label it rather than refuse it")
                 if payload.get("pool") is None:
                     RED.append("[F3] the pool payload lost its `pool` key while gaining candidates")
+                # F3b — THE STATUS IS A FILTER, NOT JUST A LABEL (Ian's refinement).
+                # Counts must cover the whole match set, and the buckets must be
+                # mutually exclusive, or the number beside a filter is a guess.
+                cc = payload.get("candidate_counts")
+                if not isinstance(cc, dict):
+                    RED.append("[F3b] the endpoint returns no candidate_counts — the dash's filter "
+                               "would have nothing to count with, and its whole job is narrowing")
+                elif cc.get("all") != sum(cc.get(k, 0) for k in ("consented", "never", "private")):
+                    RED.append(f"[F3b] the status buckets do not sum to the total ({cc}) — a member "
+                               f"is in two buckets or none, so the counts he winnows on are wrong")
+                elif cc.get("private", 0) < 1:
+                    RED.append(f"[F3b] a non-public member was found by query but the private "
+                               f"bucket counts {cc.get('private')} — the filter cannot find the "
+                               f"very row F3 just proved is there")
+                else:
+                    OK.append(f"[F3b] the status filter counts the whole match set and its buckets "
+                              f"sum exactly ({cc['all']} = {cc['consented']}+{cc['never']}+{cc['private']})")
+                # F3c — a filtered request returns ONLY that bucket.
+                r2 = subprocess.run(["sudo", "-n", "-u", "profile-app", "env", f"Q={puuid}",
+                                     "ST=private", "php", probe],
+                                    capture_output=True, text=True, timeout=40)
+                try:
+                    only = json.loads(r2.stdout).get("candidates") or []
+                except Exception:
+                    only = None
+                if only is None:
+                    DEAD.append("[F3c] the filtered request did not return JSON")
+                elif any(c.get("status") != "private" for c in only):
+                    RED.append("[F3c] filtering to 'private' returned rows of other kinds — the "
+                               "filter does not narrow, so its counts describe a different list")
+                elif not only:
+                    RED.append("[F3c] filtering to 'private' returned nothing, though F3 found a "
+                               "private member — a filter that silently matches nothing reads as "
+                               "'there is nobody'")
+                else:
+                    OK.append("[F3c] filtering to 'private' returns only private rows")
 
     # F4 — the words. Both kinds must be NAMED on the page; "featured" alone now
     # covers a member who agreed and one who was never asked.
+    # ⚠️ AND THE REFUSAL LANGUAGE MUST BE GONE. Ian struck it out; a dash that
+    # still says it is telling him something untrue about his own permissions.
+    if "Cannot be pinned" in dash:
+        RED.append("[F4] the dash still says \"Cannot be pinned\" — that refusal was stripped by "
+                   "ruling on 2026-08-22 and the words must go with the behaviour, or the page "
+                   "tells Ian he cannot do the thing he just did")
+    else:
+        OK.append("[F4] the cannot-be-pinned refusal language is gone, with the behaviour")
+    # The profile link he asked for, in a new tab, with the opener closed off.
+    if 'target="_blank"' not in dash or "noopener" not in dash:
+        RED.append("[F4] the candidate rows have no new-tab profile link with rel=noopener — "
+                   "Ian: \"I want a link to check out their profile. Open in new tab.\"")
+    else:
+        OK.append("[F4] every candidate row links to the member's profile in a new tab")
+
     for needle, what in (("pinned by an admin", "the live pick's banner"),
                          ("opted in", "the consented label")):
         if needle not in dash:
@@ -723,6 +839,123 @@ def report():
     for m in OK:   print(f"  ok   {m}")
     for m in RED:  print(f"  RED  {m}")
     for m in DEAD: print(f"  DEAD {m}")
+
+
+def section_f5_dash_renders():
+    """⚠️ THE ONLY SECTION THAT LOOKS AT THE DASH AS A PAGE, and it exists because
+    the source-grep version of it went GREEN on a mutation that removed the
+    filter. Grepping for "pinst" passed while the control was gone, because the
+    string also lives in the chip loop the mutation did not touch — the
+    "assertion matches a string that also lives elsewhere" failure this repo has
+    now paid for five times.
+
+    So this RENDERS the admin page: real WordPress, real user, and the BRANCH's
+    class. lg-layout-v2 uses a LAZY PSR-4 autoloader, so requiring the branch
+    file from `wp --require` (before WP boots) means the autoloader never fires
+    for it and the serving checkout's copy — which is main — is not what runs.
+    ReflectionClass reports the file that actually loaded, and that path is
+    asserted.
+
+    The pool payload is STUBBED through `pre_http_request`, deliberately: the
+    dash's loopback URLs are routed by nginx into the serving checkout, so a live
+    call would measure main's endpoint and report this dash as broken. The stub
+    is a fixed synthetic payload, so the counts asserted here are arithmetic, not
+    whatever the box happens to hold today."""
+    boot = os.path.join(TMP, "dashboot.php")
+    with open(boot, "w") as f:
+        f.write("<?php require_once %r;\n" % DASH_PHP)
+    payload = {
+        "pool": [],
+        "candidate_counts": {"all": 3, "consented": 1, "never": 1, "private": 1},
+        "status": "all",
+        "candidates": [
+            {"uuid": "11111111-1111-4111-8111-111111111111", "slug": "consented-one",
+             "display_name": "Consented One", "avatar_url": "/a.jpg", "location": "",
+             "eligible": True, "opted_in": True, "status": "consented",
+             "profile_url": "/u/consented-one", "has_photo": True,
+             "public_role": "Bench Work", "glance_members_only": False},
+            {"uuid": "22222222-2222-4222-8222-222222222222", "slug": "never-asked",
+             "display_name": "Never Asked", "avatar_url": "/b.jpg", "location": "",
+             "eligible": True, "opted_in": False, "status": "never",
+             "profile_url": "/u/never-asked", "has_photo": True,
+             "public_role": "", "glance_members_only": True},
+            {"uuid": "33333333-3333-4333-8333-333333333333", "slug": "private-one",
+             "display_name": "Private One", "avatar_url": "/c.jpg", "location": "",
+             "eligible": False, "opted_in": False, "status": "private",
+             "profile_url": "/u/private-one", "has_photo": True,
+             "public_role": "", "glance_members_only": False},
+        ],
+    }
+    render_php = os.path.join(TMP, "dashrender.php")
+    with open(render_php, "w") as f:
+        f.write("""<?php
+use LG\\LayoutV2\\FeaturedMemberDash;
+$r = new ReflectionClass(FeaturedMemberDash::class);
+fwrite(STDERR, "LOADED:" . $r->getFileName() . "\\n");
+add_filter('pre_http_request', function ($pre, $args, $url) {
+    if (strpos($url, 'featured-pool') !== false) {
+        return ['headers'=>[], 'body'=>getenv('POOL_JSON'),
+                'response'=>['code'=>200,'message'=>'OK'], 'cookies'=>[], 'filename'=>null];
+    }
+    if (strpos($url, '_featured-history') !== false) {
+        return ['headers'=>[], 'body'=>'{"history":[]}',
+                'response'=>['code'=>200,'message'=>'OK'], 'cookies'=>[], 'filename'=>null];
+    }
+    return $pre;
+}, 10, 3);
+$a = get_users(['role'=>'administrator','number'=>1]);
+if (!$a) { fwrite(STDERR, "NOADMIN\\n"); exit(1); }
+wp_set_current_user($a[0]->ID);
+$_GET['page'] = 'lg-featured-member';
+$_GET['pinq'] = 'x';
+ob_start(); FeaturedMemberDash::render_page(); echo ob_get_clean();
+""")
+    for f_ in (boot, render_php):
+        os.chmod(f_, 0o644)
+    p = subprocess.run(["sudo", "-n", "-u", "looth-dev", "env",
+                        "POOL_JSON=" + json.dumps(payload),
+                        "wp", "eval-file", render_php, "--require=" + boot,
+                        "--path=/var/www/dev", "--skip-themes"],
+                       capture_output=True, text=True, timeout=180)
+    html = p.stdout
+    if "LOADED:" + DASH_PHP not in p.stderr:
+        DEAD.append(f"[F5] could not render the BRANCH's dash — it loaded "
+                    f"{[l for l in p.stderr.splitlines() if l.startswith('LOADED:')] or p.stderr[-200:]}. "
+                    f"Rendering the serving checkout's copy would be measuring main.")
+        return
+    if "Featured Member" not in html:
+        DEAD.append(f"[F5] the dash rendered nothing usable: {(p.stderr or html)[-250:]}")
+        return
+
+    # THE FILTER, as rendered: one link per bucket, each carrying its count.
+    for key, label, n in (("all", "Everyone", 3), ("consented", "Consented", 1),
+                          ("never", "Never asked", 1), ("private", "Private profile", 1)):
+        if f"pinst={key}" not in html and f"pinst%3D{key}" not in html:
+            RED.append(f"[F5] the rendered dash has no link filtering to '{key}' — Ian: \"more for "
+                       f"a stat for winnowing selections in the dash\", and a label you cannot "
+                       f"click does not winnow anything")
+        elif not re.search(re.escape(label) + r"\s*<span[^>]*>\s*" + str(n), html):
+            RED.append(f"[F5] the '{label}' filter renders without its count of {n} — the number "
+                       f"beside a filter is the whole of its value when the list is 1,500 long")
+        else:
+            OK.append(f"[F5] rendered: the '{label}' filter is a link and carries its count ({n})")
+
+    # THE PRIVATE ROW IS OFFERED, not refused — the ruling, seen on the page.
+    if "Private One" not in html:
+        RED.append("[F5] the rendered dash omits the private member entirely")
+    elif "Cannot be pinned" in html:
+        RED.append("[F5] the rendered dash still refuses a private profile in words")
+    else:
+        seg = html[html.index("Private One"):]
+        seg = seg[:seg.find("</tr>") + 5] if "</tr>" in seg else seg[:1200]
+        if "Pin to front page" not in seg:
+            RED.append("[F5] the private member's row has no Pin button — Ian: \"Please strip the "
+                       "saftey feature\", so the row must be actionable, not merely present")
+        elif 'target="_blank"' not in seg:
+            RED.append("[F5] the private member's row has no new-tab profile link")
+        else:
+            OK.append("[F5] rendered: the private member is offered a Pin button and a new-tab "
+                      "profile link, labelled rather than refused")
 
 
 def main():
@@ -743,7 +976,8 @@ def main():
     try:
         for sec in (section_a_empty_pool, section_b_pin_overrides_criteria,
                     section_c_pin_never_republishes, section_d_readers_agree,
-                    section_e_tracked_default, section_f_dash_is_honest):
+                    section_e_tracked_default, section_f_dash_is_honest,
+                    section_f5_dash_renders):
             try:
                 sec()
             except Exception as e:

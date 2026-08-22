@@ -1202,29 +1202,23 @@ function lg_fm_card_role(
 ): string {
     $glance = trim($glance);
 
-    // ── #200: A PINNED PICK HAS GIVEN NO CONSENT, SO IT BORROWS NONE ────────
-    // Ian's ruling is that a member he places appears "even if they didn't meet
-    // the criteria". The criteria that ruling overrides are the platform's own
-    // bars — the tick, and the card-ready guard. It does NOT reach the member's
-    // own choices about their own text, and this is the line where that
-    // distinction is enforced rather than merely stated.
+    // ── #200: A PIN CARRIES NO SPECIAL CONSENT RULE OF ITS OWN ──────────────
+    // Ian, 2026-08-22: "if pinned, show what the band shows for anyone else."
+    // So $pinned is deliberately NOT consulted below. An earlier cut of this
+    // lane forced $consentOn = false for pins; that fence is stripped by the
+    // same ruling that stripped the privacy one.
     //
-    // Standing ruling consent-A (#107) reads "the tick is consent": every route
-    // through $mayRepublish below is a claim about a TICK — that it was made
-    // under copy describing this republication, or that an admin knowingly
-    // accepted an older one. A pinned member has not ticked at all, so there is
-    // no consent to be informed or acknowledged, and inferring one from the act
-    // of pinning would make "Ian features them knowingly" mean "Ian consents on
-    // their behalf" — which is the opposite of what that clause says.
+    // It reads as a widening and is barely one, which is worth knowing before
+    // anyone re-litigates it. A pinned member reaches $mayRepublish through the
+    // SAME two doors as everybody else, and #107's own wording opens the second
+    // for them: "until they re-confirm OR Ian features them knowingly". Pinning
+    // IS Ian featuring them knowingly, so the dash records consent_ack on a pin
+    // and this is #107 being honoured rather than routed around. The first door,
+    // `informed`, stays shut for a pin by construction — there is no tick to be
+    // stamped, so featured_opt_in_at is null.
     //
-    // So a pinned card prints only what the profile already publishes: their
-    // glance if their header block is public, else business_name, else nothing.
-    // Ian asks them personally, exactly as consent-A says; the dash says so at
-    // the point he clicks.
-    if ($pinned) {
-        $consentOn = false;
-        $consentAck = false;
-    }
+    // And today it changes nothing at all on either box: the featured-consent
+    // flag is OFF on dev2 and live, so $mayRepublish is false for everyone.
 
     // ── May this card repeat a one-liner the profile itself keeps back? ─────
     // Only ever with the flag ON, and then by ONE of two routes:
@@ -1296,23 +1290,32 @@ function lg_resolve_featured_member(string $uuid, bool $isMember, bool $consentA
                 featured_opt_in_at,
                 (profile_layout IS NULL OR profile_layout @> \'["location"]\'::jsonb) AS loc_on_profile
            FROM users
-          WHERE uuid = :u AND profile_visibility = \'public\''
-        // ── #200: THE TICK IS DROPPED FOR A PINNED PICK, THE PRIVACY IS NOT ──
-        // Ian, 2026-08-22: "The override I wanted would still have them on the
-        // frontpage even if they didn't meet the criteria." featured_opt_in is
-        // the criterion; pinning is the override, so it comes out of the WHERE.
+          WHERE uuid = :u'
+        // ── #200: A PIN IS ABSOLUTE. IAN'S RULING, 2026-08-22, VERBATIM ──────
+        //   "If I select a user for featured member I want them shown.
+        //    Regardless of the status of their profile. Please strip the
+        //    saftey feature. … I don't want to dissapear the band. Same band."
         //
-        // profile_visibility STAYS, for a pinned pick as much as any other, and
-        // that is a ruling not an oversight (keeper, 2026-08-22, upholding this
-        // lane's recommendation): a member who has set their whole profile to
-        // Private has said "I am not public", which is their own switch rather
-        // than one of the platform's bars, and it outranks admin pinning under
-        // the same consent-A principle. Publishing their face on the open web
-        // pointing at a page the public cannot open would be the one thing
-        // pinning must not do. Exactly 1 member on each box today; the dash
-        // lists them marked "cannot be pinned", so the refusal is legible
-        // rather than a name that silently does not appear.
-        . ($pinned ? '' : ' AND featured_opt_in = true')
+        // So BOTH criteria come out for a pinned pick — the consent tick and the
+        // profile-visibility state. This SUPERSEDES keeper's earlier ruling that
+        // a pin should still honour a Private profile; that one was keeper's own
+        // and carried an explicit "Ian can overrule" note, and this is the
+        // overrule.
+        //
+        // MEASURED BEFORE STRIPPING IT, because the question worth asking was
+        // what a pin could newly expose beyond a name, a photo and a link — a
+        // members-only About or one-liner belonging to somebody whose whole
+        // profile is private. Live has ZERO members who are not public; dev2 has
+        // exactly one, a test fixture with neither. The exposure is not small,
+        // it is nil on both boxes, so there is no carve-out here and no quiet
+        // exception hiding behind a comment.
+        //
+        // ⚠️ ONE FORWARD-LOOKING FACT, recorded rather than fenced: if a member
+        // ever goes Private while their About section is marked public, a pinned
+        // card would publish that About. Nobody is in that state today. The
+        // dash's job is to show Ian the member's status and let him look at
+        // their profile in a new tab before he decides — informing, not blocking.
+        . ($pinned ? '' : ' AND featured_opt_in = true AND profile_visibility = \'public\'')
     );
     $st->execute([':u' => $uuid]);
     $u = $st->fetch();

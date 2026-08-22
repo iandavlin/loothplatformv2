@@ -203,13 +203,36 @@
     </div>
   </div>
 
-  <h2 class="sec" style="margin-top:34px">One thing I need a yes or no on</h2>
-  <p class="secsub">Pinning skips every criterion except one: a member who has set their <b>whole profile
-     to Private</b>. That is not a completeness bar, it is them saying &ldquo;I am not public&rdquo;, and
-     pinning them would put their face on the open web pointing at a page the public cannot open.
-     It is exactly <b>one member</b> on each box today. My recommendation is to keep that one refusal
-     and show it in the dash as &ldquo;cannot be pinned &mdash; their profile is Private&rdquo;.
-     Say the word and I will let it through too.</p>
+  <h2 class="sec" style="margin-top:34px">Ruled &mdash; the pin is absolute</h2>
+  <div class="note note--ok">
+    <b>Your ruling, 22 August:</b> &ldquo;If I select a user for featured member I want them shown.
+    Regardless of the status of their profile. Please strip the saftey feature. I want to know what it is
+    in the dash. I want a link to check out their profile. Open in new tab. I don&rsquo;t want to dissapear
+    the band.&rdquo; <b>Built exactly that.</b> Nothing refuses a pick any more &mdash; not a private profile,
+    not a missing tick, not a missing photo. The dash <i>tells</i> you what each member is and lets you narrow
+    the list by it; it never stops you.
+  </div>
+  <p class="secsub">Before stripping it I measured the one thing that could newly be exposed &mdash; a
+     members-only bio or one-liner belonging to someone whose whole profile is private. <b>Live has zero
+     members who are not public, and dev2 has one test fixture with neither.</b> So there was nothing to
+     trade off, and no quiet exception was kept back.</p>
+
+  <h2 class="sec">The dash, as it now works</h2>
+  <p class="secsub">Search any of the 1,900+ members. Each row shows what they are, links to their profile
+     in a new tab, and has a button. The chips across the top count each kind so you can narrow before you
+     read &mdash; that is the &ldquo;stat for winnowing&rdquo; you asked for.</p>
+  <table class="tbl" style="max-width:820px">
+    <thead><tr><th>Chip</th><th>What it means</th><th>Blocks anything?</th></tr></thead>
+    <tbody>
+      <tr><td><b>Consented</b></td><td>they ticked the featured box themselves</td><td class="yes">no</td></tr>
+      <tr><td><b>Never asked</b></td><td>a public profile; they have not ticked</td><td class="yes">no</td></tr>
+      <tr><td><b>Private profile</b></td><td>not publicly visible &mdash; pinning still shows them</td><td class="yes">no</td></tr>
+    </tbody>
+  </table>
+
+  <h2 class="sec">Still yours to pick &mdash; A or B above</h2>
+  <p class="secsub">The only thing still waiting on you is which empty-state card shows when
+     <b>nobody at all</b> is selected. Both are built and both are tested; it is a one-line change either way.</p>
 
 </div>
 </body>

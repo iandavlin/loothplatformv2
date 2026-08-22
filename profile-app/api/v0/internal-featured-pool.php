@@ -297,7 +297,25 @@ foreach ($rows as $r) {
  * has not given.
  */
 $candidates = null;
+$candidateCounts = null;
 $q = trim((string) ($_GET['q'] ?? ''));
+/* ── STATUS IS A WINNOWING AID, NOT A GATE (Ian, 2026-08-22) ─────────────────
+ * "The privacy status was more for a stat for winnowing selections in the dash
+ * I thought." So it filters the list he is reading; it refuses nothing. The
+ * three buckets are mutually exclusive and sum to the whole match set, which is
+ * what makes the counts beside them trustworthy as a narrowing tool:
+ *
+ *   consented  public profile, ticked the box      — the self-serve pool
+ *   never      public profile, never ticked        — the ordinary pin case
+ *   private    profile_visibility is not public    — pinnable like anyone else
+ *
+ * `private` wins over the other two when a member is somehow both, because that
+ * is the fact he is winnowing ON. An unknown value falls back to 'all' rather
+ * than to an empty list: a filter that silently matches nothing reads as "there
+ * is nobody", which is the one thing this endpoint must never say by accident.
+ */
+$statusFilter = (string) ($_GET['status'] ?? 'all');
+if (!in_array($statusFilter, ['all', 'consented', 'never', 'private'], true)) $statusFilter = 'all';
 if ($q !== '') {
     // ILIKE over the three fields an admin would type. Bounded at 25: a search
     // is for finding a person you have in mind, and a longer list is a worse
@@ -311,20 +329,43 @@ if ($q !== '') {
     // finds nobody every time and every pin fails with "could not be looked
     // up" — caught by reading the two files together, before either ran.
     $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $q) . '%';
+    // The bucket expression lives in ONE string used by both the count query and
+    // the list query, so the number beside a filter and the rows behind it can
+    // never disagree — a count that does not match its own list is worse than no
+    // count, because it is the thing being trusted to narrow.
+    $bucket = "CASE WHEN u.profile_visibility <> 'public' THEN 'private'
+                    WHEN u.featured_opt_in THEN 'consented'
+                    ELSE 'never' END";
+    $match = "(u.display_name ILIKE :q OR u.slug ILIKE :q OR u.business_name ILIKE :q
+               OR u.uuid::text = :exact)";
+
+    // Counts for the WHOLE match set, before the 25 cap — the cap is a display
+    // limit and must not be mistaken for "this is how many there are".
+    $ccs = $pg->prepare("SELECT $bucket AS b, count(*) AS n FROM users u WHERE $match GROUP BY 1");
+    $ccs->execute([':q' => $like, ':exact' => $q]);
+    $candidateCounts = ['all' => 0, 'consented' => 0, 'never' => 0, 'private' => 0];
+    foreach ($ccs->fetchAll() as $cr) {
+        $candidateCounts[$cr['b']] = (int) $cr['n'];
+        $candidateCounts['all'] += (int) $cr['n'];
+    }
+
+    $where = $match . ($statusFilter === 'all' ? '' : " AND $bucket = :st");
     $cst = $pg->prepare(
         "SELECT u.id, u.uuid, u.slug, u.display_name, u.avatar_url, u.at_a_glance,
                 u.business_name, u.location_city, u.location_region,
                 u.profile_visibility, u.featured_opt_in,
+                $bucket AS status_bucket,
                 coalesce((SELECT ps.visibility FROM profile_sections ps
                            WHERE ps.user_id = u.id AND ps.key = 'header'), 'members')
                   AS header_visibility
            FROM users u
-          WHERE (u.display_name ILIKE :q OR u.slug ILIKE :q OR u.business_name ILIKE :q
-                 OR u.uuid::text = :exact)
+          WHERE $where
           ORDER BY (u.uuid::text = :exact) DESC, (u.display_name ILIKE :q) DESC, u.display_name ASC
           LIMIT 25"
     );
-    $cst->execute([':q' => $like, ':exact' => $q]);
+    $params = [':q' => $like, ':exact' => $q];
+    if ($statusFilter !== 'all') $params[':st'] = $statusFilter;
+    $cst->execute($params);
 
     $candidates = [];
     foreach ($cst->fetchAll() as $r) {
@@ -336,7 +377,14 @@ if ($q !== '') {
         // a copy across two processes, kept honest by gate 94 §C the same way
         // gate 39 §F3 keeps card_renderable honest.
         $glanceRaw = trim((string) $r['at_a_glance']);
-        $role = ($r['header_visibility'] === 'public') ? $glanceRaw : '';
+        // Ian, 2026-08-22: "if pinned, show what the band shows for anyone
+        // else." So this follows the consent flag exactly as the resolver does,
+        // with the ack door open — the dash records consent_ack on a pin,
+        // because #107's own wording is "until they re-confirm OR Ian features
+        // them knowingly" and pinning is the second clause. Today the flag is
+        // OFF on both boxes, so this is the header-public branch for everyone.
+        $mayRepublishPinned = $fmConsentOn && $glanceRaw !== '';
+        $role = ($r['header_visibility'] === 'public' || $mayRepublishPinned) ? $glanceRaw : '';
         if ($role === '') {
             $biz = Completeness::deEscape($r['business_name']);
             if ($biz !== '' && !str_ends_with((string) $r['display_name'], $biz)) $role = $biz;
@@ -347,11 +395,26 @@ if ($q !== '') {
             'display_name' => $r['display_name'],
             'avatar_url'   => $r['avatar_url'],
             'location'     => trim(implode(', ', array_filter([$r['location_city'], $r['location_region']]))),
-            // Privacy only — the one criterion pinning does not override.
+            // ⚠️ `eligible` IS REPORTED, AND IT NO LONGER REFUSES ANYTHING.
+            // Ian, 2026-08-22: "Please strip the saftey feature. I want to know
+            // what it is in the dash." An earlier cut of this lane used this to
+            // block a pin on a Private profile; that fence is gone, and the
+            // field survives only as one of the FACTS he winnows on. Anything
+            // reading it as permission is reading it wrong.
             'eligible'     => $r['profile_visibility'] === 'public',
-            // Already in the self-serve pool? Then they do not need pinning, and
-            // the dash says so rather than offering two routes to one member.
             'opted_in'     => (bool) $r['featured_opt_in'],
+            // The winnowing bucket, computed by the same SQL expression that
+            // produced the counts, so a filter's number and its rows agree.
+            'status'       => (string) $r['status_bucket'],
+            // "I want a link to check out their profile. Open in new tab." The
+            // dash sets target=_blank; the endpoint just says where.
+            'profile_url'  => '/u/' . rawurlencode((string) $r['slug']),
+            // A fact he may want, and the only thing pinning could publish that
+            // the member withheld: their one-liner exists but is members-only.
+            // Measured 2026-08-22 — nobody on either box is in the state where
+            // this matters (live has zero non-public members), so it is shown,
+            // not fenced.
+            'glance_members_only' => $glanceRaw !== '' && $r['header_visibility'] !== 'public',
             'has_photo'    => trim((string) $r['avatar_url']) !== '',
             // What the pinned card's second line will actually say — '' means
             // the card draws with no role line at all, which is allowed for a
@@ -363,4 +426,5 @@ if ($q !== '') {
 
 profile_app_json(200, $candidates === null
     ? ['pool' => $pool]
-    : ['pool' => $pool, 'candidates' => $candidates]);
+    : ['pool' => $pool, 'candidates' => $candidates,
+       'candidate_counts' => $candidateCounts, 'status' => $statusFilter]);

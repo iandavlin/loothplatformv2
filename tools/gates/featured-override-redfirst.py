@@ -53,7 +53,7 @@ MUTATIONS = [
      "    if (false) {", "[A3", True),
 
     ("a pinned pick no longer bypasses the tick", IDX,
-     "        . ($pinned ? '' : ' AND featured_opt_in = true')",
+     "        . ($pinned ? '' : ' AND featured_opt_in = true AND profile_visibility = \\'public\\'')",
      "        . ' AND featured_opt_in = true'", "[B1", True),
 
     # Retargeted after the first run: this originally expected §B2, whose fixture
@@ -64,9 +64,46 @@ MUTATIONS = [
      "    if (!$pinned && (trim((string) $u['avatar_url']) === '' || $role === '')) return null;",
      "    if (false) return null;", "[B3", True),
 
-    ("a pinned pick starts honouring consent again", IDX,
-     "    if ($pinned) {\n        $consentOn = false;\n        $consentAck = false;\n    }",
-     "    if (false) {\n        $consentOn = false;\n        $consentAck = false;\n    }", "[C1", True),
+    # ⚠️ THE OLD LEG HERE ASSERTED A FENCE IAN STRUCK OUT on 2026-08-22 ("if
+    # pinned, show what the band shows for anyone else"). It is replaced, not
+    # deleted, by legs for the invariant that survived the ruling: the consent
+    # FLAG is the switch, and the acknowledgement door #107 names is the only
+    # way through it.
+    ("consent_ack becomes a route on its own, with the flag off", IDX,
+     "    if ($consentOn && $glance !== '') {", "    if ($glance !== '') {", "[C1", True),
+
+    ("the acknowledgement door #107 names stops working", IDX,
+     "        if ($consentAck) {\n            $mayRepublish = true;",
+     "        if (false) {\n            $mayRepublish = true;", "[C1b", True),
+
+    ("the privacy fence Ian stripped is put back", IDX,
+     "        . ($pinned ? '' : ' AND featured_opt_in = true AND profile_visibility = \\'public\\'')",
+     "        . ' AND profile_visibility = \\'public\\'' . ($pinned ? '' : ' AND featured_opt_in = true')",
+     "[B4", True),
+
+    ("the winnowing status stops reaching the dash", POOL,
+     "                $bucket AS status_bucket,", "                'never' AS status_bucket,", "[F3", True),
+
+    ("the status buckets stop being mutually exclusive", POOL,
+     "    $bucket = \"CASE WHEN u.profile_visibility <> 'public' THEN 'private'",
+     "    $bucket = \"CASE WHEN false THEN 'private'", "[F3", True),
+
+    ("the profile link loses its new tab", DASH,
+     'target="_blank" rel="noopener noreferrer" ', '', "[F4", True),
+
+    # ⚠️ RETARGETED. The first version of this leg removed the hidden pinst input
+    # and the gate stayed GREEN, because the source-grep assertion matched the
+    # string "pinst" in the chip loop it had not touched. That is the
+    # "assertion matches a string that also lives elsewhere" family, and the
+    # answer was not a cleverer grep — §F5 now RENDERS the dash, so the mutation
+    # has to actually remove the control to pass unnoticed, and it cannot.
+    ("the status filter chips are removed entirely", DASH,
+     "        if ($search !== '' && is_array($counts)) {",
+     "        if (false) {", "[F5", True),
+
+    ("a filter chip loses its count", DASH,
+     "' <span style=\"opacity:.75\">' . $n . '</span></a>';",
+     "'</a>';", "[F5", True),
 
     ("one reader loses its .local.php layer", UPHP,
      "$lg_fmLoc = @include __DIR__ . '/../../platform/config/featured-members.local.php';",
@@ -82,9 +119,8 @@ MUTATIONS = [
     ("an ordinary Feature stops writing pinned=false", DASH,
      "            'pinned'     => false,", "            // pinned omitted", "[F2", True),
 
-    ("a Private profile becomes pinnable", POOL,
-     "            'eligible'     => $r['profile_visibility'] === 'public',",
-     "            'eligible'     => true,", "[F3", True),
+    # (the old "a Private profile becomes pinnable" leg is gone — that is now the
+    #  REQUIRED behaviour, asserted positively by §B4 and §F3.)
 
     ("the dash stops naming a pinned pick", DASH,
      "'pinned by an admin'", "'featured'", "[F4", True),
