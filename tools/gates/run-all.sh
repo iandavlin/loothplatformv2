@@ -2593,6 +2593,50 @@ echo "=== GATE 97: the View-as switcher says Edit, and the VALUE still says me =
 run "viewas-label" python3 "$(dirname "$0")/viewas-label-gate.py"
 echo
 
+echo "=== GATE 98: the shared secret's status is true, current, and says nothing else ==="
+# #201. Ian, 2026-08-22, reshaping his own issue: "Should just be a refresh
+# button or something with a status check."
+#
+# lgms_shared_secret authenticates the billing app's server-to-server calls into
+# WordPress, and it is ABSENT ON LIVE. #181's checkout guard is fail-open by
+# design -- a route that cannot answer produces UNKNOWN and UNKNOWN waves every
+# checkout through -- so the guard reads as ARMED on the dash and refuses
+# nobody. Nothing on any screen said so. This gate watches the screen that ends
+# that silence, and the field #201 retired so it could.
+#
+# ⚠️ FOUR ASSERTIONS THAT LOOK RIGHT AND MEASURE NOTHING, all posed properly here:
+#   1. "the panel renders and says OK" passes on a healthy box, and a status
+#      panel is worthless on a healthy box. Every verdict is posed against a
+#      DELIBERATELY BROKEN state and the panel must NAME it.
+#   2. "no secret is printed" tested on the happy path only. §C tests the
+#      REFRESH RESPONSE and the ERROR PATH too -- and §C3 throws an exception
+#      whose message CONTAINS the secret, which is where one actually escapes.
+#   3. "the refresh button exists" is satisfied by one that re-renders a cached
+#      answer -- a lie told convincingly. §G seeds a stale value in the option
+#      cache AND in the autoload blob and requires the stored value to win.
+#   4. "the field was removed" is the DANGEROUS half. wp-admin/options.php walks
+#      the registered options of the submitted group and calls
+#      update_option($option, null) for every one absent from POST, so removing
+#      the input while leaving register_setting would BLANK the secret on every
+#      Save. §I2b asserts the registration is gone, not just the field.
+#
+# ⚠️ §I READS TOKENS, NOT TEXT, and N3 is the control that proves it: this lane
+# left a long comment in Admin.php that NAMES the option it removed, so a grep
+# would match the explanation of its absence and pass either way.
+#
+# SIX OF ITS OWN ASSERTIONS WERE DEFECTIVE FIRST TIME, every one found by
+# red-first rather than review: §C4 wrote ONE settings file six times (the six
+# fixtures are evaluated before the loop) and rendered the same state under six
+# names; §B6 asked "both halves report their length" of the whole render and was
+# satisfied by ONE half; §H1 matched a different sentence in the same page; §G1
+# was vacuous because the cache stub let an alloptions delete wipe everything;
+# §C3e could not fail because nothing threw mid-render; §E3 counted a CSS rule
+# as a second renderer.
+#
+# RED-FIRST: 45 mutations + 3 no-op controls, 48/48 -- tools/gates/shared-secret-redfirst.py.
+run "shared-secret-status" php "$(dirname "$0")/shared-secret-status-gate.php"
+echo
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"
