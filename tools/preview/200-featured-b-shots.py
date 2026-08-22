@@ -42,7 +42,7 @@ import base64, io, json, os, shutil, subprocess, sys, time
 import urllib.request
 import websocket
 
-REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DEFS = os.path.join(REPO, "archive-poc", "web", "defaults.php")
 IDX  = os.path.join(REPO, "archive-poc", "web", "index.php")
 PUB  = "/home/ubuntu/projects/footer-mockups/200-featured-b"
