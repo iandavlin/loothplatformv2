@@ -2324,6 +2324,53 @@ echo "=== GATE 92: the licence a member picks is described correctly, and the �
 run "compose-licence" python3 "$(dirname "$0")/compose-licence-gate.py"
 echo
 
+echo "=== GATE 93: a Stripe product's tier is SET from the dash, and checkout agrees ==="
+# #194. Ian 2026-08-22, reading the go-live checklist: "Do we have a spot in the
+# dash where we register the stripe products. Like looth-lite regional A ?"
+# Measured answer: no. Health REPORTED unmapped products and nothing anywhere
+# could SET one, so registering the live catalogue meant hand-run UPDATE
+# statements against the live database on launch night.
+#
+# ⚠️ NUMBER 93, MINTED FROM MAIN (92 was the max there; lane 193 mints none).
+# Two lanes have now near-collided on a number in as many days by reading their
+# own branch instead of main.
+#
+# ⚠️ THE ASSERTION THAT LOOKS RIGHT AND MEASURES NOTHING: "mapping a product to
+# Pro makes checkout accept it" passes on a writer that hardcodes looth3 -- which
+# is the defect #148 shipped and its own gate missed. A3/A4 map one product to
+# looth2 and another to looth3 in the same run and require the REAL
+# PdoProductRepository::tierForPrice() to hand each back. A constant cannot
+# satisfy both.
+#
+# ⚠️ SECTION C IS WHY THE TWO SCREENS CANNOT DISAGREE. The tab's red rows and
+# Health's "Products with NO tier ref" are run over the SAME database across five
+# fixtures, including one where the only difference is an ARCHIVED unmapped row --
+# the case both must exclude. Red-first mutates each side in turn (M15, M18), so
+# the check is bidirectional and not just a restatement of one query.
+#
+# ⚠️ ONE BEHAVIOUR IS ASSERTED BY SOURCE AND THE GATE SAYS SO. upsertProduct is
+# MySQL-only (ON DUPLICATE KEY UPDATE) so it cannot run against SQLite. D1/D2
+# drive the REAL ProductSyncHandler through the real interface and prove a
+# product event carries no tier; D3/D4 read the update clause through PHP's
+# tokenizer and prove it names neither ref nor kind. Pretending to run the upsert
+# would be worse than naming which half is which.
+#
+# THREE HOLES THE RED-FIRST FOUND IN THIS GATE, all closed, all worth recognising:
+#   1. E4 asserted kind = 'membership' on a row SEEDED as 'membership', so it
+#      passed whether or not the UPDATE wrote that column. Same shape as #148's
+#      vacuous green. The fixture now starts on another kind.
+#   2. B6 ("a refusal writes no audit line") went green against a validator that
+#      silently fell back to the DEFAULT tier -- because the fixture was already
+#      on that tier, so the fallback was a no-op. It now starts on the other one.
+#   3. Two mutations were BROKEN rather than wrong (a parse error and an
+#      execute() arity mismatch) and killed the gate at exit 255 with no FAIL
+#      line -- the failure mode this plugin's test files have hit three times. The
+#      gate now installs an exception handler that reports a fatal AS a finding.
+#
+# RED-FIRST: 39 mutations + 2 no-op controls, 41/41 -- tools/gates/products-tab-redfirst.py.
+run "products-tab" php "$(dirname "$0")/products-tab-gate.php"
+echo
+
 if [ "$red" -ne 0 ]; then echo "############ GATES RED — do not push ############"; exit 1; fi
 if [ "$dead" -ne 0 ]; then
   echo "############ GATES INCOMPLETE — $dead gate(s) COULD NOT RUN ############"
