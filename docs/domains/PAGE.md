@@ -787,3 +787,142 @@ print what it already measured.
   Use License (leave default if unsure) value is required"), not the relabelled
   "Licence", because validation does not run `acf/prepare_field`. Near-unreachable
   now that the forward map exists, but it is the wrong words if it ever shows.
+
+---
+
+## ⚠️ #199 and #198 wear the `page` label and are NOT lanes-page issues — the EIGHTH and NINTH
+
+After #171 (Patreon/join dark mode → MEMBERSHIP.md), #179 (the Loothprint
+bundle), #185 (the compose write-up editor), #186 (compose uploads), #189 (the
+form's own uploader), #187 (article image delivery) and #191 (the licence
+control). **#199 is Loothprint gating** — which card a logged-out visitor is
+handed on a print — and **#198 is the same page's gallery.** Nothing in either
+touches `/lanes/`, `tools/lanes-page.py`, `lanes.json` or the timer. Recorded
+here rather than silently relabelled, because the domain rule says a
+domain-labelled issue updates its domain file in the same commit — so this line
+IS that update.
+
+**Eight in nine days, six different lanes.** Every one has spent a paragraph
+explaining what the label does not mean. It is now the single most-explained
+thing in this file. It needs Ian's ruling.
+
+### The one thing every lane on this box should take from #199
+
+**A CONTENT GATE HAS TWO HALVES — WHAT IS HIDDEN AND WHAT THE CARD SAYS — AND
+ONLY THE FIRST ONE IS TESTED BY ANYTHING.** Ian's screenshot was two stacked,
+identical *"MEMBERS-ONLY VIDEO"* panels on a print whose gallery was public. Both
+halves were wrong, in different files, and neither showed up as an error:
+
+- `Renderer::AUTO_GATE_TYPES` auto-gated `embed` from the post tier. Correct for
+  a video post, wrong for a print, and the constant was global.
+- `GateCta::variantFor()` is a **dispatch table with a default**, and `callout`
+  is in neither of its lists — so a gated `callout variant=files` (the shape a
+  synthesized print used for its ZIP) fell through to the **embed** default and
+  drew the video card over a download. **A right block type reaching a table
+  with no arm for it.** That is why gate 94 asserts the RENDERED CARD and never
+  the block type: reading the layout back and checking it says `download` is
+  true of the broken build.
+
+And the count matters as much as the face: *"there is a download card"* was true
+of the broken page too — it had a download card AND a video card, which was the
+complaint. **Assert the number of gate panels, not their presence.**
+
+### The trap that would have silently deleted the download
+
+`/loothprint/` is served by `archive-poc/standalone/render.php` from a
+**materialized blob**, through a **VENDORED COPY** of the engine
+(`archive-poc/standalone/engine/`), and the two copies have diverged —
+`blocks/download/render.php` has a "no file pinned ⇒ read the post's own meta"
+fallback in `lg-layout-v2/` and **did not have it in the vendored copy**.
+Meanwhile the pre-existing `download-block` flag's ON branch emits a download
+block with **no `file_id`**, and `lg_materialize_collect_media_ids()` builds the
+blob's media map from the `file_id`s it finds in the layout. So flipping that
+flag as it stood would have resolved no URL, hit `if ($url === '' && !$editorMode)
+return;` and **removed the download from the page entirely** — silently, on the
+member-facing render path only. The synthesizer now bakes `file_id`; the fallback
+is ported; the materializer bakes `loothprint_3d_file` / `loothcut_cnc_file` and
+collects the resolved attachment, without which the ported code would look up an
+id the media map had never heard of.
+
+⚠️ **The general rule: a block that "resolves it live at render" is a claim about
+the WP renderer only.** The standalone path has no WP — it has `wp-shim.php`
+serving whatever the materializer baked. Anything live-resolved needs BOTH the
+meta key baked into `post_context.meta` AND the attachment in the media map.
+
+### Verifying a standalone-render branch needs a preview AND a re-bake
+
+`tools/preview/lane-preview.sh` gives the branch's `render.php` a URL. That is
+only half: **the blob is baked by whichever synthesizer ran at save time**, and
+the save hook runs the SERVE's copy. Bake with the branch by running
+`lg_materialize_upsert()` under `wp --skip-plugins=lg-layout-v2` plus a require of
+the branch's own `lg-layout-v2.php`, and echo back `ReflectionClass::getFileName()`
+so you can prove which engine answered. `--skip-plugins` is the regular-plugin
+equivalent of #189's `WPMU_PLUGIN_DIR` mirror, and it is much cheaper.
+
+⚠️ **And it takes TWO POSTS, not one.** Because the blob carries the synthesizer's
+output, the flag alone cannot turn one page from before into after — the before
+blob says `callout`, the after blob says `download`. Bake one post both ways and
+whichever URL you did not just re-bake shows a hybrid that is neither state.
+#199 used `lane199-cleanup-stik-recreation` (main's blob, the honest BEFORE, at
+its ordinary URL) and `lane199-after` (branch-baked, behind the preview), with
+byte-identical inputs.
+
+### #198's two bugs, and a correction to the issue itself
+
+**BUG A — the poisoner, and it was NOT the on-page editor.** `EditorRest::
+handle_update` merges single props into the loaded layout and cannot drop
+siblings; every `rest(...)` call in `lg-fe-editor.js` sends one prop. The
+destroyer is `MetaBox::save()`, which **rebuilds the whole layout from the
+submitted form**, and `parse_block_props()` skips every schema prop of type
+`array` or `object` because it has no field for one. So the prop was not
+preserved, it was deleted. **Six props across six blocks** are in that class:
+`gallery.image_ids`, `post-header.hidden_links`, `taxonomy.taxonomies`,
+`event-header.event_types`, and the `items` lists on `featured-products` and
+`recent-posts`. `EditorPickers`' own docblock had recorded half of it —
+*"gallery and embed-url are FRONT-END-EDITOR ONLY … the admin metabox cannot edit
+those props. Pre-existing gap, recorded not fixed."* The unrecorded half is that
+not being able to EDIT a prop was allowed to mean destroying it. Already live on
+dev2 too: post **73510** carries a gallery with no `image_ids` key at all.
+
+Fixed by carrying unrepresented props across from the current layout, keyed on
+block **id** (slots shift under move/insert/remove in one submit) and skipped
+when the slot changed type. ⚠️ **Scoped to array/object props, and that line is
+load-bearing:** the generic walker also drops an EMPTY scalar, so a broader rule
+would restore the old value whenever somebody deliberately cleared a text field,
+and clearing a field would become impossible.
+
+**BUG B — the ghost tile, and Ian's pinned cause was wrong.** The issue comment
+pins it on the print ZIP being collected into the gallery. Measured on the live
+post it came from: 72801's `loothprint_more_images` is
+`a:2:{i:0;"72802";i:1;"72803";}` — exactly its two photos, no ZIP. The third tile
+was `blocks/gallery/render.php`'s **unconditional three-tile minimum**, an
+"add a photo here" author affordance that ran for readers too, on **every**
+gallery with fewer than three images, on every CPT. It now pads in edit mode
+only. The mime filter he asked for went in as well and is not wasted: a ZIP
+placed in `more_images` really does make a third tile on main, so both mechanisms
+are real — only one fired on that post.
+
+### Gate 94, and a third near-collision in four days
+
+`tools/gates/loothprint-gating-gate.py` + `loothprint-gating-probe.php`. Red-first
+**20 of 37 fail on an origin/main snapshot at exit 1** — findings, not CANNOT RUN,
+which took a deliberate choice: the probe degrades to `flag=false` on a tree where
+`Renderer::loothprintGatingEnabled()` does not exist, because calling it would
+fatal and a gate that reports CANNOT RUN proves nothing about main.
+
+⚠️ **94 was minted from CURRENT `origin/main`, not from the branch's base.** 90–93
+and 95 are taken. **95 looks like a free gap and is not one**: two lanes were both
+assigned 93 in one mid-flight window and keeper renumbered switch-menu 93→95
+(`b1ac293`) *after* this lane was cut. Reading the ledger from the branch's own
+copy would have said "94 and 95 free". Re-read main, not your base.
+
+### Reported by #199/#198, not fixed
+
+- **`GateCta`'s two copies have drifted**: the plugin default `button_url` is the
+  Patreon URL, the vendored copy's is `/join/`. Any gate reading that button must
+  know which copy answered.
+- **dev2 post 73510 is already poisoned** (gallery, no `image_ids`). The fix stops
+  it recurring; repairing that row is a data call.
+- The vendored-engine duplication itself. Nine files edited in pairs this lane;
+  #187's image work landed in only one of them, and the download-block fallback in
+  only the other. It generates this defect class on a schedule.

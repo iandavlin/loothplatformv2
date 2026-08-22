@@ -1327,3 +1327,94 @@ different address is the #149 lost-membership class. Keeper's privacy rail:
 the Patreon email is revealed ONLY to the authenticated member on their own
 signed-in surface — never in an anonymous API refusal. Applied by #193 (guard
 surfaces) and #196 (switch page/menu).
+
+## What a Loothprint's tier actually gates (Ian 2026-08-22, #199)
+
+Verbatim, looking at a member's live Loothprint (post 72801, *The Cleanup Stik*)
+while logged OUT: *"The gating is off too. We only need to gate the file download
+and it shouldn't look like the video gate. I think there is a block for that
+already available."*
+
+**The ruling, in three parts:** on a Loothprint the tier gates the **file
+download only** — gallery, write-up and video are public to anon; the gated
+download wears the **existing `download` block's** face and copy, never the video
+gate's; and **one** member-facing sentence appears **once**.
+
+Behind `LG_V2_LOOTHPRINT_GATING` / `lg-layout-v2/config/loothprint-gating.php`,
+defaulted OFF. Gate 94.
+
+### Why this is a membership fact and not a layout one
+
+The tier term on a print is written by **#179's paywall toggle on the compose
+form** (`lg_fc_paywall_target()`, `platform/mu-plugins/lg-frontend-compose.php`),
+so the toggle's meaning is now precisely *"the DOWNLOAD is behind the paywall"* —
+which is what Ian asked for originally. Members posting prints is the flow the
+real-money test exercises, so what a non-member is shown on a print is a
+membership surface, not a styling one.
+
+⚠️ **`looth1` IS NOT A PAYING TIER, and the paywall looks broken if you forget
+it.** `TierResolver::ROLE_TIERS` maps `looth1 => 'public'`, `looth2 =>
+'looth-lite'`, `looth3`/`looth4` => `'looth-pro'`. Signing in as a looth1 member
+and finding the download still gated is the feature working. Measured on dev2:
+607 looth3, 423 looth2, 405+60 looth1. This pairs with #186's finding that
+`member_cookies()` in `loothprint-paywall-gate.py` actually mints an
+**administrator** — between the two, "test it as a member" has now been wrong in
+both directions on the same surface.
+
+### The two ways a gate can be wrong, and only one of them hides content
+
+Ian's screenshot was **two stacked, identical "MEMBERS-ONLY VIDEO" panels**.
+Nothing was leaking; both faults were on the *presentation* side of the gate, and
+neither raised an error:
+
+1. `Renderer::AUTO_GATE_TYPES` auto-gated `embed` from the post tier — right for
+   a video post, wrong for a print, and the constant was global. Now post-type
+   aware: the print CPTs auto-gate `download`/`file`/`attachment` only.
+2. `GateCta::variantFor()` is a **dispatch table with a default**. `callout` is in
+   neither of its lists, so a gated `callout variant=files` — the shape a
+   synthesized print used for its ZIP — fell through to the **embed** default and
+   drew the video card over a download.
+
+**The lesson for any future gate work here:** a content gate has two halves, what
+is hidden and what the card says, and only the first has ever been tested. Gate
+94 asserts the RENDERED CARD and never the block type, because reading the layout
+back and checking it says `download` is true of the broken build. And it asserts
+the **number** of panels, because "there is a download card" was true of the
+broken page too — it had a download card AND a video card.
+
+⚠️ **A gated block that is not a "deliverable" is a second panel.** The
+synthesizer also gated the OnShape CAD link, so a print with one showed three
+identical cards, not two — 72801 showed two only because its CAD field was empty.
+Read literally, a link to a CAD service is not the file, so ON un-gates it.
+**7 loothprints on dev2 carry a CAD link.** Reversible in one line and the config
+docblock names it; flagged to Ian rather than decided quietly.
+
+### Verified, end to end, before any of it reached anybody
+
+Over real https on the real serve path, both themes, 1280 and 390:
+
+| viewer | gate panels | download | video | gallery tiles |
+|---|---|---|---|---|
+| anon, before (main) | 2 × *Members-only video* | — | hidden | 2 + **1 ghost** |
+| anon, after | 1 × *Members-only download — The Cleanup Stik — ZIP, 297 B* | no href anywhere | **plays** | 2 + 0 |
+| looth1 (signed in, non-payer) | 1 × download card | — | plays | 2 + 0 |
+| looth2 (= looth-lite, paying) | **0** | real ZIP href, ZIP, 297 B | plays | 2 + 0 |
+
+The anon bytes contain the file's **name, type and size and never its URL** —
+naming the file is the teaser, handing over its address is the leak.
+
+### ⚠️ The trap that would have deleted the download instead of gating it
+
+The pre-existing `download-block` flag emits a download block with **no
+`file_id`**, on the reasoning that the block resolves the post's file live at
+render. That reasoning holds for the WP renderer and **not** for the page members
+read: `/loothprint/` is served by the standalone renderer from a materialized
+blob, whose media map is built from the `file_id`s found in the layout, and the
+**vendored copy** of `blocks/download/render.php` had no live-resolve fallback at
+all. Flipping that flag as it stood would have resolved no URL and returned
+nothing — the download would have vanished from the page, silently, on the
+member-facing path only. The synthesizer now bakes `file_id`; details in PAGE.md.
+
+**General rule for any gated deliverable on this box:** "it resolves live at
+render" is a claim about the WP renderer. The standalone path has no WP — it has
+whatever the materializer baked.
