@@ -19,6 +19,8 @@ OKFILE="$HOME/.lane-park-ok"
 STATED="$HOME/.lane-park-state"
 POKES="$HOME/.keeper-pokes"          # #156: written by lanes-poke-worker.sh
 PMARK="$HOME/.keeper-poke-mark"
+DECIDES="$HOME/.keeper-decisions"   # #202: ditto, but an ANSWER not a poke
+DMARK="$HOME/.keeper-decision-mark"
 mkdir -p "$STATED"
 PARK_LIMIT=600
 while true; do
@@ -29,6 +31,26 @@ while true; do
   # alerting without advancing it re-alarms on the same poke at every relaunch
   # (the 8/16 blindspot, which fired three times in ten minutes on a healthy
   # delivery).
+  # #202: Ian answered a decision box on the lanes page. Checked FIRST, ahead
+  # even of the poke: a poke says "look at something", an answer says "here is
+  # the decision you were blocked on", and keeper is the thing that was blocked.
+  #
+  # ⚠ ITS OWN FILE AND ITS OWN SENTENCE, deliberately not folded into the poke
+  # pair below. The poke alert says Ian "flagged these seats as IDLE", which is
+  # a flat lie about a man answering a question — and the law this page is built
+  # on is that two different things must never render alike. Same watermark
+  # discipline: written BEFORE the exit, or every relaunch re-alarms on the same
+  # answer (the 8/16 blindspot, which fired three times in ten minutes on a
+  # perfectly healthy delivery).
+  if [ -s "$DECIDES" ]; then
+    NEWD=$(comm -13 <(sort "$DMARK" 2>/dev/null) <(sort "$DECIDES") 2>/dev/null)
+    if [ -n "$NEWD" ]; then
+      cp "$DECIDES" "$DMARK" 2>/dev/null
+      IDS_D=$(printf '%s\n' "$NEWD" | awk '{print $2}' | tr '\n' ' ')
+      echo "ALERT ian-decision — Ian ANSWERED a decision box on the lanes page: ${IDS_D}— read each one with lg-decide show, then ACT on the answer and tell him on the board what you did with it. This is an Ian act, as binding as an answer typed in chat; the store is already marked so do not re-ask."
+      exit 0
+    fi
+  fi
   if [ -s "$POKES" ]; then
     NEWP=$(comm -13 <(sort "$PMARK" 2>/dev/null) <(sort "$POKES") 2>/dev/null)
     if [ -n "$NEWP" ]; then
